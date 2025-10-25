@@ -1,0 +1,154 @@
+'use server'
+
+import OpenAI from 'openai'
+import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
+import { getAaplPrices, PriceRange } from './prices'
+import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+
+export type FinancialData = { year: number; value: number; metric: string }
+export type PriceData = { date: string; close: number }
+
+export type AskQuestionResponse = {
+  answer: string
+  dataUsed: {
+    type: 'financials' | 'prices'
+    data: FinancialData[] | PriceData[]
+  } | null
+  error: string | null
+}
+
+/**
+ * Main server action: orchestrate the two-step LLM flow
+ * 1. Selection step: model picks a tool and args
+ * 2. Execution: run the tool
+ * 3. Answer step: model generates final answer using facts
+ */
+export async function askQuestion(
+  userQuestion: string
+): Promise<AskQuestionResponse> {
+  try {
+    // Validate input
+    if (!userQuestion || userQuestion.trim().length === 0) {
+      return { answer: '', dataUsed: null, error: 'Question cannot be empty' }
+    }
+
+    // Step 1: Tool selection
+    const selectionPrompt = buildToolSelectionPrompt(userQuestion)
+
+    const selectionResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // Fast and cheap for routing
+      messages: [
+        {
+          role: 'user',
+          content: selectionPrompt,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 150,
+    })
+
+    const selectionContent = selectionResponse.choices[0]?.message?.content
+    if (!selectionContent) {
+      return { answer: '', dataUsed: null, error: 'Failed to select tool' }
+    }
+
+    // Parse the JSON response
+    let toolSelection: { tool: string; args: any }
+    try {
+      toolSelection = JSON.parse(selectionContent.trim())
+    } catch (parseError) {
+      console.error('Failed to parse tool selection:', selectionContent)
+      return {
+        answer: '',
+        dataUsed: null,
+        error: 'Failed to parse tool selection',
+      }
+    }
+
+    // Step 2: Execute the tool based on selection
+    let factsJson: string
+    let dataUsed: { type: 'financials' | 'prices'; data: any[] }
+
+    if (toolSelection.tool === 'getAaplFinancialsByMetric') {
+      // Validate metric
+      const metric = toolSelection.args.metric as FinancialMetric
+      if (metric !== 'revenue' && metric !== 'gross_profit') {
+        return { answer: '', dataUsed: null, error: 'Invalid metric' }
+      }
+
+      const toolResult = await getAaplFinancialsByMetric({
+        metric,
+        limit: toolSelection.args.limit || 4,
+      })
+
+      if (toolResult.error || !toolResult.data) {
+        return {
+          answer: '',
+          dataUsed: null,
+          error: toolResult.error || 'Failed to fetch financial data',
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'financials', data: toolResult.data }
+    } else if (toolSelection.tool === 'getPrices') {
+      // Validate range
+      const range = toolSelection.args.range as PriceRange
+      if (range !== '7d' && range !== '30d' && range !== '90d') {
+        return { answer: '', dataUsed: null, error: 'Invalid range' }
+      }
+
+      const toolResult = await getAaplPrices({ range })
+
+      if (toolResult.error || !toolResult.data) {
+        return {
+          answer: '',
+          dataUsed: null,
+          error: toolResult.error || 'Failed to fetch price data',
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'prices', data: toolResult.data }
+    } else {
+      return { answer: '', dataUsed: null, error: 'Unsupported tool selected' }
+    }
+
+    // Step 3: Generate final answer using the fetched facts
+    const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson)
+
+    const answerResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: answerPrompt,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 500,
+    })
+
+    const answer = answerResponse.choices[0]?.message?.content
+    if (!answer) {
+      return { answer: '', dataUsed: null, error: 'Failed to generate answer' }
+    }
+
+    return {
+      answer: answer.trim(),
+      dataUsed,
+      error: null,
+    }
+  } catch (err) {
+    console.error('Error in askQuestion:', err)
+    return {
+      answer: '',
+      dataUsed: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred',
+    }
+  }
+}
