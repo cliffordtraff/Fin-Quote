@@ -41,6 +41,13 @@ export interface Database {
           year: number
           revenue: number
           gross_profit: number
+          net_income: number | null
+          operating_income: number | null
+          total_assets: number | null
+          total_liabilities: number | null
+          shareholders_equity: number | null
+          operating_cash_flow: number | null
+          eps: number | null
         }
         Insert: {
           id?: string
@@ -49,6 +56,13 @@ export interface Database {
           year: number
           revenue: number
           gross_profit: number
+          net_income?: number | null
+          operating_income?: number | null
+          total_assets?: number | null
+          total_liabilities?: number | null
+          shareholders_equity?: number | null
+          operating_cash_flow?: number | null
+          eps?: number | null
         }
         Update: {
           id?: string
@@ -57,6 +71,13 @@ export interface Database {
           year?: number
           revenue?: number
           gross_profit?: number
+          net_income?: number | null
+          operating_income?: number | null
+          total_assets?: number | null
+          total_liabilities?: number | null
+          shareholders_equity?: number | null
+          operating_cash_flow?: number | null
+          eps?: number | null
         }
         Relationships: [
           {

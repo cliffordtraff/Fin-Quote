@@ -12,10 +12,10 @@ export type ToolDefinition = {
 export const TOOL_MENU: ToolDefinition[] = [
   {
     name: 'getAaplFinancialsByMetric',
-    description: 'Get AAPL revenue or gross_profit for the most recent years.',
+    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
     args: {
-      metric: 'revenue | gross_profit',
-      limit: 'integer 1–8 (defaults to 4)',
+      metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
+      limit: 'integer 1–10 (defaults to 4)',
     },
     notes: 'Ticker is fixed to AAPL for MVP.',
   },
@@ -32,8 +32,12 @@ export const TOOL_MENU: ToolDefinition[] = [
 export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool from the provided menu and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
-1. getAaplFinancialsByMetric - Use for questions about revenue, gross profit, or financial statement metrics
-   - args: {"metric": "revenue" | "gross_profit", "limit": 1-8}
+1. getAaplFinancialsByMetric - Use for questions about financial metrics from statements
+   - Income Statement: revenue, gross_profit, net_income, operating_income
+   - Balance Sheet: total_assets, total_liabilities, shareholders_equity
+   - Cash Flow: operating_cash_flow
+   - Per Share: eps
+   - args: {"metric": <one of above>, "limit": 1-10}
 
 2. getPrices - Use for questions about stock price, share price, or market price trends
    - args: {"range": "7d" | "30d" | "90d"}
@@ -47,12 +51,14 @@ User question: "${userQuestion}"
 
 Return ONLY JSON. Examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":4}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","limit":5}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":8}}
 {"tool":"getPrices","args":{"range":"30d"}}`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,
   factsJson: string
-) => `You are an analyst. Answer the user using ONLY the provided facts. If the facts are missing or insufficient, say you don’t know.
+) => `You are an analyst. Answer the user using ONLY the provided facts.
 
 User question: "${userQuestion}"
 
@@ -61,8 +67,10 @@ ${factsJson}
 
 Instructions:
 - Be concise and clear.
+- FIRST, check if you have all the data requested. If not, START your answer by explaining what data you DO have (e.g., "I have data for the last 10 years (2015-2024), not 15 years as requested.").
+- THEN provide your analysis using the available data.
 - If trend is relevant, describe it (e.g., increasing/decreasing/flat).
 - Do not invent numbers or sources.
-- If unsure or data missing, say you don’t know.`
+- Only say "I don't know" if you have ZERO relevant data.`
 
 

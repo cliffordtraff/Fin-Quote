@@ -76,7 +76,18 @@ export async function askQuestion(
     if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
       const metric = toolSelection.args.metric as FinancialMetric
-      if (metric !== 'revenue' && metric !== 'gross_profit') {
+      const validMetrics: FinancialMetric[] = [
+        'revenue',
+        'gross_profit',
+        'net_income',
+        'operating_income',
+        'total_assets',
+        'total_liabilities',
+        'shareholders_equity',
+        'operating_cash_flow',
+        'eps',
+      ]
+      if (!validMetrics.includes(metric)) {
         return { answer: '', dataUsed: null, error: 'Invalid metric' }
       }
 

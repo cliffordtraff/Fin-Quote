@@ -52,10 +52,19 @@ export async function getCompaniesWithFinancials(): Promise<{
   }
 }
 
-// Safe, purpose-built tool for fetching a specific financial metric for AAPL only (v1)
+// Safe, purpose-built tool for fetching a specific financial metric for AAPL only (v2)
 // This is designed to be called by server code (e.g., an LLM routing step) and returns
 // a minimal, predictable shape for easy prompting and display.
-export type FinancialMetric = 'revenue' | 'gross_profit'
+export type FinancialMetric =
+  | 'revenue'
+  | 'gross_profit'
+  | 'net_income'
+  | 'operating_income'
+  | 'total_assets'
+  | 'total_liabilities'
+  | 'shareholders_equity'
+  | 'operating_cash_flow'
+  | 'eps'
 
 export async function getAaplFinancialsByMetric(params: {
   metric: FinancialMetric
@@ -68,20 +77,30 @@ export async function getAaplFinancialsByMetric(params: {
   const requestedLimit = params.limit ?? 4
 
   // Enforce simple guardrails for MVP
-  const allowedMetrics: FinancialMetric[] = ['revenue', 'gross_profit']
+  const allowedMetrics: FinancialMetric[] = [
+    'revenue',
+    'gross_profit',
+    'net_income',
+    'operating_income',
+    'total_assets',
+    'total_liabilities',
+    'shareholders_equity',
+    'operating_cash_flow',
+    'eps',
+  ]
   if (!allowedMetrics.includes(metric)) {
     return { data: null, error: 'Unsupported metric' }
   }
 
-  // Limit rows to a small, safe window (1..8)
-  const safeLimit = Math.min(Math.max(requestedLimit, 1), 8)
+  // Limit rows to a small, safe window (1..10)
+  const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)
 
   try {
     const supabase = createServerClient()
 
     const { data, error } = await supabase
       .from('financials_std')
-      .select('year, revenue, gross_profit')
+      .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps')
       .eq('symbol', 'AAPL')
       .order('year', { ascending: false })
       .limit(safeLimit)
@@ -93,7 +112,7 @@ export async function getAaplFinancialsByMetric(params: {
 
     const mapped = (data ?? []).map((row) => ({
       year: row.year,
-      value: row[metric as 'revenue' | 'gross_profit'] as number,
+      value: row[metric] as number,
       metric,
     }))
 
