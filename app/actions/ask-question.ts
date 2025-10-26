@@ -3,6 +3,7 @@
 import OpenAI from 'openai'
 import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
 import { getAaplPrices, PriceRange } from './prices'
+import { getRecentFilings } from './filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 
 const openai = new OpenAI({
@@ -11,12 +12,20 @@ const openai = new OpenAI({
 
 export type FinancialData = { year: number; value: number; metric: string }
 export type PriceData = { date: string; close: number }
+export type FilingData = {
+  filing_type: string
+  filing_date: string
+  period_end_date: string
+  fiscal_year: number
+  fiscal_quarter: number | null
+  document_url: string
+}
 
 export type AskQuestionResponse = {
   answer: string
   dataUsed: {
-    type: 'financials' | 'prices'
-    data: FinancialData[] | PriceData[]
+    type: 'financials' | 'prices' | 'filings'
+    data: FinancialData[] | PriceData[] | FilingData[]
   } | null
   error: string | null
 }
@@ -71,7 +80,7 @@ export async function askQuestion(
 
     // Step 2: Execute the tool based on selection
     let factsJson: string
-    let dataUsed: { type: 'financials' | 'prices'; data: any[] }
+    let dataUsed: { type: 'financials' | 'prices' | 'filings'; data: any[] }
 
     if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
@@ -125,6 +134,25 @@ export async function askQuestion(
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'prices', data: toolResult.data }
+    } else if (toolSelection.tool === 'getRecentFilings') {
+      // Validate limit
+      const limit = toolSelection.args.limit || 5
+      if (limit < 1 || limit > 10) {
+        return { answer: '', dataUsed: null, error: 'Invalid limit (must be 1-10)' }
+      }
+
+      const toolResult = await getRecentFilings({ limit })
+
+      if (toolResult.error || !toolResult.data) {
+        return {
+          answer: '',
+          dataUsed: null,
+          error: toolResult.error || 'Failed to fetch filings data',
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'filings', data: toolResult.data }
     } else {
       return { answer: '', dataUsed: null, error: 'Unsupported tool selected' }
     }

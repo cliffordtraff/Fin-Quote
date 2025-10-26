@@ -88,6 +88,45 @@ export interface Database {
           }
         ]
       }
+      filings: {
+        Row: {
+          id: string
+          created_at: string
+          ticker: string
+          filing_type: string
+          filing_date: string
+          period_end_date: string
+          accession_number: string
+          document_url: string
+          fiscal_year: number
+          fiscal_quarter: number | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          ticker: string
+          filing_type: string
+          filing_date: string
+          period_end_date: string
+          accession_number: string
+          document_url: string
+          fiscal_year: number
+          fiscal_quarter?: number | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          ticker?: string
+          filing_type?: string
+          filing_date?: string
+          period_end_date?: string
+          accession_number?: string
+          document_url?: string
+          fiscal_year?: number
+          fiscal_quarter?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {}
     Functions: {}
@@ -99,6 +138,7 @@ export interface Database {
 // Helper types for easier use
 export type Company = Database['public']['Tables']['company']['Row']
 export type Financial = Database['public']['Tables']['financials_std']['Row']
+export type Filing = Database['public']['Tables']['filings']['Row']
 
 // Type for joined data
 export type CompanyWithFinancials = Company & {

@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings'
 
 export type ToolDefinition = {
   name: ToolName
@@ -27,6 +27,14 @@ export const TOOL_MENU: ToolDefinition[] = [
     },
     notes: 'Returns daily closing prices. Ticker is fixed to AAPL for MVP.',
   },
+  {
+    name: 'getRecentFilings',
+    description: 'Get recent SEC filings (10-K annual reports, 10-Q quarterly reports) for AAPL.',
+    args: {
+      limit: 'integer 1–10 (defaults to 5)',
+    },
+    notes: 'Returns filing metadata with links to SEC EDGAR documents. Ticker is fixed to AAPL for MVP.',
+  },
 ]
 
 export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool from the provided menu and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
@@ -42,6 +50,9 @@ Available Tools:
 2. getPrices - Use for questions about stock price, share price, or market price trends
    - args: {"range": "7d" | "30d" | "90d"}
 
+3. getRecentFilings - Use for questions about SEC filings, 10-K, 10-Q, quarterly reports, annual reports
+   - args: {"limit": 1-10}
+
 Rules:
 - Ticker is fixed to AAPL (MVP)
 - Choose the tool that best matches the question
@@ -53,7 +64,8 @@ Return ONLY JSON. Examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":4}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":8}}
-{"tool":"getPrices","args":{"range":"30d"}}`
+{"tool":"getPrices","args":{"range":"30d"}}
+{"tool":"getRecentFilings","args":{"limit":5}}`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,

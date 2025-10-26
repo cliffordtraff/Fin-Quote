@@ -1,0 +1,402 @@
+[
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2025-08-01",
+    "period_end_date": "2025-06-28",
+    "accession_number": "0000320193-25-000073",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250628.htm",
+    "fiscal_year": 2025,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2025-05-02",
+    "period_end_date": "2025-03-29",
+    "accession_number": "0000320193-25-000057",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/aapl-20250329.htm",
+    "fiscal_year": 2025,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2025-01-31",
+    "period_end_date": "2024-12-28",
+    "accession_number": "0000320193-25-000008",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/aapl-20241228.htm",
+    "fiscal_year": 2024,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2024-11-01",
+    "period_end_date": "2024-09-28",
+    "accession_number": "0000320193-24-000123",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm",
+    "fiscal_year": 2024,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2024-08-02",
+    "period_end_date": "2024-06-29",
+    "accession_number": "0000320193-24-000081",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000081/aapl-20240629.htm",
+    "fiscal_year": 2024,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2024-05-03",
+    "period_end_date": "2024-03-30",
+    "accession_number": "0000320193-24-000069",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000069/aapl-20240330.htm",
+    "fiscal_year": 2024,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2024-02-02",
+    "period_end_date": "2023-12-30",
+    "accession_number": "0000320193-24-000006",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000006/aapl-20231230.htm",
+    "fiscal_year": 2023,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2023-11-03",
+    "period_end_date": "2023-09-30",
+    "accession_number": "0000320193-23-000106",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+    "fiscal_year": 2023,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2023-08-04",
+    "period_end_date": "2023-07-01",
+    "accession_number": "0000320193-23-000077",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000077/aapl-20230701.htm",
+    "fiscal_year": 2023,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2023-05-05",
+    "period_end_date": "2023-04-01",
+    "accession_number": "0000320193-23-000064",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000064/aapl-20230401.htm",
+    "fiscal_year": 2023,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2023-02-03",
+    "period_end_date": "2022-12-31",
+    "accession_number": "0000320193-23-000006",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019323000006/aapl-20221231.htm",
+    "fiscal_year": 2022,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2022-10-28",
+    "period_end_date": "2022-09-24",
+    "accession_number": "0000320193-22-000108",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019322000108/aapl-20220924.htm",
+    "fiscal_year": 2022,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2022-07-29",
+    "period_end_date": "2022-06-25",
+    "accession_number": "0000320193-22-000070",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019322000070/aapl-20220625.htm",
+    "fiscal_year": 2022,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2022-04-29",
+    "period_end_date": "2022-03-26",
+    "accession_number": "0000320193-22-000059",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019322000059/aapl-20220326.htm",
+    "fiscal_year": 2022,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2022-01-28",
+    "period_end_date": "2021-12-25",
+    "accession_number": "0000320193-22-000007",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019322000007/aapl-20211225.htm",
+    "fiscal_year": 2021,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2021-10-29",
+    "period_end_date": "2021-09-25",
+    "accession_number": "0000320193-21-000105",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019321000105/aapl-20210925.htm",
+    "fiscal_year": 2021,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2021-07-28",
+    "period_end_date": "2021-06-26",
+    "accession_number": "0000320193-21-000065",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019321000065/aapl-20210626.htm",
+    "fiscal_year": 2021,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2021-04-29",
+    "period_end_date": "2021-03-27",
+    "accession_number": "0000320193-21-000056",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019321000056/aapl-20210327.htm",
+    "fiscal_year": 2021,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2021-01-28",
+    "period_end_date": "2020-12-26",
+    "accession_number": "0000320193-21-000010",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019321000010/aapl-20201226.htm",
+    "fiscal_year": 2020,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2020-10-30",
+    "period_end_date": "2020-09-26",
+    "accession_number": "0000320193-20-000096",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019320000096/aapl-20200926.htm",
+    "fiscal_year": 2020,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2020-07-31",
+    "period_end_date": "2020-06-27",
+    "accession_number": "0000320193-20-000062",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019320000062/aapl-20200627.htm",
+    "fiscal_year": 2020,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2020-05-01",
+    "period_end_date": "2020-03-28",
+    "accession_number": "0000320193-20-000052",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019320000052/a10-qq220203282020.htm",
+    "fiscal_year": 2020,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2020-01-29",
+    "period_end_date": "2019-12-28",
+    "accession_number": "0000320193-20-000010",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019320000010/a10-qq1202012282019.htm",
+    "fiscal_year": 2019,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2019-10-31",
+    "period_end_date": "2019-09-28",
+    "accession_number": "0000320193-19-000119",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019319000119/a10-k20199282019.htm",
+    "fiscal_year": 2019,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2019-07-31",
+    "period_end_date": "2019-06-29",
+    "accession_number": "0000320193-19-000076",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019319000076/a10-qq320196292019.htm",
+    "fiscal_year": 2019,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2019-05-01",
+    "period_end_date": "2019-03-30",
+    "accession_number": "0000320193-19-000066",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019319000066/a10-qq220193302019.htm",
+    "fiscal_year": 2019,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2019-01-30",
+    "period_end_date": "2018-12-29",
+    "accession_number": "0000320193-19-000010",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019319000010/a10-qq1201912292018.htm",
+    "fiscal_year": 2018,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2018-11-05",
+    "period_end_date": "2018-09-29",
+    "accession_number": "0000320193-18-000145",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019318000145/a10-k20189292018.htm",
+    "fiscal_year": 2018,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2018-08-01",
+    "period_end_date": "2018-06-30",
+    "accession_number": "0000320193-18-000100",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019318000100/a10-qq320186302018.htm",
+    "fiscal_year": 2018,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2018-05-02",
+    "period_end_date": "2018-03-31",
+    "accession_number": "0000320193-18-000070",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019318000070/a10-qq220183312018.htm",
+    "fiscal_year": 2018,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2018-02-02",
+    "period_end_date": "2017-12-30",
+    "accession_number": "0000320193-18-000007",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019318000007/a10-qq1201812302017.htm",
+    "fiscal_year": 2017,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2017-11-03",
+    "period_end_date": "2017-09-30",
+    "accession_number": "0000320193-17-000070",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019317000070/a10-k20179302017.htm",
+    "fiscal_year": 2017,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2017-08-02",
+    "period_end_date": "2017-07-01",
+    "accession_number": "0000320193-17-000009",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019317000009/a10-qq32017712017.htm",
+    "fiscal_year": 2017,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2017-05-03",
+    "period_end_date": "2017-04-01",
+    "accession_number": "0001628280-17-004790",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000162828017004790/a10-qq22017412017.htm",
+    "fiscal_year": 2017,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2017-02-01",
+    "period_end_date": "2016-12-31",
+    "accession_number": "0001628280-17-000717",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000162828017000717/a10-qq1201712312016.htm",
+    "fiscal_year": 2016,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2016-10-26",
+    "period_end_date": "2016-09-24",
+    "accession_number": "0001628280-16-020309",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000162828016020309/a201610-k9242016.htm",
+    "fiscal_year": 2016,
+    "fiscal_quarter": null
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2016-07-27",
+    "period_end_date": "2016-06-25",
+    "accession_number": "0001628280-16-017809",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000162828016017809/a10-qq320166252016.htm",
+    "fiscal_year": 2016,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2016-04-27",
+    "period_end_date": "2016-03-26",
+    "accession_number": "0001193125-16-559625",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000119312516559625/d165350d10q.htm",
+    "fiscal_year": 2016,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-Q",
+    "filing_date": "2016-01-27",
+    "period_end_date": "2015-12-26",
+    "accession_number": "0001193125-16-439878",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000119312516439878/d66145d10q.htm",
+    "fiscal_year": 2015,
+    "fiscal_quarter": 1
+  },
+  {
+    "ticker": "AAPL",
+    "filing_type": "10-K",
+    "filing_date": "2015-10-28",
+    "period_end_date": "2015-09-26",
+    "accession_number": "0001193125-15-356351",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/320193/000119312515356351/d17062d10k.htm",
+    "fiscal_year": 2015,
+    "fiscal_quarter": null
+  }
+]

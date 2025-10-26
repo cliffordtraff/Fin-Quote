@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { askQuestion, FinancialData, PriceData } from '@/app/actions/ask-question'
+import { askQuestion, FinancialData, PriceData, FilingData } from '@/app/actions/ask-question'
 
 export default function AskPage() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [dataUsed, setDataUsed] = useState<{
-    type: 'financials' | 'prices'
-    data: FinancialData[] | PriceData[]
+    type: 'financials' | 'prices' | 'filings'
+    data: FinancialData[] | PriceData[] | FilingData[]
   } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -109,13 +109,28 @@ export default function AskPage() {
                               Value
                             </th>
                           </>
-                        ) : (
+                        ) : dataUsed.type === 'prices' ? (
                           <>
                             <th className="text-left py-2 px-3 font-medium text-blue-900">
                               Date
                             </th>
                             <th className="text-right py-2 px-3 font-medium text-blue-900">
                               Close Price
+                            </th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Type
+                            </th>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Filing Date
+                            </th>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Period End
+                            </th>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Document
                             </th>
                           </>
                         )}
@@ -132,11 +147,32 @@ export default function AskPage() {
                               </td>
                             </tr>
                           ))
-                        : (dataUsed.data as PriceData[]).map((row, idx) => (
+                        : dataUsed.type === 'prices'
+                        ? (dataUsed.data as PriceData[]).map((row, idx) => (
                             <tr key={idx} className="border-b border-blue-100">
                               <td className="py-2 px-3 text-gray-700">{row.date}</td>
                               <td className="py-2 px-3 text-right text-gray-700">
                                 ${row.close.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))
+                        : (dataUsed.data as FilingData[]).map((row, idx) => (
+                            <tr key={idx} className="border-b border-blue-100">
+                              <td className="py-2 px-3 text-gray-700">
+                                {row.filing_type}
+                                {row.fiscal_quarter && ` Q${row.fiscal_quarter}`}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">{row.filing_date}</td>
+                              <td className="py-2 px-3 text-gray-700">{row.period_end_date}</td>
+                              <td className="py-2 px-3 text-gray-700">
+                                <a
+                                  href={row.document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 underline"
+                                >
+                                  View on SEC
+                                </a>
                               </td>
                             </tr>
                           ))}
@@ -155,6 +191,7 @@ export default function AskPage() {
             <ul className="text-sm mt-2 space-y-1">
               <li>"How is AAPL's revenue trending over the last 5 years?"</li>
               <li>"What's AAPL's stock price trend over the last 30 days?"</li>
+              <li>"Show me AAPL's last 3 quarterly filings"</li>
             </ul>
           </div>
         )}
