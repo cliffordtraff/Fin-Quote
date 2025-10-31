@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings'
 
 export type ToolDefinition = {
   name: ToolName
@@ -35,12 +35,21 @@ export const TOOL_MENU: ToolDefinition[] = [
     },
     notes: 'Returns filing metadata with links to SEC EDGAR documents. Ticker is fixed to AAPL for MVP.',
   },
+  {
+    name: 'searchFilings',
+    description: 'Search AAPL SEC filing content to answer questions about risks, strategy, management commentary, business description, etc.',
+    args: {
+      query: 'natural language search query',
+      limit: 'integer 1–10 (defaults to 5)',
+    },
+    notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
+  },
 ]
 
 export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool from the provided menu and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
-1. getAaplFinancialsByMetric - Use for questions about financial metrics from statements
+1. getAaplFinancialsByMetric - Use for questions about financial NUMBERS from statements
    - Income Statement: revenue, gross_profit, net_income, operating_income
    - Balance Sheet: total_assets, total_liabilities, shareholders_equity
    - Cash Flow: operating_cash_flow
@@ -50,22 +59,26 @@ Available Tools:
 2. getPrices - Use for questions about stock price, share price, or market price trends
    - args: {"range": "7d" | "30d" | "90d"}
 
-3. getRecentFilings - Use for questions about SEC filings, 10-K, 10-Q, quarterly reports, annual reports
+3. getRecentFilings - Use to LIST recent filings (metadata: dates, types, links)
    - args: {"limit": 1-10}
+
+4. searchFilings - Use to answer questions ABOUT filing content (risks, strategy, commentary, business description)
+   - Keywords: "what risks", "what did", "describe", "explain", "strategy", "management said", "business model"
+   - args: {"query": "<user question>", "limit": 5}
 
 Rules:
 - Ticker is fixed to AAPL (MVP)
 - Choose the tool that best matches the question
+- Use searchFilings for qualitative content questions, getRecentFilings for listing filings
 - Return ONLY valid JSON, no explanation
 
 User question: "${userQuestion}"
 
 Return ONLY JSON. Examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":4}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","limit":5}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":8}}
 {"tool":"getPrices","args":{"range":"30d"}}
-{"tool":"getRecentFilings","args":{"limit":5}}`
+{"tool":"getRecentFilings","args":{"limit":5}}
+{"tool":"searchFilings","args":{"query":"What supply chain risks did AAPL mention?","limit":5}}`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,

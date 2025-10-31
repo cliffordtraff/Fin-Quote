@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { askQuestion, FinancialData, PriceData, FilingData } from '@/app/actions/ask-question'
+import { askQuestion, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
 
 export default function AskPage() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [dataUsed, setDataUsed] = useState<{
-    type: 'financials' | 'prices' | 'filings'
-    data: FinancialData[] | PriceData[] | FilingData[]
+    type: 'financials' | 'prices' | 'filings' | 'passages'
+    data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
   } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -118,7 +118,7 @@ export default function AskPage() {
                               Close Price
                             </th>
                           </>
-                        ) : (
+                        ) : dataUsed.type === 'filings' ? (
                           <>
                             <th className="text-left py-2 px-3 font-medium text-blue-900">
                               Type
@@ -131,6 +131,18 @@ export default function AskPage() {
                             </th>
                             <th className="text-left py-2 px-3 font-medium text-blue-900">
                               Document
+                            </th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Source
+                            </th>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Section
+                            </th>
+                            <th className="text-left py-2 px-3 font-medium text-blue-900">
+                              Passage
                             </th>
                           </>
                         )}
@@ -156,7 +168,8 @@ export default function AskPage() {
                               </td>
                             </tr>
                           ))
-                        : (dataUsed.data as FilingData[]).map((row, idx) => (
+                        : dataUsed.type === 'filings'
+                        ? (dataUsed.data as FilingData[]).map((row, idx) => (
                             <tr key={idx} className="border-b border-blue-100">
                               <td className="py-2 px-3 text-gray-700">
                                 {row.filing_type}
@@ -173,6 +186,22 @@ export default function AskPage() {
                                 >
                                   View on SEC
                                 </a>
+                              </td>
+                            </tr>
+                          ))
+                        : (dataUsed.data as PassageData[]).map((row, idx) => (
+                            <tr key={idx} className="border-b border-blue-100">
+                              <td className="py-2 px-3 text-gray-700 text-sm">
+                                {row.filing_type} FY{row.fiscal_year}
+                                {row.fiscal_quarter && ` Q${row.fiscal_quarter}`}
+                                <br />
+                                <span className="text-xs text-gray-500">{row.filing_date}</span>
+                              </td>
+                              <td className="py-2 px-3 text-gray-700 text-sm">
+                                {row.section_name}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700 text-sm">
+                                {row.chunk_text.substring(0, 200)}...
                               </td>
                             </tr>
                           ))}
@@ -192,6 +221,7 @@ export default function AskPage() {
               <li>"How is AAPL's revenue trending over the last 5 years?"</li>
               <li>"What's AAPL's stock price trend over the last 30 days?"</li>
               <li>"Show me AAPL's last 3 quarterly filings"</li>
+              <li>"What supply chain risks did AAPL mention in their filings?"</li>
             </ul>
           </div>
         )}

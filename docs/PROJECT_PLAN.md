@@ -239,8 +239,185 @@ last 30 days, showing an upward trend of approximately 4.1%.
 
 ### Next After This
 Once `getPrices` is working, options:
-- Add more metrics to `getAaplFinancialsByMetric` (net_income, eps, etc.)
+- ✅ Add more metrics to `getAaplFinancialsByMetric` (net_income, eps, etc.) - COMPLETE
 - Begin Phase 3: filings ingestion + `getRecentFilings` tool
 - Add more tickers (expand beyond AAPL-only)
+
+---
+
+## Phase 3 — CURRENT: SEC Filings Ingestion + getRecentFilings Tool
+
+### Objective
+Build foundation for document-based Q&A by ingesting SEC filing metadata and exposing it via a new tool.
+
+### Implementation Plan
+
+#### 1. Create Database Schema
+**New Table:** `filings`
+
+**Columns:**
+- `id` (uuid, primary key)
+- `created_at` (timestamp)
+- `ticker` (text) - Company symbol (e.g., "AAPL")
+- `filing_type` (text) - "10-K", "10-Q", "8-K", etc.
+- `filing_date` (date) - When filed with SEC
+- `period_end_date` (date) - Fiscal period end date
+- `accession_number` (text, unique) - SEC unique identifier
+- `document_url` (text) - Link to filing on SEC EDGAR
+- `fiscal_year` (integer) - Year of filing
+- `fiscal_quarter` (integer, nullable) - Quarter (1-4) for 10-Q, null for 10-K
+
+**Indexes:**
+- `(ticker, filing_date)` - Fast queries by company and date
+- `accession_number` - Ensure no duplicates
+
+**SQL to run in Supabase:**
+```sql
+CREATE TABLE filings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  ticker TEXT NOT NULL,
+  filing_type TEXT NOT NULL,
+  filing_date DATE NOT NULL,
+  period_end_date DATE NOT NULL,
+  accession_number TEXT UNIQUE NOT NULL,
+  document_url TEXT NOT NULL,
+  fiscal_year INTEGER NOT NULL,
+  fiscal_quarter INTEGER
+);
+
+CREATE INDEX idx_filings_ticker_date ON filings(ticker, filing_date DESC);
+CREATE INDEX idx_filings_accession ON filings(accession_number);
+```
+
+#### 2. Fetch SEC EDGAR Data
+**Data Source:** SEC EDGAR API (free, no key required)
+
+**Endpoint:** `https://data.sec.gov/submissions/CIK{cik}.json`
+- AAPL CIK: 0000320193
+
+**What we get:**
+- Recent filings list with accession numbers, dates, types
+- Filing URLs
+
+**Script:** `scripts/fetch-sec-filings.ts`
+- Fetch AAPL filings from SEC API
+- Filter to 10-K and 10-Q only (ignore 8-K, etc. for MVP)
+- Extract metadata: type, date, accession, URL
+- Save as seed file: `data/aapl-filings.json`
+
+**Important:** SEC requires User-Agent header with contact info
+
+#### 3. Create Ingestion Script
+**Script:** `scripts/ingest-filings.ts`
+- Read from `data/aapl-filings.json`
+- Check for existing filings by accession_number
+- INSERT new filings, skip duplicates
+- Log success/errors
+
+**Similar to:** `scripts/ingest-financials.ts` pattern
+
+#### 4. Create Server Action Tool
+**File:** `app/actions/filings.ts`
+
+**Function:** `getRecentFilings({ ticker, limit })`
+- Validates ticker = "AAPL" (MVP)
+- Validates limit 1-10
+- Queries Supabase `filings` table
+- Orders by filing_date DESC
+- Returns: `Array<{ type, filing_date, period_end_date, url }>`
+
+#### 5. Update Tool Menu
+**File:** `lib/tools.ts`
+
+Add new tool definition:
+```typescript
+{
+  name: 'getRecentFilings',
+  description: 'Get recent SEC filings (10-K, 10-Q) for AAPL',
+  args: {
+    limit: 'integer 1-10 (defaults to 5)'
+  }
+}
+```
+
+Update `buildToolSelectionPrompt` to include 3 tools:
+1. getAaplFinancialsByMetric - financial metrics
+2. getPrices - stock prices
+3. getRecentFilings - SEC filings
+
+#### 6. Update Orchestration
+**File:** `app/actions/ask-question.ts`
+
+Add third tool handler:
+```typescript
+else if (toolSelection.tool === 'getRecentFilings') {
+  // Validate limit
+  // Call getRecentFilings()
+  // Set dataUsed type to 'filings'
+}
+```
+
+#### 7. Update UI for Filings Data
+**File:** `app/ask/page.tsx`
+
+Extend `dataUsed` type:
+```typescript
+type: 'financials' | 'prices' | 'filings'
+```
+
+Add filings display table:
+- Filing Type
+- Filing Date
+- Period End Date
+- Link to SEC document
+
+#### 8. Update Database Types
+**File:** `lib/database.types.ts`
+
+Add `filings` table type definition
+
+### Example Flow
+
+**User Question:** "Show me AAPL's last 3 quarterly filings"
+
+**Step 1 - Selection:**
+```json
+{"tool": "getRecentFilings", "args": {"limit": 3}}
+```
+
+**Step 2 - Execution:**
+- Queries Supabase for 3 most recent filings
+- Returns filing metadata
+
+**Step 3 - Answer:**
+```
+AAPL's last 3 quarterly filings are:
+1. 10-Q for Q4 2024, filed on 2024-11-01
+2. 10-Q for Q3 2024, filed on 2024-08-01
+3. 10-Q for Q2 2024, filed on 2024-05-02
+```
+
+**Data Used Display:**
+Table with filing type, dates, and clickable links to SEC
+
+### Testing Criteria
+- ✅ Questions about filings route to `getRecentFilings` tool
+- ✅ Filings display with correct metadata
+- ✅ Links to SEC EDGAR work
+- ✅ No duplicate filings in database
+- ✅ Handles 10-K vs 10-Q correctly
+
+### Data Scope
+- AAPL only for MVP
+- Last 5-10 years of filings
+- 10-K (annual) and 10-Q (quarterly) only
+- Approximately 40-50 filings total
+
+### Next After This
+Once filings work:
+- Phase 4: Add RAG for full-text document Q&A
+- OR expand to multi-ticker support
+- OR add multi-hop reasoning for complex questions
 
 

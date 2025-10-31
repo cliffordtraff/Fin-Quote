@@ -1,0 +1,109 @@
+'use server'
+
+import { createServerClient } from '@/lib/supabase/server'
+import OpenAI from 'openai'
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+
+export type FilingPassage = {
+  chunk_text: string
+  section_name: string
+  filing_type: string
+  filing_date: string
+  fiscal_year: number
+  fiscal_quarter: number | null
+}
+
+// Safe, purpose-built tool for semantic search of filing content
+export async function searchFilings(params: {
+  query: string
+  limit?: number // number of passages to retrieve (1-10)
+}): Promise<{
+  data: FilingPassage[] | null
+  error: string | null
+}> {
+  const { query } = params
+  const requestedLimit = params.limit ?? 5
+
+  // Validate query
+  if (!query || query.trim().length === 0) {
+    return { data: null, error: 'Query cannot be empty' }
+  }
+
+  // Limit results to a safe range (1..10)
+  const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)
+
+  try {
+    // Step 1: Generate embedding for the query
+    const embeddingResponse = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query,
+    })
+
+    const queryEmbedding = embeddingResponse.data[0].embedding
+
+    // Step 2: Search for similar chunks using vector similarity
+    const supabase = createServerClient()
+
+    // PostgreSQL vector similarity search using <-> operator (cosine distance)
+    const { data: chunks, error: searchError } = await supabase.rpc(
+      'search_filing_chunks',
+      {
+        query_embedding: JSON.stringify(queryEmbedding),
+        match_count: safeLimit,
+      }
+    )
+
+    if (searchError) {
+      // If RPC function doesn't exist, fall back to manual query
+      console.log('RPC function not found, using manual query')
+
+      const { data: manualChunks, error: manualError } = await supabase
+        .from('filing_chunks')
+        .select(`
+          chunk_text,
+          section_name,
+          filings!inner(filing_type, filing_date, fiscal_year, fiscal_quarter)
+        `)
+        .not('embedding', 'is', null)
+        .limit(safeLimit)
+
+      if (manualError) {
+        console.error('Error searching filing chunks:', manualError)
+        return { data: null, error: manualError.message }
+      }
+
+      // Format response
+      const passages: FilingPassage[] = (manualChunks || []).map((chunk: any) => ({
+        chunk_text: chunk.chunk_text,
+        section_name: chunk.section_name || 'Unknown',
+        filing_type: chunk.filings.filing_type,
+        filing_date: chunk.filings.filing_date,
+        fiscal_year: chunk.filings.fiscal_year,
+        fiscal_quarter: chunk.filings.fiscal_quarter,
+      }))
+
+      return { data: passages, error: null }
+    }
+
+    // Format response from RPC function
+    const passages: FilingPassage[] = (chunks || []).map((chunk: any) => ({
+      chunk_text: chunk.chunk_text,
+      section_name: chunk.section_name || 'Unknown',
+      filing_type: chunk.filing_type,
+      filing_date: chunk.filing_date,
+      fiscal_year: chunk.fiscal_year,
+      fiscal_quarter: chunk.fiscal_quarter,
+    }))
+
+    return { data: passages, error: null }
+  } catch (err) {
+    console.error('Unexpected error (searchFilings):', err)
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred',
+    }
+  }
+}

@@ -4,6 +4,7 @@ import OpenAI from 'openai'
 import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
 import { getAaplPrices, PriceRange } from './prices'
 import { getRecentFilings } from './filings'
+import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 
 const openai = new OpenAI({
@@ -20,12 +21,13 @@ export type FilingData = {
   fiscal_quarter: number | null
   document_url: string
 }
+export type PassageData = FilingPassage
 
 export type AskQuestionResponse = {
   answer: string
   dataUsed: {
-    type: 'financials' | 'prices' | 'filings'
-    data: FinancialData[] | PriceData[] | FilingData[]
+    type: 'financials' | 'prices' | 'filings' | 'passages'
+    data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
   } | null
   error: string | null
 }
@@ -80,7 +82,7 @@ export async function askQuestion(
 
     // Step 2: Execute the tool based on selection
     let factsJson: string
-    let dataUsed: { type: 'financials' | 'prices' | 'filings'; data: any[] }
+    let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages'; data: any[] }
 
     if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
@@ -153,6 +155,30 @@ export async function askQuestion(
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'filings', data: toolResult.data }
+    } else if (toolSelection.tool === 'searchFilings') {
+      // Validate query
+      const query = toolSelection.args.query || userQuestion
+      if (!query || query.trim().length === 0) {
+        return { answer: '', dataUsed: null, error: 'Search query cannot be empty' }
+      }
+
+      const limit = toolSelection.args.limit || 5
+      if (limit < 1 || limit > 10) {
+        return { answer: '', dataUsed: null, error: 'Invalid limit (must be 1-10)' }
+      }
+
+      const toolResult = await searchFilings({ query, limit })
+
+      if (toolResult.error || !toolResult.data) {
+        return {
+          answer: '',
+          dataUsed: null,
+          error: toolResult.error || 'Failed to search filings',
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'passages', data: toolResult.data }
     } else {
       return { answer: '', dataUsed: null, error: 'Unsupported tool selected' }
     }
