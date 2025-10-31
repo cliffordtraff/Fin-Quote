@@ -97,9 +97,13 @@ UI displays: text answer + chart + data table
 1. Install Highcharts packages
    - `highcharts`
    - `highcharts-react-official`
-2. Create `components/FinancialChart.tsx` component
+2. Create `components/FinancialChart.tsx` component with **SSR fix**
+   - Use dynamic import with `ssr: false` to prevent hydration errors
+   - Next.js will only load Highcharts in the browser (not server)
 3. Add hardcoded example to test page
 4. Verify chart renders correctly
+
+**Critical Note:** Highcharts requires the DOM (browser), so we must disable server-side rendering for this component.
 
 **Deliverable:** A working chart component showing dummy data
 
@@ -142,16 +146,22 @@ UI displays: text answer + chart + data table
 
 **Tasks:**
 1. Create helper function to determine if data should have a chart
-2. Handle different data formats (financials vs prices)
-3. Format axis labels appropriately
+2. **Sort and normalize data** (prevent wrong order in charts)
+   - Sort by year (financials) or date (prices)
+   - Deduplicate if needed
+3. Handle different data formats (financials vs prices)
+4. **Format numbers with Intl.NumberFormat** for consistency
+   - Financial metrics: "$274.5B" (billions)
+   - Prices: "$182.45" (exact)
+5. Format axis labels appropriately
    - Financial metrics: "Net Income ($B)"
    - Prices: "Stock Price ($)"
-4. Format chart titles based on query
+6. Format chart titles based on query
    - "AAPL Revenue (2020-2024)"
    - "AAPL Stock Price (Last 30 Days)"
-5. Handle edge cases (1 data point, missing data, etc.)
+7. Handle edge cases (1 data point, missing data, etc.)
 
-**Deliverable:** Smart chart generation with proper formatting
+**Deliverable:** Smart chart generation with proper formatting and data normalization
 
 **Files Modified:**
 - `lib/chart-helpers.ts` (enhanced logic)
@@ -543,6 +553,31 @@ lib/
 
 ---
 
+## Critical Implementation Notes
+
+### SSR/Hydration Fix (Stage 1)
+**Problem:** Highcharts needs browser DOM, but Next.js renders on server first.
+**Solution:** Use dynamic import with `ssr: false` in the chart component.
+```tsx
+const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
+  ssr: false
+})
+```
+
+### Data Normalization (Stage 3)
+**Problem:** Data may come back unsorted or have gaps.
+**Solution:** Sort by date/year before passing to chart.
+```typescript
+data.sort((a, b) => a.year - b.year)
+```
+
+### Licensing Consideration
+**Note:** Highcharts requires a commercial license for production use (~$500+).
+**Alternatives:** Chart.js (MIT) or ECharts (Apache) if license is an issue.
+**For MVP:** Highcharts is fine for evaluation/learning.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -586,3 +621,45 @@ Display a hardcoded chart on the `/ask` page to verify Highcharts is working
 ## Next Step
 
 Begin Stage 1: Install Highcharts and create basic chart component
+
+---
+
+## Plan Review & Recommendations
+
+### Overall
+Strong MVP: clear stages, limited scope (column only), and solid rules for when to show charts. Good focus on generating a config object and keeping the component reusable.
+
+### Key improvements
+- **Architecture & SSR**
+  - Use client-only dynamic import for Highcharts in Next.js to avoid SSR/hydration issues.
+  - Generate `chartConfig` deterministically in code (not by the LLM) inside `app/actions/ask-question.ts`; keep it fully serializable.
+  - Strengthen types with a discriminated union and include metric metadata (name, unit, frequency) to format labels.
+- **Data shaping & formatting**
+  - Normalize, sort, and dedupe categories; handle missing periods gracefully.
+  - Use `Intl.NumberFormat` for numbers/dates; auto-scale units (B, M) and expose `unit` in config.
+  - Choose time granularity (year/quarter/daily) from data and reflect it in axis labels.
+- **Component & UX**
+  - Add loading/skeleton, empty-state, and a small error banner near the chart.
+  - Accessibility: chart title as `aria-label`, and provide a table fallback toggle for screen readers.
+  - Keep styles themeable via Tailwind tokens; use a fixed-height container to prevent layout shift.
+- **Performance**
+  - Lazy-load Highcharts, memoize chart `options`, clamp max points (e.g., 100–300), and import only needed modules.
+  - Generate chart configs server-side to minimize client work and LLM latency.
+- **Licensing & testing**
+  - Highcharts has a commercial license; confirm fit. If not, consider ECharts or Chart.js.
+  - Unit-test `lib/chart-helpers.ts`; add E2E to verify charts render for financials/prices and not for filings/search.
+
+### Top risks to watch
+- **Hydration errors** if Highcharts renders on the server.
+- **Inconsistent units/axes** if metric metadata isn’t centralized.
+- **Large payloads** (excessive points) hurting load time and interactivity.
+
+### Quick wins
+- **Dynamic import** `highcharts-react-official` in `components/FinancialChart.tsx`.
+- **Helper contracts**: `generateChartConfig`, `formatFinancialValue`, `formatDateLabel` with unit tests.
+- **Response typing**: add `chartConfig?: ChartConfig | null` and metric metadata to `AskQuestionResponse` now.
+
+### Suggested next 3 actions
+1. Add a client-only chart wrapper and lazy-load Highcharts; render a dummy chart on `app/ask/page.tsx`.
+2. Implement `lib/chart-helpers.ts` with sorting, scaling, and date formatting; write quick unit tests.
+3. Update `app/actions/ask-question.ts` to return typed `chartConfig` for financials/prices and `null` otherwise; conditionally render in the UI.
