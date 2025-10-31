@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { askQuestion, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
 import FinancialChart from '@/components/FinancialChart'
 import type { ChartConfig } from '@/types/chart'
+import type { ConversationHistory, Message } from '@/types/conversation'
 
 export default function AskPage() {
   const [question, setQuestion] = useState('')
@@ -15,6 +16,28 @@ export default function AskPage() {
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
+
+  // Load conversation history from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('finquote_conversation')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setConversationHistory(parsed)
+      } catch (err) {
+        console.error('Failed to load conversation history:', err)
+        localStorage.removeItem('finquote_conversation')
+      }
+    }
+  }, [])
+
+  // Save conversation history to localStorage whenever it changes
+  useEffect(() => {
+    if (conversationHistory.length > 0) {
+      localStorage.setItem('finquote_conversation', JSON.stringify(conversationHistory))
+    }
+  }, [conversationHistory])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,12 +53,31 @@ export default function AskPage() {
     setDataUsed(null)
     setChartConfig(null)
 
+    // Create user message
+    const userMessage: Message = {
+      role: 'user',
+      content: question,
+      timestamp: new Date().toISOString(),
+    }
+
     try {
-      const result = await askQuestion(question)
+      // Send question with conversation history
+      const result = await askQuestion(question, conversationHistory)
 
       if (result.error) {
         setError(result.error)
       } else {
+        // Create assistant message
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: result.answer,
+          timestamp: new Date().toISOString(),
+        }
+
+        // Update conversation history with both messages
+        setConversationHistory([...conversationHistory, userMessage, assistantMessage])
+
+        // Update UI
         setAnswer(result.answer)
         setDataUsed(result.dataUsed)
         setChartConfig(result.chartConfig)
@@ -44,15 +86,41 @@ export default function AskPage() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setLoading(false)
+      setQuestion('') // Clear input after submission
     }
+  }
+
+  // Clear conversation history
+  const handleClearConversation = () => {
+    setConversationHistory([])
+    localStorage.removeItem('finquote_conversation')
+    setAnswer('')
+    setDataUsed(null)
+    setChartConfig(null)
+    setError('')
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-3xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Fin Quote</h1>
-          <p className="text-gray-600">Ask questions about AAPL financials</p>
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Fin Quote</h1>
+            <p className="text-gray-600">Ask questions about AAPL financials</p>
+            {conversationHistory.length > 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                {conversationHistory.length / 2} message{conversationHistory.length / 2 !== 1 ? 's' : ''} in conversation
+              </p>
+            )}
+          </div>
+          {conversationHistory.length > 0 && (
+            <button
+              onClick={handleClearConversation}
+              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Clear Conversation
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="mb-8">

@@ -70,7 +70,17 @@ Rules:
 - Ticker is fixed to AAPL (MVP)
 - Choose the tool that best matches the question
 - Use searchFilings for qualitative content questions, getRecentFilings for listing filings
+- IMPORTANT: Look at conversation history to resolve references like "that", "it", "same period", etc.
+- If user says "What about X?" and previously asked about metric Y over N years, use same N years for metric X
+- If user asks for different timeframe without mentioning metric, use metric from previous question
 - Return ONLY valid JSON, no explanation
+
+Conversation Context Examples:
+Previous: "AAPL revenue over 5 years"
+Current: "What about net income?" → {"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","limit":5}}
+
+Previous: "Stock price for 30 days"
+Current: "What about 90 days?" → {"tool":"getPrices","args":{"range":"90d"}}
 
 User question: "${userQuestion}"
 

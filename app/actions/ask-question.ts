@@ -8,6 +8,7 @@ import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import type { ChartConfig } from '@/types/chart'
+import type { ConversationHistory } from '@/types/conversation'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -37,12 +38,13 @@ export type AskQuestionResponse = {
 
 /**
  * Main server action: orchestrate the two-step LLM flow
- * 1. Selection step: model picks a tool and args
+ * 1. Selection step: model picks a tool and args (with conversation history)
  * 2. Execution: run the tool
- * 3. Answer step: model generates final answer using facts
+ * 3. Answer step: model generates final answer using facts (with conversation history)
  */
 export async function askQuestion(
-  userQuestion: string
+  userQuestion: string,
+  conversationHistory: ConversationHistory = []
 ): Promise<AskQuestionResponse> {
   try {
     // Validate input
@@ -50,17 +52,26 @@ export async function askQuestion(
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty' }
     }
 
-    // Step 1: Tool selection
+    // Step 1: Tool selection with conversation history
     const selectionPrompt = buildToolSelectionPrompt(userQuestion)
+
+    // Build messages array with conversation history
+    const selectionMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      // Include last 10 messages for context (limit to avoid token bloat)
+      ...conversationHistory.slice(-10).map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      })),
+      // Add current question with tool selection instructions
+      {
+        role: 'user' as const,
+        content: selectionPrompt,
+      },
+    ]
 
     const selectionResponse = await openai.chat.completions.create({
       model: 'gpt-4o-mini', // Fast and cheap for routing
-      messages: [
-        {
-          role: 'user',
-          content: selectionPrompt,
-        },
-      ],
+      messages: selectionMessages,
       temperature: 0,
       max_tokens: 150,
     })
@@ -198,17 +209,26 @@ export async function askQuestion(
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected' }
     }
 
-    // Step 3: Generate final answer using the fetched facts
+    // Step 3: Generate final answer using the fetched facts and conversation history
     const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson)
+
+    // Build messages array with conversation history
+    const answerMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      // Include last 10 messages for context
+      ...conversationHistory.slice(-10).map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      })),
+      // Add current question with facts
+      {
+        role: 'user' as const,
+        content: answerPrompt,
+      },
+    ]
 
     const answerResponse = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: answerPrompt,
-        },
-      ],
+      messages: answerMessages,
       temperature: 0,
       max_tokens: 500,
     })
