@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { askQuestion, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
+import FinancialChart from '@/components/FinancialChart'
+import type { ChartConfig } from '@/types/chart'
 
 export default function AskPage() {
   const [question, setQuestion] = useState('')
@@ -214,15 +216,34 @@ export default function AskPage() {
         )}
 
         {!answer && !error && !loading && (
-          <div className="text-center text-gray-500 py-12">
-            <p>Ask a question to get started</p>
-            <p className="text-sm mt-2">Try asking about:</p>
-            <ul className="text-sm mt-2 space-y-1">
-              <li>"How is AAPL's revenue trending over the last 5 years?"</li>
-              <li>"What's AAPL's stock price trend over the last 30 days?"</li>
-              <li>"Show me AAPL's last 3 quarterly filings"</li>
-              <li>"What supply chain risks did AAPL mention in their filings?"</li>
-            </ul>
+          <div className="space-y-6">
+            <div className="text-center text-gray-500 py-12">
+              <p>Ask a question to get started</p>
+              <p className="text-sm mt-2">Try asking about:</p>
+              <ul className="text-sm mt-2 space-y-1">
+                <li>"How is AAPL's revenue trending over the last 5 years?"</li>
+                <li>"What's AAPL's stock price trend over the last 30 days?"</li>
+                <li>"Show me AAPL's last 3 quarterly filings"</li>
+                <li>"What supply chain risks did AAPL mention in their filings?"</li>
+              </ul>
+            </div>
+
+            {/* Test Chart - Remove after Stage 1 testing */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-sm font-semibold mb-4 text-gray-700">
+                Test Chart (Stage 1 - Will be removed)
+              </h3>
+              <FinancialChart
+                config={{
+                  type: 'column',
+                  title: 'AAPL Revenue Test Data',
+                  data: [274.5, 365.8, 394.3, 383.3, 391.0],
+                  categories: ['2020', '2021', '2022', '2023', '2024'],
+                  yAxisLabel: 'Revenue ($B)',
+                  xAxisLabel: 'Year',
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
