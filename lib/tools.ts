@@ -75,10 +75,22 @@ Rules:
 User question: "${userQuestion}"
 
 Return ONLY JSON. Examples:
+Financial metrics:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":4}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps"}}
+
+Stock prices:
 {"tool":"getPrices","args":{"range":"30d"}}
+{"tool":"getPrices","args":{"range":"90d"}}
+
+List filings (when asking for documents/metadata):
 {"tool":"getRecentFilings","args":{"limit":5}}
-{"tool":"searchFilings","args":{"query":"What supply chain risks did AAPL mention?","limit":5}}`
+{"tool":"getRecentFilings","args":{"limit":10}}
+
+Search content (when asking WHAT/HOW/WHY about topics):
+{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+{"tool":"searchFilings","args":{"query":"supply chain risks","limit":5}}
+{"tool":"searchFilings","args":{"query":"competitive position","limit":5}}`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,
