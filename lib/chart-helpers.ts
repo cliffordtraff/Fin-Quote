@@ -84,7 +84,7 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
     const date = new Date(validData[0].date)
 
     return {
-      type: 'column',
+      type: 'line', // Line charts for price data
       title: `AAPL Stock Price (${formatDateRange(date, date)})`,
       data: values,
       categories,
@@ -102,7 +102,7 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
   const lastDate = new Date(validData[validData.length - 1].date)
 
   return {
-    type: 'column',
+    type: 'line', // Line charts are better for time-series price data
     title: `AAPL Stock Price (${formatDateRange(firstDate, lastDate)})`,
     data: values,
     categories,
