@@ -12,6 +12,7 @@ export default function AskPage() {
     type: 'financials' | 'prices' | 'filings' | 'passages'
     data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
   } | null>(null)
+  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -27,6 +28,7 @@ export default function AskPage() {
     setError('')
     setAnswer('')
     setDataUsed(null)
+    setChartConfig(null)
 
     try {
       const result = await askQuestion(question)
@@ -36,6 +38,7 @@ export default function AskPage() {
       } else {
         setAnswer(result.answer)
         setDataUsed(result.dataUsed)
+        setChartConfig(result.chartConfig)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
@@ -89,6 +92,13 @@ export default function AskPage() {
               <h2 className="text-lg font-semibold mb-3">Answer</h2>
               <p className="text-gray-800 leading-relaxed">{answer}</p>
             </div>
+
+            {/* Chart (only for financial metrics and prices) */}
+            {chartConfig && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <FinancialChart config={chartConfig} />
+              </div>
+            )}
 
             {dataUsed && dataUsed.data.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -216,34 +226,15 @@ export default function AskPage() {
         )}
 
         {!answer && !error && !loading && (
-          <div className="space-y-6">
-            <div className="text-center text-gray-500 py-12">
-              <p>Ask a question to get started</p>
-              <p className="text-sm mt-2">Try asking about:</p>
-              <ul className="text-sm mt-2 space-y-1">
-                <li>"How is AAPL's revenue trending over the last 5 years?"</li>
-                <li>"What's AAPL's stock price trend over the last 30 days?"</li>
-                <li>"Show me AAPL's last 3 quarterly filings"</li>
-                <li>"What supply chain risks did AAPL mention in their filings?"</li>
-              </ul>
-            </div>
-
-            {/* Test Chart - Remove after Stage 1 testing */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold mb-4 text-gray-700">
-                Test Chart (Stage 1 - Will be removed)
-              </h3>
-              <FinancialChart
-                config={{
-                  type: 'column',
-                  title: 'AAPL Revenue Test Data',
-                  data: [274.5, 365.8, 394.3, 383.3, 391.0],
-                  categories: ['2020', '2021', '2022', '2023', '2024'],
-                  yAxisLabel: 'Revenue ($B)',
-                  xAxisLabel: 'Year',
-                }}
-              />
-            </div>
+          <div className="text-center text-gray-500 py-12">
+            <p>Ask a question to get started</p>
+            <p className="text-sm mt-2">Try asking about:</p>
+            <ul className="text-sm mt-2 space-y-1">
+              <li>"How is AAPL's revenue trending over the last 5 years?"</li>
+              <li>"What's AAPL's stock price trend over the last 30 days?"</li>
+              <li>"Show me AAPL's last 3 quarterly filings"</li>
+              <li>"What supply chain risks did AAPL mention in their filings?"</li>
+            </ul>
           </div>
         )}
       </div>

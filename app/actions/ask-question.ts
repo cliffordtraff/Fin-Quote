@@ -6,6 +6,8 @@ import { getAaplPrices, PriceRange } from './prices'
 import { getRecentFilings } from './filings'
 import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
+import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
+import type { ChartConfig } from '@/types/chart'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -29,6 +31,7 @@ export type AskQuestionResponse = {
     type: 'financials' | 'prices' | 'filings' | 'passages'
     data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
   } | null
+  chartConfig: ChartConfig | null
   error: string | null
 }
 
@@ -44,7 +47,7 @@ export async function askQuestion(
   try {
     // Validate input
     if (!userQuestion || userQuestion.trim().length === 0) {
-      return { answer: '', dataUsed: null, error: 'Question cannot be empty' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty' }
     }
 
     // Step 1: Tool selection
@@ -64,7 +67,7 @@ export async function askQuestion(
 
     const selectionContent = selectionResponse.choices[0]?.message?.content
     if (!selectionContent) {
-      return { answer: '', dataUsed: null, error: 'Failed to select tool' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to select tool' }
     }
 
     // Parse the JSON response
@@ -76,6 +79,7 @@ export async function askQuestion(
       return {
         answer: '',
         dataUsed: null,
+        chartConfig: null,
         error: 'Failed to parse tool selection',
       }
     }
@@ -83,6 +87,7 @@ export async function askQuestion(
     // Step 2: Execute the tool based on selection
     let factsJson: string
     let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages'; data: any[] }
+    let chartConfig: ChartConfig | null = null
 
     if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
@@ -99,7 +104,7 @@ export async function askQuestion(
         'eps',
       ]
       if (!validMetrics.includes(metric)) {
-        return { answer: '', dataUsed: null, error: 'Invalid metric' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid metric' }
       }
 
       const toolResult = await getAaplFinancialsByMetric({
@@ -111,17 +116,21 @@ export async function askQuestion(
         return {
           answer: '',
           dataUsed: null,
+          chartConfig: null,
           error: toolResult.error || 'Failed to fetch financial data',
         }
       }
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'financials', data: toolResult.data }
+
+      // Generate chart for financial data
+      chartConfig = generateFinancialChart(toolResult.data, metric)
     } else if (toolSelection.tool === 'getPrices') {
       // Validate range
       const range = toolSelection.args.range as PriceRange
       if (range !== '7d' && range !== '30d' && range !== '90d') {
-        return { answer: '', dataUsed: null, error: 'Invalid range' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range' }
       }
 
       const toolResult = await getAaplPrices({ range })
@@ -130,17 +139,21 @@ export async function askQuestion(
         return {
           answer: '',
           dataUsed: null,
+          chartConfig: null,
           error: toolResult.error || 'Failed to fetch price data',
         }
       }
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'prices', data: toolResult.data }
+
+      // Generate chart for price data
+      chartConfig = generatePriceChart(toolResult.data, range)
     } else if (toolSelection.tool === 'getRecentFilings') {
       // Validate limit
       const limit = toolSelection.args.limit || 5
       if (limit < 1 || limit > 10) {
-        return { answer: '', dataUsed: null, error: 'Invalid limit (must be 1-10)' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)' }
       }
 
       const toolResult = await getRecentFilings({ limit })
@@ -149,6 +162,7 @@ export async function askQuestion(
         return {
           answer: '',
           dataUsed: null,
+          chartConfig: null,
           error: toolResult.error || 'Failed to fetch filings data',
         }
       }
@@ -159,12 +173,12 @@ export async function askQuestion(
       // Validate query
       const query = toolSelection.args.query || userQuestion
       if (!query || query.trim().length === 0) {
-        return { answer: '', dataUsed: null, error: 'Search query cannot be empty' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Search query cannot be empty' }
       }
 
       const limit = toolSelection.args.limit || 5
       if (limit < 1 || limit > 10) {
-        return { answer: '', dataUsed: null, error: 'Invalid limit (must be 1-10)' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)' }
       }
 
       const toolResult = await searchFilings({ query, limit })
@@ -173,6 +187,7 @@ export async function askQuestion(
         return {
           answer: '',
           dataUsed: null,
+          chartConfig: null,
           error: toolResult.error || 'Failed to search filings',
         }
       }
@@ -180,7 +195,7 @@ export async function askQuestion(
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'passages', data: toolResult.data }
     } else {
-      return { answer: '', dataUsed: null, error: 'Unsupported tool selected' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected' }
     }
 
     // Step 3: Generate final answer using the fetched facts
@@ -200,12 +215,13 @@ export async function askQuestion(
 
     const answer = answerResponse.choices[0]?.message?.content
     if (!answer) {
-      return { answer: '', dataUsed: null, error: 'Failed to generate answer' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer' }
     }
 
     return {
       answer: answer.trim(),
       dataUsed,
+      chartConfig,
       error: null,
     }
   } catch (err) {
@@ -213,6 +229,7 @@ export async function askQuestion(
     return {
       answer: '',
       dataUsed: null,
+      chartConfig: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',
     }
   }
