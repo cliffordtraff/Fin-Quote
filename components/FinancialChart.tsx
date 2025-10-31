@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Highcharts from 'highcharts'
 
@@ -27,7 +27,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showDataTable, setShowDataTable] = useState(false)
-  const chartContainerRef = useState<HTMLDivElement | null>(null)[0]
+  const chartContainerRef = useRef<HTMLDivElement | null>(null)
 
   // Ensure component only renders after mounting (client-side only)
   useEffect(() => {
@@ -55,11 +55,11 @@ export default function FinancialChart({ config }: FinancialChartProps) {
 
   // Toggle fullscreen
   const toggleFullscreen = async () => {
-    if (!chartContainerRef) return
+    if (!chartContainerRef.current) return
 
     try {
       if (!document.fullscreenElement) {
-        await chartContainerRef.requestFullscreen()
+        await chartContainerRef.current.requestFullscreen()
       } else {
         await document.exitFullscreen()
       }
@@ -334,11 +334,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
 
   return (
     <div
-      ref={(el) => {
-        if (el) {
-          ;(chartContainerRef as any) = el
-        }
-      }}
+      ref={chartContainerRef}
       className={`w-full relative ${isFullscreen ? 'bg-white p-8' : ''}`}
       style={isFullscreen ? { height: '100vh' } : undefined}
     >
