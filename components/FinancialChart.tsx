@@ -25,6 +25,9 @@ interface FinancialChartProps {
 
 export default function FinancialChart({ config }: FinancialChartProps) {
   const [isMounted, setIsMounted] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showDataTable, setShowDataTable] = useState(false)
+  const chartContainerRef = useState<HTMLDivElement | null>(null)[0]
 
   // Ensure component only renders after mounting (client-side only)
   useEffect(() => {
@@ -40,10 +43,49 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     setIsMounted(true)
   }, [])
 
+  // Handle fullscreen change events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  // Toggle fullscreen
+  const toggleFullscreen = async () => {
+    if (!chartContainerRef) return
+
+    try {
+      if (!document.fullscreenElement) {
+        await chartContainerRef.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
+    }
+  }
+
+  // Copy table data to clipboard
+  const copyToClipboard = () => {
+    const csvData = [
+      [config.xAxisLabel, config.yAxisLabel].join(','),
+      ...config.categories.map((cat, i) => `${cat},${config.data[i]}`).join('\n'),
+    ].join('\n')
+
+    navigator.clipboard.writeText(csvData).then(() => {
+      alert('Data copied to clipboard!')
+    }).catch((err) => {
+      console.error('Copy failed:', err)
+    })
+  }
+
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[400px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[550px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400">Loading chart...</p>
       </div>
     )
@@ -53,7 +95,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   const options: Highcharts.Options = {
     chart: {
       type: config.type,
-      height: 400,
+      height: isFullscreen ? '100%' : 550, // Larger default: 550px (was 400px), full height in fullscreen
       backgroundColor: 'transparent',
       animation: {
         duration: 800,
@@ -291,8 +333,128 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   }
 
   return (
-    <div className="w-full">
+    <div
+      ref={(el) => {
+        if (el) {
+          ;(chartContainerRef as any) = el
+        }
+      }}
+      className={`w-full relative ${isFullscreen ? 'bg-white p-8' : ''}`}
+      style={isFullscreen ? { height: '100vh' } : undefined}
+    >
+      {/* Fullscreen button */}
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-2 right-2 z-10 p-2 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+        title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+      >
+        {isFullscreen ? (
+          // Exit fullscreen icon
+          <svg
+            className="w-5 h-5 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M15 9h4.5M15 9V4.5M15 9l5.25-5.25M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"
+            />
+          </svg>
+        ) : (
+          // Enter fullscreen icon
+          <svg
+            className="w-5 h-5 text-gray-700"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+            />
+          </svg>
+        )}
+      </button>
+
       <HighchartsReact highcharts={Highcharts} options={options} />
+
+      {/* Data Table Section */}
+      {!isFullscreen && (
+        <div className="mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <button
+              onClick={() => setShowDataTable(!showDataTable)}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2"
+            >
+              {showDataTable ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  Hide Data Table
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  View Data Table
+                </>
+              )}
+            </button>
+            {showDataTable && (
+              <button
+                onClick={copyToClipboard}
+                className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                Copy as CSV
+              </button>
+            )}
+          </div>
+
+          {showDataTable && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        {config.xAxisLabel}
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        {config.yAxisLabel}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {config.categories.map((category, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">{category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                          {config.data[index].toLocaleString('en-US')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

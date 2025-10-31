@@ -132,6 +132,13 @@ export default function AskPage() {
               id="question"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                // Submit on Enter (but allow Shift+Enter for new lines)
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSubmit(e as any)
+                }
+              }}
               placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
