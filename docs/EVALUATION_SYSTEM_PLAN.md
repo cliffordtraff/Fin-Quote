@@ -127,26 +127,32 @@ User reviews results → Deploys winner
    - File: `scripts/run-evaluation.ts`
    - Reads test set from JSON
    - Loads prompt versions from database
-   - Runs each question through both prompts
+   - Supports two modes:
+     - **Routing-only:** Fast (2-3 min), tests tool selection only
+     - **Full:** Slower (10 min), complete end-to-end test
    - Saves detailed results
 
 2. **Scoring System**
    - Automatic tool selection accuracy check
-   - Automatic args matching check
-   - Calculate latency metrics
+   - Smart args matching with normalization (defaults, synonyms)
+   - Split latency tracking (routing, execution, answer)
+   - Optional: LLM-as-judge for answer quality
 
 3. **Results Storage**
    - Save to: `test-data/test-results/[timestamp].json`
    - Include summary statistics
    - Include detailed per-question results
+   - Track latency breakdown
 
 **Time Estimate:** 6-8 hours
 
 **Success Criteria:**
-- ✓ Can run `npm run evaluate-prompts` from terminal
-- ✓ Completes 100 questions in ~10 minutes
+- ✓ Can run routing-only tests in 2-3 minutes
+- ✓ Can run full tests in ~10 minutes
 - ✓ Results saved with detailed breakdown
 - ✓ Can compare any two prompt versions
+- ✓ Args normalization handles defaults and synonyms
+- ✓ Latency split into routing/execution/answer
 
 ---
 
@@ -638,6 +644,201 @@ ALTER TABLE query_logs
 **After 1 Month:**
 - ✓ Evaluation system running smoothly
 - ✓ 2-3 successful prompt improvements deployed
+
+---
+
+## Key Implementation Principles
+
+Based on best practices from production ML systems, the following principles should guide implementation:
+
+### 1. Two Evaluation Modes for Different Use Cases
+
+**Mode A: Routing-Only (Fast - Daily Use)**
+- **What:** Test ONLY tool selection and args (skip tool execution and answer generation)
+- **Speed:** ~2-3 minutes for 100 questions
+- **Cost:** Minimal (no data fetches, no answer generation)
+- **Use:** Daily iteration during prompt development
+
+**Mode B: Full End-to-End (Complete - Pre-Deploy)**
+- **What:** Complete flow including tool execution and answer generation
+- **Speed:** ~10 minutes for 100 questions
+- **Cost:** Full API costs
+- **Use:** Final validation before deploying to production
+
+**Command syntax:**
+```bash
+# Quick routing test
+npm run evaluate-prompts -- --v1=1 --v2=2 --mode=routing
+
+# Full test
+npm run evaluate-prompts -- --v1=1 --v2=2 --mode=full
+```
+
+### 2. Deterministic Testing (temperature=0)
+
+**Critical:** Always use `temperature=0` for evaluation tests to ensure deterministic results.
+
+**What it means:**
+- `temperature=0` = "as deterministic as possible"
+- Same prompt + same question = same answer every time
+- Fair comparison between prompt versions
+
+**Why it matters:**
+- Without this, results vary run-to-run even with identical prompts
+- Can't tell if improvement is real or random variation
+- "Flaky" tests waste time and reduce confidence
+
+**Implementation:**
+```typescript
+const selectionResponse = await openai.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: selectionMessages,
+  temperature: 0, // ← Critical for reproducibility
+  max_tokens: 150,
+})
+```
+
+### 3. Smart Args Normalization
+
+**Problem:** Strict equality fails when defaults/synonyms are equivalent.
+
+**Examples:**
+- Missing `limit` when it defaults to 5 → Should count as correct
+- `{"range": "30d"}` vs `{"range": "30d", "limit": null}` → Equivalent
+- User says "net profit" but expected arg is `net_income` → Should map
+
+**Solution:**
+```typescript
+function normalizeArgs(args: any, expectedArgs: any): any {
+  // 1. Fill in defaults
+  const normalized = { ...args }
+  if (!normalized.limit && expectedArgs.limit) {
+    normalized.limit = 4 // Default from tool
+  }
+
+  // 2. Map synonyms
+  const synonymMap = {
+    'net_profit': 'net_income',
+    'sales': 'revenue',
+    'earnings': 'net_income'
+  }
+  if (normalized.metric && synonymMap[normalized.metric]) {
+    normalized.metric = synonymMap[normalized.metric]
+  }
+
+  return normalized
+}
+```
+
+### 4. Dual Test Sets (Prevent Overfitting)
+
+**Structure:**
+- **Core Set (50 questions):** Frozen, rarely changes
+  - Purpose: Catch regressions
+  - Source: Carefully curated examples covering all scenarios
+  - Update: Only when adding new tools/features
+
+- **Fresh Set (50 questions):** Rotates monthly
+  - Purpose: Reflect real usage
+  - Source: Real user questions from query_logs
+  - Update: Replace 10% monthly with thumbs-down questions
+
+**File structure:**
+```
+test-data/
+├── golden-test-set.json           ← All 100 questions
+├── core-set.json                  ← 50 frozen questions
+└── fresh-set.json                 ← 50 rotating questions
+```
+
+**Reporting:**
+- Show accuracy on both sets separately
+- If core accuracy is 95% but fresh is 70%, prompt is overfitted
+
+### 5. Include Negative/Control Cases
+
+**Add 10 questions that should NOT route to any tool:**
+- "What's the CEO's salary?" → Should respond "I don't have that data"
+- "How many employees?" → Should respond "Out of scope"
+- "What's the weather in Cupertino?" → Should respond "Can't answer"
+
+**Why:**
+- Tests graceful degradation
+- Prevents forced routing to wrong tools
+- Validates "I don't know" handling
+
+### 6. Split Latency Tracking
+
+**Track separately:**
+1. **Routing latency:** Time to select tool + args
+2. **Execution latency:** Time to fetch data
+3. **Answer latency:** Time to generate final answer
+4. **Total latency:** Sum of above
+
+**Why:**
+- Identifies bottlenecks precisely
+- Can optimize routing speed independently from answer quality
+- Different prompts may trade off speed vs accuracy
+
+**Results format:**
+```json
+{
+  "latency_breakdown": {
+    "routing_ms": 450,
+    "execution_ms": 200,
+    "answer_ms": 550,
+    "total_ms": 1200
+  }
+}
+```
+
+### 7. Enhanced Scorecard
+
+**Add to terminal output:**
+```
+┌─────────────────────────────────────────────────┐
+│ SCORECARD                                       │
+├─────────────────────────────────────────────────┤
+│ Overall: v2 wins 77-23 (+27% accuracy)         │
+│                                                  │
+│ By Category:                                    │
+│  Financials:  v1: 92%  v2: 96%  (+4%)          │
+│  Prices:      v1: 60%  v2: 96%  (+36%) ★       │
+│  Search:      v1: 80%  v2: 84%  (+4%)          │
+│  List:        v1: 88%  v2: 92%  (+4%)          │
+│                                                  │
+│ Latency Split:                                  │
+│  Routing:     v1: 450ms  v2: 420ms             │
+│  Answer:      v1: 750ms  v2: 680ms             │
+│                                                  │
+│ Top 5 Failures (v1):                            │
+│  1. "What's the price?" - wrong tool (15 times)│
+│  2. "Share price trend" - wrong tool (8 times) │
+│  3. "Market price" - wrong tool (6 times)      │
+│  4. "Revenue trend" - missing limit (3 times)  │
+│  5. "Net profit" - synonym not mapped (2x)     │
+│                                                  │
+│ Recommendation: Deploy v2 ✓                    │
+└─────────────────────────────────────────────────┘
+```
+
+### 8. A/B Rollout Validation
+
+**Process:**
+1. Offline test: v1 vs v2 → v2 wins
+2. Deploy v2 to 10% of users (online A/B)
+3. Collect real feedback for 3-5 days
+4. Compare real user satisfaction
+5. If still winning, roll out to 100%
+
+**Bucketing:**
+```typescript
+function getUserBucket(sessionId: string): 'A' | 'B' {
+  // Stable hash so same user always gets same bucket
+  const hash = hashCode(sessionId)
+  return (hash % 100) < 10 ? 'B' : 'A' // 10% get v2
+}
+```
 - ✓ Tool accuracy improved from ~70% to ~85%
 
 **After 3 Months:**
@@ -821,11 +1022,20 @@ ALTER TABLE query_logs
 ## Appendix B: Command Reference
 
 ```bash
-# Run evaluation comparing two prompt versions
-npm run evaluate-prompts -- --v1=1 --v2=2
+# Quick routing-only test (daily use - 2-3 minutes)
+npm run evaluate-prompts -- --v1=1 --v2=2 --mode=routing
 
-# Run with LLM judge enabled
-npm run evaluate-prompts -- --v1=1 --v2=2 --use-llm-judge
+# Full end-to-end test (pre-deploy - 10 minutes)
+npm run evaluate-prompts -- --v1=1 --v2=2 --mode=full
+
+# Test with LLM judge enabled (answer quality scoring)
+npm run evaluate-prompts -- --v1=1 --v2=2 --mode=full --use-llm-judge
+
+# Test against core set only (frozen questions)
+npm run evaluate-prompts -- --v1=1 --v2=2 --test-set=core
+
+# Test against fresh set only (rotating questions)
+npm run evaluate-prompts -- --v1=1 --v2=2 --test-set=fresh
 
 # Generate scorecard from existing results
 npm run scorecard -- --results=test-results/2024-11-01.json
@@ -833,8 +1043,25 @@ npm run scorecard -- --results=test-results/2024-11-01.json
 # Seed initial prompts to database
 npm run seed-prompts
 
-# Update test set version
-npm run update-test-set -- --version=2.0
+# Update fresh test set with new real questions
+npm run refresh-test-set -- --count=10
+
+# View test set statistics
+npm run test-set-stats
+```
+
+**Typical workflows:**
+
+```bash
+# Daily: Quick iteration on new prompt
+npm run evaluate-prompts -- --v1=current --v2=new --mode=routing
+
+# Pre-deploy: Full validation
+npm run evaluate-prompts -- --v1=current --v2=new --mode=full
+
+# Check for overfitting
+npm run evaluate-prompts -- --v1=1 --v2=2 --test-set=core
+npm run evaluate-prompts -- --v1=1 --v2=2 --test-set=fresh
 ```
 
 ---
