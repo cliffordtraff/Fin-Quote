@@ -1,52 +1,29 @@
-// Definitions for AI-exposed tools and prompt templates
+/**
+ * Add improved prompt v3 to database
+ *
+ * Key improvements over v2:
+ * - Explicit limit parsing rules with examples
+ * - Better range mapping for ambiguous time references
+ * - Context-aware metric mapping
+ * - More concrete examples throughout
+ */
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings'
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
 
-export type ToolDefinition = {
-  name: ToolName
-  description: string
-  args: Record<string, string>
-  notes?: string
+dotenv.config({ path: '.env.local' })
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('Missing required environment variables')
+  process.exit(1)
 }
 
-export const TOOL_MENU: ToolDefinition[] = [
-  {
-    name: 'getAaplFinancialsByMetric',
-    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
-    args: {
-      metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
-      limit: 'integer 1–10 (defaults to 4)',
-    },
-    notes: 'Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'getPrices',
-    description: 'Get AAPL stock price history for recent periods.',
-    args: {
-      range: '7d | 30d | 90d',
-    },
-    notes: 'Returns daily closing prices. Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'getRecentFilings',
-    description: 'Get recent SEC filings (10-K annual reports, 10-Q quarterly reports) for AAPL.',
-    args: {
-      limit: 'integer 1–10 (defaults to 5)',
-    },
-    notes: 'Returns filing metadata with links to SEC EDGAR documents. Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'searchFilings',
-    description: 'Search AAPL SEC filing content to answer questions about risks, strategy, management commentary, business description, etc.',
-    args: {
-      query: 'natural language search query',
-      limit: 'integer 1–10 (defaults to 5)',
-    },
-    notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
-  },
-]
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
+const TOOL_SELECTION_PROMPT_V3 = `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
 
@@ -191,7 +168,7 @@ TOOL SELECTION LOGIC:
 3. List filings? → getRecentFilings
 4. Qualitative content search? → searchFilings
 
-User question: "${userQuestion}"
+User question: "{{USER_QUESTION}}"
 
 Return ONLY JSON - examples:
 
@@ -201,22 +178,54 @@ Return ONLY JSON - examples:
 {"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`
 
-export const buildFinalAnswerPrompt = (
-  userQuestion: string,
-  factsJson: string
-) => `You are an analyst. Answer the user using ONLY the provided facts.
+async function addPromptV3() {
+  console.log('📝 Adding prompt v3 to database...\n')
 
-User question: "${userQuestion}"
+  try {
+    // Deactivate v2
+    console.log('⏸️  Deactivating v2...')
+    await supabase
+      .from('prompt_versions')
+      .update({ is_active: false })
+      .eq('prompt_type', 'tool_selection')
+      .eq('version_number', 2)
 
-Facts (JSON rows):
-${factsJson}
+    // Insert v3
+    console.log('✅ Inserting v3...')
+    const { error } = await supabase
+      .from('prompt_versions')
+      .insert({
+        prompt_type: 'tool_selection',
+        version_number: 3,
+        prompt_content: TOOL_SELECTION_PROMPT_V3,
+        change_description: 'Explicit limit/range parsing rules, context-aware metric mapping, concrete examples',
+        is_active: true,
+        created_by: 'manual',
+      })
 
-Instructions:
-- Be concise and clear.
-- FIRST, check if you have all the data requested. If not, START your answer by explaining what data you DO have (e.g., "I have data for the last 10 years (2015-2024), not 15 years as requested.").
-- THEN provide your analysis using the available data.
-- If trend is relevant, describe it (e.g., increasing/decreasing/flat).
-- Do not invent numbers or sources.
-- Only say "I don't know" if you have ZERO relevant data.`
+    if (error) {
+      console.error('❌ Error:', error)
+      throw error
+    }
 
+    console.log('✅ Prompt v3 added successfully!\n')
 
+    // Verify
+    const { data } = await supabase
+      .from('prompt_versions')
+      .select('*')
+      .eq('prompt_type', 'tool_selection')
+      .order('version_number', { ascending: true })
+
+    console.log('📋 All tool_selection versions:')
+    data?.forEach(p => {
+      console.log(`  v${p.version_number}: ${p.is_active ? '🟢 ACTIVE' : '⚪ inactive'} - ${p.change_description}`)
+    })
+    console.log()
+  } catch (error) {
+    console.error('❌ Failed:', error)
+    process.exit(1)
+  }
+}
+
+addPromptV3()

@@ -1,0 +1,1735 @@
+{
+  "mode": "fast",
+  "timestamp": "2025-11-01T16:10:23.185Z",
+  "total_questions": 100,
+  "correct_tool": 76,
+  "correct_args": 43,
+  "fully_correct": 43,
+  "accuracy": {
+    "tool_selection": 76,
+    "args_selection": 43,
+    "overall": 43
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 739
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 645
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 574
+    },
+    {
+      "question_id": 4,
+      "question": "What are AAPL's risk factors?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 698
+    },
+    {
+      "question_id": 5,
+      "question": "Show me recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1367
+    },
+    {
+      "question_id": 6,
+      "question": "What's the net income trend?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "net_income",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 699
+    },
+    {
+      "question_id": 7,
+      "question": "How's the stock doing?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 743
+    },
+    {
+      "question_id": 8,
+      "question": "Tell me about supply chain risks",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "supply chain risks",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "supply chain risks",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1662
+    },
+    {
+      "question_id": 9,
+      "question": "Show me EPS over 5 years",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "eps",
+        "limit": 5
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "eps",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1192
+    },
+    {
+      "question_id": 10,
+      "question": "What are the last 3 10-Ks?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 3
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 3
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 645
+    },
+    {
+      "question_id": 11,
+      "question": "Show operating income for the last 4 years",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 805
+    },
+    {
+      "question_id": 12,
+      "question": "What's the gross profit over the past 3 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "gross_profit",
+        "limit": 3
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "gross_profit",
+        "limit": 3
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 973
+    },
+    {
+      "question_id": 13,
+      "question": "Show me R&D spending history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "research_and_development",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "R&D spending",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 719
+    },
+    {
+      "question_id": 14,
+      "question": "Get me the last year's revenue",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 1
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 4
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 666
+    },
+    {
+      "question_id": 15,
+      "question": "What's the stock price today?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "7d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 525
+    },
+    {
+      "question_id": 16,
+      "question": "Show 5 day stock chart",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "7d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 594
+    },
+    {
+      "question_id": 17,
+      "question": "What's the 90 day price trend?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "90d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 619
+    },
+    {
+      "question_id": 18,
+      "question": "Show me 1 year stock performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "1y"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 948
+    },
+    {
+      "question_id": 19,
+      "question": "Get 5 year stock price history",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "5y"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 572
+    },
+    {
+      "question_id": 20,
+      "question": "Show all historical prices",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "max"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1023
+    },
+    {
+      "question_id": 21,
+      "question": "Find information about product strategy",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "product strategy",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "product strategy",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1421
+    },
+    {
+      "question_id": 22,
+      "question": "What does the company say about competition?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "competition",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "competition",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 770
+    },
+    {
+      "question_id": 23,
+      "question": "Show me the latest 10 filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 846
+    },
+    {
+      "question_id": 24,
+      "question": "What's the operating margin trend?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_margin",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "operating margin trend",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 796
+    },
+    {
+      "question_id": 25,
+      "question": "Show me total assets over time",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "total_assets",
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 923
+    },
+    {
+      "question_id": 26,
+      "question": "What's the free cash flow?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "free_cash_flow",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "free cash flow",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 963
+    },
+    {
+      "question_id": 27,
+      "question": "Show share buyback history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "shares_repurchased",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "share buyback history",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 834
+    },
+    {
+      "question_id": 28,
+      "question": "What are capital expenditures?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "capital_expenditures",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "capital expenditures",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 735
+    },
+    {
+      "question_id": 29,
+      "question": "How has debt changed?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_debt",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "total_liabilities",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 796
+    },
+    {
+      "question_id": 30,
+      "question": "Show cash and equivalents",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "cash_and_equivalents",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "operating_cash_flow",
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1314
+    },
+    {
+      "question_id": 31,
+      "question": "What's the current price movement?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 559
+    },
+    {
+      "question_id": 32,
+      "question": "Has the stock gone up or down recently?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "7d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 602
+    },
+    {
+      "question_id": 33,
+      "question": "Tell me about executive compensation",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "executive compensation",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "executive compensation",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 773
+    },
+    {
+      "question_id": 34,
+      "question": "What does Apple say about iPhone sales?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "iPhone sales",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "iPhone sales",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 662
+    },
+    {
+      "question_id": 35,
+      "question": "Find mentions of China in filings",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "China",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "China",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 717
+    },
+    {
+      "question_id": 36,
+      "question": "Search for regulatory issues",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "regulatory issues",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "regulatory issues",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 669
+    },
+    {
+      "question_id": 37,
+      "question": "Show most recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 659
+    },
+    {
+      "question_id": 38,
+      "question": "List the filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 843
+    },
+    {
+      "question_id": 39,
+      "question": "What's Apple's profitability?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "profitability",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 787
+    },
+    {
+      "question_id": 40,
+      "question": "Show sales figures",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 954
+    },
+    {
+      "question_id": 41,
+      "question": "What's the P/E ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "pe_ratio",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "P/E ratio",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 795
+    },
+    {
+      "question_id": 42,
+      "question": "Show return on equity",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "return_on_equity",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "return on equity",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 897
+    },
+    {
+      "question_id": 43,
+      "question": "What's the price to book ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "price_to_book",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "price to book ratio",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 927
+    },
+    {
+      "question_id": 44,
+      "question": "Show dividend payments",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "dividends_paid",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "dividend payments",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 876
+    },
+    {
+      "question_id": 45,
+      "question": "What's AAPL's market cap?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "market_cap",
+        "limit": 1
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "market cap",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1009
+    },
+    {
+      "question_id": 46,
+      "question": "Chart this week's prices",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "7d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 621
+    },
+    {
+      "question_id": 47,
+      "question": "What was the price last month?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 785
+    },
+    {
+      "question_id": 48,
+      "question": "Compare this quarter to last",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 2
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 755
+    },
+    {
+      "question_id": 49,
+      "question": "Show year to date performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 453
+    },
+    {
+      "question_id": 50,
+      "question": "Historical stock performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 721
+    },
+    {
+      "question_id": 51,
+      "question": "What about environmental initiatives?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "environmental initiatives",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "environmental initiatives",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 739
+    },
+    {
+      "question_id": 52,
+      "question": "Find information on privacy policies",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "privacy policies",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "privacy policies",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 994
+    },
+    {
+      "question_id": 53,
+      "question": "Search for AI and machine learning mentions",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "AI machine learning",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "AI and machine learning",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 795
+    },
+    {
+      "question_id": 54,
+      "question": "What do they say about App Store?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "App Store",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "App Store",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 702
+    },
+    {
+      "question_id": 55,
+      "question": "Find mentions of tariffs",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "tariffs",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "tariffs",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1137
+    },
+    {
+      "question_id": 56,
+      "question": "Get the last 2 years of filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 502
+    },
+    {
+      "question_id": 57,
+      "question": "Show me just the most recent filing",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 575
+    },
+    {
+      "question_id": 58,
+      "question": "List all available reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 20
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 363
+    },
+    {
+      "question_id": 59,
+      "question": "What's the earnings per share trend over 10 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "eps",
+        "limit": 10
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "eps",
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 517
+    },
+    {
+      "question_id": 60,
+      "question": "Show me gross margin",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "gross_margin",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "gross_profit",
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 788
+    },
+    {
+      "question_id": 61,
+      "question": "Cost of revenue history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "cost_of_revenue",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 984
+    },
+    {
+      "question_id": 62,
+      "question": "What are SG&A expenses?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "selling_general_administrative",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "SG&A expenses",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 567
+    },
+    {
+      "question_id": 63,
+      "question": "Show current ratio",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "current_ratio",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "current ratio",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1074
+    },
+    {
+      "question_id": 64,
+      "question": "What's the quick ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "quick_ratio",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "quick ratio",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 885
+    },
+    {
+      "question_id": 65,
+      "question": "Show debt to equity ratio",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "debt_to_equity",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "debt to equity ratio",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 610
+    },
+    {
+      "question_id": 66,
+      "question": "What's the interest coverage?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "interest_coverage",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "interest coverage",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 827
+    },
+    {
+      "question_id": 67,
+      "question": "Show working capital trend",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "working_capital",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "total_assets",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1058
+    },
+    {
+      "question_id": 68,
+      "question": "What's inventory turnover?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "inventory_turnover",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "inventory turnover",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 859
+    },
+    {
+      "question_id": 69,
+      "question": "Show asset turnover",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "asset_turnover",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "asset turnover",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 789
+    },
+    {
+      "question_id": 70,
+      "question": "What's the price last week?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "7d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 490
+    },
+    {
+      "question_id": 71,
+      "question": "How's it trading?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 484
+    },
+    {
+      "question_id": 72,
+      "question": "Stock chart for last quarter",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 514
+    },
+    {
+      "question_id": 73,
+      "question": "Show price over the past year",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 763
+    },
+    {
+      "question_id": 74,
+      "question": "Long term price history",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "5y"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "90d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 620
+    },
+    {
+      "question_id": 75,
+      "question": "Search for climate change risks",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "climate change risks",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "climate change risks",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1153
+    },
+    {
+      "question_id": 76,
+      "question": "What about cybersecurity threats?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "cybersecurity threats",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "cybersecurity threats",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 752
+    },
+    {
+      "question_id": 77,
+      "question": "Find patent information",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "patents",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "patent information",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 815
+    },
+    {
+      "question_id": 78,
+      "question": "Search board of directors",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "board of directors",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "board of directors",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 986
+    },
+    {
+      "question_id": 79,
+      "question": "What about services revenue?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "services revenue",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "services revenue",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 628
+    },
+    {
+      "question_id": 80,
+      "question": "Show the 5 most recent reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 845
+    },
+    {
+      "question_id": 81,
+      "question": "Get filing history",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 10
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 653
+    },
+    {
+      "question_id": 82,
+      "question": "What filings are available?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 744
+    },
+    {
+      "question_id": 83,
+      "question": "Show last 2 annual reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 2
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 2
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 716
+    },
+    {
+      "question_id": 84,
+      "question": "What's the most recent 10-K?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 699
+    },
+    {
+      "question_id": 85,
+      "question": "How much did revenue grow?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "how much did revenue grow",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1041
+    },
+    {
+      "question_id": 86,
+      "question": "Is profitability improving?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "profitability",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 867
+    },
+    {
+      "question_id": 87,
+      "question": "Compare margins over time",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_margin",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "gross_profit",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 863
+    },
+    {
+      "question_id": 88,
+      "question": "How's cash position?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "cash_and_equivalents",
+        "limit": 4
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "operating_cash_flow",
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1203
+    },
+    {
+      "question_id": 89,
+      "question": "Are they buying back stock?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "shares_repurchased",
+        "limit": 4
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "Are they buying back stock?",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 697
+    },
+    {
+      "question_id": 90,
+      "question": "Latest price",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "1d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 674
+    },
+    {
+      "question_id": 91,
+      "question": "Price action this month",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 707
+    },
+    {
+      "question_id": 92,
+      "question": "6 month chart",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "6d"
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 520
+    },
+    {
+      "question_id": 93,
+      "question": "All time high?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "max"
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "all time high",
+        "limit": 5
+      },
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 661
+    },
+    {
+      "question_id": 94,
+      "question": "Search sustainability report",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "sustainability",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "sustainability report",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 914
+    },
+    {
+      "question_id": 95,
+      "question": "Find acquisition mentions",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "acquisitions",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "acquisition",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 929
+    },
+    {
+      "question_id": 96,
+      "question": "What do they say about the economy?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "economy",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "economy",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 828
+    },
+    {
+      "question_id": 97,
+      "question": "Legal proceedings?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "legal proceedings",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "Legal proceedings",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 592
+    },
+    {
+      "question_id": 98,
+      "question": "Last filing",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 1
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 479
+    },
+    {
+      "question_id": 99,
+      "question": "Show last 15 filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 15
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 15
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 500
+    },
+    {
+      "question_id": 100,
+      "question": "Available reports?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 632
+    }
+  ]
+}
