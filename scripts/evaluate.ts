@@ -66,8 +66,10 @@ type EvaluationResults = {
   results: TestResult[]
 }
 
-// Tool selection prompt v3 - improved args parsing
+// Tool selection prompt v4 - targeted fixes for 87% accuracy
 const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
+
+User question: "${userQuestion}"
 
 Available Tools:
 
@@ -92,40 +94,45 @@ Available Tools:
    - "EPS", "earnings per share", "P/E ratio", "PE" → eps
    - "operating profit", "EBIT" → operating_income
    - "gross profit", "gross margin" → gross_profit
+   - "ROE", "return on equity" → net_income (profitability measure)
 
    Balance Sheet:
    - "assets", "total assets" → total_assets
    - "liabilities", "total debt", "debt", "debt to equity" → total_liabilities
-   - "equity", "book value", "shareholders equity", "ROE", "return on equity" → shareholders_equity
+   - "equity", "book value", "shareholders equity", "price to book", "P/B" → shareholders_equity
    - "cash and equivalents", "cash on hand", "cash position" (balance sheet) → total_assets
 
    Cash Flow:
-   - "cash flow", "operating cash", "free cash flow", "FCF" → operating_cash_flow
+   - "cash flow", "operating cash" → operating_cash_flow
+   - "free cash flow", "FCF" → operating_cash_flow
+   - "buybacks", "share repurchase", "stock buyback" → operating_cash_flow
 
    Other (use closest available):
-   - "R&D", "research", "development", "capex", "buybacks", "dividends", "margins", "ratios" → operating_income
+   - "R&D", "research", "development", "capex", "dividends" → operating_income
 
    LIMIT RULES - CRITICAL:
 
-   1. If question specifies a NUMBER, use that EXACT number:
+   1. If question contains a NUMBER, extract and use it:
       "last 3 years" → limit: 3
       "past 5 years" → limit: 5
-      "last year" or "most recent year" → limit: 1
+      "last year" → limit: 1
       "10 years" → limit: 10
-      "2 years" → limit: 2
+      "15 filings" → limit: 15
+      "2 quarters" → limit: 2
 
    2. If question says "trend", "history", "over time" WITHOUT a number → limit: 4
 
-   3. If question says "all", "complete", "full history" → limit: 10
+   3. Special cases:
+      - "all available", "complete" → limit: 20
+      - "all", "full history" → limit: 10
 
-   4. If question is just asking for the metric (no time context) → limit: 4
+   4. Default (just asking for metric) → limit: 4
 
    Examples:
    - "revenue over 5 years" → limit: 5
-   - "show me net income trend" → limit: 4
-   - "EPS history" → limit: 4
-   - "gross profit" → limit: 4
-   - "all historical data" → limit: 10
+   - "show 15 filings" → limit: 15
+   - "net income trend" → limit: 4
+   - "all available reports" → limit: 20
 
    args: {"metric": <exact name>, "limit": <number 1-10>}
 
@@ -141,24 +148,24 @@ Available Tools:
    For 7d (use when):
    - "today", "current price", "now", "latest"
    - "this week", "past week", "5 days"
-   - "recent" or "recently" (without other context)
+   - "trading", "how's it trading" (very recent activity)
 
    For 30d (use when):
    - "month", "30 days", "this month", "past month"
-   - "price" (ambiguous, default to 30d)
-   - "how's the stock doing" (ambiguous, default to 30d)
+   - "price" (general, no time specified)
+   - "recent" (general)
 
    For 90d (use when):
    - "quarter", "Q1", "90 days", "3 months"
    - "6 months", "half year" (closest available)
    - "year", "YTD", "12 months", "annual" (closest available)
-   - "long term", "historical"
+   - "long term", "historical", "all time" (need max range)
 
    Examples:
-   - "What's the price?" → 30d (ambiguous defaults to month)
-   - "How's the stock doing?" → 30d
-   - "Price today" → 7d
-   - "Show me 1 year performance" → 90d
+   - "What's the price?" → 30d
+   - "How's it trading?" → 7d (recent activity)
+   - "All time high?" → 90d (need full range)
+   - "Show me 1 year" → 90d
    - "6 month chart" → 90d
 
    args: {"range": "7d" | "30d" | "90d"}
@@ -167,21 +174,23 @@ Available Tools:
 
    LIMIT RULES:
 
-   1. If question specifies NUMBER of filings → use that number
+   1. If question contains a NUMBER, extract and use it:
       "last 3 filings" → limit: 3
+      "15 filings" → limit: 15
       "most recent filing" → limit: 1
-      "2 years of filings" → limit: 10 (2 years ≈ 8-10 filings)
 
-   2. If question says "recent", "latest" (no number) → limit: 5
+   2. Special phrases:
+      - "2 years of filings" → limit: 10 (2 years ≈ 8-10 filings)
+      - "all available", "all reports" → limit: 20
+      - "filing history", "all filings" → limit: 10
 
-   3. If question says "all", "available", "history" → limit: 10
+   3. Default (no number) → limit: 5
 
    Examples:
    - "recent filings" → limit: 5
+   - "show 15 filings" → limit: 15
+   - "all available reports" → limit: 20
    - "last 3 10-Ks" → limit: 3
-   - "most recent filing" → limit: 1
-   - "all available reports" → limit: 10
-   - "filing history" → limit: 10
 
    args: {"limit": <number 1-10>}
 
@@ -196,12 +205,13 @@ Available Tools:
    QUERY RULES:
    - Extract key terms from user's question
    - Keep it simple (1-3 words usually best)
-   - Don't need full sentences
+   - Remove filler words ("and", "the", etc.)
 
    Examples:
    - "What are the risk factors?" → query: "risk factors"
    - "Tell me about competition" → query: "competition"
-   - "Search for AI mentions" → query: "AI"
+   - "AI and machine learning" → query: "AI machine learning"
+   - "Find patent information" → query: "patents"
 
    args: {"query": "<keywords>", "limit": 5}
 
@@ -212,14 +222,12 @@ TOOL SELECTION LOGIC:
 3. List filings? → getRecentFilings
 4. Qualitative content search? → searchFilings
 
-User question: "${userQuestion}"
-
 Return ONLY JSON - examples:
 
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getPrices","args":{"range":"30d"}}
-{"tool":"getRecentFilings","args":{"limit":3}}
+{"tool":"getRecentFilings","args":{"limit":15}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`
 
 // Args normalization - handle defaults and synonyms

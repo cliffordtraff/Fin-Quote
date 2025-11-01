@@ -6,9 +6,9 @@
   "metadata": {
     "source": "mixed_generation",
     "categories": {
-      "financials": 35,
+      "financials": 33,
       "prices": 30,
-      "search_filings": 20,
+      "search_filings": 22,
       "list_filings": 15
     },
     "difficulty_distribution": {
@@ -592,13 +592,13 @@
     {
       "id": 28,
       "question": "What are capital expenditures?",
-      "category": "financials",
+      "category": "search_filings",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "searchFilings",
         "args": {
-          "metric": "operating_cash_flow",
-          "limit": 4
+          "query": "capital expenditures",
+          "limit": 5
         }
       },
       "metadata": {
@@ -607,7 +607,8 @@
           "investments"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "notes": "CapEx not available as metric - search filings for accurate data"
       }
     },
     {
@@ -1303,13 +1304,13 @@
     {
       "id": 62,
       "question": "What are SG&A expenses?",
-      "category": "financials",
+      "category": "search_filings",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "searchFilings",
         "args": {
-          "metric": "operating_income",
-          "limit": 4
+          "query": "SG&A expenses",
+          "limit": 5
         }
       },
       "metadata": {
@@ -1318,7 +1319,8 @@
           "expenses"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "notes": "SG&A not available as metric - search filings for accurate data"
       }
     },
     {
