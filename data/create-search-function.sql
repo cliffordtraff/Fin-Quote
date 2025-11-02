@@ -3,7 +3,8 @@
 
 CREATE OR REPLACE FUNCTION search_filing_chunks(
   query_embedding TEXT,
-  match_count INT DEFAULT 5
+  match_count INT DEFAULT 5,
+  filing_type_filter TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   chunk_text TEXT,
@@ -29,10 +30,11 @@ BEGIN
   FROM filing_chunks fc
   INNER JOIN filings f ON fc.filing_id = f.id
   WHERE fc.embedding IS NOT NULL
+    AND (filing_type_filter IS NULL OR f.filing_type = filing_type_filter)
   ORDER BY fc.embedding <=> query_embedding::vector
   LIMIT match_count;
 END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION search_filing_chunks IS 'Search filing chunks by vector similarity using cosine distance';
+COMMENT ON FUNCTION search_filing_chunks IS 'Search filing chunks by vector similarity using cosine distance, with optional filing type filtering';

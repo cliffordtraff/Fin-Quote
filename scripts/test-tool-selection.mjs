@@ -1,52 +1,13 @@
-// Definitions for AI-exposed tools and prompt templates
+import OpenAI from 'openai';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings'
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-export type ToolDefinition = {
-  name: ToolName
-  description: string
-  args: Record<string, string>
-  notes?: string
-}
-
-export const TOOL_MENU: ToolDefinition[] = [
-  {
-    name: 'getAaplFinancialsByMetric',
-    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
-    args: {
-      metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
-      limit: 'integer 1–10 (defaults to 4)',
-    },
-    notes: 'Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'getPrices',
-    description: 'Get AAPL stock price history for recent periods.',
-    args: {
-      range: '7d | 30d | 90d',
-    },
-    notes: 'Returns daily closing prices. Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'getRecentFilings',
-    description: 'Get recent SEC filings (10-K annual reports, 10-Q quarterly reports) for AAPL.',
-    args: {
-      limit: 'integer 1–10 (defaults to 5)',
-    },
-    notes: 'Returns filing metadata with links to SEC EDGAR documents. Ticker is fixed to AAPL for MVP.',
-  },
-  {
-    name: 'searchFilings',
-    description: 'Search AAPL SEC filing content to answer questions about risks, strategy, management commentary, business description, etc.',
-    args: {
-      query: 'natural language search query',
-      limit: 'integer 1–10 (defaults to 5)',
-    },
-    notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
-  },
-]
-
-export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
+// Copy of the buildToolSelectionPrompt function
+const buildToolSelectionPrompt = (userQuestion) => `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
 
@@ -207,31 +168,23 @@ Return ONLY JSON - examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getPrices","args":{"range":"30d"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
-{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`
+{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`;
 
-export const buildFinalAnswerPrompt = (
-  userQuestion: string,
-  factsJson: string
-) => `You are an analyst. Answer the user using ONLY the provided facts.
+// Test the query
+const userQuestion = "insights from AAPL's last 10k";
+const prompt = buildToolSelectionPrompt(userQuestion);
 
-User question: "${userQuestion}"
+console.log('Testing tool selection for:', userQuestion);
+console.log('\nCalling OpenAI...\n');
 
-Facts (JSON rows):
-${factsJson}
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: prompt }],
+  temperature: 0,
+  max_tokens: 150,
+});
 
-Instructions:
-- Be concise and clear.
-- If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), ONLY mention that specific year in your answer. Do not mention other years unless the user asks for a comparison or trend.
-- If the user asks for multiple years or a trend, show all relevant years.
-- FIRST, check if you have the specific data requested. If the requested year is not in the facts, say so clearly (e.g., "I don't have data for 2020. I have data from 2015-2024, but 2020 is missing.").
-- THEN provide your analysis using the available data.
-- If trend is relevant (and the user asked for it), describe it (e.g., increasing/decreasing/flat).
-- Do not invent numbers or sources.
-- Only say "I don't know" if you have ZERO relevant data.
-
-Examples:
-- Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020)
-- Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend)
-- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested)`
-
-
+const result = response.choices[0]?.message?.content;
+console.log('Raw response:', result);
+console.log('\nParsed result:');
+console.log(JSON.stringify(JSON.parse(result), null, 2));

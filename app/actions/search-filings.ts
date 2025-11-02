@@ -44,7 +44,11 @@ export async function searchFilings(params: {
 
     const queryEmbedding = embeddingResponse.data[0].embedding
 
-    // Step 2: Search for similar chunks using vector similarity
+    // Step 2: Detect if user is asking for a specific filing type
+    const filingTypeMatch = query.match(/10-[KQ]/i)
+    const filingTypeFilter = filingTypeMatch ? filingTypeMatch[0].toUpperCase() : null
+
+    // Step 3: Search for similar chunks using vector similarity
     const supabase = createServerClient()
 
     // PostgreSQL vector similarity search using <-> operator (cosine distance)
@@ -53,6 +57,7 @@ export async function searchFilings(params: {
       {
         query_embedding: JSON.stringify(queryEmbedding),
         match_count: safeLimit,
+        filing_type_filter: filingTypeFilter,
       }
     )
 
@@ -60,7 +65,7 @@ export async function searchFilings(params: {
       // If RPC function doesn't exist, fall back to manual query
       console.log('RPC function not found, using manual query')
 
-      const { data: manualChunks, error: manualError } = await supabase
+      let queryBuilder = supabase
         .from('filing_chunks')
         .select(`
           chunk_text,
@@ -68,7 +73,13 @@ export async function searchFilings(params: {
           filings!inner(filing_type, filing_date, fiscal_year, fiscal_quarter)
         `)
         .not('embedding', 'is', null)
-        .limit(safeLimit)
+
+      // Apply filing type filter if specified
+      if (filingTypeFilter) {
+        queryBuilder = queryBuilder.eq('filings.filing_type', filingTypeFilter)
+      }
+
+      const { data: manualChunks, error: manualError } = await queryBuilder.limit(safeLimit)
 
       if (manualError) {
         console.error('Error searching filing chunks:', manualError)

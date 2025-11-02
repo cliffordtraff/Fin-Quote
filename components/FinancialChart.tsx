@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Highcharts from 'highcharts'
 
@@ -26,8 +26,30 @@ interface FinancialChartProps {
 export default function FinancialChart({ config }: FinancialChartProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenSize, setFullscreenSize] = useState<{ width: number; height: number } | null>(null)
   const [showDataTable, setShowDataTable] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
+  const chartInstanceRef = useRef<Highcharts.Chart | null>(null)
+  const chartWrapperRef = useRef<HTMLDivElement | null>(null)
+  // Force Highcharts to follow the surrounding wrapper dimensions (especially in fullscreen)
+  const resizeChart = useCallback((sizeOverride?: { width: number; height: number }) => {
+    const chart = chartInstanceRef.current
+    const wrapperEl = chartWrapperRef.current
+
+    if (!chart || (!wrapperEl && !sizeOverride)) {
+      return
+    }
+
+    const width = sizeOverride?.width ?? wrapperEl?.clientWidth ?? 0
+    const height = sizeOverride?.height ?? wrapperEl?.clientHeight ?? 0
+
+    if (!width || !height) {
+      return
+    }
+
+    chart.setSize(width, height, false)
+    chart.reflow()
+  }, [])
 
   // Ensure component only renders after mounting (client-side only)
   useEffect(() => {
@@ -47,11 +69,46 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
+
+      requestAnimationFrame(() => {
+        resizeChart()
+      })
     }
 
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [])
+  }, [resizeChart])
+
+  useEffect(() => {
+    if (!chartInstanceRef.current) {
+      return
+    }
+
+    if (!isFullscreen) {
+      setFullscreenSize(null)
+      requestAnimationFrame(() => {
+        chartInstanceRef.current?.reflow()
+      })
+      return
+    }
+
+    const updateFullscreenSize = () => {
+      if (typeof window === 'undefined') return
+      const nextSize = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }
+      setFullscreenSize(nextSize)
+      requestAnimationFrame(() => resizeChart(nextSize))
+    }
+
+    updateFullscreenSize()
+    window.addEventListener('resize', updateFullscreenSize)
+
+    return () => {
+      window.removeEventListener('resize', updateFullscreenSize)
+    }
+  }, [isFullscreen, resizeChart])
 
   // Toggle fullscreen
   const toggleFullscreen = async () => {
@@ -85,7 +142,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[550px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[800px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400">Loading chart...</p>
       </div>
     )
@@ -95,11 +152,18 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   const options: Highcharts.Options = {
     chart: {
       type: config.type,
-      height: isFullscreen ? '100%' : 550, // Larger default: 550px (was 400px), full height in fullscreen
+      height: isFullscreen
+        ? fullscreenSize?.height ?? '100%'
+        : 800, // Extra large: 800px for maximum visibility, 100%/viewport in fullscreen
+      width: isFullscreen ? fullscreenSize?.width ?? undefined : undefined, // Full width in fullscreen mode
       backgroundColor: 'transparent',
+      // Minimize whitespace in fullscreen while keeping axes readable
+      spacingTop: isFullscreen ? 16 : 36,
+      spacingBottom: isFullscreen ? 8 : 48,
+      spacingLeft: 24,
+      spacingRight: 24,
       animation: {
         duration: 800,
-        easing: 'easeOutQuart',
       },
       style: {
         fontFamily: 'inherit', // Use Tailwind font
@@ -108,7 +172,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     title: {
       text: config.title,
       style: {
-        fontSize: '16px',
+        fontSize: '28px',
         fontWeight: '600',
         color: '#1f2937', // gray-800
       },
@@ -118,14 +182,14 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       title: {
         text: config.xAxisLabel,
         style: {
-          fontSize: '12px',
+          fontSize: '18px',
           fontWeight: '500',
           color: '#6b7280', // gray-500
         },
       },
       labels: {
         style: {
-          fontSize: '11px',
+          fontSize: '16px',
           color: '#6b7280', // gray-500
         },
       },
@@ -135,16 +199,19 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       title: {
         text: config.yAxisLabel,
         style: {
-          fontSize: '12px',
+          fontSize: '18px',
           fontWeight: '500',
           color: '#6b7280', // gray-500
         },
       },
+      minPadding: 0,
+      maxPadding: 0,
       labels: {
         style: {
-          fontSize: '11px',
+          fontSize: '16px',
           color: '#6b7280', // gray-500
         },
+        y: isFullscreen ? -4 : 0,
         formatter: function () {
           // Format large numbers with commas
           return this.value.toLocaleString('en-US')
@@ -165,7 +232,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           enabled: true, // Show values on top of bars
           format: '{y}',
           style: {
-            fontSize: '11px',
+            fontSize: '16px',
             fontWeight: '600',
             color: '#1f2937', // gray-800
             textOutline: 'none',
@@ -281,11 +348,11 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         width: 4,
       },
       style: {
-        fontSize: '12px',
+        fontSize: '16px',
         color: '#1f2937', // gray-800
       },
-      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px;">{point.x}</div>',
-      pointFormat: '<div style="color: #6b7280;">{series.name}: <span style="font-weight: 600; color: #1f2937;">{point.y}</span></div>',
+      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px;">{point.x}</div>',
+      pointFormat: '<div style="color: #6b7280; font-size: 16px;">{series.name}: <span style="font-weight: 600; color: #1f2937;">{point.y}</span></div>',
       useHTML: true,
     },
     // Responsive behavior
@@ -297,20 +364,20 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           },
           chartOptions: {
             chart: {
-              height: 300, // Shorter on small screens
+              height: 400, // Larger on small screens too
             },
             xAxis: {
               labels: {
                 rotation: -45, // Rotate labels on mobile
                 style: {
-                  fontSize: '10px',
+                  fontSize: '14px',
                 },
               },
             },
             yAxis: {
               labels: {
                 style: {
-                  fontSize: '10px',
+                  fontSize: '14px',
                 },
               },
             },
@@ -335,13 +402,22 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   return (
     <div
       ref={chartContainerRef}
-      className={`w-full relative ${isFullscreen ? 'bg-white p-8' : ''}`}
-      style={isFullscreen ? { height: '100vh' } : undefined}
+      className={`w-full relative ${isFullscreen ? 'bg-white flex flex-col h-full' : ''}`}
+      style={
+        isFullscreen
+          ? {
+              height: '100%',
+              minHeight: '100vh',
+              width: '100%',
+              maxWidth: '100%',
+            }
+          : undefined
+      }
     >
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-2 right-2 z-10 p-2 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
         title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (
@@ -377,7 +453,32 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         )}
       </button>
 
-      <HighchartsReact highcharts={Highcharts} options={options} />
+      <div className={isFullscreen ? 'flex-1 w-full min-h-0' : ''}>
+        <div
+          ref={chartWrapperRef}
+          className={isFullscreen ? 'w-full h-full flex flex-1 min-h-0 items-stretch' : ''}
+        >
+          <HighchartsReact
+            highcharts={Highcharts}
+            options={options}
+            callback={(chart) => {
+              chartInstanceRef.current = chart
+              requestAnimationFrame(resizeChart)
+            }}
+            containerProps={{
+              className: isFullscreen ? 'flex-1 min-h-0' : undefined,
+              style: isFullscreen
+                ? {
+                    width: '100%',
+                    height: '100%',
+                    flex: 1,
+                    minHeight: 0,
+                  }
+                : {},
+            }}
+          />
+        </div>
+      </div>
 
       {/* Data Table Section */}
       {!isFullscreen && (

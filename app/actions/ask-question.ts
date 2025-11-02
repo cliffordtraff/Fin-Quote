@@ -1,6 +1,7 @@
 'use server'
 
 import OpenAI from 'openai'
+import { createServerClient } from '@/lib/supabase/server'
 import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
 import { getAaplPrices, PriceRange } from './prices'
 import { getRecentFilings } from './filings'
@@ -34,6 +35,95 @@ export type AskQuestionResponse = {
   } | null
   chartConfig: ChartConfig | null
   error: string | null
+  queryLogId: string | null
+}
+
+/**
+ * Log a query to the database for accuracy tracking and improvement
+ * Returns the ID of the inserted log entry
+ */
+async function logQuery(data: {
+  sessionId: string
+  userId?: string | null
+  userQuestion: string
+  toolSelected: string
+  toolArgs: any
+  toolSelectionLatencyMs?: number
+  dataReturned?: any
+  dataRowCount?: number
+  toolExecutionLatencyMs?: number
+  toolError?: string
+  answerGenerated: string
+  answerLatencyMs?: number
+}): Promise<string | null> {
+  try {
+    const supabase = createServerClient()
+
+    // Type assertion needed because query_logs table not in generated types yet
+    const { data: insertedData, error } = await (supabase as any)
+      .from('query_logs')
+      .insert({
+        user_id: data.userId || null,
+        session_id: data.sessionId,
+        user_question: data.userQuestion,
+        tool_selected: data.toolSelected,
+        tool_args: data.toolArgs,
+        tool_selection_latency_ms: data.toolSelectionLatencyMs,
+        data_returned: data.dataReturned,
+        data_row_count: data.dataRowCount,
+        tool_execution_latency_ms: data.toolExecutionLatencyMs,
+        tool_error: data.toolError,
+        answer_generated: data.answerGenerated,
+        answer_latency_ms: data.answerLatencyMs,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('Failed to log query:', error)
+      return null
+    }
+
+    return insertedData?.id || null
+  } catch (err) {
+    console.error('Failed to log query (unexpected error):', err)
+    return null
+  }
+}
+
+/**
+ * Submit user feedback for a query
+ */
+export async function submitFeedback(params: {
+  queryLogId: string
+  feedback: 'thumbs_up' | 'thumbs_down'
+  comment?: string
+}): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const supabase = createServerClient()
+
+    // Type assertion needed because query_logs table not in generated types yet
+    const { error } = await (supabase as any)
+      .from('query_logs')
+      .update({
+        user_feedback: params.feedback,
+        user_feedback_comment: params.comment || null,
+      })
+      .eq('id', params.queryLogId)
+
+    if (error) {
+      console.error('Failed to submit feedback:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, error: null }
+  } catch (err) {
+    console.error('Failed to submit feedback (unexpected error):', err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred',
+    }
+  }
 }
 
 /**
@@ -44,15 +134,23 @@ export type AskQuestionResponse = {
  */
 export async function askQuestion(
   userQuestion: string,
-  conversationHistory: ConversationHistory = []
+  conversationHistory: ConversationHistory = [],
+  sessionId: string = ''
 ): Promise<AskQuestionResponse> {
+  // Track latencies for logging
+  let toolSelectionLatencyMs: number | undefined
+  let toolExecutionLatencyMs: number | undefined
+  let answerLatencyMs: number | undefined
+  let toolError: string | undefined
+
   try {
     // Validate input
     if (!userQuestion || userQuestion.trim().length === 0) {
-      return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty', queryLogId: null }
     }
 
     // Step 1: Tool selection with conversation history
+    const toolSelectionStart = Date.now()
     const selectionPrompt = buildToolSelectionPrompt(userQuestion)
 
     // Build messages array with conversation history
@@ -78,7 +176,7 @@ export async function askQuestion(
 
     const selectionContent = selectionResponse.choices[0]?.message?.content
     if (!selectionContent) {
-      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to select tool' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to select tool', queryLogId: null }
     }
 
     // Parse the JSON response
@@ -92,10 +190,14 @@ export async function askQuestion(
         dataUsed: null,
         chartConfig: null,
         error: 'Failed to parse tool selection',
+        queryLogId: null,
       }
     }
 
+    toolSelectionLatencyMs = Date.now() - toolSelectionStart
+
     // Step 2: Execute the tool based on selection
+    const toolExecutionStart = Date.now()
     let factsJson: string
     let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages'; data: any[] }
     let chartConfig: ChartConfig | null = null
@@ -115,7 +217,7 @@ export async function askQuestion(
         'eps',
       ]
       if (!validMetrics.includes(metric)) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid metric' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid metric', queryLogId: null }
       }
 
       const toolResult = await getAaplFinancialsByMetric({
@@ -124,11 +226,13 @@ export async function askQuestion(
       })
 
       if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to fetch financial data'
         return {
           answer: '',
           dataUsed: null,
           chartConfig: null,
-          error: toolResult.error || 'Failed to fetch financial data',
+          error: toolError,
+          queryLogId: null,
         }
       }
 
@@ -141,17 +245,19 @@ export async function askQuestion(
       // Validate range
       const range = toolSelection.args.range as PriceRange
       if (range !== '7d' && range !== '30d' && range !== '90d') {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range', queryLogId: null }
       }
 
       const toolResult = await getAaplPrices({ range })
 
       if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to fetch price data'
         return {
           answer: '',
           dataUsed: null,
           chartConfig: null,
-          error: toolResult.error || 'Failed to fetch price data',
+          error: toolError,
+          queryLogId: null,
         }
       }
 
@@ -164,17 +270,19 @@ export async function askQuestion(
       // Validate limit
       const limit = toolSelection.args.limit || 5
       if (limit < 1 || limit > 10) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)', queryLogId: null }
       }
 
       const toolResult = await getRecentFilings({ limit })
 
       if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to fetch filings data'
         return {
           answer: '',
           dataUsed: null,
           chartConfig: null,
-          error: toolResult.error || 'Failed to fetch filings data',
+          error: toolError,
+          queryLogId: null,
         }
       }
 
@@ -184,32 +292,37 @@ export async function askQuestion(
       // Validate query
       const query = toolSelection.args.query || userQuestion
       if (!query || query.trim().length === 0) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Search query cannot be empty' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Search query cannot be empty', queryLogId: null }
       }
 
       const limit = toolSelection.args.limit || 5
       if (limit < 1 || limit > 10) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)' }
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)', queryLogId: null }
       }
 
       const toolResult = await searchFilings({ query, limit })
 
       if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to search filings'
         return {
           answer: '',
           dataUsed: null,
           chartConfig: null,
-          error: toolResult.error || 'Failed to search filings',
+          error: toolError,
+          queryLogId: null,
         }
       }
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'passages', data: toolResult.data }
     } else {
-      return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected', queryLogId: null }
     }
 
+    toolExecutionLatencyMs = Date.now() - toolExecutionStart
+
     // Step 3: Generate final answer using the fetched facts and conversation history
+    const answerGenerationStart = Date.now()
     const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson)
 
     // Build messages array with conversation history
@@ -235,7 +348,32 @@ export async function askQuestion(
 
     const answer = answerResponse.choices[0]?.message?.content
     if (!answer) {
-      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer' }
+      return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer', queryLogId: null }
+    }
+
+    answerLatencyMs = Date.now() - answerGenerationStart
+
+    // Get current user if logged in
+    const supabase = createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // Log the query and get the log ID for feedback
+    let queryLogId: string | null = null
+    if (sessionId) {
+      queryLogId = await logQuery({
+        sessionId,
+        userId: user?.id || null,
+        userQuestion,
+        toolSelected: toolSelection.tool,
+        toolArgs: toolSelection.args,
+        toolSelectionLatencyMs,
+        dataReturned: null, // For Phase 1, store null to save space; can enable in Phase 2
+        dataRowCount: dataUsed.data.length,
+        toolExecutionLatencyMs,
+        toolError,
+        answerGenerated: answer.trim(),
+        answerLatencyMs,
+      })
     }
 
     return {
@@ -243,6 +381,7 @@ export async function askQuestion(
       dataUsed,
       chartConfig,
       error: null,
+      queryLogId,
     }
   } catch (err) {
     console.error('Error in askQuestion:', err)
@@ -251,6 +390,7 @@ export async function askQuestion(
       dataUsed: null,
       chartConfig: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',
+      queryLogId: null,
     }
   }
 }
