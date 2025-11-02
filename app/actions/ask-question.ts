@@ -63,9 +63,35 @@ async function logQuery(data: {
   answerGenerated: string
   answerLatencyMs?: number
   validationResults?: CompleteValidationResults
+  // Token usage tracking
+  toolSelectionPromptTokens?: number
+  toolSelectionCompletionTokens?: number
+  toolSelectionTotalTokens?: number
+  answerPromptTokens?: number
+  answerCompletionTokens?: number
+  answerTotalTokens?: number
+  regenerationPromptTokens?: number
+  regenerationCompletionTokens?: number
+  regenerationTotalTokens?: number
+  embeddingTokens?: number
 }): Promise<string | null> {
   try {
     const supabase = createServerClient()
+
+    // Calculate total cost (gpt-4o-mini: $0.15/1M input, $0.60/1M output, embeddings: $0.02/1M)
+    let totalCost = 0
+    if (data.toolSelectionPromptTokens && data.toolSelectionCompletionTokens) {
+      totalCost += (data.toolSelectionPromptTokens * 0.15 / 1_000_000) + (data.toolSelectionCompletionTokens * 0.6 / 1_000_000)
+    }
+    if (data.answerPromptTokens && data.answerCompletionTokens) {
+      totalCost += (data.answerPromptTokens * 0.15 / 1_000_000) + (data.answerCompletionTokens * 0.6 / 1_000_000)
+    }
+    if (data.regenerationPromptTokens && data.regenerationCompletionTokens) {
+      totalCost += (data.regenerationPromptTokens * 0.15 / 1_000_000) + (data.regenerationCompletionTokens * 0.6 / 1_000_000)
+    }
+    if (data.embeddingTokens) {
+      totalCost += data.embeddingTokens * 0.02 / 1_000_000
+    }
 
     // Type assertion needed because query_logs table not in generated types yet
     const { data: insertedData, error } = await (supabase as any)
@@ -93,6 +119,18 @@ async function logQuery(data: {
         } : null,
         validation_passed: data.validationResults?.overall_passed || null,
         validation_run_at: data.validationResults ? new Date().toISOString() : null,
+        // Token usage
+        tool_selection_prompt_tokens: data.toolSelectionPromptTokens,
+        tool_selection_completion_tokens: data.toolSelectionCompletionTokens,
+        tool_selection_total_tokens: data.toolSelectionTotalTokens,
+        answer_prompt_tokens: data.answerPromptTokens,
+        answer_completion_tokens: data.answerCompletionTokens,
+        answer_total_tokens: data.answerTotalTokens,
+        regeneration_prompt_tokens: data.regenerationPromptTokens,
+        regeneration_completion_tokens: data.regenerationCompletionTokens,
+        regeneration_total_tokens: data.regenerationTotalTokens,
+        embedding_tokens: data.embeddingTokens,
+        total_cost_usd: totalCost > 0 ? totalCost : null,
       })
       .select('id')
       .single()
@@ -161,6 +199,18 @@ export async function askQuestion(
   let answerLatencyMs: number | undefined
   let toolError: string | undefined
 
+  // Track token usage for cost calculation
+  let toolSelectionPromptTokens: number | undefined
+  let toolSelectionCompletionTokens: number | undefined
+  let toolSelectionTotalTokens: number | undefined
+  let answerPromptTokens: number | undefined
+  let answerCompletionTokens: number | undefined
+  let answerTotalTokens: number | undefined
+  let regenerationPromptTokens: number | undefined
+  let regenerationCompletionTokens: number | undefined
+  let regenerationTotalTokens: number | undefined
+  let embeddingTokens: number | undefined
+
   try {
     // Validate input
     if (!userQuestion || userQuestion.trim().length === 0) {
@@ -191,6 +241,11 @@ export async function askQuestion(
       temperature: 0,
       max_tokens: 150,
     })
+
+    // Capture token usage
+    toolSelectionPromptTokens = selectionResponse.usage?.prompt_tokens
+    toolSelectionCompletionTokens = selectionResponse.usage?.completion_tokens
+    toolSelectionTotalTokens = selectionResponse.usage?.total_tokens
 
     const selectionContent = selectionResponse.choices[0]?.message?.content
     if (!selectionContent) {
@@ -369,6 +424,11 @@ export async function askQuestion(
       max_tokens: 500,
     })
 
+    // Capture token usage
+    answerPromptTokens = answerResponse.usage?.prompt_tokens
+    answerCompletionTokens = answerResponse.usage?.completion_tokens
+    answerTotalTokens = answerResponse.usage?.total_tokens
+
     const answer = answerResponse.choices[0]?.message?.content
     if (!answer) {
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer', queryLogId: null }
@@ -478,6 +538,11 @@ export async function askQuestion(
           max_tokens: 500,
         })
 
+        // Capture regeneration token usage
+        regenerationPromptTokens = regenerationResponse.usage?.prompt_tokens
+        regenerationCompletionTokens = regenerationResponse.usage?.completion_tokens
+        regenerationTotalTokens = regenerationResponse.usage?.total_tokens
+
         const regeneratedAnswer = regenerationResponse.choices[0]?.message?.content
 
         if (regeneratedAnswer) {
@@ -564,6 +629,17 @@ export async function askQuestion(
         answerGenerated: finalAnswer, // Use final answer (potentially regenerated)
         answerLatencyMs,
         validationResults: validationResultsWithRegen,
+        // Token usage for cost tracking
+        toolSelectionPromptTokens,
+        toolSelectionCompletionTokens,
+        toolSelectionTotalTokens,
+        answerPromptTokens,
+        answerCompletionTokens,
+        answerTotalTokens,
+        regenerationPromptTokens,
+        regenerationCompletionTokens,
+        regenerationTotalTokens,
+        embeddingTokens,
       })
     }
 
