@@ -9,6 +9,12 @@ import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer, CompleteValidationResults } from '@/lib/validators'
+import {
+  shouldRegenerateAnswer,
+  determineRegenerationAction,
+  buildRegenerationPrompt,
+  type RegenerationContext,
+} from '@/lib/regeneration'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory } from '@/types/conversation'
 
@@ -391,13 +397,116 @@ export async function askQuestion(
     }
 
     // Run validation
-    const validationResults = await validateAnswer(
+    let validationResults = await validateAnswer(
       answer.trim(),
       dataUsed.data,
       checkYearInDatabase
     )
 
-    // Log validation results (for Phase 1, we just log - no blocking)
+    // Phase 3: Auto-Correction with Regeneration
+    let finalAnswer = answer.trim()
+    let regenerationAttempted = false
+    let regenerationSucceeded = false
+    let firstAttemptAnswer = answer.trim()
+    let firstAttemptValidation = validationResults
+
+    // Check if we should regenerate
+    const regenerationDecision = shouldRegenerateAnswer(validationResults)
+
+    if (regenerationDecision.shouldRegenerate) {
+      regenerationAttempted = true
+      console.log('🔄 Regeneration triggered:', {
+        reason: regenerationDecision.reason,
+        severity: regenerationDecision.severity,
+      })
+
+      try {
+        // Determine regeneration action (refetch data if needed)
+        const context: RegenerationContext = {
+          originalQuestion: userQuestion,
+          originalAnswer: answer.trim(),
+          validationResults,
+          data: dataUsed.data,
+          toolName: toolSelection.tool,
+          toolArgs: toolSelection.args,
+        }
+
+        const action = determineRegenerationAction(context, regenerationDecision)
+
+        // Refetch data if needed (e.g., year exists in DB but wasn't fetched)
+        let regenerationData = dataUsed.data
+
+        if (action.refetchData && action.refetchArgs) {
+          console.log('🔄 Refetching data with corrected args:', action.refetchArgs)
+
+          if (toolSelection.tool === 'getAaplFinancialsByMetric') {
+            const refetchResult = await getAaplFinancialsByMetric(action.refetchArgs)
+            if (refetchResult.data) {
+              regenerationData = refetchResult.data
+              dataUsed.data = refetchResult.data // Update dataUsed for final response
+            }
+          }
+        }
+
+        // Build regeneration prompt
+        const regenerationPrompt = buildRegenerationPrompt(
+          {
+            ...context,
+            data: regenerationData,
+          },
+          buildFinalAnswerPrompt
+        )
+
+        // Regenerate answer
+        const regenerationStart = Date.now()
+        const regenerationResponse = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user' as const,
+              content: regenerationPrompt,
+            },
+          ],
+          temperature: 0,
+          max_tokens: 500,
+        })
+
+        const regeneratedAnswer = regenerationResponse.choices[0]?.message?.content
+
+        if (regeneratedAnswer) {
+          const regenerationLatency = Date.now() - regenerationStart
+
+          // Validate the regenerated answer
+          const regeneratedValidation = await validateAnswer(
+            regeneratedAnswer.trim(),
+            regenerationData,
+            checkYearInDatabase
+          )
+
+          console.log('🔄 Regeneration validation:', {
+            passed: regeneratedValidation.overall_passed,
+            severity: regeneratedValidation.overall_severity,
+            latency: regenerationLatency,
+          })
+
+          // If regeneration passed, use it!
+          if (regeneratedValidation.overall_passed) {
+            finalAnswer = regeneratedAnswer.trim()
+            validationResults = regeneratedValidation
+            regenerationSucceeded = true
+            console.log('✅ Regeneration succeeded - using new answer')
+          } else {
+            // Regeneration still failed, use original
+            console.warn('⚠️ Regeneration failed validation - using original answer')
+          }
+        }
+      } catch (regenerationError) {
+        console.error('❌ Regeneration error:', regenerationError)
+        // Fall back to original answer on error
+      }
+    }
+
+    // Log validation results
     if (!validationResults.overall_passed) {
       console.warn('Validation failed:', {
         question: userQuestion,
@@ -406,6 +515,8 @@ export async function askQuestion(
         number_status: validationResults.number_validation.status,
         year_status: validationResults.year_validation.status,
         filing_status: validationResults.filing_validation.status,
+        regeneration_attempted: regenerationAttempted,
+        regeneration_succeeded: regenerationSucceeded,
       })
     }
 
@@ -415,6 +526,23 @@ export async function askQuestion(
     // Log the query and get the log ID for feedback
     let queryLogId: string | null = null
     if (sessionId) {
+      // Add regeneration metadata to validation results
+      const validationResultsWithRegen = {
+        ...validationResults,
+        regeneration: regenerationAttempted ? {
+          triggered: true,
+          first_attempt_answer: firstAttemptAnswer,
+          first_attempt_validation: {
+            passed: firstAttemptValidation.overall_passed,
+            severity: firstAttemptValidation.overall_severity,
+          },
+          second_attempt_passed: regenerationSucceeded,
+          reason: regenerationDecision.reason,
+        } : {
+          triggered: false,
+        },
+      }
+
       queryLogId = await logQuery({
         sessionId,
         userId: user?.id || null,
@@ -426,14 +554,14 @@ export async function askQuestion(
         dataRowCount: dataUsed.data.length,
         toolExecutionLatencyMs,
         toolError,
-        answerGenerated: answer.trim(),
+        answerGenerated: finalAnswer, // Use final answer (potentially regenerated)
         answerLatencyMs,
-        validationResults,
+        validationResults: validationResultsWithRegen,
       })
     }
 
     return {
-      answer: answer.trim(),
+      answer: finalAnswer, // Return the final answer (original or regenerated)
       dataUsed,
       chartConfig,
       error: null,
