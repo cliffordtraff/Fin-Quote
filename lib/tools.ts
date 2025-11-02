@@ -72,11 +72,13 @@ Available Tools:
    - "operating profit", "EBIT", "operating margin" → operating_income
    - "gross profit", "gross margin" → gross_profit
    - "net margin", "net profit margin", "profit margin" → net_income
+   - "ROE", "return on equity" → net_income (will calculate: net_income / shareholders_equity)
+   - "ROA", "return on assets" → net_income (will calculate: net_income / total_assets)
 
    Balance Sheet:
-   - "assets", "total assets", "ROA", "return on assets", "asset turnover" → total_assets
+   - "assets", "total assets", "asset turnover" → total_assets
    - "liabilities", "total debt", "debt", "debt to equity", "debt to assets", "leverage" → total_liabilities
-   - "equity", "book value", "shareholders equity", "ROE", "return on equity" → shareholders_equity
+   - "equity", "book value", "shareholders equity" → shareholders_equity
    - "cash and equivalents", "cash on hand", "cash position" (balance sheet) → total_assets
 
    Cash Flow:
