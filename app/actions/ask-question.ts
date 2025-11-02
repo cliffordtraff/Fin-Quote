@@ -343,6 +343,11 @@ export async function askQuestion(
     const answerGenerationStart = Date.now()
     const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson)
 
+    // Debug logging
+    console.log('🔍 DEBUG - Question:', userQuestion)
+    console.log('🔍 DEBUG - Facts JSON:', factsJson.substring(0, 500))
+    console.log('🔍 DEBUG - Prompt (first 800 chars):', answerPrompt.substring(0, 800))
+
     // Build messages array with conversation history
     const answerMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       // Include last 10 messages for context
@@ -368,6 +373,8 @@ export async function askQuestion(
     if (!answer) {
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer', queryLogId: null }
     }
+
+    console.log('🔍 DEBUG - LLM Answer:', answer)
 
     answerLatencyMs = Date.now() - answerGenerationStart
 
