@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
 import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
@@ -36,6 +36,9 @@ export default function AskPage() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const supabase = createClientComponentClient<Database>()
+
+  // Ref for the textarea to enable auto-focus
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Generate or retrieve session ID on mount
   useEffect(() => {
@@ -84,6 +87,35 @@ export default function AskPage() {
       localStorage.setItem('finquote_conversation', JSON.stringify(conversationHistory))
     }
   }, [conversationHistory])
+
+  // Auto-focus textarea when user starts typing anywhere on the page
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't interfere if user is already typing in an input/textarea
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+
+      // Don't interfere with keyboard shortcuts (Ctrl, Cmd, Alt)
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return
+      }
+
+      // Don't interfere with special keys
+      if (e.key.length > 1 && e.key !== 'Enter' && e.key !== 'Backspace') {
+        return
+      }
+
+      // Focus the textarea and let the keystroke happen naturally
+      if (textareaRef.current && document.activeElement !== textareaRef.current) {
+        textareaRef.current.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -293,6 +325,7 @@ export default function AskPage() {
                   Your Question
                 </label>
                 <textarea
+                  ref={textareaRef}
                   id="question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}

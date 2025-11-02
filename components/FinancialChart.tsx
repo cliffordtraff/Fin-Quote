@@ -235,6 +235,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         dataLabels: {
           enabled: true, // Show values on top of bars
           format: config.yAxisLabel.includes('%') ? '{y}%' : '{y}',
+          verticalAlign: 'top', // Position labels above bars
+          y: -10, // Offset 10px above the bar
           style: {
             fontSize: '16px',
             fontWeight: '600',
