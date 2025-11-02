@@ -22,6 +22,7 @@ export default function AskPage() {
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState<'selecting' | 'fetching' | 'analyzing' | null>(null)
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
   const [sessionId, setSessionId] = useState<string>('')
   const [queryLogId, setQueryLogId] = useState<string | null>(null)
@@ -126,6 +127,7 @@ export default function AskPage() {
     }
 
     setLoading(true)
+    setLoadingStep('selecting')
     setError('')
     setAnswer('')
     setDataUsed(null)
@@ -139,6 +141,10 @@ export default function AskPage() {
     }
 
     try {
+      // Simulate loading steps for better UX
+      setTimeout(() => setLoadingStep('fetching'), 500)
+      setTimeout(() => setLoadingStep('analyzing'), 1000)
+
       // Send question with conversation history and session ID
       const result = await askQuestion(question, conversationHistory, sessionId)
 
@@ -173,6 +179,7 @@ export default function AskPage() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setLoading(false)
+      setLoadingStep(null)
       setQuestion('') // Clear input after submission
     }
   }
@@ -243,6 +250,18 @@ export default function AskPage() {
     setQuestion(queryText)
     // Optionally auto-submit:
     // setTimeout(() => handleSubmit(new Event('submit') as any), 100)
+  }
+
+  // Handle clicking on an example query
+  const handleExampleClick = (exampleQuery: string) => {
+    setQuestion(exampleQuery)
+    // Auto-submit after a short delay
+    setTimeout(() => {
+      const form = document.querySelector('form')
+      if (form) {
+        form.requestSubmit()
+      }
+    }, 100)
   }
 
   return (
@@ -341,12 +360,52 @@ export default function AskPage() {
                   rows={3}
                   disabled={loading}
                 />
+
+                {/* Example Query Chips */}
+                {!loading && !answer && (
+                  <div className="mt-3">
+                    <p className="text-sm text-gray-600 mb-2">Try these:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        "What's AAPL gross margin?",
+                        "Show me AAPL ROE trend",
+                        "AAPL debt to equity ratio",
+                        "AAPL revenue last 5 years"
+                      ].map((example, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleExampleClick(example)}
+                          className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors border border-blue-200"
+                        >
+                          {example}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={loading}
                   className="mt-4 w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
                 >
-                  {loading ? 'Thinking...' : 'Ask'}
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                      <span>
+                        {loadingStep === 'selecting' && 'Selecting tool...'}
+                        {loadingStep === 'fetching' && 'Fetching data...'}
+                        {loadingStep === 'analyzing' && 'Analyzing...'}
+                      </span>
+                    </div>
+                  ) : (
+                    'Ask'
+                  )}
                 </button>
               </div>
             </form>
