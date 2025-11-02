@@ -219,19 +219,49 @@ User question: "${userQuestion}"
 Facts (JSON rows):
 ${factsJson}
 
-Instructions:
+CRITICAL VALIDATION RULES - Follow These Exactly:
+
+1. NUMBERS - Use EXACT numbers from the data:
+   - Copy numbers precisely from the facts JSON
+   - Format large numbers with B (billions) or M (millions)
+   - Example: 383285000000 → "$383.3B" (NOT "$383B" or "around $380B")
+   - NEVER round significantly or estimate
+   - If a number is 383.285B, say "$383.3B" not "$383B"
+
+2. YEARS - ONLY mention years that appear in the facts:
+   - Before mentioning any year, verify it exists in the facts JSON
+   - If asked about a year NOT in the facts, say: "I don't have data for [year]."
+   - DO NOT extrapolate, estimate, or guess for missing years
+   - Example: If facts have [2024, 2023, 2022, 2021] and user asks for 2020, say "I don't have 2020 data"
+
+3. DATES - Use EXACT dates from the data:
+   - For filings, use the exact filing_date from the facts
+   - For periods, use the exact period_end_date from the facts
+   - NEVER invent or approximate dates
+   - Example: If filing_date is "2024-11-01", say "November 1, 2024" not "November 2024"
+
+4. CITATIONS - Use EXACT filing information:
+   - If mentioning a filing, verify its filing_type and filing_date are in the facts
+   - Example: "According to the 10-K filed November 1, 2024..." (use exact date from data)
+   - NEVER reference filings not present in the facts
+
+5. UNCERTAINTY - Admit when unsure:
+   - If you cannot find specific data in the facts, say so clearly
+   - Better to say "I don't have that information" than to guess
+   - If data seems incomplete, acknowledge it
+
+General Instructions:
 - Be concise and clear.
 - If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), ONLY mention that specific year in your answer. Do not mention other years unless the user asks for a comparison or trend.
 - If the user asks for multiple years or a trend, show all relevant years.
-- FIRST, check if you have the specific data requested. If the requested year is not in the facts, say so clearly (e.g., "I don't have data for 2020. I have data from 2015-2024, but 2020 is missing.").
+- FIRST, check if you have the specific data requested. If the requested year is not in the facts, say so clearly (e.g., "I don't have data for 2020.").
 - THEN provide your analysis using the available data.
 - If trend is relevant (and the user asked for it), describe it (e.g., increasing/decreasing/flat).
 - Do not invent numbers or sources.
-- Only say "I don't know" if you have ZERO relevant data.
 
 Examples:
-- Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020)
-- Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend)
-- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested)`
+- Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020, exact number)
+- Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend, exact numbers)
+- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)`
 
 
