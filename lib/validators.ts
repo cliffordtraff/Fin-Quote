@@ -73,19 +73,21 @@ function detectRatioMetrics(data: any[]): {
   hasRevenue: boolean
   hasShareholders: boolean
   hasLiabilities: boolean
+  hasAssets: boolean
   primaryMetric?: string
 } {
   if (!data || data.length === 0) {
-    return { hasRevenue: false, hasShareholders: false, hasLiabilities: false }
+    return { hasRevenue: false, hasShareholders: false, hasLiabilities: false, hasAssets: false }
   }
 
   const firstRow = data[0]
   const hasRevenue = 'revenue' in firstRow && firstRow.revenue != null
   const hasShareholders = 'shareholders_equity' in firstRow && firstRow.shareholders_equity != null
   const hasLiabilities = 'total_liabilities' in firstRow && firstRow.total_liabilities != null
+  const hasAssets = 'total_assets' in firstRow && firstRow.total_assets != null
   const primaryMetric = firstRow.metric || undefined
 
-  return { hasRevenue, hasShareholders, hasLiabilities, primaryMetric }
+  return { hasRevenue, hasShareholders, hasLiabilities, hasAssets, primaryMetric }
 }
 
 /**
@@ -93,10 +95,10 @@ function detectRatioMetrics(data: any[]): {
  */
 function calculateRatios(data: any[]): number[] {
   const ratios: number[] = []
-  const { hasRevenue, hasShareholders, hasLiabilities, primaryMetric } = detectRatioMetrics(data)
+  const { hasRevenue, hasShareholders, hasLiabilities, hasAssets, primaryMetric } = detectRatioMetrics(data)
 
   for (const row of data) {
-    // Margin calculations (value / revenue)
+    // Margin calculations (value / revenue) - for gross_profit, operating_income, net_income, operating_cash_flow
     if (hasRevenue && row.value != null && row.revenue != null) {
       const margin = (row.value / row.revenue) * 100
       ratios.push(parseFloat(margin.toFixed(1)))
@@ -108,10 +110,28 @@ function calculateRatios(data: any[]): number[] {
       ratios.push(parseFloat(roe.toFixed(1)))
     }
 
+    // ROA calculation (net_income / total_assets)
+    if (hasAssets && primaryMetric === 'net_income' && row.value != null && row.total_assets != null) {
+      const roa = (row.value / row.total_assets) * 100
+      ratios.push(parseFloat(roa.toFixed(1)))
+    }
+
     // Debt-to-Equity ratio (total_liabilities / shareholders_equity)
     if (hasLiabilities && primaryMetric === 'shareholders_equity' && row.value != null && row.total_liabilities != null) {
       const debtToEquity = row.total_liabilities / row.value
       ratios.push(parseFloat(debtToEquity.toFixed(2)))
+    }
+
+    // Debt-to-Assets ratio (total_liabilities / total_assets)
+    if (hasAssets && primaryMetric === 'total_liabilities' && row.value != null && row.total_assets != null) {
+      const debtToAssets = row.value / row.total_assets
+      ratios.push(parseFloat(debtToAssets.toFixed(2)))
+    }
+
+    // Asset Turnover (revenue / total_assets)
+    if (hasRevenue && hasAssets && primaryMetric === 'total_assets' && row.value != null && row.revenue != null) {
+      const turnover = row.revenue / row.value
+      ratios.push(parseFloat(turnover.toFixed(2)))
     }
   }
 
@@ -215,7 +235,7 @@ function findClosestMatch(mentioned: number, dataNumbers: number[], tolerancePer
 export function validateNumbers(answer: string, data: any[]): ValidationResult {
   // Check if this is a ratio calculation scenario
   const ratioMetrics = detectRatioMetrics(data)
-  const isRatioCalculation = ratioMetrics.hasRevenue || ratioMetrics.hasShareholders || ratioMetrics.hasLiabilities
+  const isRatioCalculation = ratioMetrics.hasRevenue || ratioMetrics.hasShareholders || ratioMetrics.hasLiabilities || ratioMetrics.hasAssets
 
   // Extract percentages and absolute numbers
   const mentionedPercentages = extractPercentages(answer)

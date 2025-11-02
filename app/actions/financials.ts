@@ -119,18 +119,33 @@ export async function getAaplFinancialsByMetric(params: {
       }
 
       // Include revenue for margin calculations
-      if (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income') {
+      if (['gross_profit', 'operating_income', 'net_income', 'operating_cash_flow'].includes(metric)) {
         result.revenue = row.revenue
       }
 
-      // Include shareholders_equity for ROE calculations
+      // Include shareholders_equity and total_assets for ROE and ROA calculations
       if (metric === 'net_income') {
         result.shareholders_equity = row.shareholders_equity
+        result.total_assets = row.total_assets
       }
 
-      // Include total_liabilities for debt-to-equity calculations
+      // Include shareholders_equity and total_assets for debt-to-equity and debt-to-assets calculations
+      if (metric === 'total_liabilities') {
+        result.shareholders_equity = row.shareholders_equity
+        result.total_assets = row.total_assets
+      }
+
+      // Include total_liabilities and total_assets for debt-to-equity calculations
       if (metric === 'shareholders_equity') {
         result.total_liabilities = row.total_liabilities
+        result.total_assets = row.total_assets
+      }
+
+      // Include revenue for asset turnover calculation
+      if (metric === 'total_assets') {
+        result.revenue = row.revenue
+        result.total_liabilities = row.total_liabilities
+        result.shareholders_equity = row.shareholders_equity
       }
 
       return result

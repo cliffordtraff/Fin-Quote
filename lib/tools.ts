@@ -69,17 +69,18 @@ Available Tools:
    - "sales", "revenue", "top line" → revenue
    - "profit", "earnings", "bottom line", "profitability" → net_income
    - "EPS", "earnings per share", "P/E ratio", "PE" → eps
-   - "operating profit", "EBIT" → operating_income
+   - "operating profit", "EBIT", "operating margin" → operating_income
    - "gross profit", "gross margin" → gross_profit
+   - "net margin", "net profit margin", "profit margin" → net_income
 
    Balance Sheet:
-   - "assets", "total assets" → total_assets
-   - "liabilities", "total debt", "debt", "debt to equity" → total_liabilities
+   - "assets", "total assets", "ROA", "return on assets", "asset turnover" → total_assets
+   - "liabilities", "total debt", "debt", "debt to equity", "debt to assets", "leverage" → total_liabilities
    - "equity", "book value", "shareholders equity", "ROE", "return on equity" → shareholders_equity
    - "cash and equivalents", "cash on hand", "cash position" (balance sheet) → total_assets
 
    Cash Flow:
-   - "cash flow", "operating cash", "free cash flow", "FCF" → operating_cash_flow
+   - "cash flow", "operating cash", "free cash flow", "FCF", "cash flow margin" → operating_cash_flow
 
    Other (use closest available):
    - "R&D", "research", "development", "capex", "buybacks", "dividends", "margins", "ratios" → operating_income
@@ -251,11 +252,22 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - If data seems incomplete, acknowledge it
 
 6. CALCULATIONS - You MAY calculate ratios/percentages from the data:
+
+   PROFITABILITY RATIOS:
    - Gross Margin = (gross_profit / revenue) × 100
    - Operating Margin = (operating_income / revenue) × 100
    - Net Margin = (net_income / revenue) × 100
    - ROE (Return on Equity) = (net_income / shareholders_equity) × 100
+   - ROA (Return on Assets) = (net_income / total_assets) × 100
+
+   LEVERAGE RATIOS:
    - Debt-to-Equity = total_liabilities / shareholders_equity
+   - Debt-to-Assets = total_liabilities / total_assets
+
+   EFFICIENCY RATIOS:
+   - Asset Turnover = revenue / total_assets
+   - Cash Flow Margin = (operating_cash_flow / revenue) × 100
+
    - If user asks for a "margin" or "ratio", calculate it from the available data
    - Show the calculation briefly: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
 

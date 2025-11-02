@@ -24,10 +24,15 @@ export function generateFinancialChart(
   const hasRevenue = data[0] && 'revenue' in data[0] && data[0].revenue != null
   const hasShareholders = data[0] && 'shareholders_equity' in data[0]
   const hasLiabilities = data[0] && 'total_liabilities' in data[0]
+  const hasAssets = data[0] && 'total_assets' in data[0]
 
   const isMarginCalculation = hasRevenue && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
+  const isCashFlowMargin = hasRevenue && metric === 'operating_cash_flow'
   const isROECalculation = hasShareholders && metric === 'net_income'
+  const isROACalculation = hasAssets && metric === 'net_income'
   const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity'
+  const isDebtToAssetsCalculation = hasAssets && metric === 'total_liabilities'
+  const isAssetTurnover = hasRevenue && metric === 'total_assets'
 
   // Sort by year ascending
   const sortedData = [...data].sort((a, b) => a.year - b.year)
@@ -54,6 +59,14 @@ export function generateFinancialChart(
     metricName = metric === 'gross_profit' ? 'Gross Margin' :
                  metric === 'operating_income' ? 'Operating Margin' : 'Net Margin'
     yAxisLabel = `${metricName} (%)`
+  } else if (isCashFlowMargin) {
+    // Calculate cash flow margin
+    values = validData.map((d: any) => {
+      const margin = (d.value / d.revenue) * 100
+      return parseFloat(margin.toFixed(1))
+    })
+    metricName = 'Cash Flow Margin'
+    yAxisLabel = 'Cash Flow Margin (%)'
   } else if (isROECalculation) {
     // Calculate ROE percentages
     values = validData.map((d: any) => {
@@ -62,6 +75,14 @@ export function generateFinancialChart(
     })
     metricName = 'Return on Equity (ROE)'
     yAxisLabel = 'ROE (%)'
+  } else if (isROACalculation) {
+    // Calculate ROA percentages
+    values = validData.map((d: any) => {
+      const roa = (d.value / d.total_assets) * 100
+      return parseFloat(roa.toFixed(1))
+    })
+    metricName = 'Return on Assets (ROA)'
+    yAxisLabel = 'ROA (%)'
   } else if (isDebtToEquityCalculation) {
     // Calculate debt-to-equity ratio
     values = validData.map((d: any) => {
@@ -70,6 +91,22 @@ export function generateFinancialChart(
     })
     metricName = 'Debt-to-Equity Ratio'
     yAxisLabel = 'Ratio'
+  } else if (isDebtToAssetsCalculation) {
+    // Calculate debt-to-assets ratio
+    values = validData.map((d: any) => {
+      const ratio = d.value / d.total_assets
+      return parseFloat(ratio.toFixed(2))
+    })
+    metricName = 'Debt-to-Assets Ratio'
+    yAxisLabel = 'Ratio'
+  } else if (isAssetTurnover) {
+    // Calculate asset turnover
+    values = validData.map((d: any) => {
+      const turnover = d.revenue / d.value
+      return parseFloat(turnover.toFixed(2))
+    })
+    metricName = 'Asset Turnover'
+    yAxisLabel = 'Turnover Ratio'
   } else {
     // Regular financial values in billions
     values = validData.map((d) => formatFinancialValue(d.value))
