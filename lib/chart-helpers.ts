@@ -20,22 +20,14 @@ export function generateFinancialChart(
   // Edge case: no data
   if (!data || data.length === 0) return null
 
-  // Edge case: single data point
-  if (data.length === 1) {
-    // Still show chart but user should know it's just one point
-    const categories = [data[0].year.toString()]
-    const values = [formatFinancialValue(data[0].value)]
-    const metricName = formatMetricName(metric)
+  // Check if this is a margin/ratio calculation (has both value and revenue)
+  const hasRevenue = data[0] && 'revenue' in data[0] && data[0].revenue != null
+  const hasShareholders = data[0] && 'shareholders_equity' in data[0]
+  const hasLiabilities = data[0] && 'total_liabilities' in data[0]
 
-    return {
-      type: 'column',
-      title: `AAPL ${metricName} (${categories[0]})`,
-      data: values,
-      categories,
-      yAxisLabel: `${metricName} ($B)`,
-      xAxisLabel: 'Year',
-    }
-  }
+  const isMarginCalculation = hasRevenue && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
+  const isROECalculation = hasShareholders && metric === 'net_income'
+  const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity'
 
   // Sort by year ascending
   const sortedData = [...data].sort((a, b) => a.year - b.year)
@@ -45,19 +37,52 @@ export function generateFinancialChart(
 
   if (validData.length === 0) return null
 
-  // Extract years and values
+  // Extract years
   const categories = validData.map((d) => d.year.toString())
-  const values = validData.map((d) => formatFinancialValue(d.value))
 
-  // Generate human-readable metric name
-  const metricName = formatMetricName(metric)
+  // Calculate values based on type
+  let values: number[]
+  let yAxisLabel: string
+  let metricName: string
+
+  if (isMarginCalculation) {
+    // Calculate margin percentages
+    values = validData.map((d: any) => {
+      const margin = (d.value / d.revenue) * 100
+      return parseFloat(margin.toFixed(1))
+    })
+    metricName = metric === 'gross_profit' ? 'Gross Margin' :
+                 metric === 'operating_income' ? 'Operating Margin' : 'Net Margin'
+    yAxisLabel = `${metricName} (%)`
+  } else if (isROECalculation) {
+    // Calculate ROE percentages
+    values = validData.map((d: any) => {
+      const roe = (d.value / d.shareholders_equity) * 100
+      return parseFloat(roe.toFixed(1))
+    })
+    metricName = 'Return on Equity (ROE)'
+    yAxisLabel = 'ROE (%)'
+  } else if (isDebtToEquityCalculation) {
+    // Calculate debt-to-equity ratio
+    values = validData.map((d: any) => {
+      const ratio = d.total_liabilities / d.value
+      return parseFloat(ratio.toFixed(2))
+    })
+    metricName = 'Debt-to-Equity Ratio'
+    yAxisLabel = 'Ratio'
+  } else {
+    // Regular financial values in billions
+    values = validData.map((d) => formatFinancialValue(d.value))
+    metricName = formatMetricName(metric)
+    yAxisLabel = `${metricName} ($B)`
+  }
 
   return {
     type: 'column',
     title: `AAPL ${metricName} (${categories[0]}-${categories[categories.length - 1]})`,
     data: values,
     categories,
-    yAxisLabel: `${metricName} ($B)`,
+    yAxisLabel,
     xAxisLabel: 'Year',
   }
 }

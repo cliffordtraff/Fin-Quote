@@ -102,8 +102,18 @@ export default function ReviewPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Query Review Dashboard</h1>
-          <p className="text-gray-600">Review and categorize query failures for active learning</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Query Review Dashboard</h1>
+              <p className="text-gray-600">Review and categorize query failures for active learning</p>
+            </div>
+            <a
+              href="/admin/validation"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors"
+            >
+              View Validation Dashboard →
+            </a>
+          </div>
         </div>
 
         {/* Stats Summary */}
@@ -156,7 +166,7 @@ export default function ReviewPage() {
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 mb-1">{query.user_question}</h3>
                       <div className="flex items-center gap-3 text-sm text-gray-600">
-                        <span>{new Date(query.created_at).toLocaleString()}</span>
+                        <span>{new Date(query.created_at).toLocaleString('en-US', { timeZone: 'America/Chicago' })}</span>
                         <span>•</span>
                         <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">{query.tool_selected}</span>
                         {getFeedbackBadge(query.user_feedback)}
@@ -222,7 +232,7 @@ export default function ReviewPage() {
                           <div className="font-medium">Category: {query.error_category}</div>
                           {query.reviewer_notes && <div className="mt-1">Notes: {query.reviewer_notes}</div>}
                           <div className="text-xs text-gray-600 mt-1">
-                            Reviewed: {query.reviewed_at ? new Date(query.reviewed_at).toLocaleString() : 'N/A'}
+                            Reviewed: {query.reviewed_at ? new Date(query.reviewed_at).toLocaleString('en-US', { timeZone: 'America/Chicago' }) : 'N/A'}
                           </div>
                         </div>
                       </div>

@@ -110,11 +110,31 @@ export async function getAaplFinancialsByMetric(params: {
       return { data: null, error: error.message }
     }
 
-    const mapped = (data ?? []).map((row) => ({
-      year: row.year,
-      value: row[metric] as number,
-      metric,
-    }))
+    // For margin/ratio calculations, include related metrics
+    const mapped = (data ?? []).map((row) => {
+      const result: any = {
+        year: row.year,
+        value: row[metric] as number,
+        metric,
+      }
+
+      // Include revenue for margin calculations
+      if (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income') {
+        result.revenue = row.revenue
+      }
+
+      // Include shareholders_equity for ROE calculations
+      if (metric === 'net_income') {
+        result.shareholders_equity = row.shareholders_equity
+      }
+
+      // Include total_liabilities for debt-to-equity calculations
+      if (metric === 'shareholders_equity') {
+        result.total_liabilities = row.total_liabilities
+      }
+
+      return result
+    })
 
     return { data: mapped, error: null }
   } catch (err) {

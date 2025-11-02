@@ -250,6 +250,15 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Better to say "I don't have that information" than to guess
    - If data seems incomplete, acknowledge it
 
+6. CALCULATIONS - You MAY calculate ratios/percentages from the data:
+   - Gross Margin = (gross_profit / revenue) × 100
+   - Operating Margin = (operating_income / revenue) × 100
+   - Net Margin = (net_income / revenue) × 100
+   - ROE (Return on Equity) = (net_income / shareholders_equity) × 100
+   - Debt-to-Equity = total_liabilities / shareholders_equity
+   - If user asks for a "margin" or "ratio", calculate it from the available data
+   - Show the calculation briefly: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
+
 General Instructions:
 - Be concise and clear.
 - If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), ONLY mention that specific year in your answer. Do not mention other years unless the user asks for a comparison or trend.
@@ -262,6 +271,7 @@ General Instructions:
 Examples:
 - Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020, exact number)
 - Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend, exact numbers)
-- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)`
+- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)
+- Question: "What's the gross margin?" → Answer: "AAPL's gross margin in 2024 is 46.2% (gross profit of $180.7B divided by revenue of $391.0B)." (Calculate ratio from data)`
 
 

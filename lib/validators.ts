@@ -43,6 +43,82 @@ export interface CompleteValidationResults {
 // ============================================================================
 
 /**
+ * Extract percentages from text:
+ * - "46.2%" → 46.2
+ * - "15.3 percent" → 15.3
+ */
+function extractPercentages(text: string): number[] {
+  const percentages: number[] = []
+
+  // Pattern 1: XX.X% or XX%
+  const percentPattern = /(\d+\.?\d*)\s*%/gi
+  let match
+  while ((match = percentPattern.exec(text)) !== null) {
+    percentages.push(parseFloat(match[1]))
+  }
+
+  // Pattern 2: XX.X percent
+  const percentWordPattern = /(\d+\.?\d*)\s*percent/gi
+  while ((match = percentWordPattern.exec(text)) !== null) {
+    percentages.push(parseFloat(match[1]))
+  }
+
+  return percentages
+}
+
+/**
+ * Detect if data contains metrics needed for ratio calculations
+ */
+function detectRatioMetrics(data: any[]): {
+  hasRevenue: boolean
+  hasShareholders: boolean
+  hasLiabilities: boolean
+  primaryMetric?: string
+} {
+  if (!data || data.length === 0) {
+    return { hasRevenue: false, hasShareholders: false, hasLiabilities: false }
+  }
+
+  const firstRow = data[0]
+  const hasRevenue = 'revenue' in firstRow && firstRow.revenue != null
+  const hasShareholders = 'shareholders_equity' in firstRow && firstRow.shareholders_equity != null
+  const hasLiabilities = 'total_liabilities' in firstRow && firstRow.total_liabilities != null
+  const primaryMetric = firstRow.metric || undefined
+
+  return { hasRevenue, hasShareholders, hasLiabilities, primaryMetric }
+}
+
+/**
+ * Calculate expected ratios from data
+ */
+function calculateRatios(data: any[]): number[] {
+  const ratios: number[] = []
+  const { hasRevenue, hasShareholders, hasLiabilities, primaryMetric } = detectRatioMetrics(data)
+
+  for (const row of data) {
+    // Margin calculations (value / revenue)
+    if (hasRevenue && row.value != null && row.revenue != null) {
+      const margin = (row.value / row.revenue) * 100
+      ratios.push(parseFloat(margin.toFixed(1)))
+    }
+
+    // ROE calculation (net_income / shareholders_equity)
+    if (hasShareholders && primaryMetric === 'net_income' && row.value != null && row.shareholders_equity != null) {
+      const roe = (row.value / row.shareholders_equity) * 100
+      ratios.push(parseFloat(roe.toFixed(1)))
+    }
+
+    // Debt-to-Equity ratio (total_liabilities / shareholders_equity)
+    if (hasLiabilities && primaryMetric === 'shareholders_equity' && row.value != null && row.total_liabilities != null) {
+      const debtToEquity = row.total_liabilities / row.value
+      ratios.push(parseFloat(debtToEquity.toFixed(2)))
+    }
+  }
+
+  return ratios
+}
+
+/**
  * Extract numbers from text, handling common formats:
  * - $383.3B → 383300000000
  * - $57.4 billion → 57400000000
@@ -137,14 +213,113 @@ function findClosestMatch(mentioned: number, dataNumbers: number[], tolerancePer
  * @returns ValidationResult with pass/fail and details
  */
 export function validateNumbers(answer: string, data: any[]): ValidationResult {
-  // Extract all numbers mentioned in the answer
+  // Check if this is a ratio calculation scenario
+  const ratioMetrics = detectRatioMetrics(data)
+  const isRatioCalculation = ratioMetrics.hasRevenue || ratioMetrics.hasShareholders || ratioMetrics.hasLiabilities
+
+  // Extract percentages and absolute numbers
+  const mentionedPercentages = extractPercentages(answer)
   const mentionedNumbers = extractNumbers(answer)
 
-  // Skip validation if no numbers mentioned
-  if (mentionedNumbers.length === 0) {
+  // Track all validations
+  let totalMentioned = 0
+  let totalMatched = 0
+  let totalUnmatched = 0
+  const validationDetails: string[] = []
+
+  // ============================================================================
+  // RATIO VALIDATION (if applicable)
+  // ============================================================================
+  if (isRatioCalculation && mentionedPercentages.length > 0) {
+    const expectedRatios = calculateRatios(data)
+
+    const unmatchedPercentages: number[] = []
+    const matchedPercentages: Array<{ mentioned: number; expected: number; percentDiff: number }> = []
+
+    for (const mentioned of mentionedPercentages) {
+      const match = findClosestMatch(mentioned, expectedRatios, 0.5) // Allow 0.5% tolerance for ratios
+
+      if (match.found && match.actual !== undefined && match.percentDiff !== undefined) {
+        matchedPercentages.push({
+          mentioned,
+          expected: match.actual,
+          percentDiff: match.percentDiff,
+        })
+        totalMatched++
+      } else {
+        unmatchedPercentages.push(mentioned)
+        totalUnmatched++
+      }
+      totalMentioned++
+    }
+
+    if (matchedPercentages.length > 0) {
+      validationDetails.push(`Ratios: ${matchedPercentages.length}/${mentionedPercentages.length} validated`)
+    }
+    if (unmatchedPercentages.length > 0) {
+      validationDetails.push(`Ratios: ${unmatchedPercentages.length} unmatched`)
+    }
+  }
+
+  // ============================================================================
+  // ABSOLUTE NUMBER VALIDATION
+  // ============================================================================
+  if (mentionedNumbers.length > 0) {
+    // Extract all numeric values from the data
+    const dataNumbers: number[] = []
+    for (const row of data) {
+      if (row.value !== undefined && row.value !== null) {
+        dataNumbers.push(Number(row.value))
+      }
+      // Also check for price data
+      if (row.close !== undefined && row.close !== null) {
+        dataNumbers.push(Number(row.close))
+      }
+      // Include related metrics for validation
+      if (row.revenue !== undefined && row.revenue !== null) {
+        dataNumbers.push(Number(row.revenue))
+      }
+    }
+
+    if (dataNumbers.length > 0) {
+      const unmatchedNumbers: number[] = []
+      const matchedNumbers: Array<{ mentioned: number; actual: number; percentDiff: number }> = []
+
+      for (const mentioned of mentionedNumbers) {
+        const match = findClosestMatch(mentioned, dataNumbers, 0.5)
+
+        if (match.found && match.actual !== undefined && match.percentDiff !== undefined) {
+          matchedNumbers.push({
+            mentioned,
+            actual: match.actual,
+            percentDiff: match.percentDiff,
+          })
+          totalMatched++
+        } else {
+          unmatchedNumbers.push(mentioned)
+          totalUnmatched++
+        }
+        totalMentioned++
+      }
+
+      if (matchedNumbers.length > 0) {
+        validationDetails.push(`Numbers: ${matchedNumbers.length}/${mentionedNumbers.length} validated`)
+      }
+      if (unmatchedNumbers.length > 0) {
+        validationDetails.push(`Numbers: ${unmatchedNumbers.length} unmatched`)
+      }
+    }
+  }
+
+  // ============================================================================
+  // DETERMINE OVERALL RESULT
+  // ============================================================================
+
+  // Skip validation if nothing to validate
+  if (totalMentioned === 0) {
     return {
       status: 'skip',
-      details: 'No numbers found in answer',
+      details: 'No numbers or percentages found in answer',
       metadata: {
         mentioned_count: 0,
         data_count: 0,
@@ -152,84 +327,40 @@ export function validateNumbers(answer: string, data: any[]): ValidationResult {
     }
   }
 
-  // Extract all numeric values from the data
-  const dataNumbers: number[] = []
-  for (const row of data) {
-    if (row.value !== undefined && row.value !== null) {
-      dataNumbers.push(Number(row.value))
-    }
-    // Also check for price data
-    if (row.close !== undefined && row.close !== null) {
-      dataNumbers.push(Number(row.close))
-    }
-  }
-
-  // Skip validation if no data to compare against
-  if (dataNumbers.length === 0) {
-    return {
-      status: 'skip',
-      details: 'No numeric data to validate against',
-      metadata: {
-        mentioned_count: mentionedNumbers.length,
-        data_count: 0,
-      },
-    }
-  }
-
-  // Check each mentioned number
-  const unmatchedNumbers: number[] = []
-  const matchedNumbers: Array<{ mentioned: number; actual: number; percentDiff: number }> = []
-
-  for (const mentioned of mentionedNumbers) {
-    const match = findClosestMatch(mentioned, dataNumbers, 0.5)
-
-    if (match.found && match.actual !== undefined && match.percentDiff !== undefined) {
-      matchedNumbers.push({
-        mentioned,
-        actual: match.actual,
-        percentDiff: match.percentDiff,
-      })
-    } else {
-      unmatchedNumbers.push(mentioned)
-    }
-  }
-
-  // Determine severity and status
-  if (unmatchedNumbers.length === 0) {
-    // All numbers matched
+  // All validated successfully
+  if (totalUnmatched === 0) {
     return {
       status: 'pass',
       severity: 'none',
-      details: `All ${mentionedNumbers.length} numbers validated successfully`,
+      details: `All ${totalMentioned} values validated: ${validationDetails.join(', ')}`,
       metadata: {
-        mentioned_count: mentionedNumbers.length,
-        matched_count: matchedNumbers.length,
-        matches: matchedNumbers,
+        mentioned_count: totalMentioned,
+        matched_count: totalMatched,
+        is_ratio_calculation: isRatioCalculation,
         tolerance_percent: 0.5,
       },
     }
   }
 
-  // Calculate severity based on how many numbers failed
-  const failureRate = unmatchedNumbers.length / mentionedNumbers.length
+  // Calculate severity based on failure rate
+  const failureRate = totalUnmatched / totalMentioned
   let severity: ValidationSeverity = 'low'
 
   if (failureRate >= 0.5) {
-    severity = 'high' // 50%+ of numbers wrong
+    severity = 'high' // 50%+ of values wrong
   } else if (failureRate >= 0.25) {
-    severity = 'medium' // 25-50% of numbers wrong
+    severity = 'medium' // 25-50% of values wrong
   }
 
   return {
     status: 'fail',
     severity,
-    details: `${unmatchedNumbers.length} of ${mentionedNumbers.length} numbers could not be validated`,
+    details: `${totalUnmatched} of ${totalMentioned} values could not be validated: ${validationDetails.join(', ')}`,
     metadata: {
-      mentioned_count: mentionedNumbers.length,
-      matched_count: matchedNumbers.length,
-      unmatched_count: unmatchedNumbers.length,
-      unmatched_numbers: unmatchedNumbers,
-      matched_numbers: matchedNumbers,
+      mentioned_count: totalMentioned,
+      matched_count: totalMatched,
+      unmatched_count: totalUnmatched,
+      is_ratio_calculation: isRatioCalculation,
       tolerance_percent: 0.5,
     },
   }

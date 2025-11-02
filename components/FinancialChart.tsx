@@ -192,6 +192,10 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           fontSize: '16px',
           color: '#6b7280', // gray-500
         },
+        formatter: function () {
+          // Explicitly return the category string (year), not the index
+          return this.value
+        },
       },
       gridLineWidth: 0,
     },
@@ -230,7 +234,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
         dataLabels: {
           enabled: true, // Show values on top of bars
-          format: '{y}',
+          format: config.yAxisLabel.includes('%') ? '{y}%' : '{y}',
           style: {
             fontSize: '16px',
             fontWeight: '600',
