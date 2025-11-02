@@ -421,133 +421,521 @@ Log the issue for urgent review
 
 ## Implementation Plan
 
+### Pre-Implementation: Establish Baseline (Do First!)
+
+**Time:** 4-6 hours
+**Owner:** You (the developer)
+**Priority:** CRITICAL - Must complete before building validators
+
+#### 1. Measure Current Accuracy (2-3 hours)
+
+**Collect baseline metrics:**
+
+```sql
+-- Current thumbs up/down ratio
+SELECT
+  user_feedback,
+  COUNT(*) as count,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
+FROM query_logs
+WHERE user_feedback IS NOT NULL
+GROUP BY user_feedback;
+
+-- Average response time
+SELECT
+  AVG(tool_selection_latency_ms + tool_execution_latency_ms + answer_latency_ms) as avg_total_ms
+FROM query_logs
+WHERE created_at > NOW() - INTERVAL '7 days';
+
+-- Error rate (queries with tool errors)
+SELECT
+  COUNT(CASE WHEN tool_error IS NOT NULL THEN 1 END) * 100.0 / COUNT(*) as error_rate_pct
+FROM query_logs
+WHERE created_at > NOW() - INTERVAL '7 days';
+```
+
+**Manual accuracy check:**
+1. Pull 50 random queries from last week
+2. For each query, check:
+   - Is the answer factually correct?
+   - Do numbers match the data?
+   - Are years/dates correct?
+   - Are citations real?
+3. Calculate: `Accuracy = Correct Answers / Total * 100`
+
+**Document baseline:**
+```
+Baseline Metrics (as of [DATE]):
+- Thumbs up rate: ??%
+- Thumbs down rate: ??%
+- Manual accuracy check: ??% (50 queries)
+- Average response time: ??ms
+- Error rate: ??%
+```
+
+#### 2. Design Data Model (1 hour)
+
+**Add validation columns to query_logs:**
+
+```sql
+-- Run in Supabase SQL Editor
+ALTER TABLE query_logs
+ADD COLUMN IF NOT EXISTS validation_results JSONB,
+ADD COLUMN IF NOT EXISTS validation_passed BOOLEAN,
+ADD COLUMN IF NOT EXISTS validation_run_at TIMESTAMPTZ;
+
+-- Add index for querying validation failures
+CREATE INDEX IF NOT EXISTS idx_query_logs_validation_passed
+ON query_logs(validation_passed);
+
+-- Add comments
+COMMENT ON COLUMN query_logs.validation_results IS
+'JSONB containing results of all validation checks:
+{
+  "number_validation": {"status": "pass"|"fail"|"skip", "details": {...}},
+  "year_validation": {"status": "pass"|"fail"|"skip", "details": {...}},
+  "filing_validation": {"status": "pass"|"fail"|"skip", "details": {...}},
+  "overall_severity": "none"|"low"|"medium"|"high"|"critical"
+}';
+```
+
+**Example validation_results payload:**
+```json
+{
+  "number_validation": {
+    "status": "pass",
+    "checked": ["383.3B"],
+    "matched": [383285000000],
+    "tolerance": 0.1
+  },
+  "year_validation": {
+    "status": "fail",
+    "mentioned_years": [2020],
+    "available_years": [2024, 2023, 2022, 2021],
+    "missing_years": [2020],
+    "severity": "medium"
+  },
+  "overall_severity": "medium"
+}
+```
+
+#### 3. Define Failure-Handling Policy (1 hour)
+
+**Decision Table:**
+
+| Failure Type | Severity | Confidence | Action | User Message | Log Priority |
+|--------------|----------|------------|--------|--------------|--------------|
+| Number mismatch >10% | High | High | Block + Regenerate | "Unable to verify accuracy. Please try again." | Error |
+| Number mismatch 5-10% | Medium | Medium | Regenerate once | Show regenerated answer | Warning |
+| Number mismatch <5% | Low | High | Allow + Log | None | Info |
+| Year missing (exists in DB) | High | High | Regenerate with all years | Show regenerated answer | Error |
+| Year missing (not in DB) | Low | High | Allow + Log | None | Info |
+| Future date mentioned | High | High | Block + Regenerate | "Date validation error" | Error |
+| Fake filing reference | Critical | High | Block | "Citation error detected" | Critical |
+| Real filing, wrong date | Medium | Medium | Regenerate once | Show regenerated answer | Warning |
+| Quoted text not found | High | Medium | Flag + Allow with warning | None (logged for review) | Error |
+| "No data" but data exists | Critical | High | Regenerate with correction | Show regenerated answer | Critical |
+
+**Regeneration limits:**
+- Max 1 retry per query
+- If retry also fails validation: show error, don't show either answer
+- All regenerations logged with reason
+
+---
+
+### Phase 0: Quick Wins with Prompt Improvements (Week 0)
+
+**Time:** 2-3 hours
+**Goal:** Improve accuracy with minimal code changes
+**Why:** Might solve 20-30% of issues before building validators
+
+#### What to Change:
+
+**1. Update `buildFinalAnswerPrompt` in lib/tools.ts:**
+
+Current prompt section:
+```
+Instructions:
+- Be concise and clear.
+- [existing instructions...]
+```
+
+Add these rules:
+```
+CRITICAL VALIDATION RULES:
+1. Numbers: Use EXACT numbers from the data. Format large numbers with B (billions) or M (millions).
+   Example: 383285000000 → "$383.3B" (not "$383B" or "around $380B")
+
+2. Years: ONLY mention years that appear in the facts JSON.
+   If asked about a year not in the data, say: "I don't have data for [year]."
+   DO NOT extrapolate or estimate.
+
+3. Dates: Check the filing_date in the data. Do not invent dates.
+
+4. Citations: If mentioning a filing, use the EXACT date and type from the data.
+   Example: "According to the 10-K filed November 1, 2024..."
+
+5. If you're unsure about ANY fact, say so. It's better to admit uncertainty than provide wrong information.
+```
+
+#### Testing:
+
+**Test with 10 queries that previously failed:**
+1. Run queries through updated prompt
+2. Manually check if answers improved
+3. Document improvement rate
+4. If <10% improvement: proceed with validators
+5. If >30% improvement: still build validators, but expectations are higher
+
+#### Success Criteria:
+- Documented improvement in accuracy
+- Identified which error types are reduced
+- Baseline for validator effectiveness
+
+---
+
 ### Phase 1: Build Basic Validators (Week 1)
 
+**Time:** 8-12 hours
+**Owner:** You (the developer)
 **Goal:** Create validators that check numbers and years
 
 #### What We'll Build:
 
-**1. Number Validator**
+**1. Number Validator** (3-4 hours)
 - Extracts numbers from LLM answer
 - Extracts numbers from data
 - Compares them (with tolerance for rounding)
 - Returns: pass/fail + details
 
-**2. Year Validator**
+**2. Year Validator** (2-3 hours)
 - Extracts years from LLM answer
 - Lists years in data
 - Checks if all mentioned years exist
 - If not, checks database to see if they exist but weren't fetched
 - Returns: pass/fail + details
 
-**3. Integration**
+**3. Integration** (2-3 hours)
 - Add validation step to ask-question.ts
 - Run validators after LLM generates answer
 - Log results to database
 - For now: Just log failures, still show answers
 
+**4. Validator Testing** (2-3 hours)
+- Write unit tests for each validator
+- Create golden examples (inputs with known correct outputs)
+- Test edge cases
+
 **Why start here:**
-- Numbers and years are most common issues
+- Numbers and years are most common issues (based on baseline analysis)
 - Relatively simple to implement
 - High impact (catches many real errors)
+- Fast feedback loop for testing
+
+#### Validator Testing Plan:
+
+**Number Validator Tests:**
+```typescript
+// Test cases
+✓ Exact match: "$383.3B" matches 383285000000
+✓ Within tolerance: "$383B" matches 383285000000 (0.1% diff)
+✓ Out of tolerance: "$350B" fails for 383285000000 (8.7% diff)
+✓ Wrong units: "$383M" fails for 383285000000
+✓ Multiple numbers: "Revenue $383.3B, up from $274.5B" (check both)
+✗ No numbers in answer: skip validation
+✓ Numbers in text: "twenty billion" vs 20000000000
+```
+
+**Year Validator Tests:**
+```typescript
+// Test cases
+✓ Year in data: "2023" when data has [2024, 2023, 2022]
+✗ Year not in data: "2020" when data has [2024, 2023, 2022]
+✓ Multiple years: "from 2020 to 2024" (check all mentioned)
+✗ Year exists in DB: "2020" - check if it's in database but wasn't fetched
+✓ Future year: "2026" should fail
+✗ No years mentioned: skip validation
+```
 
 #### Success Criteria:
 - Validators run on every query
-- Results logged to database
+- Results logged to database with proper JSONB structure
 - Can see validation pass/fail rate in logs
+- Unit tests achieve >90% coverage
+- <50ms added latency per query
 
 ### Phase 2: Add Filing/Citation Validation (Week 2)
 
+**Time:** 6-8 hours
+**Owner:** You (the developer)
 **Goal:** Detect hallucinated filing references
 
 #### What We'll Build:
 
-**1. Filing Reference Validator**
+**1. Filing Reference Validator** (3-4 hours)
 - Extracts filing mentions from answer
 - Checks if they exist in returned data
 - Validates filing dates and types
 - Returns: pass/fail + details
 
-**2. Quote Validator**
+**2. Quote Validator** (2-3 hours)
 - Extracts quoted text from answer
 - Checks if quote appears in returned passages
 - Returns: pass/fail + details
 
+**3. Testing** (1-2 hours)
+- Unit tests for filing/quote extraction
+- Test with real filing data
+- Verify citation accuracy
+
 #### Success Criteria:
-- Catches fake filing references
-- Catches made-up quotes
-- All validation results logged
+- Catches fake filing references (>95% accuracy)
+- Catches made-up quotes (>90% accuracy)
+- All validation results logged with details
+- False positive rate <10%
 
 ### Phase 3: Add Auto-Correction (Week 3)
 
+**Time:** 6-8 hours
+**Owner:** You (the developer)
 **Goal:** Automatically fix simple failures
 
 #### What We'll Build:
 
-**1. Regeneration Logic**
+**1. Regeneration Logic** (3-4 hours)
 - When validation fails, try once more with stronger prompt
 - Include specific error in prompt: "The year 2020 was not found in your answer..."
 - Validate again
 - If passes: show new answer
 - If fails: flag for manual review
 
-**2. Smart Prompting**
+**2. Smart Prompting** (2-3 hours)
 - Based on failure type, customize regeneration prompt
 - Number mismatch → "Use EXACT numbers from data"
 - Missing year → "Data includes year X which you must mention"
+- Hallucinated filing → "Only use filings with these exact dates: [list]"
+
+**3. Testing & Monitoring** (1-2 hours)
+- Test regeneration on known failures
+- Monitor regeneration success rate
+- Track latency impact (regeneration adds 1-2s)
 
 #### Success Criteria:
-- 50%+ of failures auto-corrected
-- Auto-corrected answers validate successfully
-- Reduced error rate shown to users
+- 50%+ of failures auto-corrected successfully
+- Auto-corrected answers pass validation
+- Regeneration adds <3s to response time
+- Users don't notice (seamless experience)
 
 ### Phase 4: Add Validation Dashboard (Week 4)
 
+**Time:** 4-6 hours
+**Owner:** You (the developer)
 **Goal:** Make validation results visible and actionable
 
 #### What We'll Build:
 
-**1. Validation Stats View**
+**1. Validation Stats View** (2-3 hours)
 - Show daily/weekly pass rate
 - Show most common failure types
 - Show examples of each failure type
 - Charts and trends
+- Response time impact metrics
 
-**2. Integration with Review Dashboard**
-- Link validation failures to manual review system
+**2. Integration with Review Dashboard** (2-3 hours)
+- Link validation failures to manual review system (`/admin/review`)
 - Show validation details when reviewing queries
 - Allow marking: "validation was correct" or "false positive"
+- Filter by validation status
 
 #### Success Criteria:
 - Can see validation performance at a glance
 - Can drill down into specific failures
 - Can track improvement over time
+- False positive identification helps tune validators
 
 ### Phase 5: Advanced Validation (Week 5+)
 
+**Time:** 8-12 hours (ongoing improvement)
+**Owner:** You (the developer)
 **Goal:** Catch more subtle issues
 
 #### What We'll Build:
 
-**1. Logic Consistency Validator**
+**1. Logic Consistency Validator** (3-4 hours)
 - Check for contradictions
 - Check if answer addresses the question
 - Check completeness
+- Verify units are consistent throughout answer
 
-**2. LLM-Assisted Validation**
-- Use small, cheap LLM to double-check answer
-- "Given this data, is this answer accurate?"
+**2. LLM-Assisted Validation** (3-4 hours)
+- Use small, cheap LLM (GPT-4o-mini) to double-check answer
+- Prompt: "Given this data, is this answer accurate? Respond with yes/no and reason."
 - Acts as second opinion
+- Cost: ~$0.0001 per validation
 
-**3. Pattern Learning**
+**3. Pattern Learning** (2-4 hours)
 - Learn from manual reviews which validations matter most
 - Adjust validation strictness based on query type
 - Prioritize high-impact validations
+- Build from manual review data collected in Phase 1-4
 
 #### Success Criteria:
 - 98%+ validation accuracy
 - Catches subtle errors that earlier validators miss
-- Low false positive rate
+- False positive rate <3%
+- System continuously improves from feedback
+
+---
+
+## Operational Visibility & Monitoring
+
+### Real-Time Monitoring (Set up in Phase 1)
+
+#### Metrics Dashboard
+
+**Key Metrics to Track:**
+
+1. **Validation Pass Rate** (most important)
+   - Target: >95% pass rate
+   - Alert if: <80% pass rate (something's broken)
+
+2. **Validation Failure Rate by Type**
+   - Track: number_validation, year_validation, filing_validation
+   - Identify which validators need tuning
+
+3. **Response Time Impact**
+   - Target: <100ms added per validation
+   - Alert if: >500ms (performance issue)
+
+4. **Auto-Correction Success Rate**
+   - Target: >50% of failures corrected
+   - Track: how many regenerations succeed vs fail
+
+5. **False Positive Rate**
+   - Target: <5%
+   - Measure: manual review of flagged queries
+
+#### Alert Conditions
+
+**Critical Alerts** (immediate action needed):
+```
+IF validation_pass_rate < 50% FOR 1 hour
+  → Email/Slack: "Validation system failing - check logs"
+  → Possible causes: validator bug, database down, API issue
+
+IF validation_latency > 1000ms FOR 10 minutes
+  → Email/Slack: "Validation slow - performance degradation"
+  → Possible causes: database slow, network issue
+
+IF regeneration_rate > 30% FOR 2 hours
+  → Email/Slack: "High regeneration rate - LLM quality issue?"
+  → Possible causes: bad prompt, model degradation
+```
+
+**Warning Alerts** (monitor closely):
+```
+IF false_positive_rate > 10%
+  → Review: validators may be too strict
+
+IF specific_validator_failure_rate > 40%
+  → Review: that validator may have bugs
+```
+
+#### Dashboard SQL Queries
+
+**Hourly validation metrics:**
+```sql
+SELECT
+  date_trunc('hour', created_at) as hour,
+  COUNT(*) as total_queries,
+  COUNT(*) FILTER (WHERE validation_passed = true) as passed,
+  COUNT(*) FILTER (WHERE validation_passed = false) as failed,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE validation_passed = true) / COUNT(*), 2) as pass_rate_pct,
+  AVG((validation_results->>'latency_ms')::numeric) as avg_validation_latency_ms
+FROM query_logs
+WHERE validation_run_at > NOW() - INTERVAL '24 hours'
+GROUP BY hour
+ORDER BY hour DESC;
+```
+
+**Failure breakdown by type:**
+```sql
+SELECT
+  jsonb_object_keys(validation_results) as validator_name,
+  COUNT(*) FILTER (
+    WHERE (validation_results->jsonb_object_keys(validation_results))->>'status' = 'fail'
+  ) as failure_count
+FROM query_logs
+WHERE validation_passed = false
+  AND created_at > NOW() - INTERVAL '7 days'
+GROUP BY validator_name
+ORDER BY failure_count DESC;
+```
+
+### Logging Strategy
+
+**What to Log:**
+
+**Every validation:**
+- Query ID
+- Timestamp
+- Pass/fail status
+- Detailed results (JSONB)
+- Latency
+- Action taken (shown, regenerated, blocked)
+
+**Example log entry:**
+```json
+{
+  "query_id": "abc123",
+  "validation_passed": false,
+  "validation_results": {
+    "number_validation": {"status": "pass"},
+    "year_validation": {
+      "status": "fail",
+      "mentioned_years": [2020],
+      "available_years": [2024, 2023],
+      "missing_years": [2020],
+      "severity": "high"
+    },
+    "overall_severity": "high"
+  },
+  "action_taken": "regenerated",
+  "regeneration_succeeded": true,
+  "latency_ms": 45
+}
+```
+
+### Health Checks
+
+**Add to monitoring system:**
+
+```typescript
+// GET /api/health/validation
+export async function GET() {
+  const recentQueries = await getQueriesLast10Minutes()
+
+  return {
+    status: recentQueries.passRate > 0.8 ? 'healthy' : 'degraded',
+    metrics: {
+      pass_rate: recentQueries.passRate,
+      avg_latency_ms: recentQueries.avgLatency,
+      total_queries: recentQueries.count
+    }
+  }
+}
+```
+
+### Weekly Review Checklist
+
+**Every Monday morning (15 minutes):**
+
+- [ ] Check validation pass rate (should be >90%)
+- [ ] Review top 3 failure types
+- [ ] Check false positive rate
+- [ ] Review any alerts from past week
+- [ ] Identify any patterns needing fixes
+- [ ] Update decision table if needed
 
 ---
 
@@ -735,4 +1123,4 @@ Log the issue for urgent review
 
 ---
 
-**Ready to build this?** Let's start with Phase 1!
+**Ready to build this?** Let's start with the Pre-Implementation baseline, then Phase 0, then Phase 1!
