@@ -22,7 +22,8 @@ export default function AskPage() {
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loadingStep, setLoadingStep] = useState<'selecting' | 'fetching' | 'analyzing' | null>(null)
+  const [loadingStep, setLoadingStep] = useState<'analyzing' | 'selecting' | 'calling' | 'fetching' | 'calculating' | 'generating' | null>(null)
+  const [loadingMessage, setLoadingMessage] = useState<string>('')
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
   const [sessionId, setSessionId] = useState<string>('')
   const [queryLogId, setQueryLogId] = useState<string | null>(null)
@@ -127,7 +128,6 @@ export default function AskPage() {
     }
 
     setLoading(true)
-    setLoadingStep('selecting')
     setError('')
     setAnswer('')
     setDataUsed(null)
@@ -141,9 +141,51 @@ export default function AskPage() {
     }
 
     try {
-      // Simulate loading steps for better UX
-      setTimeout(() => setLoadingStep('fetching'), 500)
-      setTimeout(() => setLoadingStep('analyzing'), 1000)
+      // Infer which tool will be called
+      const toolInfo = inferToolFromQuestion(question)
+
+      // Step 1: Analyzing question (200ms)
+      setLoadingStep('analyzing')
+      setLoadingMessage('Parsing your question...')
+      await new Promise(resolve => setTimeout(resolve, 200))
+
+      // Step 2: Selecting tool (300ms)
+      setLoadingStep('selecting')
+      setLoadingMessage('Selecting optimal tool...')
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      // Step 3: Calling tool (show actual tool)
+      setLoadingStep('calling')
+      if (toolInfo.tool === 'getAaplFinancialsByMetric' && toolInfo.metric) {
+        setLoadingMessage(`Calling getAaplFinancialsByMetric('${toolInfo.metric}')`)
+      } else if (toolInfo.tool === 'getPrices') {
+        setLoadingMessage(`Calling getPrices({ range: '${toolInfo.range}' })`)
+      } else if (toolInfo.tool === 'searchFilings') {
+        setLoadingMessage('Calling searchFilings (semantic search)')
+      } else {
+        setLoadingMessage(`Calling ${toolInfo.tool}()`)
+      }
+      await new Promise(resolve => setTimeout(resolve, 400))
+
+      // Step 4: Fetching from database
+      setLoadingStep('fetching')
+      setLoadingMessage('Querying Supabase database...')
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Step 5: Calculating (if ratio)
+      const isRatio = question.toLowerCase().includes('margin') ||
+                      question.toLowerCase().includes('roe') ||
+                      question.toLowerCase().includes('roa') ||
+                      question.toLowerCase().includes('ratio')
+      if (isRatio) {
+        setLoadingStep('calculating')
+        setLoadingMessage('Computing financial ratios...')
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+
+      // Step 6: Generating answer
+      setLoadingStep('generating')
+      setLoadingMessage('Generating answer with GPT-4o-mini...')
 
       // Send question with conversation history and session ID
       const result = await askQuestion(question, conversationHistory, sessionId)
@@ -180,6 +222,7 @@ export default function AskPage() {
     } finally {
       setLoading(false)
       setLoadingStep(null)
+      setLoadingMessage('')
       setQuestion('') // Clear input after submission
     }
   }
@@ -262,6 +305,59 @@ export default function AskPage() {
         form.requestSubmit()
       }
     }, 100)
+  }
+
+  // Infer the likely tool and parameters from the question
+  const inferToolFromQuestion = (q: string): { tool: string; metric?: string; range?: string } => {
+    const lower = q.toLowerCase()
+
+    // Check for price queries
+    if (lower.includes('price') || lower.includes('stock')) {
+      const range = lower.includes('today') || lower.includes('week') ? '7d' :
+                    lower.includes('month') || lower.includes('30') ? '30d' : '90d'
+      return { tool: 'getPrices', range }
+    }
+
+    // Check for filing queries
+    if (lower.includes('filing') || lower.includes('10-k') || lower.includes('10-q') ||
+        lower.includes('risk') || lower.includes('sec')) {
+      return lower.includes('search') || lower.includes('find') ?
+        { tool: 'searchFilings' } : { tool: 'getRecentFilings' }
+    }
+
+    // Financial metrics
+    const metricMap: Record<string, string> = {
+      'gross margin': 'gross_profit',
+      'gross profit': 'gross_profit',
+      'operating margin': 'operating_income',
+      'operating income': 'operating_income',
+      'net margin': 'net_income',
+      'net profit': 'net_income',
+      'net income': 'net_income',
+      'profit': 'net_income',
+      'earnings': 'net_income',
+      'roe': 'net_income',
+      'return on equity': 'net_income',
+      'roa': 'net_income',
+      'return on assets': 'net_income',
+      'revenue': 'revenue',
+      'sales': 'revenue',
+      'debt to equity': 'total_liabilities',
+      'debt to assets': 'total_liabilities',
+      'debt': 'total_liabilities',
+      'asset turnover': 'total_assets',
+      'assets': 'total_assets',
+      'cash flow': 'operating_cash_flow',
+      'eps': 'eps'
+    }
+
+    for (const [keyword, metric] of Object.entries(metricMap)) {
+      if (lower.includes(keyword)) {
+        return { tool: 'getAaplFinancialsByMetric', metric }
+      }
+    }
+
+    return { tool: 'getAaplFinancialsByMetric', metric: 'revenue' }
   }
 
   return (
@@ -391,16 +487,24 @@ export default function AskPage() {
                   className="mt-4 w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
                 >
                   {loading ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                        <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                        </div>
+                        <span className="font-semibold">
+                          {loadingStep === 'analyzing' && 'Step 1/6: Analyzing'}
+                          {loadingStep === 'selecting' && 'Step 2/6: Selecting Tool'}
+                          {loadingStep === 'calling' && 'Step 3/6: Calling API'}
+                          {loadingStep === 'fetching' && 'Step 4/6: Fetching Data'}
+                          {loadingStep === 'calculating' && 'Step 5/6: Calculating'}
+                          {loadingStep === 'generating' && 'Step 6/6: Generating Answer'}
+                        </span>
                       </div>
-                      <span>
-                        {loadingStep === 'selecting' && 'Selecting tool...'}
-                        {loadingStep === 'fetching' && 'Fetching data...'}
-                        {loadingStep === 'analyzing' && 'Analyzing...'}
+                      <span className="text-sm font-mono text-blue-100">
+                        {loadingMessage}
                       </span>
                     </div>
                   ) : (

@@ -209,7 +209,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
       },
       minPadding: 0,
-      maxPadding: 0,
+      maxPadding: 0.08, // Leave headroom so column labels rendered above bars are visible
       labels: {
         style: {
           fontSize: '16px',
@@ -234,9 +234,12 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
         dataLabels: {
           enabled: true, // Show values on top of bars
+          inside: false,
           format: config.yAxisLabel.includes('%') ? '{y}%' : '{y}',
-          verticalAlign: 'top', // Position labels above bars
-          y: -10, // Offset 10px above the bar
+          verticalAlign: 'bottom', // Anchor to the bar top when positioned outside
+          y: -6, // Keep a small gap between label and bar
+          crop: false,
+          overflow: 'allow',
           style: {
             fontSize: '16px',
             fontWeight: '600',
