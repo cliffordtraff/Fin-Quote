@@ -8,6 +8,7 @@ import { getRecentFilings } from './filings'
 import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
+import { validateAnswer, CompleteValidationResults } from '@/lib/validators'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory } from '@/types/conversation'
 
@@ -55,6 +56,7 @@ async function logQuery(data: {
   toolError?: string
   answerGenerated: string
   answerLatencyMs?: number
+  validationResults?: CompleteValidationResults
 }): Promise<string | null> {
   try {
     const supabase = createServerClient()
@@ -75,6 +77,16 @@ async function logQuery(data: {
         tool_error: data.toolError,
         answer_generated: data.answerGenerated,
         answer_latency_ms: data.answerLatencyMs,
+        validation_results: data.validationResults ? {
+          number_validation: data.validationResults.number_validation,
+          year_validation: data.validationResults.year_validation,
+          filing_validation: data.validationResults.filing_validation,
+          overall_severity: data.validationResults.overall_severity,
+          action_taken: 'shown', // For Phase 1, we always show the answer
+          latency_ms: data.validationResults.latency_ms,
+        } : null,
+        validation_passed: data.validationResults?.overall_passed || null,
+        validation_run_at: data.validationResults ? new Date().toISOString() : null,
       })
       .select('id')
       .single()
@@ -353,8 +365,51 @@ export async function askQuestion(
 
     answerLatencyMs = Date.now() - answerGenerationStart
 
-    // Get current user if logged in
+    // Step 4: Validate the answer (Phase 1)
     const supabase = createServerClient()
+
+    // Helper function to check if a year exists in the database
+    const checkYearInDatabase = async (year: number): Promise<boolean> => {
+      try {
+        const { data, error } = await supabase
+          .from('financials_std')
+          .select('year')
+          .eq('symbol', 'AAPL')
+          .eq('year', year)
+          .limit(1)
+
+        if (error) {
+          console.error('Error checking year in database:', error)
+          return false
+        }
+
+        return data && data.length > 0
+      } catch (err) {
+        console.error('Error in checkYearInDatabase:', err)
+        return false
+      }
+    }
+
+    // Run validation
+    const validationResults = await validateAnswer(
+      answer.trim(),
+      dataUsed.data,
+      checkYearInDatabase
+    )
+
+    // Log validation results (for Phase 1, we just log - no blocking)
+    if (!validationResults.overall_passed) {
+      console.warn('Validation failed:', {
+        question: userQuestion,
+        tool: toolSelection.tool,
+        severity: validationResults.overall_severity,
+        number_status: validationResults.number_validation.status,
+        year_status: validationResults.year_validation.status,
+        filing_status: validationResults.filing_validation.status,
+      })
+    }
+
+    // Get current user if logged in
     const { data: { user } } = await supabase.auth.getUser()
 
     // Log the query and get the log ID for feedback
@@ -373,6 +428,7 @@ export async function askQuestion(
         toolError,
         answerGenerated: answer.trim(),
         answerLatencyMs,
+        validationResults,
       })
     }
 
