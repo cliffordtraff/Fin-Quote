@@ -92,8 +92,8 @@ export async function getAaplFinancialsByMetric(params: {
     return { data: null, error: 'Unsupported metric' }
   }
 
-  // Limit rows to a small, safe window (1..10)
-  const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)
+  // Limit rows to a small, safe window (1..20)
+  const safeLimit = Math.min(Math.max(requestedLimit, 1), 20)
 
   try {
     const supabase = createServerClient()

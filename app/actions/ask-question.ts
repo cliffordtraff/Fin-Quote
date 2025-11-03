@@ -49,7 +49,7 @@ export type AskQuestionResponse = {
  * Log a query to the database for accuracy tracking and improvement
  * Returns the ID of the inserted log entry
  */
-async function logQuery(data: {
+export async function logQuery(data: {
   sessionId: string
   userId?: string | null
   userQuestion: string

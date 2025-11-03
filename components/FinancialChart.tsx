@@ -360,7 +360,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         fontSize: '16px',
         color: '#1f2937', // gray-800
       },
-      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px;">{point.x}</div>',
+      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px;">{point.key}</div>',
       pointFormat: '<div style="color: #6b7280; font-size: 16px;">{series.name}: <span style="font-weight: 600; color: #1f2937;">{point.y}</span></div>',
       useHTML: true,
     },

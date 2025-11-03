@@ -323,15 +323,41 @@ export async function POST(req: NextRequest) {
                 },
               ],
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
-              max_completion_tokens: 150,
+              max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
+              ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
               response_format: { type: 'json_object' },
             })
 
-            const followUpContent = followUpResponse.choices[0]?.message?.content
-            console.log('🔍 Follow-up response:', followUpContent)
+            // Debug: Log the full response
+            console.log('🔍 Full response object:', JSON.stringify(followUpResponse, null, 2))
+
+            const choiceMessage = followUpResponse.choices[0]?.message as any
+            let followUpContent: string | undefined
+
+            // Handle different response formats (similar to tool selection)
+            if (typeof choiceMessage?.content === 'string') {
+              followUpContent = choiceMessage.content
+            } else if (Array.isArray(choiceMessage?.content)) {
+              followUpContent = choiceMessage.content
+                .map((part: any) => {
+                  if (!part) return ''
+                  if (typeof part === 'string') return part
+                  if (typeof part.text === 'string') return part.text
+                  if (typeof part.content === 'string') return part.content
+                  return ''
+                })
+                .join('')
+                .trim()
+            }
+
+            if (!followUpContent && choiceMessage?.parsed) {
+              followUpContent = JSON.stringify(choiceMessage.parsed)
+            }
+
+            console.log('🔍 Follow-up content:', followUpContent)
 
             if (followUpContent) {
-              const parsed = JSON.parse(followUpContent)
+              const parsed = choiceMessage?.parsed || JSON.parse(followUpContent)
               console.log('🔍 Parsed follow-up:', parsed)
 
               if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
