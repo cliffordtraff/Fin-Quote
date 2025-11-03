@@ -77,12 +77,12 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900">Recent Queries</h2>
+        <h2 className="text-base font-semibold text-gray-900">Recent Queries</h2>
         {queries.length > 0 && (
           <button
             onClick={handleClearHistory}
             disabled={clearing}
-            className="text-xs text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
+            className="text-sm text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
             title="Clear history"
           >
             {clearing ? 'Clearing...' : 'Clear'}
@@ -107,8 +107,8 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
-            <p className="text-sm text-gray-500">No recent queries</p>
-            <p className="text-xs text-gray-400 mt-1">Your questions will appear here</p>
+            <p className="text-base text-gray-500">No recent queries</p>
+            <p className="text-sm text-gray-400 mt-1">Your questions will appear here</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -118,26 +118,14 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
                 onClick={() => onQueryClick(query.question)}
                 className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors group"
               >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-sm text-gray-900 font-medium line-clamp-2 group-hover:text-blue-600 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-base text-gray-900 font-medium line-clamp-2 group-hover:text-blue-600 transition-colors">
                     {truncateText(query.question, 100)}
                   </p>
-                  <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+                  <span className="text-sm text-gray-400 whitespace-nowrap flex-shrink-0">
                     {formatTime(query.created_at)}
                   </span>
                 </div>
-
-                {/* Tool badge */}
-                {query.tool_used && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                      {query.tool_used === 'getAaplFinancialsByMetric' && '📊 Financials'}
-                      {query.tool_used === 'getPrices' && '📈 Prices'}
-                      {query.tool_used === 'searchFilings' && '🔍 Search'}
-                      {query.tool_used === 'getRecentFilings' && '📄 Filings'}
-                    </span>
-                  </div>
-                )}
               </button>
             ))}
           </div>
@@ -147,7 +135,7 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
       {/* Footer hint */}
       {queries.length > 0 && (
         <div className="px-4 py-2 border-t border-gray-200 bg-gray-50">
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-sm text-gray-500 text-center">
             Click any question to ask it again
           </p>
         </div>

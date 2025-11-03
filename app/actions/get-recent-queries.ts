@@ -22,7 +22,7 @@ export async function getRecentQueries(params?: {
       .from('query_logs')
       .select('id, user_question, answer_generated, created_at, tool_selected')
       .order('created_at', { ascending: false })
-      .limit(10)
+      .limit(50)
 
     if (params?.userId) {
       // Logged in user - fetch their queries

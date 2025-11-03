@@ -9,6 +9,7 @@ import RecentQueries from '@/components/RecentQueries'
 import AuthModal from '@/components/AuthModal'
 import UserMenu from '@/components/UserMenu'
 import FollowUpQuestions from '@/components/FollowUpQuestions'
+import FinancialsModal from '@/components/FinancialsModal'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { Database } from '@/lib/database.types'
@@ -163,6 +164,7 @@ export default function AskPage() {
   const [user, setUser] = useState<User | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showFinancialsModal, setShowFinancialsModal] = useState(false)
   const supabase = createClientComponentClient<Database>()
 
   // Ref for the textarea to enable auto-focus
@@ -709,6 +711,12 @@ export default function AskPage() {
                       Clear Conversation
                     </button>
                   )}
+                  <button
+                    onClick={() => setShowFinancialsModal(true)}
+                    className="px-4 py-2 text-base bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Financials
+                  </button>
                   {user ? (
                     <UserMenu user={user} />
                   ) : (
@@ -974,6 +982,12 @@ export default function AskPage() {
           setShowAuthModal(false)
           setRefreshQueriesTrigger(prev => prev + 1)
         }}
+      />
+
+      {/* Financials Modal */}
+      <FinancialsModal
+        isOpen={showFinancialsModal}
+        onClose={() => setShowFinancialsModal(false)}
       />
     </div>
   )

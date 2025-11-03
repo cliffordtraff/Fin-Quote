@@ -12,7 +12,7 @@ export default function FollowUpQuestions({ questions, onQuestionClick }: Follow
 
   return (
     <div className="mt-6 space-y-2">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+      <p className="text-sm font-medium text-gray-700">
         Suggested follow-up questions:
       </p>
       <div className="flex flex-wrap gap-2">
@@ -20,7 +20,7 @@ export default function FollowUpQuestions({ questions, onQuestionClick }: Follow
           <button
             key={index}
             onClick={() => onQuestionClick(question)}
-            className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-white dark:bg-blue-900/20 text-blue-900 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors duration-200 border border-blue-300 dark:border-blue-800 shadow-sm hover:shadow-md"
+            className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow-md"
           >
             {question}
           </button>
