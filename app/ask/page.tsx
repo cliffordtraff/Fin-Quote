@@ -12,6 +12,129 @@ import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { Database } from '@/lib/database.types'
 
+const stripMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[_~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const formatNumberValue = (value: number, decimals: number): string =>
+  new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  }).format(value)
+
+const formatMetricValue = (value: number, yAxisLabel: string): string => {
+  const label = yAxisLabel.toLowerCase()
+
+  if (label.includes('%')) {
+    return `${formatNumberValue(value, 1)}%`
+  }
+
+  if (label.includes('($b)')) {
+    return `$${formatNumberValue(value, 1)}B`
+  }
+
+  if (label.includes('($m)')) {
+    return `$${formatNumberValue(value, 1)}M`
+  }
+
+  if (label.includes('($)')) {
+    return `$${formatNumberValue(value, 2)}`
+  }
+
+  if (label.includes('ratio') || label.includes('turnover')) {
+    return formatNumberValue(value, 2)
+  }
+
+  return formatNumberValue(value, 1)
+}
+
+const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): string => {
+  const cleanedAnswer = stripMarkdown(rawAnswer)
+
+  if (
+    !chartConfig ||
+    !Array.isArray(chartConfig.data) ||
+    !Array.isArray(chartConfig.categories) ||
+    chartConfig.data.length !== chartConfig.categories.length ||
+    chartConfig.data.length <= 4
+  ) {
+    return cleanedAnswer
+  }
+
+  const { data, categories, yAxisLabel, title } = chartConfig
+  if (data.length === 0) return cleanedAnswer
+
+  const metricMatch = title?.match(/AAPL\s+(.+?)\s*\(/i)
+  const metricDisplayName = (metricMatch ? metricMatch[1] : yAxisLabel.replace(/\s*\(.*\)/, '')).trim() || 'metric'
+  const metricLower = metricDisplayName.toLowerCase()
+
+  const startYear = categories[0]
+  const endYear = categories[categories.length - 1]
+  const startValue = data[0]
+  const endValue = data[data.length - 1]
+
+  let minIndex = 0
+  let maxIndex = 0
+  data.forEach((value, index) => {
+    if (value < data[minIndex]) minIndex = index
+    if (value > data[maxIndex]) maxIndex = index
+  })
+
+  const startText = formatMetricValue(startValue, yAxisLabel)
+  const endText = formatMetricValue(endValue, yAxisLabel)
+
+  const extremes: string[] = []
+  if (data.length > 2) {
+    if (maxIndex !== 0 && maxIndex !== data.length - 1) {
+      extremes.push(`peaking at ${formatMetricValue(data[maxIndex], yAxisLabel)} in ${categories[maxIndex]}`)
+    }
+    if (minIndex !== 0 && minIndex !== data.length - 1 && minIndex !== maxIndex) {
+      extremes.push(`bottoming at ${formatMetricValue(data[minIndex], yAxisLabel)} in ${categories[minIndex]}`)
+    }
+  }
+
+  let extremesText = ''
+  if (extremes.length === 1) {
+    extremesText = `, ${extremes[0]}`
+  } else if (extremes.length === 2) {
+    extremesText = `, ${extremes[0]} and ${extremes[1]}`
+  }
+
+  const normalizedLabel = yAxisLabel.toLowerCase()
+  let tolerance = Math.abs(startValue) * 0.01
+  if (!Number.isFinite(tolerance) || tolerance < 0.01) {
+    tolerance = 0.01
+  }
+  if (normalizedLabel.includes('%')) {
+    tolerance = Math.max(tolerance, 0.3)
+  } else if (normalizedLabel.includes('($')) {
+    tolerance = Math.max(tolerance, 1)
+  } else {
+    tolerance = Math.max(tolerance, 0.02)
+  }
+
+  const diff = endValue - startValue
+  let trendClause: string
+  if (diff > tolerance) {
+    trendClause = 'increased over the period'
+  } else if (diff < -tolerance) {
+    trendClause = 'decreased over the period'
+  } else {
+    trendClause = 'was relatively flat over the period'
+  }
+
+  const firstSentence = `AAPL's ${metricDisplayName} moved from ${startText} in ${startYear} to ${endText} in ${endYear}${extremesText}.`
+  const secondSentence = `Overall ${metricLower} ${trendClause}; check the data table below for the full year-by-year breakdown.`
+
+  return `${firstSentence} ${secondSentence}`
+}
+
 export default function AskPage() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
@@ -185,7 +308,7 @@ export default function AskPage() {
 
       // Step 6: Generating answer
       setLoadingStep('generating')
-      setLoadingMessage('Generating answer with GPT-4o-mini...')
+      setLoadingMessage('Generating answer with GPT-5-nano...')
 
       // Send question with conversation history and session ID
       const result = await askQuestion(question, conversationHistory, sessionId)
@@ -193,10 +316,11 @@ export default function AskPage() {
       if (result.error) {
         setError(result.error)
       } else {
+        const formattedAnswer = summarizeAnswer(result.answer, result.chartConfig)
         // Create assistant message
         const assistantMessage: Message = {
           role: 'assistant',
-          content: result.answer,
+          content: formattedAnswer,
           timestamp: new Date().toISOString(),
         }
 
@@ -204,7 +328,7 @@ export default function AskPage() {
         setConversationHistory([...conversationHistory, userMessage, assistantMessage])
 
         // Update UI
-        setAnswer(result.answer)
+        setAnswer(formattedAnswer)
         setDataUsed(result.dataUsed)
         setChartConfig(result.chartConfig)
         setQueryLogId(result.queryLogId)

@@ -289,12 +289,11 @@ async function testRouting(question: TestQuestion): Promise<TestResult> {
   try {
     const prompt = buildToolSelectionPrompt(question.question)
 
-    // Call OpenAI with temperature=0 for deterministic results
+    // Call OpenAI (Note: gpt-5-nano only supports default temperature)
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || 'gpt-5-nano',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0, // Deterministic
-      max_tokens: 150,
+      max_completion_tokens: 150,
     })
 
     const latency = Date.now() - startTime

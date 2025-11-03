@@ -78,16 +78,19 @@ async function logQuery(data: {
   try {
     const supabase = createServerClient()
 
-    // Calculate total cost (gpt-4o-mini: $0.15/1M input, $0.60/1M output, embeddings: $0.02/1M)
+    // Calculate total cost (gpt-5-nano: $0.05/1M input, $0.40/1M output, embeddings: $0.02/1M)
+    const inputPrice = 0.05 / 1_000_000 // gpt-5-nano input price
+    const outputPrice = 0.40 / 1_000_000 // gpt-5-nano output price
+
     let totalCost = 0
     if (data.toolSelectionPromptTokens && data.toolSelectionCompletionTokens) {
-      totalCost += (data.toolSelectionPromptTokens * 0.15 / 1_000_000) + (data.toolSelectionCompletionTokens * 0.6 / 1_000_000)
+      totalCost += (data.toolSelectionPromptTokens * inputPrice) + (data.toolSelectionCompletionTokens * outputPrice)
     }
     if (data.answerPromptTokens && data.answerCompletionTokens) {
-      totalCost += (data.answerPromptTokens * 0.15 / 1_000_000) + (data.answerCompletionTokens * 0.6 / 1_000_000)
+      totalCost += (data.answerPromptTokens * inputPrice) + (data.answerCompletionTokens * outputPrice)
     }
     if (data.regenerationPromptTokens && data.regenerationCompletionTokens) {
-      totalCost += (data.regenerationPromptTokens * 0.15 / 1_000_000) + (data.regenerationCompletionTokens * 0.6 / 1_000_000)
+      totalCost += (data.regenerationPromptTokens * inputPrice) + (data.regenerationCompletionTokens * outputPrice)
     }
     if (data.embeddingTokens) {
       totalCost += data.embeddingTokens * 0.02 / 1_000_000
@@ -223,6 +226,11 @@ export async function askQuestion(
 
     // Build messages array with conversation history
     const selectionMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content:
+          'You are Fin Quote routing assistant. Your ONLY job is to pick exactly one tool and respond with valid JSON matching {"tool": string, "args": object}. Do not add explanations, comments, or Markdown.',
+      },
       // Include last 10 messages for context (limit to avoid token bloat)
       ...conversationHistory.slice(-10).map(msg => ({
         role: msg.role as 'user' | 'assistant',
@@ -236,10 +244,14 @@ export async function askQuestion(
     ]
 
     const selectionResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Fast and cheap for routing
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Fast and cheap for routing
       messages: selectionMessages,
-      temperature: 0,
-      max_tokens: 150,
+      ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
+      // GPT-5 models need more tokens for reasoning + output (reasoning tokens count against limit)
+      // Set to 20,000 to ensure model has enough room for complex reasoning
+      max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
+      ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
+      response_format: { type: 'json_object' },
     })
 
     // Capture token usage
@@ -247,15 +259,46 @@ export async function askQuestion(
     toolSelectionCompletionTokens = selectionResponse.usage?.completion_tokens
     toolSelectionTotalTokens = selectionResponse.usage?.total_tokens
 
-    const selectionContent = selectionResponse.choices[0]?.message?.content
+    const choiceMessage = selectionResponse.choices[0]?.message as any
+    let selectionContent: string | undefined
+
+    if (typeof choiceMessage?.content === 'string') {
+      selectionContent = choiceMessage.content
+    } else if (Array.isArray(choiceMessage?.content)) {
+      selectionContent = choiceMessage.content
+        .map((part: any) => {
+          if (!part) return ''
+          if (typeof part === 'string') return part
+          if (typeof part.text === 'string') return part.text
+          if (typeof part.content === 'string') return part.content
+          return ''
+        })
+        .join('')
+        .trim()
+    }
+
+    if (!selectionContent && choiceMessage?.parsed) {
+      selectionContent = JSON.stringify(choiceMessage.parsed)
+    }
+
     if (!selectionContent) {
+      console.error('Tool selection returned empty response:', selectionResponse)
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to select tool', queryLogId: null }
+    }
+
+    console.log('🔍 DEBUG - Tool selection content:', selectionContent)
+    if (choiceMessage?.parsed) {
+      console.log('🔍 DEBUG - Tool selection parsed object:', choiceMessage.parsed)
     }
 
     // Parse the JSON response
     let toolSelection: { tool: string; args: any }
     try {
-      toolSelection = JSON.parse(selectionContent.trim())
+      if (choiceMessage?.parsed) {
+        toolSelection = choiceMessage.parsed
+      } else {
+        toolSelection = JSON.parse(selectionContent.trim())
+      }
     } catch (parseError) {
       console.error('Failed to parse tool selection:', selectionContent)
       return {
@@ -404,9 +447,21 @@ export async function askQuestion(
     console.log('🔍 DEBUG - Prompt (first 800 chars):', answerPrompt.substring(0, 800))
 
     // Build messages array with conversation history
+    const formattingInstructions = [
+      'You are Fin Quote analyst assistant.',
+      'Use only the provided facts; never guess or pull in outside data.',
+      'Respond in plain text sentences with no Markdown, bullets, bold, italics, tables, or code blocks.',
+      'If the answer covers more than four data points (years, filings, etc.), write at most two sentences: first sentence includes the earliest year/value, latest year/value, and any notable high or low; second sentence describes the overall trend and reminds the user to check the data table below for the full yearly breakdown.',
+      'Keep answers concise and follow user instructions precisely.',
+    ].join(' ')
+
+    const historyLimit = process.env.OPENAI_MODEL?.includes('gpt-5') ? 4 : 10
+    const recentHistory = conversationHistory.slice(-historyLimit)
+
     const answerMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      // Include last 10 messages for context
-      ...conversationHistory.slice(-10).map(msg => ({
+      { role: 'system', content: formattingInstructions },
+      // Include a limited slice of prior conversation to reduce prompt size
+      ...recentHistory.map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
       })),
@@ -418,10 +473,13 @@ export async function askQuestion(
     ]
 
     const answerResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: answerMessages,
-      temperature: 0,
-      max_tokens: 500,
+      ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
+      // GPT-5 models need more tokens for reasoning + output
+      // Set to 20,000 to ensure model has enough room for complex reasoning and detailed answers
+      max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+      ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
     })
 
     // Capture token usage
@@ -429,8 +487,11 @@ export async function askQuestion(
     answerCompletionTokens = answerResponse.usage?.completion_tokens
     answerTotalTokens = answerResponse.usage?.total_tokens
 
+    console.log('🔍 DEBUG - Answer response:', JSON.stringify(answerResponse, null, 2))
+
     const answer = answerResponse.choices[0]?.message?.content
     if (!answer) {
+      console.error('❌ Answer generation returned empty content. Full response:', answerResponse)
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer', queryLogId: null }
     }
 
@@ -527,15 +588,18 @@ export async function askQuestion(
         // Regenerate answer
         const regenerationStart = Date.now()
         const regenerationResponse = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           messages: [
             {
               role: 'user' as const,
               content: regenerationPrompt,
             },
           ],
-          temperature: 0,
-          max_tokens: 500,
+          ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
+          // GPT-5 models need more tokens for reasoning + output
+          // Set to 20,000 to ensure model has enough room for complex reasoning and corrections
+          max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+          ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
         })
 
         // Capture regeneration token usage

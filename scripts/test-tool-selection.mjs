@@ -178,10 +178,9 @@ console.log('Testing tool selection for:', userQuestion);
 console.log('\nCalling OpenAI...\n');
 
 const response = await openai.chat.completions.create({
-  model: 'gpt-4o-mini',
+  model: process.env.OPENAI_MODEL || 'gpt-5-nano',
   messages: [{ role: 'user', content: prompt }],
-  temperature: 0,
-  max_tokens: 150,
+  max_completion_tokens: 150,
 });
 
 const result = response.choices[0]?.message?.content;

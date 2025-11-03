@@ -54,9 +54,12 @@ http://localhost:3000/admin/costs
 - Token usage statistics
 - Average cost per query
 
-### Pricing (as of 2024):
+### Pricing (as of August 2025):
+- **gpt-5-nano**: $0.050 per 1M input tokens, $0.400 per 1M output tokens (default)
 - **gpt-4o-mini**: $0.150 per 1M input tokens, $0.600 per 1M output tokens
 - **text-embedding-3-small**: $0.020 per 1M tokens
+
+**Note:** Model can be configured via `OPENAI_MODEL` environment variable.
 
 ## Database Schema
 

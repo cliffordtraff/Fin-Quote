@@ -298,10 +298,9 @@ async function runQuery(question) {
     // Step 1: Tool selection
     const selectionPrompt = buildToolSelectionPrompt(question)
     const selectionResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || 'gpt-5-nano',
       messages: [{ role: 'user', content: selectionPrompt }],
-      temperature: 0,
-      max_tokens: 150,
+      max_completion_tokens: 150,
     })
 
     const selectionContent = selectionResponse.choices[0]?.message?.content
@@ -344,10 +343,9 @@ async function runQuery(question) {
     // Step 3: Generate answer using updated prompt
     const answerPrompt = buildFinalAnswerPrompt(question, factsJson)
     const answerResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || 'gpt-5-nano',
       messages: [{ role: 'user', content: answerPrompt }],
-      temperature: 0,
-      max_tokens: 500,
+      max_completion_tokens: 500,
     })
 
     const answer = answerResponse.choices[0]?.message?.content || ''

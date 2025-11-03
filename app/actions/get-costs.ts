@@ -2,10 +2,15 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 
-// OpenAI Pricing (as of 2024)
-// GPT-4o-mini: $0.150 per 1M input tokens, $0.600 per 1M output tokens
+// OpenAI Pricing (as of August 2025)
+// gpt-5-nano: $0.050 per 1M input tokens, $0.400 per 1M output tokens (60% cheaper than gpt-4o-mini)
+// gpt-4o-mini: $0.150 per 1M input tokens, $0.600 per 1M output tokens
 // text-embedding-3-small: $0.020 per 1M tokens
 const PRICING = {
+  'gpt-5-nano': {
+    input: 0.050 / 1_000_000, // $ per token
+    output: 0.400 / 1_000_000,
+  },
   'gpt-4o-mini': {
     input: 0.150 / 1_000_000, // $ per token
     output: 0.600 / 1_000_000,
@@ -13,6 +18,16 @@ const PRICING = {
   'text-embedding-3-small': {
     embedding: 0.020 / 1_000_000,
   },
+}
+
+// Get pricing for current model from environment variable
+const getCurrentModelPricing = () => {
+  const model = process.env.OPENAI_MODEL || 'gpt-5-nano'
+  if (model in PRICING && 'input' in PRICING[model as keyof typeof PRICING]) {
+    return PRICING[model as 'gpt-5-nano' | 'gpt-4o-mini']
+  }
+  // Fallback to gpt-5-nano pricing if unknown model
+  return PRICING['gpt-5-nano']
 }
 
 export type CostStats = {
@@ -91,14 +106,17 @@ export async function getCostStats(params?: {
     const costByDate = new Map<string, { cost: number; queries: number }>()
     const costByTool = new Map<string, { cost: number; queries: number }>()
 
+    // Get current model pricing for calculations
+    const modelPricing = getCurrentModelPricing()
+
     for (const query of queries) {
       // Calculate cost for this query
       let queryCost = 0
 
       // Tool selection cost
       if (query.tool_selection_prompt_tokens && query.tool_selection_completion_tokens) {
-        const inputCost = query.tool_selection_prompt_tokens * PRICING['gpt-4o-mini'].input
-        const outputCost = query.tool_selection_completion_tokens * PRICING['gpt-4o-mini'].output
+        const inputCost = query.tool_selection_prompt_tokens * modelPricing.input
+        const outputCost = query.tool_selection_completion_tokens * modelPricing.output
         queryCost += inputCost + outputCost
         llmCost += inputCost + outputCost
         totalInputTokens += query.tool_selection_prompt_tokens
@@ -107,8 +125,8 @@ export async function getCostStats(params?: {
 
       // Answer generation cost
       if (query.answer_prompt_tokens && query.answer_completion_tokens) {
-        const inputCost = query.answer_prompt_tokens * PRICING['gpt-4o-mini'].input
-        const outputCost = query.answer_completion_tokens * PRICING['gpt-4o-mini'].output
+        const inputCost = query.answer_prompt_tokens * modelPricing.input
+        const outputCost = query.answer_completion_tokens * modelPricing.output
         queryCost += inputCost + outputCost
         llmCost += inputCost + outputCost
         totalInputTokens += query.answer_prompt_tokens
@@ -117,8 +135,8 @@ export async function getCostStats(params?: {
 
       // Regeneration cost (if any)
       if (query.regeneration_prompt_tokens && query.regeneration_completion_tokens) {
-        const inputCost = query.regeneration_prompt_tokens * PRICING['gpt-4o-mini'].input
-        const outputCost = query.regeneration_completion_tokens * PRICING['gpt-4o-mini'].output
+        const inputCost = query.regeneration_prompt_tokens * modelPricing.input
+        const outputCost = query.regeneration_completion_tokens * modelPricing.output
         queryCost += inputCost + outputCost
         llmCost += inputCost + outputCost
         totalInputTokens += query.regeneration_prompt_tokens

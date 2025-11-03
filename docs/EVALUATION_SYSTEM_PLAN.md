@@ -691,10 +691,10 @@ npm run evaluate-prompts -- --v1=1 --v2=2 --mode=full
 **Implementation:**
 ```typescript
 const selectionResponse = await openai.chat.completions.create({
-  model: 'gpt-4o-mini',
+  model: process.env.OPENAI_MODEL || 'gpt-5-nano',
   messages: selectionMessages,
-  temperature: 0, // ← Critical for reproducibility
-  max_tokens: 150,
+  max_completion_tokens: 150, // GPT-5+ models use max_completion_tokens
+  // Note: gpt-5-nano only supports default temperature (1)
 })
 ```
 
