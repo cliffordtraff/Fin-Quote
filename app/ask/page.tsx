@@ -155,6 +155,7 @@ export default function AskPage() {
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
+  const [useStreaming, setUseStreaming] = useState(true) // Enable streaming by default
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -242,6 +243,138 @@ export default function AskPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Streaming version using Server-Sent Events
+  const handleSubmitStreaming = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!question.trim()) {
+      setError('Please enter a question')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setAnswer('')
+    setDataUsed(null)
+    setChartConfig(null)
+
+    // Create user message
+    const userMessage: Message = {
+      role: 'user',
+      content: question,
+      timestamp: new Date().toISOString(),
+    }
+
+    try {
+      const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          conversationHistory,
+          sessionId,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      let streamedAnswer = ''
+      let receivedData: any = null
+      let receivedChart: any = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n\n')
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+
+          // Parse SSE format: "event: eventName\ndata: {...}"
+          const eventMatch = line.match(/event: (\w+)\ndata: (.+)/)
+          if (!eventMatch) continue
+
+          const [, eventType, dataStr] = eventMatch
+          const data = JSON.parse(dataStr)
+
+          switch (eventType) {
+            case 'status':
+              setLoadingStep(data.step)
+              setLoadingMessage(data.message)
+              break
+
+            case 'data':
+              receivedData = data.dataUsed
+              receivedChart = data.chartConfig
+              setDataUsed(data.dataUsed)
+              setChartConfig(data.chartConfig)
+              break
+
+            case 'answer':
+              streamedAnswer += data.content
+              setAnswer(streamedAnswer)
+              break
+
+            case 'validation':
+              // Validation results received (could show warning if needed)
+              console.log('Validation:', data.results)
+              break
+
+            case 'complete':
+              // Answer complete
+              console.log('Latency:', data.latency)
+              break
+
+            case 'error':
+              setError(data.message)
+              break
+          }
+        }
+      }
+
+      // Format the answer and update conversation history
+      if (streamedAnswer && !error) {
+        const formattedAnswer = summarizeAnswer(streamedAnswer, receivedChart)
+
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: formattedAnswer,
+          timestamp: new Date().toISOString(),
+        }
+
+        setConversationHistory([...conversationHistory, userMessage, assistantMessage])
+        setAnswer(formattedAnswer)
+
+        // Reset feedback state
+        setFeedback(null)
+        setShowCommentBox(false)
+        setFeedbackComment('')
+
+        // Refresh recent queries sidebar
+        setRefreshQueriesTrigger(prev => prev + 1)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      setLoading(false)
+      setLoadingStep(null)
+      setLoadingMessage('')
+      setQuestion('')
+    }
+  }
+
+  // Non-streaming version (original)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -558,7 +691,7 @@ export default function AskPage() {
               )}
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={useStreaming ? handleSubmitStreaming : handleSubmit}>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <label htmlFor="question" className="block text-base font-medium mb-2">
                   Your Question
@@ -572,7 +705,8 @@ export default function AskPage() {
                     // Submit on Enter (but allow Shift+Enter for new lines)
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
-                      handleSubmit(e as any)
+                      const submitHandler = useStreaming ? handleSubmitStreaming : handleSubmit
+                      submitHandler(e as any)
                     }
                   }}
                   placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
@@ -604,6 +738,21 @@ export default function AskPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Streaming Toggle */}
+                <div className="mt-3 flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useStreaming}
+                      onChange={(e) => setUseStreaming(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Enable streaming (faster perceived response)
+                    </span>
+                  </label>
+                </div>
 
                 <button
                   type="submit"

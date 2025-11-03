@@ -355,8 +355,8 @@ export async function askQuestion(
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'financials', data: toolResult.data }
 
-      // Generate chart for financial data
-      chartConfig = generateFinancialChart(toolResult.data, metric)
+      // Generate chart for financial data (pass user question to detect margin vs raw value requests)
+      chartConfig = generateFinancialChart(toolResult.data, metric, userQuestion)
     } else if (toolSelection.tool === 'getPrices') {
       // Validate range
       const range = toolSelection.args.range as PriceRange

@@ -15,7 +15,8 @@ export function shouldGenerateChart(dataType: string): boolean {
  */
 export function generateFinancialChart(
   data: FinancialData[],
-  metric: string
+  metric: string,
+  userQuestion?: string
 ): ChartConfig | null {
   // Edge case: no data
   if (!data || data.length === 0) return null
@@ -26,8 +27,10 @@ export function generateFinancialChart(
   const hasLiabilities = data[0] && 'total_liabilities' in data[0]
   const hasAssets = data[0] && 'total_assets' in data[0]
 
-  const isMarginCalculation = hasRevenue && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
-  const isCashFlowMargin = hasRevenue && metric === 'operating_cash_flow'
+  // Only calculate margins if the user explicitly asked for them
+  const userAskedForMargin = userQuestion?.toLowerCase().includes('margin') || userQuestion?.toLowerCase().includes('percent')
+  const isMarginCalculation = hasRevenue && userAskedForMargin && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
+  const isCashFlowMargin = hasRevenue && userAskedForMargin && metric === 'operating_cash_flow'
   const isROECalculation = hasShareholders && metric === 'net_income'
   const isROACalculation = hasAssets && metric === 'net_income'
   const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity'
