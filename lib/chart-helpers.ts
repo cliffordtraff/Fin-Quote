@@ -31,11 +31,18 @@ export function generateFinancialChart(
   const userAskedForMargin = userQuestion?.toLowerCase().includes('margin') || userQuestion?.toLowerCase().includes('percent')
   const isMarginCalculation = hasRevenue && userAskedForMargin && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
   const isCashFlowMargin = hasRevenue && userAskedForMargin && metric === 'operating_cash_flow'
-  const isROECalculation = hasShareholders && metric === 'net_income'
-  const isROACalculation = hasAssets && metric === 'net_income'
-  const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity'
-  const isDebtToAssetsCalculation = hasAssets && metric === 'total_liabilities'
-  const isAssetTurnover = hasRevenue && metric === 'total_assets'
+
+  // Only calculate ratios if user explicitly asked for them
+  const userAskedForROE = userQuestion?.toLowerCase().includes('roe') || userQuestion?.toLowerCase().includes('return on equity')
+  const userAskedForROA = userQuestion?.toLowerCase().includes('roa') || userQuestion?.toLowerCase().includes('return on assets')
+  const userAskedForDebtRatio = userQuestion?.toLowerCase().includes('debt') && (userQuestion?.toLowerCase().includes('equity') || userQuestion?.toLowerCase().includes('assets'))
+  const userAskedForTurnover = userQuestion?.toLowerCase().includes('turnover')
+
+  const isROECalculation = hasShareholders && metric === 'net_income' && userAskedForROE
+  const isROACalculation = hasAssets && metric === 'net_income' && userAskedForROA
+  const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity' && userAskedForDebtRatio
+  const isDebtToAssetsCalculation = hasAssets && metric === 'total_liabilities' && userAskedForDebtRatio
+  const isAssetTurnover = hasRevenue && metric === 'total_assets' && userAskedForTurnover
 
   // Sort by year ascending
   const sortedData = [...data].sort((a, b) => a.year - b.year)

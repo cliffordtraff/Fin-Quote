@@ -8,6 +8,7 @@ import FinancialChart from '@/components/FinancialChart'
 import RecentQueries from '@/components/RecentQueries'
 import AuthModal from '@/components/AuthModal'
 import UserMenu from '@/components/UserMenu'
+import FollowUpQuestions from '@/components/FollowUpQuestions'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { Database } from '@/lib/database.types'
@@ -155,7 +156,8 @@ export default function AskPage() {
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
-  const [useStreaming, setUseStreaming] = useState(true) // Enable streaming by default
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -257,6 +259,7 @@ export default function AskPage() {
     setAnswer('')
     setDataUsed(null)
     setChartConfig(null)
+    setFollowUpQuestions([])
 
     // Create user message
     const userMessage: Message = {
@@ -331,6 +334,17 @@ export default function AskPage() {
               console.log('Validation:', data.results)
               break
 
+            case 'followup':
+              // Follow-up question suggestions received
+              console.log('📥 Received followup event:', data)
+              if (data.questions && Array.isArray(data.questions)) {
+                console.log('✅ Setting follow-up questions:', data.questions)
+                setFollowUpQuestions(data.questions)
+              } else {
+                console.log('⚠️ Invalid follow-up data structure:', data)
+              }
+              break
+
             case 'complete':
               // Answer complete
               console.log('Latency:', data.latency)
@@ -343,18 +357,19 @@ export default function AskPage() {
         }
       }
 
-      // Format the answer and update conversation history
+      // Update conversation history (no summarization in streaming mode)
       if (streamedAnswer && !error) {
-        const formattedAnswer = summarizeAnswer(streamedAnswer, receivedChart)
-
+        // In streaming mode, trust the LLM prompt to generate concise answers
+        // The prompt already instructs: "If >4 data points, write 2 sentences max"
+        // Client-side summarization would cause a jarring flash after streaming
         const assistantMessage: Message = {
           role: 'assistant',
-          content: formattedAnswer,
+          content: streamedAnswer,
           timestamp: new Date().toISOString(),
         }
 
         setConversationHistory([...conversationHistory, userMessage, assistantMessage])
-        setAnswer(formattedAnswer)
+        // Answer is already displayed during streaming - don't replace it!
 
         // Reset feedback state
         setFeedback(null)
@@ -525,6 +540,30 @@ export default function AskPage() {
     }
   }
 
+  // Handle follow-up question click
+  const handleFollowUpQuestionClick = (selectedQuestion: string) => {
+    setQuestion(selectedQuestion)
+    // Trigger submit after a brief delay to ensure state is updated
+    setTimeout(() => {
+      const form = document.querySelector('form')
+      if (form) {
+        const event = new Event('submit', { bubbles: true, cancelable: true })
+        form.dispatchEvent(event)
+      }
+    }, 0)
+  }
+
+  // Copy answer to clipboard
+  const handleCopyAnswer = async () => {
+    try {
+      await navigator.clipboard.writeText(answer)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
   // Clear conversation history
   const handleClearConversation = () => {
     setConversationHistory([])
@@ -691,7 +730,7 @@ export default function AskPage() {
               )}
             </div>
 
-            <form onSubmit={useStreaming ? handleSubmitStreaming : handleSubmit}>
+            <form onSubmit={handleSubmitStreaming}>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <label htmlFor="question" className="block text-base font-medium mb-2">
                   Your Question
@@ -705,8 +744,7 @@ export default function AskPage() {
                     // Submit on Enter (but allow Shift+Enter for new lines)
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
-                      const submitHandler = useStreaming ? handleSubmitStreaming : handleSubmit
-                      submitHandler(e as any)
+                      handleSubmitStreaming(e as any)
                     }
                   }}
                   placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
@@ -738,21 +776,6 @@ export default function AskPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Streaming Toggle */}
-                <div className="mt-3 flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useStreaming}
-                      onChange={(e) => setUseStreaming(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">
-                      Enable streaming (faster perceived response)
-                    </span>
-                  </label>
-                </div>
 
                 <button
                   type="submit"
@@ -803,7 +826,28 @@ export default function AskPage() {
                 <div className="w-1/3">
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-2xl font-semibold mb-4">Answer</h2>
-                    <p className="text-gray-800 leading-relaxed text-lg">{answer}</p>
+
+                    {/* Answer text with copy button */}
+                    <div className="relative mb-6 pb-10">
+                      <p className="text-gray-800 leading-relaxed text-lg pr-12">{answer}</p>
+
+                      {/* Copy button - bottom right of answer text */}
+                      <button
+                        onClick={handleCopyAnswer}
+                        className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-800"
+                        title={copied ? 'Copied!' : 'Copy answer'}
+                      >
+                        {copied ? (
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
 
                     {/* Feedback Section */}
                     <div className="mt-6 pt-4 border-t border-gray-200">
@@ -887,6 +931,12 @@ export default function AskPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Follow-up Questions */}
+                    <FollowUpQuestions
+                      questions={followUpQuestions}
+                      onQuestionClick={handleFollowUpQuestionClick}
+                    />
                   </div>
                 </div>
 

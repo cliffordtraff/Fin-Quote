@@ -5,10 +5,11 @@ import { getAaplFinancialsByMetric, FinancialMetric } from '@/app/actions/financ
 import { getAaplPrices, PriceRange } from '@/app/actions/prices'
 import { getRecentFilings } from '@/app/actions/filings'
 import { searchFilings } from '@/app/actions/search-filings'
-import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
+import { buildToolSelectionPrompt, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
 import { generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer } from '@/lib/validators'
 import { shouldRegenerateAnswer, determineRegenerationAction, buildRegenerationPrompt } from '@/lib/regeneration'
+import { logQuery } from '@/app/actions/ask-question'
 import type { ConversationHistory } from '@/types/conversation'
 
 const openai = new OpenAI({
@@ -229,7 +230,7 @@ export async function POST(req: NextRequest) {
             'You are Fin Quote analyst assistant.',
             'Use only the provided facts; never guess or pull in outside data.',
             'Respond in plain text sentences with no Markdown, bullets, bold, italics, tables, or code blocks.',
-            'If the answer covers more than four data points (years, filings, etc.), write at most two sentences: first sentence includes the earliest year/value, latest year/value, and any notable high or low; second sentence describes the overall trend and reminds the user to check the data table below for the full yearly breakdown.',
+            'CRITICAL: If the answer covers more than four data points (years, filings, etc.), DO NOT list each one individually. Instead, write EXACTLY two sentences: (1) The first sentence mentions ONLY the earliest year/value and latest year/value, plus any notable high or low. (2) The second sentence describes the overall trend and tells the user to check the data table below for the full yearly breakdown. DO NOT list all the individual years in your answer text.',
             'Keep answers concise and follow user instructions precisely.',
           ].join(' ')
 
@@ -297,8 +298,81 @@ export async function POST(req: NextRequest) {
           // Send validation results
           sendEvent('validation', { results: validationResults })
 
-          // Log query (optional - could be async)
-          // You can implement logging here if needed
+          // Step 5: Generate follow-up questions
+          sendEvent('status', { step: 'suggestions', message: 'Generating suggestions...' })
+
+          let followUpQuestions: string[] = []
+          try {
+            const followUpPrompt = buildFollowUpQuestionsPrompt(
+              question,
+              toolSelection.tool,
+              fullAnswer.trim()
+            )
+
+            console.log('🔍 Generating follow-up questions...')
+            const followUpResponse = await openai.chat.completions.create({
+              model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You generate follow-up question suggestions. Return ONLY valid JSON matching {"suggestions": string[]}. No prose.',
+                },
+                {
+                  role: 'user',
+                  content: followUpPrompt,
+                },
+              ],
+              ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
+              max_completion_tokens: 150,
+              response_format: { type: 'json_object' },
+            })
+
+            const followUpContent = followUpResponse.choices[0]?.message?.content
+            console.log('🔍 Follow-up response:', followUpContent)
+
+            if (followUpContent) {
+              const parsed = JSON.parse(followUpContent)
+              console.log('🔍 Parsed follow-up:', parsed)
+
+              if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
+                followUpQuestions = parsed.suggestions.slice(0, 3)
+                console.log('🔍 Follow-up questions to send:', followUpQuestions)
+              }
+            }
+          } catch (followUpError) {
+            console.error('❌ Failed to generate follow-up questions:', followUpError)
+            // Continue even if follow-up generation fails
+          }
+
+          // Send follow-up questions to client
+          if (followUpQuestions.length > 0) {
+            console.log('📤 Sending follow-up event with questions:', followUpQuestions)
+            sendEvent('followup', { questions: followUpQuestions })
+          } else {
+            console.log('⚠️ No follow-up questions to send')
+          }
+
+          // Log query to database for Recent Queries sidebar
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            await logQuery({
+              sessionId,
+              userId: user?.id || null,
+              userQuestion: question,
+              toolSelected: toolSelection.tool,
+              toolArgs: toolSelection.args,
+              toolSelectionLatencyMs,
+              dataReturned: dataUsed.data,
+              dataRowCount: dataUsed.data.length,
+              toolExecutionLatencyMs,
+              answerGenerated: fullAnswer.trim(),
+              answerLatencyMs,
+              validationResults,
+            })
+          } catch (logError) {
+            console.error('Failed to log query:', logError)
+            // Don't fail the request if logging fails
+          }
 
           // Send completion event
           sendEvent('complete', {

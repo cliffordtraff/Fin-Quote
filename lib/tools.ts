@@ -15,7 +15,7 @@ export const TOOL_MENU: ToolDefinition[] = [
     description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
     args: {
       metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
-      limit: 'integer 1–10 (defaults to 4)',
+      limit: 'integer 1–20 (defaults to 4)',
     },
     notes: 'Ticker is fixed to AAPL for MVP.',
   },
@@ -89,35 +89,36 @@ Available Tools:
 
    LIMIT RULES - CRITICAL:
 
-   1. If question asks for a SPECIFIC YEAR (2020, 2019, 2015, etc.) → limit: 10
-      Why: We only have 10 years (2015-2024). To find any specific year, fetch all.
+   1. If question asks for a SPECIFIC YEAR (2020, 2019, 2015, 2006, etc.) → limit: 20
+      Why: We have 20 years (2006-2025). To find any specific year, fetch all.
       Examples:
-      - "net income in 2020" → limit: 10
-      - "revenue for 2018" → limit: 10
-      - "What was EPS in 2015?" → limit: 10
+      - "net income in 2020" → limit: 20
+      - "revenue for 2018" → limit: 20
+      - "What was EPS in 2006?" → limit: 20
 
    2. If question specifies a NUMBER of years, use that EXACT number:
       "last 3 years" → limit: 3
       "past 5 years" → limit: 5
       "last year" or "most recent year" → limit: 1
       "10 years" → limit: 10
+      "20 years" → limit: 20
       "2 years" → limit: 2
 
    3. If question says "trend", "history", "over time" WITHOUT a number → limit: 4
 
-   4. If question says "all", "complete", "full history" → limit: 10
+   4. If question says "all", "complete", "full history" → limit: 20
 
    5. If question is just asking for the metric (no time context) → limit: 4
 
    Examples:
-   - "net income in 2020" → limit: 10 (specific year)
+   - "net income in 2006" → limit: 20 (specific year)
    - "revenue over 5 years" → limit: 5 (number specified)
    - "show me net income trend" → limit: 4 (no number)
    - "EPS history" → limit: 4 (no number)
    - "gross profit" → limit: 4 (no number)
-   - "all historical data" → limit: 10 (all data)
+   - "all historical data" → limit: 20 (all data)
 
-   args: {"metric": <exact name>, "limit": <number 1-10>}
+   args: {"metric": <exact name>, "limit": <number 1-20>}
 
 2. getPrices - Stock PRICE history
 
@@ -212,6 +213,32 @@ Return ONLY JSON - examples:
 {"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`
 
+export const buildFollowUpQuestionsPrompt = (
+  userQuestion: string,
+  toolUsed: string,
+  answer: string
+) => `Generate 3 relevant follow-up questions based on the user's question and answer.
+
+User's question: "${userQuestion}"
+Tool used: ${toolUsed}
+Answer provided: "${answer}"
+
+Generate 3 concise, natural follow-up questions that would be interesting and relevant for the user to ask next. Each question should:
+- Be directly related to the topic or data discussed
+- Explore different aspects (comparisons, trends, related metrics, time periods)
+- Be specific and actionable
+- Use natural language (not overly formal)
+
+Return ONLY valid JSON with this exact format:
+{"suggestions": ["question 1", "question 2", "question 3"]}
+
+Examples:
+- If they asked about revenue, suggest questions about profit margins, growth rates, or specific years
+- If they asked about a specific year, suggest comparisons to other years or trends
+- If they asked about one metric, suggest related metrics or ratios
+
+No explanations, just the JSON.`
+
 export const buildFinalAnswerPrompt = (
   userQuestion: string,
   factsJson: string
@@ -275,10 +302,10 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
 
 General Instructions:
 - Be concise and clear.
-- If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), ONLY mention that specific year in your answer. Do not mention other years unless the user asks for a comparison or trend.
+- If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), check if that year exists in the facts:
+  * If the year IS in the facts → provide the data directly and clearly
+  * If the year is NOT in the facts → say "I don't have data for [year]." and stop
 - If the user asks for multiple years or a trend, show all relevant years.
-- FIRST, check if you have the specific data requested. If the requested year is not in the facts, say so clearly (e.g., "I don't have data for 2020.").
-- THEN provide your analysis using the available data.
 - If trend is relevant (and the user asked for it), describe it (e.g., increasing/decreasing/flat).
 - Do not invent numbers or sources.
 - Respond in plain text sentences. Do NOT use Markdown formatting (no bullet lists, bold, italics, tables, or code blocks).
