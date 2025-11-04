@@ -280,7 +280,11 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Better to say "I don't have that information" than to guess
    - If data seems incomplete, acknowledge it
 
-6. CALCULATIONS - You MAY calculate ratios/percentages from the data:
+6. CALCULATIONS - You MUST calculate ratios/percentages from the data when requested:
+
+   IMPORTANT: The facts JSON often includes multiple fields per row to enable ratio calculations.
+   For example, if the metric is "total_liabilities", the JSON will also include "shareholders_equity" and "total_assets".
+   These additional fields are provided specifically so you can calculate ratios. USE THEM.
 
    PROFITABILITY RATIOS:
    - Gross Margin = (gross_profit / revenue) × 100
@@ -291,6 +295,8 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
 
    LEVERAGE RATIOS:
    - Debt-to-Equity = total_liabilities / shareholders_equity
+     * When asked for debt-to-equity, look for "value" (total_liabilities) and "shareholders_equity" in each row
+     * Calculate the ratio for each year: value / shareholders_equity
    - Debt-to-Assets = total_liabilities / total_assets
 
    EFFICIENCY RATIOS:
@@ -299,6 +305,7 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
 
    - If user asks for a "margin" or "ratio", calculate it from the available data
    - Show the calculation briefly: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
+   - For leverage ratios like debt-to-equity, show it as a ratio: "Debt-to-equity ratio is 2.1 (total liabilities of $290B / shareholders equity of $138B)"
 
 General Instructions:
 - Be concise and clear.

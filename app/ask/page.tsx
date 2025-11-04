@@ -829,7 +829,7 @@ export default function AskPage() {
             )}
 
             {answer && (
-              <div className="space-y-6">
+              <div className="space-y-6 max-w-5xl mx-auto">
                 {/* Answer Section - Top */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h2 className="text-2xl font-semibold mb-4">Answer</h2>
