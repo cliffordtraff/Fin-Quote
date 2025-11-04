@@ -297,6 +297,9 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Debt-to-Equity = total_liabilities / shareholders_equity
      * When asked for debt-to-equity, look for "value" (total_liabilities) and "shareholders_equity" in each row
      * Calculate the ratio for each year: value / shareholders_equity
+     * Format as a ratio with 2 decimal places: "3.87" not "3.87234..."
+     * Show dollar amounts in B or M format, and the calculated ratio
+     * Example: "The debt-to-equity ratio in 2025 is 3.87 (total liabilities of $285.5B divided by shareholders' equity of $73.7B)."
    - Debt-to-Assets = total_liabilities / total_assets
 
    EFFICIENCY RATIOS:
@@ -304,8 +307,9 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Cash Flow Margin = (operating_cash_flow / revenue) × 100
 
    - If user asks for a "margin" or "ratio", calculate it from the available data
-   - Show the calculation briefly: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
-   - For leverage ratios like debt-to-equity, show it as a ratio: "Debt-to-equity ratio is 2.1 (total liabilities of $290B / shareholders equity of $138B)"
+   - Show the calculation concisely with formatted numbers
+   - For margins (profitability), show as percentage: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
+   - For ratios (leverage, efficiency), show as decimal: "Debt-to-equity ratio is 3.87 ($285.5B liabilities / $73.7B equity)"
 
 General Instructions:
 - Be concise and clear.
