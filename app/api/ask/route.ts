@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
             input: selectionMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
             max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
-            ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
+            ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             text: { format: { type: 'json_object' } },
           })
 
@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
             input: answerMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
             max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
-            ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
+            ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             stream: true,
           })
 
@@ -323,7 +323,7 @@ export async function POST(req: NextRequest) {
               ],
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
               max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
-              ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
+              ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
               text: { format: { type: 'json_object' } },
             })
 
