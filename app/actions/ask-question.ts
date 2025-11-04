@@ -249,7 +249,7 @@ export async function askQuestion(
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output (reasoning tokens count against limit)
       // Set to 20,000 to ensure model has enough room for complex reasoning
-      max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
+      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
       text: { format: { type: 'json_object' } },
     })
@@ -470,7 +470,7 @@ export async function askQuestion(
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output
       // Set to 20,000 to ensure model has enough room for complex reasoning and detailed answers
-      max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
     })
 
@@ -610,7 +610,7 @@ export async function askQuestion(
           ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
           // GPT-5 models need more tokens for reasoning + output
           // Set to 20,000 to ensure model has enough room for complex reasoning and corrections
-          max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+          max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
           ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
         })
 

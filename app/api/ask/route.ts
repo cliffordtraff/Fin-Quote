@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             input: selectionMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-            max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
+            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             text: { format: { type: 'json_object' } },
           })
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             input: answerMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-            max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             stream: true,
           })
