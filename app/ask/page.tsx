@@ -740,7 +740,7 @@ export default function AskPage() {
 
             <form onSubmit={handleSubmitStreaming}>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <label htmlFor="question" className="block text-base font-medium mb-2">
+                <label htmlFor="question" className="block text-lg font-medium mb-2">
                   Your Question
                 </label>
                 <textarea
@@ -756,7 +756,7 @@ export default function AskPage() {
                     }
                   }}
                   placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-lg"
                   rows={3}
                   disabled={loading}
                 />
@@ -837,7 +837,7 @@ export default function AskPage() {
 
                     {/* Answer text with copy button */}
                     <div className="relative mb-6 pb-10">
-                      <p className="text-gray-800 leading-relaxed text-lg pr-12">{answer}</p>
+                      <p className="text-gray-800 leading-relaxed text-xl pr-12">{answer}</p>
 
                       {/* Copy button - bottom right of answer text */}
                       <button
