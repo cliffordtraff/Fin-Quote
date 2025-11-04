@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
           let toolSelection: { tool: string; args: any }
           try {
             toolSelection = JSON.parse(selectionContent.trim())
+            console.log('🔧 Tool selection:', JSON.stringify(toolSelection, null, 2))
           } catch (parseError) {
             sendEvent('error', { message: 'Failed to parse tool selection' })
             controller.close()
@@ -123,7 +124,8 @@ export async function POST(req: NextRequest) {
               'operating_cash_flow', 'eps',
             ]
             if (!validMetrics.includes(metric)) {
-              sendEvent('error', { message: 'Invalid metric' })
+              console.error('❌ Invalid metric received:', metric, 'Valid metrics:', validMetrics)
+              sendEvent('error', { message: `Invalid metric: ${metric}` })
               controller.close()
               return
             }

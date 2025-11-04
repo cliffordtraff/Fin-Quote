@@ -77,9 +77,14 @@ Available Tools:
 
    Balance Sheet:
    - "assets", "total assets", "asset turnover" → total_assets
-   - "liabilities", "total debt", "debt", "debt to equity", "debt to assets", "leverage" → total_liabilities
+   - "liabilities", "total debt", "debt", "leverage" → total_liabilities
    - "equity", "book value", "shareholders equity" → shareholders_equity
    - "cash and equivalents", "cash on hand", "cash position" (balance sheet) → total_assets
+
+   IMPORTANT - Ratio Questions:
+   - "debt to equity", "debt-to-equity", "D/E ratio" → total_liabilities (NOT "debt_to_equity")
+   - "debt to assets", "debt-to-assets" → total_liabilities (NOT "debt_to_assets")
+   - The metric is ALWAYS "total_liabilities" - the ratio will be calculated from the data
 
    Cash Flow:
    - "cash flow", "operating cash", "free cash flow", "FCF", "cash flow margin" → operating_cash_flow
@@ -209,9 +214,20 @@ Return ONLY JSON - examples:
 
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
 {"tool":"getPrices","args":{"range":"30d"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
-{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}`
+{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+
+CRITICAL EXAMPLES - Ratio Questions:
+Q: "What is AAPL's debt to equity ratio?"
+A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
+
+Q: "Show me debt-to-equity trend"
+A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":10}}
+
+Q: "What's the D/E ratio in 2024?"
+A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":20}}`
 
 export const buildFollowUpQuestionsPrompt = (
   userQuestion: string,
