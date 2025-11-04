@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
                 },
               ],
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
-              max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
+              max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
               text: { format: { type: 'json_object' } },
             })
