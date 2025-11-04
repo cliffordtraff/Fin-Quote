@@ -829,133 +829,129 @@ export default function AskPage() {
             )}
 
             {answer && (
-              <div className="flex gap-6">
-                {/* Answer Section - Left side (1/3 width) */}
-                <div className="w-1/3">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-2xl font-semibold mb-4">Answer</h2>
+              <div className="space-y-6">
+                {/* Answer Section - Top */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-2xl font-semibold mb-4">Answer</h2>
 
-                    {/* Answer text with copy button */}
-                    <div className="relative mb-6 pb-10">
-                      <p className="text-gray-800 leading-relaxed text-xl pr-12">{answer}</p>
+                  {/* Answer text with copy button */}
+                  <div className="relative mb-6 pb-10">
+                    <p className="text-gray-800 leading-relaxed text-xl pr-12">{answer}</p>
 
-                      {/* Copy button - bottom right of answer text */}
-                      <button
-                        onClick={handleCopyAnswer}
-                        className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-800"
-                        title={copied ? 'Copied!' : 'Copy answer'}
-                      >
-                        {copied ? (
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
+                    {/* Copy button - bottom right of answer text */}
+                    <button
+                      onClick={handleCopyAnswer}
+                      className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-800"
+                      title={copied ? 'Copied!' : 'Copy answer'}
+                    >
+                      {copied ? (
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Feedback Section */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-4">
+                      <p className="text-base text-gray-600">Was this answer helpful?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleFeedbackClick('thumbs_up')}
+                          disabled={feedbackSubmitting}
+                          className={`p-2 rounded-lg transition-colors ${
+                            feedback === 'thumbs_up'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          } disabled:opacity-50`}
+                          title="Thumbs up"
+                        >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                            />
                           </svg>
-                        )}
-                      </button>
+                        </button>
+                        <button
+                          onClick={() => handleFeedbackClick('thumbs_down')}
+                          disabled={feedbackSubmitting}
+                          className={`p-2 rounded-lg transition-colors ${
+                            feedback === 'thumbs_down'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          } disabled:opacity-50`}
+                          title="Thumbs down"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"
+                            />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Feedback Section */}
-                    <div className="mt-6 pt-4 border-t border-gray-200">
-                      <div className="flex items-center gap-4">
-                        <p className="text-base text-gray-600">Was this answer helpful?</p>
+                    {/* Comment Box */}
+                    {showCommentBox && (
+                      <div className="mt-4 space-y-3">
+                        <textarea
+                          value={feedbackComment}
+                          onChange={(e) => setFeedbackComment(e.target.value)}
+                          placeholder={
+                            feedback === 'thumbs_down'
+                              ? 'What was wrong with this answer? (optional)'
+                              : 'Any additional comments? (optional)'
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
+                          rows={3}
+                        />
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleFeedbackClick('thumbs_up')}
+                            onClick={handleCommentSubmit}
                             disabled={feedbackSubmitting}
-                            className={`p-2 rounded-lg transition-colors ${
-                              feedback === 'thumbs_up'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            } disabled:opacity-50`}
-                            title="Thumbs up"
+                            className="px-4 py-2 bg-blue-600 text-white text-base rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
-                              />
-                            </svg>
+                            {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
                           </button>
                           <button
-                            onClick={() => handleFeedbackClick('thumbs_down')}
+                            onClick={() => {
+                              setShowCommentBox(false)
+                              setFeedbackComment('')
+                            }}
                             disabled={feedbackSubmitting}
-                            className={`p-2 rounded-lg transition-colors ${
-                              feedback === 'thumbs_down'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            } disabled:opacity-50`}
-                            title="Thumbs down"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 text-base rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"
-                              />
-                            </svg>
+                            Cancel
                           </button>
                         </div>
                       </div>
-
-                      {/* Comment Box */}
-                      {showCommentBox && (
-                        <div className="mt-4 space-y-3">
-                          <textarea
-                            value={feedbackComment}
-                            onChange={(e) => setFeedbackComment(e.target.value)}
-                            placeholder={
-                              feedback === 'thumbs_down'
-                                ? 'What was wrong with this answer? (optional)'
-                                : 'Any additional comments? (optional)'
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-base"
-                            rows={3}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleCommentSubmit}
-                              disabled={feedbackSubmitting}
-                              className="px-4 py-2 bg-blue-600 text-white text-base rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-                            >
-                              {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setShowCommentBox(false)
-                                setFeedbackComment('')
-                              }}
-                              disabled={feedbackSubmitting}
-                              className="px-4 py-2 bg-gray-200 text-gray-700 text-base rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Follow-up Questions */}
-                    <FollowUpQuestions
-                      questions={followUpQuestions}
-                      onQuestionClick={handleFollowUpQuestionClick}
-                    />
+                    )}
                   </div>
                 </div>
 
-                {/* Chart Section - Right side (2/3 width) */}
+                {/* Chart Section - Middle */}
                 {chartConfig && (
-                  <div className="w-2/3">
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                      <FinancialChart config={chartConfig} />
-                    </div>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <FinancialChart config={chartConfig} />
                   </div>
                 )}
+
+                {/* Follow-up Questions - Bottom */}
+                <FollowUpQuestions
+                  questions={followUpQuestions}
+                  onQuestionClick={handleFollowUpQuestionClick}
+                />
               </div>
             )}
 
