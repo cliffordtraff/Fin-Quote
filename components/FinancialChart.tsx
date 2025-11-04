@@ -28,6 +28,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenSize, setFullscreenSize] = useState<{ width: number; height: number } | null>(null)
   const [showDataTable, setShowDataTable] = useState(false)
+  const [isInitialRender, setIsInitialRender] = useState(true)
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const chartInstanceRef = useRef<Highcharts.Chart | null>(null)
   const chartWrapperRef = useRef<HTMLDivElement | null>(null)
@@ -63,6 +64,13 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       }
     }
     setIsMounted(true)
+
+    // After first render, disable initial render flag
+    const timer = setTimeout(() => {
+      setIsInitialRender(false)
+    }, 100)
+
+    return () => clearTimeout(timer)
   }, [])
 
   // Handle fullscreen change events
@@ -162,8 +170,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       spacingBottom: isFullscreen ? 8 : 48,
       spacingLeft: 24,
       spacingRight: 24,
-      animation: {
-        duration: 800,
+      animation: isInitialRender ? false : {
+        duration: 400, // Faster, smoother animation
       },
       style: {
         fontFamily: 'inherit', // Use Tailwind font
@@ -229,8 +237,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     },
     plotOptions: {
       column: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
         dataLabels: {
           enabled: true, // Show values on top of bars
@@ -256,8 +264,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
       },
       line: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
         dataLabels: {
           enabled: false, // Hide labels on line charts for cleaner look
@@ -281,8 +289,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
       },
       series: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
       },
     },
