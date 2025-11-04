@@ -243,15 +243,15 @@ export async function askQuestion(
       },
     ]
 
-    const selectionResponse = await openai.chat.completions.create({
+    const selectionResponse = await openai.responses.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Fast and cheap for routing
-      messages: selectionMessages,
+      input: selectionMessages,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output (reasoning tokens count against limit)
       // Set to 20,000 to ensure model has enough room for complex reasoning
       max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
-      response_format: { type: 'json_object' },
+      text: { format: { type: 'json_object' } },
     })
 
     // Capture token usage
@@ -259,26 +259,25 @@ export async function askQuestion(
     toolSelectionCompletionTokens = selectionResponse.usage?.completion_tokens
     toolSelectionTotalTokens = selectionResponse.usage?.total_tokens
 
-    const choiceMessage = selectionResponse.choices[0]?.message as any
-    let selectionContent: string | undefined
+    // Extract content from Responses API output
+    // Use output_text convenience field if available, otherwise extract from message output
+    let selectionContent: string | undefined = (selectionResponse as any).output_text
 
-    if (typeof choiceMessage?.content === 'string') {
-      selectionContent = choiceMessage.content
-    } else if (Array.isArray(choiceMessage?.content)) {
-      selectionContent = choiceMessage.content
-        .map((part: any) => {
-          if (!part) return ''
-          if (typeof part === 'string') return part
-          if (typeof part.text === 'string') return part.text
-          if (typeof part.content === 'string') return part.content
-          return ''
-        })
-        .join('')
-        .trim()
-    }
-
-    if (!selectionContent && choiceMessage?.parsed) {
-      selectionContent = JSON.stringify(choiceMessage.parsed)
+    if (!selectionContent) {
+      const messageOutput = selectionResponse.output?.find((item: any) => item.type === 'message')
+      if (messageOutput?.content) {
+        if (Array.isArray(messageOutput.content)) {
+          selectionContent = messageOutput.content
+            .map((part: any) => {
+              if (part.type === 'output_text' && part.text) return part.text
+              if (typeof part.text === 'string') return part.text
+              if (typeof part === 'string') return part
+              return ''
+            })
+            .join('')
+            .trim()
+        }
+      }
     }
 
     if (!selectionContent) {
@@ -287,18 +286,11 @@ export async function askQuestion(
     }
 
     console.log('🔍 DEBUG - Tool selection content:', selectionContent)
-    if (choiceMessage?.parsed) {
-      console.log('🔍 DEBUG - Tool selection parsed object:', choiceMessage.parsed)
-    }
 
     // Parse the JSON response
     let toolSelection: { tool: string; args: any }
     try {
-      if (choiceMessage?.parsed) {
-        toolSelection = choiceMessage.parsed
-      } else {
-        toolSelection = JSON.parse(selectionContent.trim())
-      }
+      toolSelection = JSON.parse(selectionContent.trim())
     } catch (parseError) {
       console.error('Failed to parse tool selection:', selectionContent)
       return {
@@ -472,9 +464,9 @@ export async function askQuestion(
       },
     ]
 
-    const answerResponse = await openai.chat.completions.create({
+    const answerResponse = await openai.responses.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: answerMessages,
+      input: answerMessages,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output
       // Set to 20,000 to ensure model has enough room for complex reasoning and detailed answers
@@ -489,7 +481,27 @@ export async function askQuestion(
 
     console.log('🔍 DEBUG - Answer response:', JSON.stringify(answerResponse, null, 2))
 
-    const answer = answerResponse.choices[0]?.message?.content
+    // Extract answer from Responses API output
+    // Use output_text convenience field if available, otherwise extract from message output
+    let answer: string | undefined = (answerResponse as any).output_text
+
+    if (!answer) {
+      const messageOutput = answerResponse.output?.find((item: any) => item.type === 'message')
+      if (messageOutput?.content) {
+        if (Array.isArray(messageOutput.content)) {
+          answer = messageOutput.content
+            .map((part: any) => {
+              if (part.type === 'output_text' && part.text) return part.text
+              if (typeof part.text === 'string') return part.text
+              if (typeof part === 'string') return part
+              return ''
+            })
+            .join('')
+            .trim()
+        }
+      }
+    }
+
     if (!answer) {
       console.error('❌ Answer generation returned empty content. Full response:', answerResponse)
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Failed to generate answer', queryLogId: null }
@@ -587,9 +599,9 @@ export async function askQuestion(
 
         // Regenerate answer
         const regenerationStart = Date.now()
-        const regenerationResponse = await openai.chat.completions.create({
+        const regenerationResponse = await openai.responses.create({
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-          messages: [
+          input: [
             {
               role: 'user' as const,
               content: regenerationPrompt,
@@ -607,7 +619,26 @@ export async function askQuestion(
         regenerationCompletionTokens = regenerationResponse.usage?.completion_tokens
         regenerationTotalTokens = regenerationResponse.usage?.total_tokens
 
-        const regeneratedAnswer = regenerationResponse.choices[0]?.message?.content
+        // Extract regenerated answer from Responses API output
+        // Use output_text convenience field if available, otherwise extract from message output
+        let regeneratedAnswer: string | undefined = (regenerationResponse as any).output_text
+
+        if (!regeneratedAnswer) {
+          const messageOutput = regenerationResponse.output?.find((item: any) => item.type === 'message')
+          if (messageOutput?.content) {
+            if (Array.isArray(messageOutput.content)) {
+              regeneratedAnswer = messageOutput.content
+                .map((part: any) => {
+                  if (part.type === 'output_text' && part.text) return part.text
+                  if (typeof part.text === 'string') return part.text
+                  if (typeof part === 'string') return part
+                  return ''
+                })
+                .join('')
+                .trim()
+            }
+          }
+        }
 
         if (regeneratedAnswer) {
           const regenerationLatency = Date.now() - regenerationStart

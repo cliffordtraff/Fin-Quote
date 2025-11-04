@@ -59,35 +59,34 @@ export async function POST(req: NextRequest) {
             },
           ]
 
-          const selectionResponse = await openai.chat.completions.create({
+          const selectionResponse = await openai.responses.create({
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-            messages: selectionMessages,
+            input: selectionMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
             max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
-            response_format: { type: 'json_object' },
+            text: { format: { type: 'json_object' } },
           })
 
-          const choiceMessage = selectionResponse.choices[0]?.message as any
-          let selectionContent: string | undefined
+          // Extract content from Responses API output
+          // Use output_text convenience field if available, otherwise extract from message output
+          let selectionContent: string | undefined = (selectionResponse as any).output_text
 
-          if (typeof choiceMessage?.content === 'string') {
-            selectionContent = choiceMessage.content
-          } else if (Array.isArray(choiceMessage?.content)) {
-            selectionContent = choiceMessage.content
-              .map((part: any) => {
-                if (!part) return ''
-                if (typeof part === 'string') return part
-                if (typeof part.text === 'string') return part.text
-                if (typeof part.content === 'string') return part.content
-                return ''
-              })
-              .join('')
-              .trim()
-          }
-
-          if (!selectionContent && choiceMessage?.parsed) {
-            selectionContent = JSON.stringify(choiceMessage.parsed)
+          if (!selectionContent) {
+            const messageOutput = selectionResponse.output?.find((item: any) => item.type === 'message')
+            if (messageOutput?.content) {
+              if (Array.isArray(messageOutput.content)) {
+                selectionContent = messageOutput.content
+                  .map((part: any) => {
+                    if (part.type === 'output_text' && part.text) return part.text
+                    if (typeof part.text === 'string') return part.text
+                    if (typeof part === 'string') return part
+                    return ''
+                  })
+                  .join('')
+                  .trim()
+              }
+            }
           }
 
           if (!selectionContent) {
@@ -98,11 +97,7 @@ export async function POST(req: NextRequest) {
 
           let toolSelection: { tool: string; args: any }
           try {
-            if (choiceMessage?.parsed) {
-              toolSelection = choiceMessage.parsed
-            } else {
-              toolSelection = JSON.parse(selectionContent.trim())
-            }
+            toolSelection = JSON.parse(selectionContent.trim())
           } catch (parseError) {
             sendEvent('error', { message: 'Failed to parse tool selection' })
             controller.close()
@@ -249,22 +244,26 @@ export async function POST(req: NextRequest) {
             },
           ]
 
-          const answerStream = await openai.chat.completions.create({
+          const answerStream = await openai.responses.create({
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-            messages: answerMessages,
+            input: answerMessages,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
             max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
             stream: true,
           })
 
-          // Stream the answer to client
+          // Stream the answer to client (Responses API returns different chunk format)
           let fullAnswer = ''
           for await (const chunk of answerStream) {
-            const content = chunk.choices[0]?.delta?.content || ''
-            if (content) {
-              fullAnswer += content
-              sendEvent('answer', { content })
+            // Responses API chunks have type field and delta for incremental updates
+            const chunkType = (chunk as any).type
+            if (chunkType === 'response.output_text.delta') {
+              const delta = (chunk as any).delta
+              if (delta) {
+                fullAnswer += delta
+                sendEvent('answer', { content: delta })
+              }
             }
           }
 
@@ -310,9 +309,9 @@ export async function POST(req: NextRequest) {
             )
 
             console.log('🔍 Generating follow-up questions...')
-            const followUpResponse = await openai.chat.completions.create({
+            const followUpResponse = await openai.responses.create({
               model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-              messages: [
+              input: [
                 {
                   role: 'system',
                   content: 'You generate follow-up question suggestions. Return ONLY valid JSON matching {"suggestions": string[]}. No prose.',
@@ -325,39 +324,37 @@ export async function POST(req: NextRequest) {
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
               max_completion_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning_effort: 'minimal' } : {}),
-              response_format: { type: 'json_object' },
+              text: { format: { type: 'json_object' } },
             })
 
             // Debug: Log the full response
             console.log('🔍 Full response object:', JSON.stringify(followUpResponse, null, 2))
 
-            const choiceMessage = followUpResponse.choices[0]?.message as any
-            let followUpContent: string | undefined
+            // Extract content from Responses API output
+            // Use output_text convenience field if available, otherwise extract from message output
+            let followUpContent: string | undefined = (followUpResponse as any).output_text
 
-            // Handle different response formats (similar to tool selection)
-            if (typeof choiceMessage?.content === 'string') {
-              followUpContent = choiceMessage.content
-            } else if (Array.isArray(choiceMessage?.content)) {
-              followUpContent = choiceMessage.content
-                .map((part: any) => {
-                  if (!part) return ''
-                  if (typeof part === 'string') return part
-                  if (typeof part.text === 'string') return part.text
-                  if (typeof part.content === 'string') return part.content
-                  return ''
-                })
-                .join('')
-                .trim()
-            }
-
-            if (!followUpContent && choiceMessage?.parsed) {
-              followUpContent = JSON.stringify(choiceMessage.parsed)
+            if (!followUpContent) {
+              const messageOutput = followUpResponse.output?.find((item: any) => item.type === 'message')
+              if (messageOutput?.content) {
+                if (Array.isArray(messageOutput.content)) {
+                  followUpContent = messageOutput.content
+                    .map((part: any) => {
+                      if (part.type === 'output_text' && part.text) return part.text
+                      if (typeof part.text === 'string') return part.text
+                      if (typeof part === 'string') return part
+                      return ''
+                    })
+                    .join('')
+                    .trim()
+                }
+              }
             }
 
             console.log('🔍 Follow-up content:', followUpContent)
 
             if (followUpContent) {
-              const parsed = choiceMessage?.parsed || JSON.parse(followUpContent)
+              const parsed = JSON.parse(followUpContent)
               console.log('🔍 Parsed follow-up:', parsed)
 
               if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
