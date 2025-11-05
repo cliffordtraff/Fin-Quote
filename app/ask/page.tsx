@@ -911,7 +911,7 @@ export default function AskPage() {
                     handleSubmitStreaming(e as any)
                   }
                 }}
-                placeholder="Message Fin Quote"
+                placeholder="Ask Anything"
                 className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl"
                 disabled={loading}
               />
