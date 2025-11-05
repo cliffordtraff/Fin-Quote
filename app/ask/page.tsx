@@ -895,7 +895,7 @@ export default function AskPage() {
       </div>
 
       {/* Fixed bottom input bar */}
-      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-gray-100 dark:bg-gray-900 rounded-full px-6 py-4 border border-gray-300 dark:border-gray-600">
