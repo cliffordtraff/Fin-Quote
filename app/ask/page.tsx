@@ -782,27 +782,10 @@ export default function AskPage() {
               </div>
             ))}
 
-            {/* Show current streaming answer */}
+            {/* Show current streaming answer (text only - chart appears when complete) */}
             {loading && answer && (
-              <div className="space-y-4">
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
-                </div>
-
-                {/* Show chart during streaming if available */}
-                {chartConfig && (
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
-                    <FinancialChart config={chartConfig} />
-                  </div>
-                )}
-
-                {/* Show follow-up questions during streaming if available */}
-                {followUpQuestions.length > 0 && (
-                  <FollowUpQuestions
-                    questions={followUpQuestions}
-                    onQuestionClick={handleFollowUpQuestionClick}
-                  />
-                )}
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
               </div>
             )}
 
