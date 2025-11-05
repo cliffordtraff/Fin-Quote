@@ -251,10 +251,15 @@ export default function AskPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Auto-scroll to latest message when conversation history changes
+  // Auto-scroll to latest USER message when conversation history changes
+  // Only scroll when user asks a question, not when answer appears
   useEffect(() => {
     if (latestMessageRef.current && conversationHistory.length > 0) {
-      latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const lastMessage = conversationHistory[conversationHistory.length - 1]
+      // Only auto-scroll if the last message is from the user
+      if (lastMessage.role === 'user') {
+        latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
     }
   }, [conversationHistory.length])
 
