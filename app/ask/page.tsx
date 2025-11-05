@@ -258,7 +258,8 @@ export default function AskPage() {
       const lastMessage = conversationHistory[conversationHistory.length - 1]
       // Only auto-scroll if the last message is from the user
       if (lastMessage.role === 'user') {
-        latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        // Use 'auto' for instant scroll instead of 'smooth'
+        latestMessageRef.current.scrollIntoView({ behavior: 'auto', block: 'start' })
       }
     }
   }, [conversationHistory.length])
