@@ -22,6 +22,40 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+type SimpleMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+const toResponseInputMessages = (messages: SimpleMessage[]) =>
+  messages.map((msg, index) => ({
+    id: `msg_${index}`,
+    role: msg.role === 'assistant' ? 'assistant' : msg.role,
+    content: [{ type: 'input_text', text: msg.content }],
+    type: 'message',
+  })) as any
+
+const extractResponseText = (response: any): string | undefined => {
+  if (response?.output_text) {
+    return response.output_text
+  }
+
+  const messageOutput = (response?.output as any[])?.find(item => item.type === 'message')
+  if (messageOutput?.content && Array.isArray(messageOutput.content)) {
+    return messageOutput.content
+      .map((part: any) => {
+        if (part?.type === 'output_text' && typeof part?.text === 'string') return part.text
+        if (typeof part?.text === 'string') return part.text
+        if (typeof part === 'string') return part
+        return ''
+      })
+      .join('')
+      .trim()
+  }
+
+  return undefined
+}
+
 export type FinancialData = { year: number; value: number; metric: string }
 export type PriceData = { date: string; close: number }
 export type FilingData = {
@@ -225,7 +259,7 @@ export async function askQuestion(
     const selectionPrompt = buildToolSelectionPrompt(userQuestion)
 
     // Build messages array with conversation history
-    const selectionMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    const selectionMessages: SimpleMessage[] = [
       {
         role: 'system',
         content:
@@ -238,14 +272,16 @@ export async function askQuestion(
       })),
       // Add current question with tool selection instructions
       {
-        role: 'user' as const,
+        role: 'user',
         content: selectionPrompt,
       },
     ]
 
+    const selectionInput = toResponseInputMessages(selectionMessages)
+
     const selectionResponse = await openai.responses.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Fast and cheap for routing
-      input: selectionMessages,
+      input: selectionInput,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output (reasoning tokens count against limit)
       // Set to 20,000 to ensure model has enough room for complex reasoning
@@ -255,30 +291,12 @@ export async function askQuestion(
     })
 
     // Capture token usage
-    toolSelectionPromptTokens = selectionResponse.usage?.prompt_tokens
-    toolSelectionCompletionTokens = selectionResponse.usage?.completion_tokens
+    toolSelectionPromptTokens = selectionResponse.usage?.input_tokens
+    toolSelectionCompletionTokens = selectionResponse.usage?.output_tokens
     toolSelectionTotalTokens = selectionResponse.usage?.total_tokens
 
     // Extract content from Responses API output
-    // Use output_text convenience field if available, otherwise extract from message output
-    let selectionContent: string | undefined = (selectionResponse as any).output_text
-
-    if (!selectionContent) {
-      const messageOutput = selectionResponse.output?.find((item: any) => item.type === 'message')
-      if (messageOutput?.content) {
-        if (Array.isArray(messageOutput.content)) {
-          selectionContent = messageOutput.content
-            .map((part: any) => {
-              if (part.type === 'output_text' && part.text) return part.text
-              if (typeof part.text === 'string') return part.text
-              if (typeof part === 'string') return part
-              return ''
-            })
-            .join('')
-            .trim()
-        }
-      }
-    }
+    let selectionContent: string | undefined = extractResponseText(selectionResponse as any)
 
     if (!selectionContent) {
       console.error('Tool selection returned empty response:', selectionResponse)
@@ -450,7 +468,7 @@ export async function askQuestion(
     const historyLimit = process.env.OPENAI_MODEL?.includes('gpt-5') ? 4 : 10
     const recentHistory = conversationHistory.slice(-historyLimit)
 
-    const answerMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    const answerMessages: SimpleMessage[] = [
       { role: 'system', content: formattingInstructions },
       // Include a limited slice of prior conversation to reduce prompt size
       ...recentHistory.map(msg => ({
@@ -459,14 +477,16 @@ export async function askQuestion(
       })),
       // Add current question with facts
       {
-        role: 'user' as const,
+        role: 'user',
         content: answerPrompt,
       },
     ]
 
+    const answerInput = toResponseInputMessages(answerMessages)
+
     const answerResponse = await openai.responses.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      input: answerMessages,
+      input: answerInput,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
       // GPT-5 models need more tokens for reasoning + output
       // Set to 20,000 to ensure model has enough room for complex reasoning and detailed answers
@@ -475,32 +495,15 @@ export async function askQuestion(
     })
 
     // Capture token usage
-    answerPromptTokens = answerResponse.usage?.prompt_tokens
-    answerCompletionTokens = answerResponse.usage?.completion_tokens
+    answerPromptTokens = answerResponse.usage?.input_tokens
+    answerCompletionTokens = answerResponse.usage?.output_tokens
     answerTotalTokens = answerResponse.usage?.total_tokens
 
     console.log('🔍 DEBUG - Answer response:', JSON.stringify(answerResponse, null, 2))
 
     // Extract answer from Responses API output
     // Use output_text convenience field if available, otherwise extract from message output
-    let answer: string | undefined = (answerResponse as any).output_text
-
-    if (!answer) {
-      const messageOutput = answerResponse.output?.find((item: any) => item.type === 'message')
-      if (messageOutput?.content) {
-        if (Array.isArray(messageOutput.content)) {
-          answer = messageOutput.content
-            .map((part: any) => {
-              if (part.type === 'output_text' && part.text) return part.text
-              if (typeof part.text === 'string') return part.text
-              if (typeof part === 'string') return part
-              return ''
-            })
-            .join('')
-            .trim()
-        }
-      }
-    }
+    let answer: string | undefined = extractResponseText(answerResponse as any)
 
     if (!answer) {
       console.error('❌ Answer generation returned empty content. Full response:', answerResponse)
@@ -599,14 +602,16 @@ export async function askQuestion(
 
         // Regenerate answer
         const regenerationStart = Date.now()
+        const regenerationMessages: SimpleMessage[] = [
+          {
+            role: 'user',
+            content: regenerationPrompt,
+          },
+        ]
+
         const regenerationResponse = await openai.responses.create({
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-          input: [
-            {
-              role: 'user' as const,
-              content: regenerationPrompt,
-            },
-          ],
+          input: toResponseInputMessages(regenerationMessages),
           ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
           // GPT-5 models need more tokens for reasoning + output
           // Set to 20,000 to ensure model has enough room for complex reasoning and corrections
@@ -615,30 +620,12 @@ export async function askQuestion(
         })
 
         // Capture regeneration token usage
-        regenerationPromptTokens = regenerationResponse.usage?.prompt_tokens
-        regenerationCompletionTokens = regenerationResponse.usage?.completion_tokens
+        regenerationPromptTokens = regenerationResponse.usage?.input_tokens
+        regenerationCompletionTokens = regenerationResponse.usage?.output_tokens
         regenerationTotalTokens = regenerationResponse.usage?.total_tokens
 
         // Extract regenerated answer from Responses API output
-        // Use output_text convenience field if available, otherwise extract from message output
-        let regeneratedAnswer: string | undefined = (regenerationResponse as any).output_text
-
-        if (!regeneratedAnswer) {
-          const messageOutput = regenerationResponse.output?.find((item: any) => item.type === 'message')
-          if (messageOutput?.content) {
-            if (Array.isArray(messageOutput.content)) {
-              regeneratedAnswer = messageOutput.content
-                .map((part: any) => {
-                  if (part.type === 'output_text' && part.text) return part.text
-                  if (typeof part.text === 'string') return part.text
-                  if (typeof part === 'string') return part
-                  return ''
-                })
-                .join('')
-                .trim()
-            }
-          }
-        }
+        const regeneratedAnswer: string | undefined = extractResponseText(regenerationResponse as any)
 
         if (regeneratedAnswer) {
           const regenerationLatency = Date.now() - regenerationStart

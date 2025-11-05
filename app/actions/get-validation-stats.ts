@@ -6,6 +6,28 @@ import { createServerClient } from '@/lib/supabase/server'
 // Types
 // ============================================================================
 
+type QueryLogValidationRow = {
+  id: string
+  created_at: string
+  user_question: string
+  answer_generated: string
+  tool_selected: string
+  tool_args: any
+  validation_passed: boolean | null
+  validation_results: {
+    overall_severity?: string
+    number_validation?: { status?: 'pass' | 'fail' | 'skip' }
+    year_validation?: { status?: 'pass' | 'fail' | 'skip' }
+    filing_validation?: { status?: 'pass' | 'fail' | 'skip' }
+    regeneration?: {
+      triggered?: boolean
+      second_attempt_passed?: boolean
+    }
+  } | null
+  user_feedback: string | null
+  validation_run_at: string | null
+}
+
 export type ValidationStats = {
   overall: {
     total_queries: number
@@ -81,7 +103,7 @@ export async function getValidationStats(params?: {
       return { data: null, error: error.message }
     }
 
-    const allQueries = queries || []
+    const allQueries: QueryLogValidationRow[] = (queries ?? []) as QueryLogValidationRow[]
 
     // Overall stats
     const totalQueries = allQueries.length
@@ -230,7 +252,9 @@ export async function getValidationFailures(params?: {
       return { data: null, error: error.message }
     }
 
-    const allFailures = (queries || []).map((q) => ({
+    const typedFailures: QueryLogValidationRow[] = (queries ?? []) as QueryLogValidationRow[]
+
+    const allFailures = typedFailures.map((q) => ({
       id: q.id,
       created_at: q.created_at,
       user_question: q.user_question,
@@ -298,7 +322,7 @@ export async function getQueriesForValidationReview(params?: {
       return { data: null, error: error.message }
     }
 
-    let allQueries = (queries || []).map((q) => ({
+    let allQueries = ((queries ?? []) as QueryLogValidationRow[]).map((q) => ({
       id: q.id,
       created_at: q.created_at,
       user_question: q.user_question,

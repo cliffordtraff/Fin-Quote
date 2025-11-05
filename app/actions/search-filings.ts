@@ -52,7 +52,7 @@ export async function searchFilings(params: {
     const supabase = createServerClient()
 
     // PostgreSQL vector similarity search using <-> operator (cosine distance)
-    const { data: chunks, error: searchError } = await supabase.rpc(
+    const { data: chunks, error: searchError } = await (supabase as any).rpc(
       'search_filing_chunks',
       {
         query_embedding: JSON.stringify(queryEmbedding),

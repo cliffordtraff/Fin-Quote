@@ -318,6 +318,21 @@ async function testRouting(question: TestQuestion): Promise<TestResult> {
         error: `JSON parse error: ${content}`,
       }
     }
+    if (!parsed) {
+      return {
+        question_id: question.id,
+        question: question.question,
+        expected_tool: question.expected_output.tool,
+        expected_args: question.expected_output.args,
+        actual_tool: null,
+        actual_args: null,
+        tool_match: false,
+        args_match: false,
+        overall_correct: false,
+        routing_latency_ms: latency,
+        error: 'Empty routing result',
+      }
+    }
 
     const toolMatch = parsed.tool === question.expected_output.tool
     const argsMatchResult = argsMatch(

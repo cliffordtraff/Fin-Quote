@@ -16,11 +16,11 @@ type AssistantChatProps = {
 export default function AssistantChat({
   conversationHistory,
   sessionId,
-  onNewMessage
+  onNewMessage,
 }: AssistantChatProps) {
   // Create a local runtime that handles our streaming API
   const runtime = useLocalRuntime({
-    async onNew({ messages }) {
+    async onNew({ messages }: { messages: Array<{ role: string; content: Array<{ text: string }> }> }) {
       const lastMessage = messages[messages.length - 1]
       if (!lastMessage || lastMessage.role !== 'user') return
 
@@ -49,6 +49,30 @@ export default function AssistantChat({
         let streamedAnswer = ''
         let accumulatedChunk = ''
 
+        const processChunk = (eventText: string) => {
+          if (!eventText.trim()) return
+
+          const eventMatch = eventText.match(/event: (\w+)\ndata: (.+)/)
+          if (!eventMatch) return
+
+          const [, eventType, dataStr] = eventMatch
+
+          try {
+            const data = JSON.parse(dataStr)
+
+            if (eventType === 'answer') {
+              streamedAnswer += data.content ?? ''
+              // Append to the assistant's message in the thread
+              runtime.append({
+                role: 'assistant',
+                content: [{ type: 'text', text: streamedAnswer }],
+              })
+            }
+          } catch (e) {
+            console.error('Failed to parse event data:', e)
+          }
+        }
+
         while (true) {
           const { done, value } = await reader.read()
 
@@ -69,30 +93,6 @@ export default function AssistantChat({
 
           for (const event of events) {
             processChunk(event)
-          }
-        }
-
-        function processChunk(eventText: string) {
-          if (!eventText.trim()) return
-
-          const eventMatch = eventText.match(/event: (\w+)\ndata: (.+)/)
-          if (!eventMatch) return
-
-          const [, eventType, dataStr] = eventMatch
-
-          try {
-            const data = JSON.parse(dataStr)
-
-            if (eventType === 'answer') {
-              streamedAnswer += data.content
-              // Append to the assistant's message in the thread
-              runtime.append({
-                role: 'assistant',
-                content: [{ type: 'text', text: streamedAnswer }],
-              })
-            }
-          } catch (e) {
-            console.error('Failed to parse event data:', e)
           }
         }
 

@@ -2,6 +2,19 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 
+type QueryLogRow = {
+  id: string
+  created_at: string
+  tool_selected: string
+  tool_selection_prompt_tokens?: number | null
+  tool_selection_completion_tokens?: number | null
+  answer_prompt_tokens?: number | null
+  answer_completion_tokens?: number | null
+  regeneration_prompt_tokens?: number | null
+  regeneration_completion_tokens?: number | null
+  embedding_tokens?: number | null
+}
+
 // OpenAI Pricing (as of August 2025)
 // gpt-5-nano: $0.050 per 1M input tokens, $0.400 per 1M output tokens (60% cheaper than gpt-4o-mini)
 // gpt-4o-mini: $0.150 per 1M input tokens, $0.600 per 1M output tokens
@@ -78,7 +91,9 @@ export async function getCostStats(params?: {
       return { data: null, error: error.message }
     }
 
-    if (!queries || queries.length === 0) {
+    const typedQueries: QueryLogRow[] = (queries ?? []) as QueryLogRow[]
+
+    if (typedQueries.length === 0) {
       return {
         data: {
           total_queries: 0,
@@ -109,7 +124,7 @@ export async function getCostStats(params?: {
     // Get current model pricing for calculations
     const modelPricing = getCurrentModelPricing()
 
-    for (const query of queries) {
+    for (const query of typedQueries) {
       // Calculate cost for this query
       let queryCost = 0
 
@@ -170,14 +185,14 @@ export async function getCostStats(params?: {
 
     return {
       data: {
-        total_queries: queries.length,
+        total_queries: typedQueries.length,
         total_cost_usd: totalCost,
         llm_cost_usd: llmCost,
         embedding_cost_usd: embeddingCost,
         total_input_tokens: totalInputTokens,
         total_output_tokens: totalOutputTokens,
         total_embedding_tokens: totalEmbeddingTokens,
-        avg_cost_per_query: queries.length > 0 ? totalCost / queries.length : 0,
+        avg_cost_per_query: typedQueries.length > 0 ? totalCost / typedQueries.length : 0,
         cost_by_date: Array.from(costByDate.entries())
           .map(([date, stats]) => ({ date, cost: stats.cost, queries: stats.queries }))
           .sort((a, b) => a.date.localeCompare(b.date)),

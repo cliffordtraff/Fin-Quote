@@ -9,10 +9,12 @@ import RecentQueries from '@/components/RecentQueries'
 import AuthModal from '@/components/AuthModal'
 import UserMenu from '@/components/UserMenu'
 import FollowUpQuestions from '@/components/FollowUpQuestions'
+import FlowVisualization, { FlowFilter } from '@/components/FlowVisualization'
 import FinancialsModal from '@/components/FinancialsModal'
 import ThemeToggle from '@/components/ThemeToggle'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
+import type { FlowEvent } from '@/lib/flow/events'
 import type { Database } from '@/lib/database.types'
 
 const stripMarkdown = (text: string): string => {
@@ -162,6 +164,11 @@ export default function AskPage() {
   const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
+  const [flowEvents, setFlowEvents] = useState<FlowEvent[]>([])
+  const [flowPanelOpen, setFlowPanelOpen] = useState(false)
+  const [flowFilter, setFlowFilter] = useState<FlowFilter>('all')
+  const flowPanelOffsetClass = flowPanelOpen ? 'lg:mr-[420px]' : ''
+  const flowPanelPaddingClass = flowPanelOpen ? 'lg:pr-[420px]' : ''
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -267,6 +274,36 @@ export default function AskPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const storedOpen = window.localStorage.getItem('finquote_flow_panel_open')
+    if (storedOpen !== null) {
+      setFlowPanelOpen(storedOpen === 'true')
+    }
+
+    const storedFilter = window.localStorage.getItem('finquote_flow_filter')
+    if (
+      storedFilter === 'all' ||
+      storedFilter === 'errors' ||
+      storedFilter === 'warnings' ||
+      storedFilter === 'slow' ||
+      storedFilter === 'cost'
+    ) {
+      setFlowFilter(storedFilter)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('finquote_flow_panel_open', flowPanelOpen.toString())
+  }, [flowPanelOpen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('finquote_flow_filter', flowFilter)
+  }, [flowFilter])
+
   // Auto-scroll to latest USER message when conversation history changes
   // Only scroll when user asks a question, not when answer appears
   useEffect(() => {
@@ -309,6 +346,7 @@ export default function AskPage() {
     setDataUsed(null)
     setChartConfig(null)
     setFollowUpQuestions([])
+    setFlowEvents([])
 
     // Create user message
     const userMessage: Message = {
@@ -345,6 +383,28 @@ export default function AskPage() {
         throw new Error('No response body')
       }
 
+      const updateFlowEvent = (incoming: FlowEvent) => {
+        setFlowEvents(prev => {
+          const existingIndex = prev.findIndex(event => event.id === incoming.id)
+          if (existingIndex === -1) {
+            return [...prev, incoming].sort((a, b) => a.sequence - b.sequence)
+          }
+
+          const next = [...prev]
+          const previous = next[existingIndex]
+          next[existingIndex] = {
+            ...previous,
+            ...incoming,
+            summary: incoming.summary ?? previous.summary,
+            why: incoming.why ?? previous.why,
+            details: incoming.details ?? previous.details,
+            durationMs: incoming.durationMs ?? previous.durationMs,
+            costUsd: incoming.costUsd ?? previous.costUsd,
+          }
+          return next.sort((a, b) => a.sequence - b.sequence)
+        })
+      }
+
       let streamedAnswer = ''
       let receivedData: any = null
       let receivedChart: any = null
@@ -371,6 +431,10 @@ export default function AskPage() {
             case 'status':
               setLoadingStep(data.step)
               setLoadingMessage(data.message)
+              break
+
+            case 'flow':
+              updateFlowEvent(data as FlowEvent)
               break
 
             case 'data':
@@ -719,7 +783,7 @@ export default function AskPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
-        className={`hidden lg:block fixed left-0 top-20 h-[calc(100vh-5rem)] w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-40 transition-transform duration-300 ${
+        className={`hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-30 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -751,8 +815,8 @@ export default function AskPage() {
       </button>
 
       {/* Header - fixed at top */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 transition-[margin] ${flowPanelOffsetClass}`}>
+        <div className={`max-w-7xl mx-auto flex justify-between items-center ${flowPanelPaddingClass}`}>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
           <div className="flex items-center gap-3">
             {conversationHistory.length > 0 && (
@@ -768,6 +832,12 @@ export default function AskPage() {
               className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               Financials
+            </button>
+            <button
+              onClick={() => setFlowPanelOpen(prev => !prev)}
+              className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              Flow
             </button>
             <ThemeToggle />
             {user ? (
@@ -785,7 +855,7 @@ export default function AskPage() {
       </div>
 
       {/* Main scrollable content area - conversation */}
-      <div ref={scrollContainerRef} className="lg:ml-80 xl:ml-96 flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className={`lg:ml-80 xl:ml-96 flex-1 overflow-y-auto transition-[margin] pt-20 ${flowPanelOffsetClass}`}>
         <div className="max-w-6xl mx-auto p-6 space-y-6 pb-32 lg:pb-[35vh]">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
@@ -960,7 +1030,7 @@ export default function AskPage() {
       </div>
 
       {/* Fixed bottom input bar */}
-      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-12 z-50">
+      <div className={`lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-12 z-50 transition-[right] ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
         <div className="max-w-6xl mx-auto">
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-slate-800 rounded-full px-6 py-5 border border-blue-300 dark:border-slate-700">
@@ -1019,6 +1089,14 @@ export default function AskPage() {
           </form>
         </div>
       </div>
+
+      <FlowVisualization
+        events={flowEvents}
+        isOpen={flowPanelOpen}
+        onToggle={() => setFlowPanelOpen(prev => !prev)}
+        filter={flowFilter}
+        onFilterChange={setFlowFilter}
+      />
 
       {/* Auth Modal */}
       <AuthModal

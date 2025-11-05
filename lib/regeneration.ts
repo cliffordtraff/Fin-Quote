@@ -53,7 +53,7 @@ export function shouldRegenerateAnswer(
     }
   }
 
-  const severity = validationResults.overall_severity
+  const severity = (validationResults.overall_severity === 'none' ? 'low' : validationResults.overall_severity) as 'low' | 'medium' | 'high' | 'critical'
 
   // Always regenerate for critical and high severity failures
   if (severity === 'critical' || severity === 'high') {

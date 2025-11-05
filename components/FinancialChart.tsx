@@ -2,23 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import Highcharts from 'highcharts'
+import Highcharts, { AxisLabelsFormatterContextObject } from 'highcharts'
 import { useTheme } from '@/components/ThemeProvider'
+import type { ChartConfig } from '@/types/chart'
 
 // Critical: Dynamic import with ssr: false to prevent Next.js hydration errors
 // Highcharts needs the browser DOM and can't render on the server
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
   ssr: false,
 })
-
-export type ChartConfig = {
-  type: 'column' | 'line'
-  title: string
-  data: number[]
-  categories: string[]
-  yAxisLabel: string
-  xAxisLabel: string
-}
 
 interface FinancialChartProps {
   config: ChartConfig
@@ -138,10 +130,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
 
   // Copy table data to clipboard
   const copyToClipboard = () => {
-    const csvData = [
-      [config.xAxisLabel, config.yAxisLabel].join(','),
-      ...config.categories.map((cat, i) => `${cat},${config.data[i]}`).join('\n'),
-    ].join('\n')
+    const rows = config.categories.map((cat, i) => `${cat},${config.data[i]}`)
+    const csvData = [[config.xAxisLabel, config.yAxisLabel].join(',')].concat(rows).join('\n')
 
     navigator.clipboard.writeText(csvData).then(() => {
       alert('Data copied to clipboard!')
@@ -203,9 +193,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           fontSize: '16px',
           color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
-        formatter: function () {
-          // Explicitly return the category string (year), not the index
-          return this.value
+        formatter: function (this: AxisLabelsFormatterContextObject) {
+          return String(this.value ?? '')
         },
       },
       gridLineWidth: 0,
@@ -228,9 +217,9 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
         y: isFullscreen ? -4 : 0,
-        formatter: function () {
-          // Format large numbers with commas
-          return this.value.toLocaleString('en-US')
+        formatter: function (this: AxisLabelsFormatterContextObject) {
+          const raw = typeof this.value === 'number' ? this.value : Number(this.value)
+          return Number.isFinite(raw) ? raw.toLocaleString('en-US') : String(this.value ?? '')
         },
       },
       gridLineColor: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
@@ -261,11 +250,6 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
         borderRadius: 4, // Rounded corners on bars
         borderWidth: 0,
-        states: {
-          hover: {
-            brightness: 0.1, // Subtle hover effect
-          },
-        },
       },
       line: {
         animation: isInitialRender ? false : {
@@ -280,16 +264,6 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           fillColor: '#3b82f6', // Blue
           lineWidth: 2,
           lineColor: isDark ? '#111827' : '#ffffff', // Dark: gray-900, Light: white border around dots
-          states: {
-            hover: {
-              radius: 6, // Slightly larger on hover
-            },
-          },
-        },
-        states: {
-          hover: {
-            lineWidthPlus: 1, // Slightly thicker on hover
-          },
         },
       },
       series: {
@@ -303,7 +277,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         type: config.type, // Dynamic: column or line based on data type
         name: config.yAxisLabel,
         data: config.data,
-        color: '#3b82f6', // Blue color (Tailwind blue-500)
+        color: config.color ?? '#3b82f6', // Blue color (Tailwind blue-500)
       },
     ],
     credits: {
@@ -325,14 +299,6 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           theme: {
             fill: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
             stroke: isDark ? '#4b5563' : '#e5e7eb', // Dark: gray-600, Light: gray-200
-            states: {
-              hover: {
-                fill: isDark ? '#4b5563' : '#e5e7eb', // Dark: gray-600, Light: gray-200
-              },
-              select: {
-                fill: isDark ? '#6b7280' : '#d1d5db', // Dark: gray-500, Light: gray-300
-              },
-            },
           },
           symbolStroke: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
@@ -482,9 +448,9 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           <HighchartsReact
             highcharts={Highcharts}
             options={options}
-            callback={(chart) => {
+            callback={(chart: Highcharts.Chart) => {
               chartInstanceRef.current = chart
-              requestAnimationFrame(resizeChart)
+              requestAnimationFrame(() => resizeChart())
             }}
             containerProps={{
               className: isFullscreen ? 'flex-1 min-h-0' : undefined,

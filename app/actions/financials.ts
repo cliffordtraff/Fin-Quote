@@ -1,7 +1,7 @@
 'use server'
 
 import { createServerClient } from '@/lib/supabase/server'
-import { CompanyWithFinancials } from '@/lib/database.types'
+import { CompanyWithFinancials, Company, Financial } from '@/lib/database.types'
 
 export async function getCompaniesWithFinancials(): Promise<{
   data: CompanyWithFinancials[] | null
@@ -25,6 +25,8 @@ export async function getCompaniesWithFinancials(): Promise<{
       return { data: [], error: null }
     }
 
+    const companyRows: Company[] = companies as Company[]
+
     // Fetch all financials
     const { data: financials, error: financialsError } = await supabase
       .from('financials_std')
@@ -36,10 +38,12 @@ export async function getCompaniesWithFinancials(): Promise<{
       return { data: null, error: financialsError.message }
     }
 
+    const financialRows: Financial[] = (financials ?? []) as Financial[]
+
     // Manually join the data by symbol
-    const companiesWithFinancials: CompanyWithFinancials[] = companies.map((company) => ({
+    const companiesWithFinancials: CompanyWithFinancials[] = companyRows.map((company) => ({
       ...company,
-      financials_std: financials?.filter((f) => f.symbol === company.symbol) || [],
+      financials_std: financialRows.filter((f) => f.symbol === company.symbol),
     }))
 
     return { data: companiesWithFinancials, error: null }
@@ -77,6 +81,16 @@ export type CalculatedFinancialMetric =
 // Combined type for all supported metrics
 export type FinancialMetric = RawFinancialMetric | CalculatedFinancialMetric
 
+export type FinancialMetricDataPoint = {
+  year: number
+  value: number
+  metric: FinancialMetric
+  revenue?: number | null
+  shareholders_equity?: number | null
+  total_assets?: number | null
+  total_liabilities?: number | null
+}
+
 // Helper to check if a metric is calculated (internal use only)
 function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinancialMetric {
   const calculatedMetrics: CalculatedFinancialMetric[] = [
@@ -91,7 +105,7 @@ export async function getAaplFinancialsByMetric(params: {
   metric: FinancialMetric
   limit?: number // number of most recent years to fetch
 }): Promise<{
-  data: Array<{ year: number; value: number; metric: FinancialMetric }> | null
+  data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
   const { metric } = params
@@ -118,9 +132,15 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      const calculated = (data ?? []).map((row) => ({
+      type DebtToEquityRow = Pick<Financial, 'year' | 'total_liabilities' | 'shareholders_equity'>
+      const rows: DebtToEquityRow[] = (data ?? []) as DebtToEquityRow[]
+
+      const calculated = rows.map((row) => ({
         year: row.year,
-        value: row.total_liabilities / row.shareholders_equity,
+        value:
+          row.shareholders_equity && row.shareholders_equity !== 0
+            ? (row.total_liabilities ?? 0) / row.shareholders_equity
+            : 0,
         metric: 'debt_to_equity_ratio' as const,
       }))
 
@@ -140,9 +160,15 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      const calculated = (data ?? []).map((row) => ({
+      type GrossMarginRow = Pick<Financial, 'year' | 'gross_profit' | 'revenue'>
+      const rows: GrossMarginRow[] = (data ?? []) as GrossMarginRow[]
+
+      const calculated = rows.map((row) => ({
         year: row.year,
-        value: (row.gross_profit / row.revenue) * 100,
+        value:
+          row.revenue && row.revenue !== 0
+            ? ((row.gross_profit ?? 0) / row.revenue) * 100
+            : 0,
         metric: 'gross_margin' as const,
       }))
 
@@ -162,9 +188,15 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      const calculated = (data ?? []).map((row) => ({
+      type RoeRow = Pick<Financial, 'year' | 'net_income' | 'shareholders_equity'>
+      const rows: RoeRow[] = (data ?? []) as RoeRow[]
+
+      const calculated = rows.map((row) => ({
         year: row.year,
-        value: (row.net_income / row.shareholders_equity) * 100,
+        value:
+          row.shareholders_equity && row.shareholders_equity !== 0
+            ? ((row.net_income ?? 0) / row.shareholders_equity) * 100
+            : 0,
         metric: 'roe' as const,
       }))
 
@@ -192,7 +224,9 @@ export async function getAaplFinancialsByMetric(params: {
 
     const { data, error } = await supabase
       .from('financials_std')
-      .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps')
+      .select(
+        'year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps'
+      )
       .eq('symbol', 'AAPL')
       .order('year', { ascending: false })
       .limit(safeLimit)
@@ -203,41 +237,58 @@ export async function getAaplFinancialsByMetric(params: {
     }
 
     // For margin/ratio calculations, include related metrics
-    const mapped = (data ?? []).map((row) => {
-      const result: any = {
+    type RawRow = Pick<
+      Financial,
+      | 'year'
+      | 'revenue'
+      | 'gross_profit'
+      | 'net_income'
+      | 'operating_income'
+      | 'total_assets'
+      | 'total_liabilities'
+      | 'shareholders_equity'
+      | 'operating_cash_flow'
+      | 'eps'
+    >
+
+    const rows: RawRow[] = (data ?? []) as RawRow[]
+
+    const mapped: FinancialMetricDataPoint[] = rows.map((row) => {
+      const metricValue = (row as Record<string, number | null>)[metric] ?? 0
+      const result: FinancialMetricDataPoint = {
         year: row.year,
-        value: row[metric] as number,
+        value: typeof metricValue === 'number' ? metricValue : Number(metricValue ?? 0),
         metric,
       }
 
       // Include revenue for margin calculations
       if (['gross_profit', 'operating_income', 'net_income', 'operating_cash_flow'].includes(metric)) {
-        result.revenue = row.revenue
+        result.revenue = row.revenue ?? null
       }
 
       // Include shareholders_equity and total_assets for ROE and ROA calculations
       if (metric === 'net_income') {
-        result.shareholders_equity = row.shareholders_equity
-        result.total_assets = row.total_assets
+        result.shareholders_equity = row.shareholders_equity ?? null
+        result.total_assets = row.total_assets ?? null
       }
 
       // Include shareholders_equity and total_assets for debt-to-equity and debt-to-assets calculations
       if (metric === 'total_liabilities') {
-        result.shareholders_equity = row.shareholders_equity
-        result.total_assets = row.total_assets
+        result.shareholders_equity = row.shareholders_equity ?? null
+        result.total_assets = row.total_assets ?? null
       }
 
       // Include total_liabilities and total_assets for debt-to-equity calculations
       if (metric === 'shareholders_equity') {
-        result.total_liabilities = row.total_liabilities
-        result.total_assets = row.total_assets
+        result.total_liabilities = row.total_liabilities ?? null
+        result.total_assets = row.total_assets ?? null
       }
 
       // Include revenue for asset turnover calculation
       if (metric === 'total_assets') {
-        result.revenue = row.revenue
-        result.total_liabilities = row.total_liabilities
-        result.shareholders_equity = row.shareholders_equity
+        result.revenue = row.revenue ?? null
+        result.total_liabilities = row.total_liabilities ?? null
+        result.shareholders_equity = row.shareholders_equity ?? null
       }
 
       return result

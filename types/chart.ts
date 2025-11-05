@@ -7,4 +7,5 @@ export type ChartConfig = {
   categories: string[] // Array of x-axis labels (years, dates, etc.)
   yAxisLabel: string // e.g., "Revenue ($B)"
   xAxisLabel: string // e.g., "Year"
+  color?: string // Optional custom series color
 }
