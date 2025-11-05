@@ -76,13 +76,13 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900">Recent Queries</h2>
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Recent Queries</h2>
         {queries.length > 0 && (
           <button
             onClick={handleClearHistory}
             disabled={clearing}
-            className="text-sm text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
             title="Clear history"
           >
             {clearing ? 'Clearing...' : 'Clear'}
@@ -95,7 +95,7 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
         {queries.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400 mb-3"
+              className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600 mb-3"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -107,22 +107,22 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
-            <p className="text-base text-gray-500">No recent queries</p>
-            <p className="text-sm text-gray-400 mt-1">Your questions will appear here</p>
+            <p className="text-base text-gray-500 dark:text-gray-400">No recent queries</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Your questions will appear here</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
             {queries.map((query) => (
               <button
                 key={query.id}
                 onClick={() => onQueryClick(query.question)}
-                className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors group"
+                className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-base text-gray-900 font-medium line-clamp-2 group-hover:text-blue-600 transition-colors">
+                  <p className="text-base text-gray-900 dark:text-gray-100 font-medium line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                     {truncateText(query.question, 100)}
                   </p>
-                  <span className="text-sm text-gray-400 whitespace-nowrap flex-shrink-0">
+                  <span className="text-sm text-gray-400 dark:text-gray-500 whitespace-nowrap flex-shrink-0">
                     {formatTime(query.created_at)}
                   </span>
                 </div>
@@ -134,8 +134,8 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, refresh
 
       {/* Footer hint */}
       {queries.length > 0 && (
-        <div className="px-4 py-2 border-t border-gray-200 bg-gray-50">
-          <p className="text-sm text-gray-500 text-center">
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
             Click any question to ask it again
           </p>
         </div>
