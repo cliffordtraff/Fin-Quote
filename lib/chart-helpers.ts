@@ -98,17 +98,6 @@ export function generateFinancialChart(
   const isDebtToAssetsCalculation = hasAssets && metric === 'total_liabilities' && userAskedForDebtRatio
   const isAssetTurnover = hasRevenue && metric === 'total_assets' && userAskedForTurnover
 
-  // Sort by year ascending
-  const sortedData = [...data].sort((a, b) => a.year - b.year)
-
-  // Filter out any invalid/null values
-  const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
-
-  if (validData.length === 0) return null
-
-  // Extract years
-  const categories = validData.map((d) => d.year.toString())
-
   // Calculate values based on type
   let values: number[]
   let yAxisLabel: string
