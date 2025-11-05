@@ -171,6 +171,9 @@ export default function AskPage() {
   // Ref for the textarea to enable auto-focus
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Ref for the latest message to enable auto-scroll
+  const latestMessageRef = useRef<HTMLDivElement>(null)
+
   // Generate or retrieve session ID on mount
   useEffect(() => {
     let id = localStorage.getItem('finquote_session_id')
@@ -247,6 +250,13 @@ export default function AskPage() {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Auto-scroll to latest message when conversation history changes
+  useEffect(() => {
+    if (latestMessageRef.current && conversationHistory.length > 0) {
+      latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [conversationHistory.length])
 
   // Streaming version using Server-Sent Events
   const handleSubmitStreaming = async (e: React.FormEvent) => {
@@ -747,11 +757,17 @@ export default function AskPage() {
             )}
 
             {/* Display conversation history */}
-            {conversationHistory.map((message, index) => (
-              <div key={index} className="space-y-4">
-                {message.role === 'user' ? (
-                  // User question
-                  <div className="flex justify-end">
+            {conversationHistory.map((message, index) => {
+              const isLastMessage = index === conversationHistory.length - 1
+              return (
+                <div
+                  key={index}
+                  className="space-y-4"
+                  ref={isLastMessage ? latestMessageRef : null}
+                >
+                  {message.role === 'user' ? (
+                    // User question
+                    <div className="flex justify-end">
                     <div className="bg-blue-600 text-white rounded-2xl px-6 py-4 max-w-3xl">
                       <p className="text-xl">{message.content}</p>
                     </div>
@@ -778,9 +794,10 @@ export default function AskPage() {
                       />
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              )
+            })}
 
             {/* Show current streaming answer (text only - chart appears when complete) */}
             {loading && answer && (
