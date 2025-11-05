@@ -1,0 +1,45 @@
+name: Daily Data Update
+
+# When to run this workflow
+on:
+  schedule:
+    # Run every day at 2am UTC (adjust time as needed)
+    - cron: '0 2 * * *'
+
+  # Also allow manual triggering from GitHub UI
+  workflow_dispatch:
+
+jobs:
+  update-financial-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code from your repo
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Run the data fetch script
+      - name: Fetch AAPL financial data
+        run: npx tsx scripts/fetch-aapl-data.ts
+        env:
+          # These come from GitHub Secrets (we'll add them next)
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+
+      # 5. Run the SEC filings fetch (optional, can comment out if not needed)
+      - name: Fetch SEC filings
+        run: npx tsx scripts/fetch-sec-filings.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
