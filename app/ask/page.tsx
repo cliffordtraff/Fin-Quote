@@ -299,6 +299,7 @@ export default function AskPage() {
       let streamedAnswer = ''
       let receivedData: any = null
       let receivedChart: any = null
+      let receivedFollowUpQuestions: string[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -345,6 +346,7 @@ export default function AskPage() {
               console.log('📥 Received followup event:', data)
               if (data.questions && Array.isArray(data.questions)) {
                 console.log('✅ Setting follow-up questions:', data.questions)
+                receivedFollowUpQuestions = data.questions
                 setFollowUpQuestions(data.questions)
               } else {
                 console.log('⚠️ Invalid follow-up data structure:', data)
@@ -372,6 +374,8 @@ export default function AskPage() {
           role: 'assistant',
           content: streamedAnswer,
           timestamp: new Date().toISOString(),
+          chartConfig: receivedChart,
+          followUpQuestions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
         }
 
         // Add only assistant message (user message was already added at the start)
@@ -753,9 +757,26 @@ export default function AskPage() {
                     </div>
                   </div>
                 ) : (
-                  // Assistant answer
-                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
+                  // Assistant answer with chart and follow-up questions
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                      <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
+                    </div>
+
+                    {/* Chart for this message */}
+                    {message.chartConfig && (
+                      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
+                        <FinancialChart config={message.chartConfig} />
+                      </div>
+                    )}
+
+                    {/* Follow-up questions for this message */}
+                    {message.followUpQuestions && message.followUpQuestions.length > 0 && (
+                      <FollowUpQuestions
+                        questions={message.followUpQuestions}
+                        onQuestionClick={handleFollowUpQuestionClick}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -763,12 +784,29 @@ export default function AskPage() {
 
             {/* Show current streaming answer */}
             {loading && answer && (
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+              <div className="space-y-4">
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+                </div>
+
+                {/* Show chart during streaming if available */}
+                {chartConfig && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
+                    <FinancialChart config={chartConfig} />
+                  </div>
+                )}
+
+                {/* Show follow-up questions during streaming if available */}
+                {followUpQuestions.length > 0 && (
+                  <FollowUpQuestions
+                    questions={followUpQuestions}
+                    onQuestionClick={handleFollowUpQuestionClick}
+                  />
+                )}
               </div>
             )}
 
-            {/* Chart, feedback, and follow-up questions (shown only when not loading) */}
+            {/* Copy and feedback section (shown only when not loading and has answer) */}
             {!loading && answer && (
               <div className="space-y-6">
                 {/* Copy, feedback and comment section */}
@@ -875,19 +913,6 @@ export default function AskPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Chart Section - Middle */}
-                {chartConfig && (
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
-                    <FinancialChart config={chartConfig} />
-                  </div>
-                )}
-
-                {/* Follow-up Questions - Bottom */}
-                <FollowUpQuestions
-                  questions={followUpQuestions}
-                  onQuestionClick={handleFollowUpQuestionClick}
-                />
               </div>
             )}
 
