@@ -77,8 +77,8 @@ export type CalculatedFinancialMetric =
 // Combined type for all supported metrics
 export type FinancialMetric = RawFinancialMetric | CalculatedFinancialMetric
 
-// Helper to check if a metric is calculated
-export function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinancialMetric {
+// Helper to check if a metric is calculated (internal use only)
+function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinancialMetric {
   const calculatedMetrics: CalculatedFinancialMetric[] = [
     'debt_to_equity_ratio',
     'gross_margin',
