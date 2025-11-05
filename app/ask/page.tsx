@@ -271,6 +271,9 @@ export default function AskPage() {
       timestamp: new Date().toISOString(),
     }
 
+    // Add user message to conversation history immediately
+    setConversationHistory(prev => [...prev, userMessage])
+
     try {
       const response = await fetch('/api/ask', {
         method: 'POST',
@@ -371,7 +374,8 @@ export default function AskPage() {
           timestamp: new Date().toISOString(),
         }
 
-        setConversationHistory([...conversationHistory, userMessage, assistantMessage])
+        // Add only assistant message (user message was already added at the start)
+        setConversationHistory(prev => [...prev, assistantMessage])
         // Answer is already displayed during streaming - don't replace it!
 
         // Reset feedback state
@@ -738,33 +742,55 @@ export default function AskPage() {
               </div>
             )}
 
-            {answer && (
-              <div className="space-y-6 max-w-5xl mx-auto">
-                {/* Answer Section - Top */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                  <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Answer</h2>
-
-                  {/* Answer text with copy button */}
-                  <div className="relative mb-6 pb-10">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-xl pr-12">{answer}</p>
-
-                    {/* Copy button - bottom right of answer text */}
-                    <button
-                      onClick={handleCopyAnswer}
-                      className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
-                      title={copied ? 'Copied!' : 'Copy answer'}
-                    >
-                      {copied ? (
-                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      )}
-                    </button>
+            {/* Display conversation history */}
+            {conversationHistory.map((message, index) => (
+              <div key={index} className="space-y-4">
+                {message.role === 'user' ? (
+                  // User question
+                  <div className="flex justify-end">
+                    <div className="bg-blue-600 text-white rounded-2xl px-6 py-4 max-w-3xl">
+                      <p className="text-xl">{message.content}</p>
+                    </div>
                   </div>
+                ) : (
+                  // Assistant answer
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Show current streaming answer */}
+            {loading && answer && (
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+              </div>
+            )}
+
+            {/* Chart, feedback, and follow-up questions (shown only when not loading) */}
+            {!loading && answer && (
+              <div className="space-y-6">
+                {/* Copy, feedback and comment section */}
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                    {/* Copy button */}
+                    <div className="relative mb-6">
+                      <button
+                        onClick={handleCopyAnswer}
+                        className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
+                        title={copied ? 'Copied!' : 'Copy answer'}
+                      >
+                        {copied ? (
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
 
                   {/* Feedback Section */}
                   <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
