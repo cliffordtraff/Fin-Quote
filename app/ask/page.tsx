@@ -10,6 +10,7 @@ import AuthModal from '@/components/AuthModal'
 import UserMenu from '@/components/UserMenu'
 import FollowUpQuestions from '@/components/FollowUpQuestions'
 import FinancialsModal from '@/components/FinancialsModal'
+import ThemeToggle from '@/components/ThemeToggle'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { Database } from '@/lib/database.types'
@@ -659,10 +660,10 @@ export default function AskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar - fixed position overlay */}
       <div
-        className={`hidden lg:block fixed left-0 top-0 h-screen w-80 xl:w-96 border-r border-gray-200 bg-white z-40 transition-transform duration-300 ${
+        className={`hidden lg:block fixed left-0 top-0 h-screen w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-40 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -677,17 +678,17 @@ export default function AskPage() {
       {/* Sidebar Toggle Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-50 bg-white border border-gray-300 rounded-r-lg px-2 py-4 hover:bg-gray-100 transition-all shadow-lg ${
+        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-lg ${
           sidebarOpen ? 'xl:left-96 left-80' : 'left-0'
         }`}
         title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
       >
         {sidebarOpen ? (
-          <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         ) : (
-          <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         )}
@@ -700,23 +701,24 @@ export default function AskPage() {
             <div className="mb-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h1 className="text-4xl font-bold mb-2">Fin Quote</h1>
+                  <h1 className="text-4xl font-bold mb-2 text-gray-900 dark:text-gray-100">Fin Quote</h1>
                 </div>
                 <div className="flex items-center gap-3">
                   {conversationHistory.length > 0 && (
                     <button
                       onClick={handleClearConversation}
-                      className="px-4 py-2 text-base bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                      className="px-4 py-2 text-base bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                     >
                       Clear Conversation
                     </button>
                   )}
                   <button
                     onClick={() => setShowFinancialsModal(true)}
-                    className="px-4 py-2 text-base bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="px-4 py-2 text-base bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
                     Financials
                   </button>
+                  <ThemeToggle />
                   {user ? (
                     <UserMenu user={user} />
                   ) : (
@@ -730,7 +732,7 @@ export default function AskPage() {
                 </div>
               </div>
               {!user && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-base text-blue-800">
+                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-base text-blue-800 dark:text-blue-200">
                   <p>
                     <span className="font-medium">Tip:</span> Sign up to save your query history across all devices.
                   </p>
@@ -739,8 +741,8 @@ export default function AskPage() {
             </div>
 
             <form onSubmit={handleSubmitStreaming}>
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <label htmlFor="question" className="block text-lg font-medium mb-2">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <label htmlFor="question" className="block text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
                   Your Question
                 </label>
                 <textarea
@@ -756,7 +758,7 @@ export default function AskPage() {
                     }
                   }}
                   placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-lg"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-lg"
                   rows={3}
                   disabled={loading}
                 />
@@ -831,17 +833,17 @@ export default function AskPage() {
             {answer && (
               <div className="space-y-6 max-w-5xl mx-auto">
                 {/* Answer Section - Top */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-2xl font-semibold mb-4">Answer</h2>
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Answer</h2>
 
                   {/* Answer text with copy button */}
                   <div className="relative mb-6 pb-10">
-                    <p className="text-gray-800 leading-relaxed text-xl pr-12">{answer}</p>
+                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-xl pr-12">{answer}</p>
 
                     {/* Copy button - bottom right of answer text */}
                     <button
                       onClick={handleCopyAnswer}
-                      className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-800"
+                      className="absolute bottom-0 right-0 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
                       title={copied ? 'Copied!' : 'Copy answer'}
                     >
                       {copied ? (
@@ -857,9 +859,9 @@ export default function AskPage() {
                   </div>
 
                   {/* Feedback Section */}
-                  <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-4">
-                      <p className="text-base text-gray-600">Was this answer helpful?</p>
+                      <p className="text-base text-gray-600 dark:text-gray-400">Was this answer helpful?</p>
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleFeedbackClick('thumbs_up')}
