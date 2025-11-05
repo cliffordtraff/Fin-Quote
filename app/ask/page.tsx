@@ -140,7 +140,9 @@ const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): st
   return `${firstSentence} ${secondSentence}`
 }
 
-const SCROLL_BUFFER_PX = 24
+const SCROLL_BUFFER_PX = 8  // Minimal gap between question and header
+const HEADER_HEIGHT_PX = 80
+const EXTRA_SCROLL_UP = 50  // Extra pixels to scroll up to hide previous content completely
 
 export default function AskPage() {
   const [question, setQuestion] = useState('')
@@ -185,6 +187,9 @@ export default function AskPage() {
 
   // Ref for the scrollable container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // Ref for tracking the previous message's follow-up questions (to measure height for scroll)
+  const previousFollowUpRef = useRef<HTMLDivElement>(null)
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -304,31 +309,63 @@ export default function AskPage() {
     window.localStorage.setItem('finquote_flow_filter', flowFilter)
   }, [flowFilter])
 
+  // Track if we've already scrolled for this user message
+  const hasScrolledForMessage = useRef<number>(-1)
+
   // Auto-scroll to latest USER message when conversation history changes
-  // Only scroll when user asks a question, not when answer appears
+  // Step 2: Scroll immediately after user message is posted
+  // Using useEffect to run after DOM is fully painted
   useEffect(() => {
     if (conversationHistory.length === 0) return
 
     const lastMessage = conversationHistory[conversationHistory.length - 1]
+    // Only scroll when user message is added (question is posted)
     if (lastMessage.role !== 'user') return
 
-    // Use setTimeout to ensure DOM has fully rendered
-    setTimeout(() => {
-      if (!latestMessageRef.current) return
+    // Only scroll once per user message
+    if (hasScrolledForMessage.current === conversationHistory.length) return
+    hasScrolledForMessage.current = conversationHistory.length
 
-      // Get the absolute position of the message relative to the viewport
-      const rect = latestMessageRef.current.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+    // Scroll immediately after question is posted
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!scrollContainerRef.current) return
 
-      // Calculate target position (message position + current scroll - desired offset from top)
-      const targetPosition = rect.top + scrollTop - 100
+        // Get all message containers
+        const messageContainers = scrollContainerRef.current.querySelectorAll('.space-y-6 > .space-y-4')
 
-      // Scroll the WINDOW, not the container
-      window.scrollTo({
-        top: targetPosition,
-        behavior: 'instant'
+        // The user message is the last container
+        const userMessageIndex = conversationHistory.length - 1
+        const userMessageElement = messageContainers[userMessageIndex] as HTMLElement
+
+        if (!userMessageElement) {
+          console.warn('Could not find user message element')
+          return
+        }
+
+        // Scroll the user message to the top of the viewport
+        // block: 'start' aligns the element with the top of the scrolling area
+        userMessageElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+
+        // After scrollIntoView, adjust for the fixed header by scrolling up a bit more
+        setTimeout(() => {
+          if (scrollContainerRef.current) {
+            const currentScroll = scrollContainerRef.current.scrollTop
+            const adjustment = HEADER_HEIGHT_PX + SCROLL_BUFFER_PX
+
+            scrollContainerRef.current.scrollTo({
+              top: Math.max(currentScroll - adjustment, 0),
+              behavior: 'smooth',
+            })
+
+            console.log('🎯 Scrolled to new user question with header adjustment')
+          }
+        }, 300) // Wait for initial scrollIntoView to complete
       })
-    }, 100)
+    })
   }, [conversationHistory.length])
 
   // Streaming version using Server-Sent Events
@@ -895,11 +932,15 @@ export default function AskPage() {
                     )}
 
                     {/* Follow-up questions for this message */}
+                    {/* Only show follow-ups for the most recent assistant message */}
                     {message.followUpQuestions && message.followUpQuestions.length > 0 && (
-                      <FollowUpQuestions
-                        questions={message.followUpQuestions}
-                        onQuestionClick={handleFollowUpQuestionClick}
-                      />
+                      <div className={index < conversationHistory.length - 1 ? 'hidden' : ''}>
+                        <FollowUpQuestions
+                          ref={index === conversationHistory.length - 2 ? previousFollowUpRef : null}
+                          questions={message.followUpQuestions}
+                          onQuestionClick={handleFollowUpQuestionClick}
+                        />
+                      </div>
                     )}
                   </div>
                   )}

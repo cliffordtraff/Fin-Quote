@@ -46,7 +46,8 @@ export const TOOL_MENU: ToolDefinition[] = [
   },
 ]
 
-export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
+// Static instructions that will be cached by OpenAI
+const TOOL_SELECTION_STATIC_PROMPT = `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
 
@@ -204,8 +205,6 @@ TOOL SELECTION LOGIC:
 3. List filings? → getRecentFilings
 4. Qualitative content search? → searchFilings
 
-User question: "${userQuestion}"
-
 Return ONLY JSON - examples:
 
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
@@ -224,6 +223,23 @@ A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","lim
 
 Q: "What's the D/E ratio in 2024?"
 A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":20}}`
+
+// New function that returns structured messages for caching
+export const buildToolSelectionMessages = (userQuestion: string) => [
+  {
+    role: 'system' as const,
+    content: TOOL_SELECTION_STATIC_PROMPT
+  },
+  {
+    role: 'user' as const,
+    content: `User question: "${userQuestion}"`
+  }
+]
+
+// Legacy function - kept for backwards compatibility
+export const buildToolSelectionPrompt = (userQuestion: string) => `${TOOL_SELECTION_STATIC_PROMPT}
+
+User question: "${userQuestion}"`
 
 export const buildFollowUpQuestionsPrompt = (
   userQuestion: string,

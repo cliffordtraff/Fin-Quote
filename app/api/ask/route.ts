@@ -5,7 +5,7 @@ import { getAaplFinancialsByMetric, FinancialMetric } from '@/app/actions/financ
 import { getAaplPrices, PriceRange } from '@/app/actions/prices'
 import { getRecentFilings } from '@/app/actions/filings'
 import { searchFilings } from '@/app/actions/search-filings'
-import { buildToolSelectionPrompt, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
+import { buildToolSelectionMessages, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
 import { generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer } from '@/lib/validators'
 import { shouldRegenerateAnswer, determineRegenerationAction, buildRegenerationPrompt } from '@/lib/regeneration'
@@ -94,22 +94,17 @@ export async function POST(req: NextRequest) {
           sendEvent('status', { step: 'selecting', message: 'Analyzing your question...' })
 
           const toolSelectionStart = Date.now()
-          const selectionPrompt = buildToolSelectionPrompt(question)
 
+          // Build messages with caching-friendly structure:
+          // [system: static prompt (cached)] + [conversation history] + [user: question]
+          const baseMessages = buildToolSelectionMessages(question)
           const selectionMessages: SimpleMessage[] = [
-            {
-              role: 'system',
-              content:
-                'You are Fin Quote routing assistant. Your ONLY job is to pick exactly one tool and respond with valid JSON matching {"tool": string, "args": object}. Do not add explanations, comments, or Markdown.',
-            },
+            baseMessages[0], // system message with static prompt (will be cached by OpenAI)
             ...conversationHistory.slice(-10).map((msg: any) => ({
               role: msg.role as 'user' | 'assistant',
               content: msg.content,
             })),
-            {
-              role: 'user',
-              content: selectionPrompt,
-            },
+            baseMessages[1], // user message with just the question
           ]
 
           const selectionResponse = await openai.responses.create({
