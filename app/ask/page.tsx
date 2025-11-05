@@ -742,9 +742,6 @@ export default function AskPage() {
 
             <form onSubmit={handleSubmitStreaming}>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <label htmlFor="question" className="block text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-                  Your Question
-                </label>
                 <textarea
                   ref={textareaRef}
                   id="question"
