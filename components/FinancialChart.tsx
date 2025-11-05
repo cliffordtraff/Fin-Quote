@@ -170,7 +170,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       backgroundColor: isDark ? '#111827' : 'transparent', // Dark: gray-900, Light: transparent
       // Minimize whitespace in fullscreen while keeping axes readable
       spacingTop: isFullscreen ? 16 : 36,
-      spacingBottom: isFullscreen ? 8 : 48,
+      spacingBottom: isFullscreen ? 8 : 16,
       spacingLeft: 24,
       spacingRight: 24,
       animation: isInitialRender ? false : {
