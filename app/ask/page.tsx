@@ -898,7 +898,7 @@ export default function AskPage() {
       <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-6">
         <div className="max-w-6xl mx-auto">
           <form onSubmit={handleSubmitStreaming}>
-            <div className="relative flex items-center gap-4 bg-gray-100 dark:bg-gray-900 rounded-full px-6 py-4 border border-gray-300 dark:border-gray-600">
+            <div className="relative flex items-center gap-4 bg-blue-50 dark:bg-blue-950 rounded-full px-6 py-4 border border-blue-200 dark:border-blue-800">
               {/* Input field */}
               <input
                 ref={textareaRef as any}
