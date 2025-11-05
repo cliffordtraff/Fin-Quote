@@ -12,15 +12,15 @@ export default function FollowUpQuestions({ questions, onQuestionClick }: Follow
 
   return (
     <div className="mt-6 space-y-4">
-      <p className="text-xl font-medium text-gray-700">
+      <p className="text-xl font-medium text-gray-700 dark:text-gray-300">
         Suggested follow-up questions:
       </p>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-2">
         {questions.map((question, index) => (
           <button
             key={index}
             onClick={() => onQuestionClick(question)}
-            className="inline-flex items-center px-5 py-3 rounded-full text-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow-md"
+            className="text-left px-0 py-2 text-lg text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline transition-colors duration-200"
           >
             {question}
           </button>
