@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Highcharts from 'highcharts'
+import { useTheme } from '@/components/ThemeProvider'
 
 // Critical: Dynamic import with ssr: false to prevent Next.js hydration errors
 // Highcharts needs the browser DOM and can't render on the server
@@ -24,6 +25,8 @@ interface FinancialChartProps {
 }
 
 export default function FinancialChart({ config }: FinancialChartProps) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenSize, setFullscreenSize] = useState<{ width: number; height: number } | null>(null)
@@ -150,8 +153,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[800px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
-        <p className="text-gray-400">Loading chart...</p>
+      <div className="w-full h-[800px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+        <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
   }
@@ -164,7 +167,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         ? fullscreenSize?.height ?? '100%'
         : 800, // Extra large: 800px for maximum visibility, 100%/viewport in fullscreen
       width: isFullscreen ? fullscreenSize?.width ?? undefined : undefined, // Full width in fullscreen mode
-      backgroundColor: 'transparent',
+      backgroundColor: isDark ? '#111827' : 'transparent', // Dark: gray-900, Light: transparent
       // Minimize whitespace in fullscreen while keeping axes readable
       spacingTop: isFullscreen ? 16 : 36,
       spacingBottom: isFullscreen ? 8 : 48,
@@ -182,7 +185,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       style: {
         fontSize: '28px',
         fontWeight: '600',
-        color: '#1f2937', // gray-800
+        color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
       },
     },
     xAxis: {
@@ -192,13 +195,13 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         style: {
           fontSize: '18px',
           fontWeight: '500',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       labels: {
         style: {
           fontSize: '16px',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
         formatter: function () {
           // Explicitly return the category string (year), not the index
@@ -206,6 +209,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
       },
       gridLineWidth: 0,
+      lineColor: isDark ? '#374151' : '#e5e7eb', // Dark: gray-700, Light: gray-200
     },
     yAxis: {
       title: {
@@ -213,7 +217,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         style: {
           fontSize: '18px',
           fontWeight: '500',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       minPadding: 0,
@@ -221,7 +225,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       labels: {
         style: {
           fontSize: '16px',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
         y: isFullscreen ? -4 : 0,
         formatter: function () {
@@ -229,7 +233,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           return this.value.toLocaleString('en-US')
         },
       },
-      gridLineColor: '#f3f4f6', // gray-100
+      gridLineColor: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
       gridLineWidth: 1,
     },
     legend: {
@@ -251,7 +255,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           style: {
             fontSize: '16px',
             fontWeight: '600',
-            color: '#1f2937', // gray-800
+            color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
             textOutline: 'none',
           },
         },
@@ -275,7 +279,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           radius: 4, // Medium-sized dots
           fillColor: '#3b82f6', // Blue
           lineWidth: 2,
-          lineColor: '#ffffff', // White border around dots
+          lineColor: isDark ? '#111827' : '#ffffff', // Dark: gray-900, Light: white border around dots
           states: {
             hover: {
               radius: 6, // Slightly larger on hover
@@ -319,18 +323,18 @@ export default function FinancialChart({ config }: FinancialChartProps) {
             'downloadXLS',
           ],
           theme: {
-            fill: '#f3f4f6', // gray-100
-            stroke: '#e5e7eb', // gray-200
+            fill: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
+            stroke: isDark ? '#4b5563' : '#e5e7eb', // Dark: gray-600, Light: gray-200
             states: {
               hover: {
-                fill: '#e5e7eb', // gray-200
+                fill: isDark ? '#4b5563' : '#e5e7eb', // Dark: gray-600, Light: gray-200
               },
               select: {
-                fill: '#d1d5db', // gray-300
+                fill: isDark ? '#6b7280' : '#d1d5db', // Dark: gray-500, Light: gray-300
               },
             },
           },
-          symbolStroke: '#6b7280', // gray-500
+          symbolStroke: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       filename: config.title.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
@@ -353,8 +357,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       },
     },
     tooltip: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e7eb', // gray-200
+      backgroundColor: isDark ? '#1f2937' : '#ffffff', // Dark: gray-800, Light: white
+      borderColor: isDark ? '#374151' : '#e5e7eb', // Dark: gray-700, Light: gray-200
       borderRadius: 8,
       borderWidth: 1,
       shadow: {
@@ -366,10 +370,10 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       },
       style: {
         fontSize: '16px',
-        color: '#1f2937', // gray-800
+        color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
       },
-      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px;">{point.key}</div>',
-      pointFormat: '<div style="color: #6b7280; font-size: 16px;">{series.name}: <span style="font-weight: 600; color: #1f2937;">{point.y}</span></div>',
+      headerFormat: `<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px; color: ${isDark ? '#f9fafb' : '#1f2937'};">{point.key}</div>`,
+      pointFormat: `<div style="color: ${isDark ? '#9ca3af' : '#6b7280'}; font-size: 16px;">{series.name}: <span style="font-weight: 600; color: ${isDark ? '#f9fafb' : '#1f2937'};">{point.y}</span></div>`,
       useHTML: true,
     },
     // Responsive behavior
@@ -419,7 +423,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   return (
     <div
       ref={chartContainerRef}
-      className={`w-full relative ${isFullscreen ? 'bg-white flex flex-col h-full' : ''}`}
+      className={`w-full relative ${isFullscreen ? 'bg-white dark:bg-gray-900 flex flex-col h-full' : ''}`}
       style={
         isFullscreen
           ? {
@@ -434,13 +438,13 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-4 left-4 z-10 p-2 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (
           // Exit fullscreen icon
           <svg
-            className="w-5 h-5 text-gray-700"
+            className="w-5 h-5 text-gray-700 dark:text-gray-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -455,7 +459,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         ) : (
           // Enter fullscreen icon
           <svg
-            className="w-5 h-5 text-gray-700"
+            className="w-5 h-5 text-gray-700 dark:text-gray-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -503,7 +507,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           <div className="flex justify-between items-center mb-2">
             <button
               onClick={() => setShowDataTable(!showDataTable)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
             >
               {showDataTable ? (
                 <>
@@ -524,7 +528,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
             {showDataTable && (
               <button
                 onClick={copyToClipboard}
-                className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -540,24 +544,24 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           </div>
 
           {showDataTable && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-100">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-100 dark:bg-gray-900">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         {config.xAxisLabel}
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         {config.yAxisLabel}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {config.categories.map((category, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{category}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right font-medium">
                           {config.data[index].toLocaleString('en-US')}
                         </td>
                       </tr>
