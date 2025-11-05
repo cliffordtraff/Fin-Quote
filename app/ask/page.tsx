@@ -660,7 +660,7 @@ export default function AskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
         className={`hidden lg:block fixed left-0 top-0 h-screen w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-40 transition-transform duration-300 ${
@@ -694,140 +694,43 @@ export default function AskPage() {
         )}
       </button>
 
-      {/* Main content - with fixed left margin to reserve space for sidebar */}
-      <div className="lg:ml-80 xl:ml-96 p-8">
-          {/* Header and Question Form - Centered with max width */}
-          <div className="max-w-5xl mx-auto mb-8">
-            <div className="mb-8">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h1 className="text-4xl font-bold mb-2 text-gray-900 dark:text-gray-100">Fin Quote</h1>
-                </div>
-                <div className="flex items-center gap-3">
-                  {conversationHistory.length > 0 && (
-                    <button
-                      onClick={handleClearConversation}
-                      className="px-4 py-2 text-base bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      Clear Conversation
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowFinancialsModal(true)}
-                    className="px-4 py-2 text-base bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    Financials
-                  </button>
-                  <ThemeToggle />
-                  {user ? (
-                    <UserMenu user={user} />
-                  ) : (
-                    <button
-                      onClick={() => setShowAuthModal(true)}
-                      className="px-4 py-2 text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Login / Sign Up
-                    </button>
-                  )}
-                </div>
-              </div>
-              {!user && (
-                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-base text-blue-800 dark:text-blue-200">
-                  <p>
-                    <span className="font-medium">Tip:</span> Sign up to save your query history across all devices.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleSubmitStreaming}>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="relative">
-                  <textarea
-                    ref={textareaRef}
-                    id="question"
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Submit on Enter (but allow Shift+Enter for new lines)
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSubmitStreaming(e as any)
-                      }
-                    }}
-                    placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
-                    className="w-full px-4 py-3 pr-14 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xl"
-                    rows={3}
-                    disabled={loading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading || !question.trim()}
-                    className="absolute bottom-3 right-3 w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                    title="Send message"
-                  >
-                    {loading ? (
-                      <div className="flex gap-0.5">
-                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                      </div>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-
-                {/* Loading Status */}
-                {loading && (
-                  <div className="mt-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                        {loadingStep === 'analyzing' && 'Step 1/6: Analyzing'}
-                        {loadingStep === 'selecting' && 'Step 2/6: Selecting Tool'}
-                        {loadingStep === 'calling' && 'Step 3/6: Calling API'}
-                        {loadingStep === 'fetching' && 'Step 4/6: Fetching Data'}
-                        {loadingStep === 'calculating' && 'Step 5/6: Calculating'}
-                        {loadingStep === 'generating' && 'Step 6/6: Generating Answer'}
-                      </span>
-                    </div>
-                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">
-                      {loadingMessage}
-                    </span>
-                  </div>
-                )}
-
-                {/* Example Query Chips */}
-                {!loading && !answer && (
-                  <div className="mt-3">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Try these:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        "What's AAPL gross margin?",
-                        "Show me AAPL ROE trend",
-                        "AAPL debt to equity ratio",
-                        "AAPL revenue last 5 years"
-                      ].map((example, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => handleExampleClick(example)}
-                          className="px-3 py-1.5 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800"
-                        >
-                          {example}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </form>
+      {/* Header - fixed at top */}
+      <div className="lg:ml-80 xl:ml-96 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
+          <div className="flex items-center gap-3">
+            {conversationHistory.length > 0 && (
+              <button
+                onClick={handleClearConversation}
+                className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => setShowFinancialsModal(true)}
+              className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              Financials
+            </button>
+            <ThemeToggle />
+            {user ? (
+              <UserMenu user={user} />
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Login
+              </button>
+            )}
           </div>
+        </div>
+      </div>
 
-          {/* Answer and Chart Section - Full width */}
-          <div className="w-full px-4">
+      {/* Main scrollable content area - conversation */}
+      <div className="lg:ml-80 xl:ml-96 flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-6 space-y-6">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
                 <p className="font-medium text-lg">Error</p>
@@ -962,6 +865,88 @@ export default function AskPage() {
               </div>
             )}
 
+        </div>
+      </div>
+
+      {/* Fixed bottom input bar */}
+      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+        <div className="max-w-4xl mx-auto">
+          <form onSubmit={handleSubmitStreaming}>
+            <div className="relative flex items-center gap-3 bg-gray-100 dark:bg-gray-900 rounded-full px-4 py-3 border border-gray-300 dark:border-gray-600">
+              {/* Plus button */}
+              <button
+                type="button"
+                className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                title="Attach"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+
+              {/* Input field */}
+              <input
+                ref={textareaRef as any}
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSubmitStreaming(e as any)
+                  }
+                }}
+                placeholder="Message Fin Quote"
+                className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-lg"
+                disabled={loading}
+              />
+
+              {/* Microphone button */}
+              <button
+                type="button"
+                className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                title="Voice input"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={loading || !question.trim()}
+                className="flex-shrink-0 w-9 h-9 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                title="Send message"
+              >
+                {loading ? (
+                  <div className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* Loading status below input */}
+            {loading && (
+              <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-semibold">
+                  {loadingStep === 'analyzing' && 'Analyzing...'}
+                  {loadingStep === 'selecting' && 'Selecting Tool...'}
+                  {loadingStep === 'calling' && 'Calling API...'}
+                  {loadingStep === 'fetching' && 'Fetching Data...'}
+                  {loadingStep === 'calculating' && 'Calculating...'}
+                  {loadingStep === 'generating' && 'Generating Answer...'}
+                </span>
+              </div>
+            )}
+          </form>
         </div>
       </div>
 
