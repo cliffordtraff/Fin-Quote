@@ -742,28 +742,67 @@ export default function AskPage() {
 
             <form onSubmit={handleSubmitStreaming}>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <textarea
-                  ref={textareaRef}
-                  id="question"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Submit on Enter (but allow Shift+Enter for new lines)
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSubmitStreaming(e as any)
-                    }
-                  }}
-                  placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xl"
-                  rows={3}
-                  disabled={loading}
-                />
+                <div className="relative">
+                  <textarea
+                    ref={textareaRef}
+                    id="question"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Submit on Enter (but allow Shift+Enter for new lines)
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSubmitStreaming(e as any)
+                      }
+                    }}
+                    placeholder="e.g., What is AAPL's revenue trend over the last 4 years?"
+                    className="w-full px-4 py-3 pr-14 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xl"
+                    rows={3}
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !question.trim()}
+                    className="absolute bottom-3 right-3 w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                    title="Send message"
+                  >
+                    {loading ? (
+                      <div className="flex gap-0.5">
+                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {/* Loading Status */}
+                {loading && (
+                  <div className="mt-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        {loadingStep === 'analyzing' && 'Step 1/6: Analyzing'}
+                        {loadingStep === 'selecting' && 'Step 2/6: Selecting Tool'}
+                        {loadingStep === 'calling' && 'Step 3/6: Calling API'}
+                        {loadingStep === 'fetching' && 'Step 4/6: Fetching Data'}
+                        {loadingStep === 'calculating' && 'Step 5/6: Calculating'}
+                        {loadingStep === 'generating' && 'Step 6/6: Generating Answer'}
+                      </span>
+                    </div>
+                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">
+                      {loadingMessage}
+                    </span>
+                  </div>
+                )}
 
                 {/* Example Query Chips */}
                 {!loading && !answer && (
                   <div className="mt-3">
-                    <p className="text-sm text-gray-600 mb-2">Try these:</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Try these:</p>
                     <div className="flex flex-wrap gap-2">
                       {[
                         "What's AAPL gross margin?",
@@ -775,7 +814,7 @@ export default function AskPage() {
                           key={index}
                           type="button"
                           onClick={() => handleExampleClick(example)}
-                          className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors border border-blue-200"
+                          className="px-3 py-1.5 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800"
                         >
                           {example}
                         </button>
@@ -783,37 +822,6 @@ export default function AskPage() {
                     </div>
                   </div>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="mt-4 w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
-                >
-                  {loading ? (
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex gap-1">
-                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                          <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                        </div>
-                        <span className="font-semibold">
-                          {loadingStep === 'analyzing' && 'Step 1/6: Analyzing'}
-                          {loadingStep === 'selecting' && 'Step 2/6: Selecting Tool'}
-                          {loadingStep === 'calling' && 'Step 3/6: Calling API'}
-                          {loadingStep === 'fetching' && 'Step 4/6: Fetching Data'}
-                          {loadingStep === 'calculating' && 'Step 5/6: Calculating'}
-                          {loadingStep === 'generating' && 'Step 6/6: Generating Answer'}
-                        </span>
-                      </div>
-                      <span className="text-sm font-mono text-blue-100">
-                        {loadingMessage}
-                      </span>
-                    </div>
-                  ) : (
-                    'Ask'
-                  )}
-                </button>
               </div>
             </form>
           </div>
@@ -954,18 +962,6 @@ export default function AskPage() {
               </div>
             )}
 
-            {!answer && !error && !loading && (
-              <div className="text-center text-gray-500 py-12">
-                <p className="text-lg">Ask a question to get started</p>
-                <p className="text-base mt-2">Try asking about:</p>
-                <ul className="text-base mt-2 space-y-1">
-                  <li>"How is AAPL's revenue trending over the last 5 years?"</li>
-                  <li>"What's AAPL's stock price trend over the last 30 days?"</li>
-                  <li>"Show me AAPL's last 3 quarterly filings"</li>
-                  <li>"What supply chain risks did AAPL mention in their filings?"</li>
-                </ul>
-              </div>
-            )}
         </div>
       </div>
 
