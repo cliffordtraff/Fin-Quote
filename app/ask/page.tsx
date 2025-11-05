@@ -290,6 +290,9 @@ export default function AskPage() {
     // Add user message to conversation history immediately
     setConversationHistory(prev => [...prev, userMessage])
 
+    // Clear the input box immediately
+    setQuestion('')
+
     try {
       const response = await fetch('/api/ask', {
         method: 'POST',
@@ -412,7 +415,6 @@ export default function AskPage() {
       setLoading(false)
       setLoadingStep(null)
       setLoadingMessage('')
-      setQuestion('')
     }
   }
 
