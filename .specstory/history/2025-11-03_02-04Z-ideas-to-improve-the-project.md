@@ -2701,7 +2701,15 @@ Recommended hybrid for Fin Quote
   - If they ask for a variant/custom ratio → use the calculator directly and cache the result.
 - Invalidation/recompute:
   - Trigger recompute when primitives ingest or restatements arrive; otherwise run a nightly job.
-  - Version formulas (formula_version)
+  - Version formulas (formula_version) so you can track definition changes over time.
+
+Important: This still fixes the “lossy translation” issue
+- Don’t ask the LLM for a single metric string. Ask for a plan (concept + formula + period).
+- If the plan maps to a precomputed ratio, read it. Otherwise, use the calculator to compute from primitives.
+
+Rule of thumb
+- If you have a small, stable set of ratios users ask for repeatedly → precompute them.
+- If users ask for many variants or you’re still experimenting with definitions → rely more on the calculator + caching.
 
 ---
 
