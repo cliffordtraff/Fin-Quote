@@ -179,6 +179,17 @@ export default function AskPage() {
   // Ref for the scrollable container
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto'
+    // Set height to scrollHeight (content height)
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }, [question])
+
   // Generate or retrieve session ID on mount
   useEffect(() => {
     let id = localStorage.getItem('finquote_session_id')
@@ -740,8 +751,8 @@ export default function AskPage() {
       </button>
 
       {/* Header - fixed at top */}
-      <div className="lg:ml-80 xl:ml-96 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
           <div className="flex items-center gap-3">
             {conversationHistory.length > 0 && (
@@ -949,14 +960,13 @@ export default function AskPage() {
       </div>
 
       {/* Fixed bottom input bar */}
-      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-12">
+      <div className="lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-12 z-50">
         <div className="max-w-6xl mx-auto">
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-slate-800 rounded-full px-6 py-5 border border-blue-300 dark:border-slate-700">
-              {/* Input field */}
-              <input
-                ref={textareaRef as any}
-                type="text"
+              {/* Textarea field */}
+              <textarea
+                ref={textareaRef}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
@@ -966,7 +976,9 @@ export default function AskPage() {
                   }
                 }}
                 placeholder="Ask Anything"
-                className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl"
+                rows={1}
+                className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
+                style={{ height: 'auto' }}
                 disabled={loading}
               />
 
