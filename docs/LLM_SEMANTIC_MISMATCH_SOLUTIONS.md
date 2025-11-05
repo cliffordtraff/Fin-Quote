@@ -1345,6 +1345,38 @@ Don't try to build the perfect system upfront. Ship, learn, improve.
 
 ---
 
+## Recommended Implementation Plan
+
+### Recommended Solution
+
+- Keep Solution 1 (normalization layer) in place as the immediate fix so the LLM can return semantic metric names while the backend adapts them to the raw schema.
+- Use normalization logs to understand real user phrasing and prioritize which calculated metrics deserve native support.
+- Incrementally adopt Solution 2 by introducing typed, server-side calculators for the most common ratios, aligning the API surface with user language.
+
+### Concrete Changes
+
+- Add `/lib/metric-normalizer.ts` with resilient cleanup plus the alias map drawn from observed questions.
+- Invoke `normalizeMetric` before validation in the tool handler, and emit structured logs for every translation.
+- Extend `/app/actions/financials.ts` with `RawFinancialMetric`/`CalculatedFinancialMetric` unions and deterministic calculators for the top ratios (`debt_to_equity_ratio`, `gross_margin`, `roe`, etc.).
+- Refresh prompt/tool documentation (`/lib/tools.ts`, onboarding docs) to advertise newly supported calculated metrics instead of discouraging them.
+- Back the new calculators and the normalization helper with unit tests to lock in formulas and catch breaking changes.
+
+### Step-by-Step Timeline
+
+1. **Day 0–1:** Implement and deploy the normalization helper with verbose logging.
+2. **Week 1:** Review logs, cluster aliases, and pad the mapping with any obvious gaps.
+3. **Week 2–3:** Promote the top 3–5 ratios into native, typed calculators while keeping normalization for the long tail.
+4. **Week 4+:** Iterate—migrate additional ratios, trim redundant prompt guidance, and start surfacing warnings for metrics that should be native.
+5. **Quarterly:** When normalization hits become rare, deprecate the mapping, require `FinancialMetric` enums end-to-end, and archive the playbook for future metrics.
+
+### Success Criteria
+
+- LLM outputs that use natural finance terminology pass validation without manual prompt hacks.
+- Calculated metrics return deterministic, tested values suitable for downstream charts and analytics.
+- Normalization logs show a declining hit rate as the schema evolves toward user semantics.
+
+---
+
 ## Lessons Learned
 
 ### 1. Prompts Are Not a Programming Language

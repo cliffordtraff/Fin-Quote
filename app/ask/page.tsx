@@ -138,6 +138,8 @@ const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): st
   return `${firstSentence} ${secondSentence}`
 }
 
+const SCROLL_BUFFER_PX = 24
+
 export default function AskPage() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
@@ -173,6 +175,9 @@ export default function AskPage() {
 
   // Ref for the latest message to enable auto-scroll
   const latestMessageRef = useRef<HTMLDivElement>(null)
+
+  // Ref for the scrollable container
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Generate or retrieve session ID on mount
   useEffect(() => {
@@ -254,18 +259,28 @@ export default function AskPage() {
   // Auto-scroll to latest USER message when conversation history changes
   // Only scroll when user asks a question, not when answer appears
   useEffect(() => {
-    if (conversationHistory.length > 0) {
-      const lastMessage = conversationHistory[conversationHistory.length - 1]
-      // Only auto-scroll if the last message is from the user
-      if (lastMessage.role === 'user') {
-        // Use setTimeout to ensure DOM has updated before scrolling
-        setTimeout(() => {
-          if (latestMessageRef.current) {
-            latestMessageRef.current.scrollIntoView({ behavior: 'auto', block: 'start' })
-          }
-        }, 0)
-      }
-    }
+    if (conversationHistory.length === 0) return
+
+    const lastMessage = conversationHistory[conversationHistory.length - 1]
+    if (lastMessage.role !== 'user') return
+
+    // Use setTimeout to ensure DOM has fully rendered
+    setTimeout(() => {
+      if (!latestMessageRef.current) return
+
+      // Get the absolute position of the message relative to the viewport
+      const rect = latestMessageRef.current.getBoundingClientRect()
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+
+      // Calculate target position (message position + current scroll - desired offset from top)
+      const targetPosition = rect.top + scrollTop - 100
+
+      // Scroll the WINDOW, not the container
+      window.scrollTo({
+        top: targetPosition,
+        behavior: 'instant'
+      })
+    }, 100)
   }, [conversationHistory.length])
 
   // Streaming version using Server-Sent Events
@@ -693,7 +708,7 @@ export default function AskPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
-        className={`hidden lg:block fixed left-0 top-0 h-screen w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-40 transition-transform duration-300 ${
+        className={`hidden lg:block fixed left-0 top-20 h-[calc(100vh-5rem)] w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-40 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -759,8 +774,8 @@ export default function AskPage() {
       </div>
 
       {/* Main scrollable content area - conversation */}
-      <div className="lg:ml-80 xl:ml-96 flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div ref={scrollContainerRef} className="lg:ml-80 xl:ml-96 flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto p-6 space-y-6 pb-32 lg:pb-[35vh]">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
                 <p className="font-medium text-lg">Error</p>
@@ -927,6 +942,8 @@ export default function AskPage() {
                 </div>
               </div>
             )}
+
+            <div aria-hidden="true" className="pointer-events-none h-24 sm:h-32 lg:h-[30vh]" />
 
         </div>
       </div>
