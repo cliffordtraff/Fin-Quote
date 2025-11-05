@@ -55,7 +55,9 @@ export async function getCompaniesWithFinancials(): Promise<{
 // Safe, purpose-built tool for fetching a specific financial metric for AAPL only (v2)
 // This is designed to be called by server code (e.g., an LLM routing step) and returns
 // a minimal, predictable shape for easy prompting and display.
-export type FinancialMetric =
+
+// Raw metrics stored directly in the database
+export type RawFinancialMetric =
   | 'revenue'
   | 'gross_profit'
   | 'net_income'
@@ -66,6 +68,25 @@ export type FinancialMetric =
   | 'operating_cash_flow'
   | 'eps'
 
+// Calculated metrics computed from raw data
+export type CalculatedFinancialMetric =
+  | 'debt_to_equity_ratio'  // total_liabilities / shareholders_equity
+  | 'gross_margin'          // (gross_profit / revenue) × 100
+  | 'roe'                   // (net_income / shareholders_equity) × 100
+
+// Combined type for all supported metrics
+export type FinancialMetric = RawFinancialMetric | CalculatedFinancialMetric
+
+// Helper to check if a metric is calculated
+export function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinancialMetric {
+  const calculatedMetrics: CalculatedFinancialMetric[] = [
+    'debt_to_equity_ratio',
+    'gross_margin',
+    'roe',
+  ]
+  return calculatedMetrics.includes(metric as CalculatedFinancialMetric)
+}
+
 export async function getAaplFinancialsByMetric(params: {
   metric: FinancialMetric
   limit?: number // number of most recent years to fetch
@@ -75,28 +96,99 @@ export async function getAaplFinancialsByMetric(params: {
 }> {
   const { metric } = params
   const requestedLimit = params.limit ?? 4
-
-  // Enforce simple guardrails for MVP
-  const allowedMetrics: FinancialMetric[] = [
-    'revenue',
-    'gross_profit',
-    'net_income',
-    'operating_income',
-    'total_assets',
-    'total_liabilities',
-    'shareholders_equity',
-    'operating_cash_flow',
-    'eps',
-  ]
-  if (!allowedMetrics.includes(metric)) {
-    return { data: null, error: 'Unsupported metric' }
-  }
-
-  // Limit rows to a small, safe window (1..20)
   const safeLimit = Math.min(Math.max(requestedLimit, 1), 20)
 
   try {
     const supabase = createServerClient()
+
+    // ===============================================
+    // HANDLE CALCULATED METRICS
+    // ===============================================
+
+    if (metric === 'debt_to_equity_ratio') {
+      const { data, error } = await supabase
+        .from('financials_std')
+        .select('year, total_liabilities, shareholders_equity')
+        .eq('symbol', 'AAPL')
+        .order('year', { ascending: false })
+        .limit(safeLimit)
+
+      if (error) {
+        console.error('Error fetching data for debt_to_equity_ratio:', error)
+        return { data: null, error: error.message }
+      }
+
+      const calculated = (data ?? []).map((row) => ({
+        year: row.year,
+        value: row.total_liabilities / row.shareholders_equity,
+        metric: 'debt_to_equity_ratio' as const,
+      }))
+
+      return { data: calculated, error: null }
+    }
+
+    if (metric === 'gross_margin') {
+      const { data, error } = await supabase
+        .from('financials_std')
+        .select('year, gross_profit, revenue')
+        .eq('symbol', 'AAPL')
+        .order('year', { ascending: false })
+        .limit(safeLimit)
+
+      if (error) {
+        console.error('Error fetching data for gross_margin:', error)
+        return { data: null, error: error.message }
+      }
+
+      const calculated = (data ?? []).map((row) => ({
+        year: row.year,
+        value: (row.gross_profit / row.revenue) * 100,
+        metric: 'gross_margin' as const,
+      }))
+
+      return { data: calculated, error: null }
+    }
+
+    if (metric === 'roe') {
+      const { data, error } = await supabase
+        .from('financials_std')
+        .select('year, net_income, shareholders_equity')
+        .eq('symbol', 'AAPL')
+        .order('year', { ascending: false })
+        .limit(safeLimit)
+
+      if (error) {
+        console.error('Error fetching data for ROE:', error)
+        return { data: null, error: error.message }
+      }
+
+      const calculated = (data ?? []).map((row) => ({
+        year: row.year,
+        value: (row.net_income / row.shareholders_equity) * 100,
+        metric: 'roe' as const,
+      }))
+
+      return { data: calculated, error: null }
+    }
+
+    // ===============================================
+    // HANDLE RAW METRICS
+    // ===============================================
+
+    const allowedRawMetrics: RawFinancialMetric[] = [
+      'revenue',
+      'gross_profit',
+      'net_income',
+      'operating_income',
+      'total_assets',
+      'total_liabilities',
+      'shareholders_equity',
+      'operating_cash_flow',
+      'eps',
+    ]
+    if (!allowedRawMetrics.includes(metric as RawFinancialMetric)) {
+      return { data: null, error: 'Unsupported metric' }
+    }
 
     const { data, error } = await supabase
       .from('financials_std')

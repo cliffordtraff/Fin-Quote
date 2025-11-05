@@ -53,15 +53,16 @@ Available Tools:
 1. getAaplFinancialsByMetric - Financial metrics as NUMBERS over time
 
    SUPPORTED METRICS:
-   - revenue
-   - gross_profit
-   - net_income
-   - operating_income
-   - total_assets
-   - total_liabilities
-   - shareholders_equity
-   - operating_cash_flow
-   - eps
+
+   Raw Metrics:
+   - revenue, gross_profit, net_income, operating_income
+   - total_assets, total_liabilities, shareholders_equity
+   - operating_cash_flow, eps
+
+   Calculated Metrics (✨ Native Support):
+   - debt_to_equity_ratio  (total_liabilities / shareholders_equity)
+   - gross_margin          (gross_profit / revenue × 100)
+   - roe                   (net_income / shareholders_equity × 100)
 
    METRIC MAPPING (with context clues):
 
@@ -69,22 +70,17 @@ Available Tools:
    - "sales", "revenue", "top line" → revenue
    - "profit", "earnings", "bottom line", "profitability" → net_income
    - "EPS", "earnings per share", "P/E ratio", "PE" → eps
-   - "operating profit", "EBIT", "operating margin" → operating_income
-   - "gross profit", "gross margin" → gross_profit
-   - "net margin", "net profit margin", "profit margin" → net_income
-   - "ROE", "return on equity" → net_income (will calculate: net_income / shareholders_equity)
-   - "ROA", "return on assets" → net_income (will calculate: net_income / total_assets)
+   - "operating profit", "EBIT" → operating_income
 
-   Balance Sheet:
-   - "assets", "total assets", "asset turnover" → total_assets
-   - "liabilities", "total debt", "debt", "leverage" → total_liabilities
+   Calculated Ratios (✨ NOW NATIVE - use directly):
+   - "gross margin", "gross profit margin" → gross_margin
+   - "ROE", "return on equity" → roe
+   - "debt to equity", "debt-to-equity", "D/E ratio", "leverage ratio" → debt_to_equity_ratio
+
+   Balance Sheet (Raw):
+   - "assets", "total assets" → total_assets
+   - "liabilities", "total debt", "debt" → total_liabilities
    - "equity", "book value", "shareholders equity" → shareholders_equity
-   - "cash and equivalents", "cash on hand", "cash position" (balance sheet) → total_assets
-
-   IMPORTANT - Ratio Questions:
-   - "debt to equity", "debt-to-equity", "D/E ratio" → total_liabilities (NOT "debt_to_equity")
-   - "debt to assets", "debt-to-assets" → total_liabilities (NOT "debt_to_assets")
-   - The metric is ALWAYS "total_liabilities" - the ratio will be calculated from the data
 
    Cash Flow:
    - "cash flow", "operating cash", "free cash flow", "FCF", "cash flow margin" → operating_cash_flow

@@ -21,6 +21,60 @@ export function generateFinancialChart(
   // Edge case: no data
   if (!data || data.length === 0) return null
 
+  // Sort by year ascending
+  const sortedData = [...data].sort((a, b) => a.year - b.year)
+  const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
+  if (validData.length === 0) return null
+
+  const categories = validData.map((d) => d.year.toString())
+
+  // ===============================================
+  // HANDLE NATIVE CALCULATED METRICS
+  // ===============================================
+
+  if (metric === 'debt_to_equity_ratio') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(2)))
+    return {
+      type: 'line',
+      title: `AAPL Debt-to-Equity Ratio (${categories[0]}-${categories[categories.length - 1]})`,
+      data: values,
+      categories,
+      yAxisLabel: 'Ratio',
+      xAxisLabel: 'Year',
+      color: '#EF4444', // Red for leverage metrics
+    }
+  }
+
+  if (metric === 'gross_margin') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(1)))
+    return {
+      type: 'column',
+      title: `AAPL Gross Margin (${categories[0]}-${categories[categories.length - 1]})`,
+      data: values,
+      categories,
+      yAxisLabel: 'Margin (%)',
+      xAxisLabel: 'Year',
+      color: '#10B981', // Green for profitability
+    }
+  }
+
+  if (metric === 'roe') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(1)))
+    return {
+      type: 'line',
+      title: `AAPL Return on Equity (${categories[0]}-${categories[categories.length - 1]})`,
+      data: values,
+      categories,
+      yAxisLabel: 'ROE (%)',
+      xAxisLabel: 'Year',
+      color: '#3B82F6', // Blue for returns
+    }
+  }
+
+  // ===============================================
+  // HANDLE RAW METRICS (with prompt-based calculations)
+  // ===============================================
+
   // Check if this is a margin/ratio calculation (has both value and revenue)
   const hasRevenue = data[0] && 'revenue' in data[0] && data[0].revenue != null
   const hasShareholders = data[0] && 'shareholders_equity' in data[0]

@@ -119,9 +119,12 @@ export async function POST(req: NextRequest) {
           if (toolSelection.tool === 'getAaplFinancialsByMetric') {
             const metric = toolSelection.args.metric as FinancialMetric
             const validMetrics: FinancialMetric[] = [
+              // Raw metrics
               'revenue', 'gross_profit', 'net_income', 'operating_income',
               'total_assets', 'total_liabilities', 'shareholders_equity',
               'operating_cash_flow', 'eps',
+              // Calculated metrics
+              'debt_to_equity_ratio', 'gross_margin', 'roe',
             ]
             if (!validMetrics.includes(metric)) {
               console.error('❌ Invalid metric received:', metric, 'Valid metrics:', validMetrics)
