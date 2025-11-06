@@ -1,0 +1,1694 @@
+[
+  {
+    "metric_name": "commonStockRepurchased",
+    "category": "Capital Returns & Share Data",
+    "description": "Stock Repurchases - Cash used to buy back company shares, a form of capital return to shareholders",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "buybacks",
+      "share buybacks",
+      "stock buybacks",
+      "share repurchases",
+      "treasury stock purchases",
+      "stock repurchases"
+    ]
+  },
+  {
+    "metric_name": "dividendsPaid",
+    "category": "Capital Returns & Share Data",
+    "description": "Dividends Paid - Total cash distributed to shareholders as dividends during the period",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "dividends",
+      "dividend payments",
+      "cash dividends",
+      "dividends paid"
+    ]
+  },
+  {
+    "metric_name": "dividendYield",
+    "category": "Capital Returns & Share Data",
+    "description": "Dividend Yield - Annual dividend as percentage of stock price",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "dividend yield",
+      "yield"
+    ]
+  },
+  {
+    "metric_name": "numberOfShares",
+    "category": "Capital Returns & Share Data",
+    "description": "Number of Shares Outstanding - Total shares of stock outstanding",
+    "unit": "number",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "shares outstanding",
+      "outstanding shares",
+      "share count"
+    ]
+  },
+  {
+    "metric_name": "payoutRatio",
+    "category": "Capital Returns & Share Data",
+    "description": "Payout Ratio - Percentage of earnings paid as dividends",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "dividend payout ratio"
+    ]
+  },
+  {
+    "metric_name": "capitalExpenditure",
+    "category": "Cash Flow",
+    "description": "Capital Expenditures - Cash spent on acquiring or upgrading physical assets like property, plant, and equipment",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex",
+      "capital spending",
+      "capital expenditures",
+      "CapEx",
+      "PP&E spending",
+      "investment in PP&E"
+    ]
+  },
+  {
+    "metric_name": "freeCashFlow",
+    "category": "Cash Flow",
+    "description": "Free Cash Flow - Operating cash flow minus capital expenditures, representing cash available for distribution to investors",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "FCF",
+      "free cash flow",
+      "free cash",
+      "unlevered free cash flow",
+      "unlevered FCF"
+    ]
+  },
+  {
+    "metric_name": "assetTurnover",
+    "category": "Efficiency & Working Capital",
+    "description": "Asset Turnover Ratio - Revenue generated per dollar of assets",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "asset turnover ratio",
+      "total asset turnover",
+      "asset efficiency"
+    ]
+  },
+  {
+    "metric_name": "cashConversionCycle",
+    "category": "Efficiency & Working Capital",
+    "description": "Cash Conversion Cycle - Days to convert inventory and receivables into cash",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "CCC",
+      "cash cycle",
+      "operating cycle"
+    ]
+  },
+  {
+    "metric_name": "daysOfInventoryOutstanding",
+    "category": "Efficiency & Working Capital",
+    "description": "Days of Inventory Outstanding - Days to sell inventory",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DIO",
+      "inventory turnover days",
+      "days sales of inventory"
+    ]
+  },
+  {
+    "metric_name": "daysOfPayablesOutstanding",
+    "category": "Efficiency & Working Capital",
+    "description": "Days Payables Outstanding - Average days to pay suppliers",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DPO",
+      "payables days",
+      "days payable"
+    ]
+  },
+  {
+    "metric_name": "daysOfSalesOutstanding",
+    "category": "Efficiency & Working Capital",
+    "description": "Days Sales Outstanding - Average days to collect receivables",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DSO",
+      "receivables days",
+      "collection period"
+    ]
+  },
+  {
+    "metric_name": "fixedAssetTurnover",
+    "category": "Efficiency & Working Capital",
+    "description": "Fixed Asset Turnover Ratio - Revenue generated per dollar of fixed assets",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "fixed asset turnover",
+      "FAT ratio",
+      "PP&E turnover"
+    ]
+  },
+  {
+    "metric_name": "inventoryTurnover",
+    "category": "Efficiency & Working Capital",
+    "description": "Inventory Turnover - Number of times inventory is sold per period",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "inventory turnover ratio",
+      "stock turnover"
+    ]
+  },
+  {
+    "metric_name": "payablesTurnover",
+    "category": "Efficiency & Working Capital",
+    "description": "Payables Turnover Ratio - Number of times payables are paid per period",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "payables turnover",
+      "AP turnover"
+    ]
+  },
+  {
+    "metric_name": "receivablesTurnover",
+    "category": "Efficiency & Working Capital",
+    "description": "Receivables Turnover Ratio - Number of times receivables are collected per period",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "receivables turnover",
+      "AR turnover"
+    ]
+  },
+  {
+    "metric_name": "assetGrowth",
+    "category": "Growth",
+    "description": "Asset Growth Rate - Year-over-year percentage growth in total assets",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "asset growth rate",
+      "growth in assets",
+      "total asset growth"
+    ]
+  },
+  {
+    "metric_name": "bookValueperShareGrowth",
+    "category": "Growth",
+    "description": "Book Value Per Share Growth - Year-over-year growth in book value per share",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "BVPS growth",
+      "book value growth"
+    ]
+  },
+  {
+    "metric_name": "debtGrowth",
+    "category": "Growth",
+    "description": "Debt Growth Rate - Year-over-year percentage growth in total debt",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "debt growth rate",
+      "growth in debt"
+    ]
+  },
+  {
+    "metric_name": "dividendsperShareGrowth",
+    "category": "Growth",
+    "description": "Dividends Per Share Growth - Year-over-year growth in dividends per share",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DPS growth",
+      "dividend growth",
+      "dividend per share growth"
+    ]
+  },
+  {
+    "metric_name": "ebitgrowth",
+    "category": "Growth",
+    "description": "EBIT Growth - Year-over-year growth in earnings before interest and taxes",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBIT growth",
+      "operating income growth"
+    ]
+  },
+  {
+    "metric_name": "epsdilutedGrowth",
+    "category": "Growth",
+    "description": "Diluted EPS Growth - Year-over-year growth in diluted earnings per share",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "diluted EPS growth",
+      "earnings growth"
+    ]
+  },
+  {
+    "metric_name": "epsgrowth",
+    "category": "Growth",
+    "description": "EPS Growth - Year-over-year growth in earnings per share",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EPS growth",
+      "earnings per share growth",
+      "earnings growth rate"
+    ]
+  },
+  {
+    "metric_name": "fiveYDividendperShareGrowthPerShare",
+    "category": "Growth",
+    "description": "Five Year Dividend Per Share Growth - Compound annual growth rate of dividends over 5 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "5Y dividend growth",
+      "5 year DPS growth",
+      "dividend CAGR"
+    ]
+  },
+  {
+    "metric_name": "fiveYNetIncomeGrowthPerShare",
+    "category": "Growth",
+    "description": "Five Year Net Income Growth Per Share - Compound annual growth rate of net income per share over 5 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "5Y net income growth",
+      "5 year earnings growth",
+      "earnings CAGR"
+    ]
+  },
+  {
+    "metric_name": "fiveYOperatingCFGrowthPerShare",
+    "category": "Growth",
+    "description": "Five Year Operating Cash Flow Growth Per Share - Compound annual growth rate of operating cash flow per share over 5 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "5Y OCF growth",
+      "5 year cash flow growth",
+      "OCF CAGR"
+    ]
+  },
+  {
+    "metric_name": "fiveYRevenueGrowthPerShare",
+    "category": "Growth",
+    "description": "Five Year Revenue Growth Per Share - Compound annual growth rate of revenue per share over 5 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "5Y revenue growth",
+      "5 year sales growth",
+      "revenue CAGR"
+    ]
+  },
+  {
+    "metric_name": "fiveYShareholdersEquityGrowthPerShare",
+    "category": "Growth",
+    "description": "Five Year Shareholders Equity Growth Per Share - Compound annual growth rate of equity per share over 5 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "5Y equity growth",
+      "5 year book value growth",
+      "equity CAGR"
+    ]
+  },
+  {
+    "metric_name": "freeCashFlowGrowth",
+    "category": "Growth",
+    "description": "Free Cash Flow Growth - Year-over-year growth in free cash flow",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "FCF growth",
+      "free cash flow growth rate"
+    ]
+  },
+  {
+    "metric_name": "grossProfitGrowth",
+    "category": "Growth",
+    "description": "Gross Profit Growth - Year-over-year growth in gross profit",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "gross profit growth rate"
+    ]
+  },
+  {
+    "metric_name": "inventoryGrowth",
+    "category": "Growth",
+    "description": "Inventory Growth - Year-over-year growth in inventory",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "inventory growth rate"
+    ]
+  },
+  {
+    "metric_name": "netIncomeGrowth",
+    "category": "Growth",
+    "description": "Net Income Growth - Year-over-year growth in net income",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "net income growth rate",
+      "earnings growth",
+      "profit growth"
+    ]
+  },
+  {
+    "metric_name": "operatingCashFlowGrowth",
+    "category": "Growth",
+    "description": "Operating Cash Flow Growth - Year-over-year growth in operating cash flow",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "OCF growth",
+      "cash flow growth"
+    ]
+  },
+  {
+    "metric_name": "operatingIncomeGrowth",
+    "category": "Growth",
+    "description": "Operating Income Growth - Year-over-year growth in operating income",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBIT growth",
+      "operating profit growth"
+    ]
+  },
+  {
+    "metric_name": "rdexpenseGrowth",
+    "category": "Growth",
+    "description": "R&D Expense Growth - Year-over-year growth in research and development expenses",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "R&D growth",
+      "research expense growth"
+    ]
+  },
+  {
+    "metric_name": "receivablesGrowth",
+    "category": "Growth",
+    "description": "Receivables Growth - Year-over-year growth in accounts receivable",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "AR growth",
+      "receivables growth rate"
+    ]
+  },
+  {
+    "metric_name": "revenueGrowth",
+    "category": "Growth",
+    "description": "Revenue Growth - Year-over-year growth in revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "revenue growth rate",
+      "sales growth",
+      "top line growth"
+    ]
+  },
+  {
+    "metric_name": "sgaexpensesGrowth",
+    "category": "Growth",
+    "description": "SG&A Expenses Growth - Year-over-year growth in selling, general & administrative expenses",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "SG&A growth",
+      "operating expense growth"
+    ]
+  },
+  {
+    "metric_name": "tenYDividendperShareGrowthPerShare",
+    "category": "Growth",
+    "description": "Ten Year Dividend Per Share Growth - Compound annual growth rate of dividends over 10 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "10Y dividend growth",
+      "10 year DPS growth"
+    ]
+  },
+  {
+    "metric_name": "tenYNetIncomeGrowthPerShare",
+    "category": "Growth",
+    "description": "Ten Year Net Income Growth Per Share - Compound annual growth rate of net income per share over 10 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "10Y net income growth",
+      "10 year earnings growth"
+    ]
+  },
+  {
+    "metric_name": "tenYOperatingCFGrowthPerShare",
+    "category": "Growth",
+    "description": "Ten Year Operating Cash Flow Growth Per Share - Compound annual growth rate of operating cash flow per share over 10 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "10Y OCF growth",
+      "10 year cash flow growth"
+    ]
+  },
+  {
+    "metric_name": "tenYRevenueGrowthPerShare",
+    "category": "Growth",
+    "description": "Ten Year Revenue Growth Per Share - Compound annual growth rate of revenue per share over 10 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "10Y revenue growth",
+      "10 year sales growth"
+    ]
+  },
+  {
+    "metric_name": "tenYShareholdersEquityGrowthPerShare",
+    "category": "Growth",
+    "description": "Ten Year Shareholders Equity Growth Per Share - Compound annual growth rate of equity per share over 10 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "10Y equity growth",
+      "10 year book value growth"
+    ]
+  },
+  {
+    "metric_name": "threeYDividendperShareGrowthPerShare",
+    "category": "Growth",
+    "description": "Three Year Dividend Per Share Growth - Compound annual growth rate of dividends over 3 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "3Y dividend growth",
+      "3 year DPS growth"
+    ]
+  },
+  {
+    "metric_name": "threeYNetIncomeGrowthPerShare",
+    "category": "Growth",
+    "description": "Three Year Net Income Growth Per Share - Compound annual growth rate of net income per share over 3 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "3Y net income growth",
+      "3 year earnings growth"
+    ]
+  },
+  {
+    "metric_name": "threeYOperatingCFGrowthPerShare",
+    "category": "Growth",
+    "description": "Three Year Operating Cash Flow Growth Per Share - Compound annual growth rate of operating cash flow per share over 3 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "3Y OCF growth",
+      "3 year cash flow growth"
+    ]
+  },
+  {
+    "metric_name": "threeYRevenueGrowthPerShare",
+    "category": "Growth",
+    "description": "Three Year Revenue Growth Per Share - Compound annual growth rate of revenue per share over 3 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "3Y revenue growth",
+      "3 year sales growth"
+    ]
+  },
+  {
+    "metric_name": "threeYShareholdersEquityGrowthPerShare",
+    "category": "Growth",
+    "description": "Three Year Shareholders Equity Growth Per Share - Compound annual growth rate of equity per share over 3 years",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "3Y equity growth",
+      "3 year book value growth"
+    ]
+  },
+  {
+    "metric_name": "weightedAverageSharesDilutedGrowth",
+    "category": "Growth",
+    "description": "Weighted Average Shares Diluted Growth - Year-over-year growth in diluted shares outstanding",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "diluted shares growth",
+      "share count growth"
+    ]
+  },
+  {
+    "metric_name": "weightedAverageSharesGrowth",
+    "category": "Growth",
+    "description": "Weighted Average Shares Growth - Year-over-year growth in shares outstanding",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "shares growth",
+      "share count growth"
+    ]
+  },
+  {
+    "metric_name": "cashFlowToDebtRatio",
+    "category": "Leverage & Solvency",
+    "description": "Cash Flow to Debt Ratio - Operating cash flow relative to total debt",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "cash flow to debt",
+      "CF to debt",
+      "debt coverage ratio"
+    ]
+  },
+  {
+    "metric_name": "cashRatio",
+    "category": "Leverage & Solvency",
+    "description": "Cash Ratio - Cash and equivalents divided by current liabilities",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "cash ratio",
+      "liquidity ratio"
+    ]
+  },
+  {
+    "metric_name": "currentRatio",
+    "category": "Leverage & Solvency",
+    "description": "Current Ratio - Current assets divided by current liabilities",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "current ratio",
+      "working capital ratio"
+    ]
+  },
+  {
+    "metric_name": "debtEquityRatio",
+    "category": "Leverage & Solvency",
+    "description": "Debt-to-Equity Ratio - Total liabilities divided by shareholders equity",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "D/E",
+      "debt to equity",
+      "debt-to-equity",
+      "leverage ratio",
+      "gearing ratio"
+    ]
+  },
+  {
+    "metric_name": "debtRatio",
+    "category": "Leverage & Solvency",
+    "description": "Debt Ratio - Total debt divided by total assets",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "debt ratio",
+      "total debt ratio",
+      "debt to assets"
+    ]
+  },
+  {
+    "metric_name": "interestCoverage",
+    "category": "Leverage & Solvency",
+    "description": "Interest Coverage Ratio - Ability to pay interest from operating income",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "interest coverage",
+      "times interest earned",
+      "TIE"
+    ]
+  },
+  {
+    "metric_name": "longTermDebtToCapitalization",
+    "category": "Leverage & Solvency",
+    "description": "Long-Term Debt to Capitalization Ratio - Long-term debt divided by total capitalization",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "long term debt to cap",
+      "LTD to capitalization"
+    ]
+  },
+  {
+    "metric_name": "quickRatio",
+    "category": "Leverage & Solvency",
+    "description": "Quick Ratio - (Current assets minus inventory) divided by current liabilities",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "quick ratio",
+      "acid test ratio",
+      "acid test"
+    ]
+  },
+  {
+    "metric_name": "totalDebtToCapitalization",
+    "category": "Leverage & Solvency",
+    "description": "Total Debt to Capitalization Ratio - Total debt divided by total capitalization",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "debt to cap",
+      "debt to capitalization"
+    ]
+  },
+  {
+    "metric_name": "stockPrice",
+    "category": "Market Data",
+    "description": "Stock Price - Current market price per share",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "share price",
+      "stock price",
+      "market price"
+    ]
+  },
+  {
+    "metric_name": "addTotalDebt",
+    "category": "Other",
+    "description": "Additional Total Debt - New debt added during the period",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "new debt",
+      "additional debt",
+      "debt added"
+    ]
+  },
+  {
+    "metric_name": "averageInventory",
+    "category": "Other",
+    "description": "Average Inventory - Average inventory value during the period",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "avg inventory",
+      "mean inventory"
+    ]
+  },
+  {
+    "metric_name": "averagePayables",
+    "category": "Other",
+    "description": "Average Accounts Payable - Average payables during the period",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "avg payables",
+      "mean payables",
+      "average AP"
+    ]
+  },
+  {
+    "metric_name": "averageReceivables",
+    "category": "Other",
+    "description": "Average Accounts Receivable - Average receivables during the period",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "avg receivables",
+      "mean receivables",
+      "average AR"
+    ]
+  },
+  {
+    "metric_name": "capexPerShare",
+    "category": "Other",
+    "description": "Capital Expenditure Per Share - Capital spending per share",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex per share",
+      "capital spending per share"
+    ]
+  },
+  {
+    "metric_name": "capexToDepreciation",
+    "category": "Other",
+    "description": "Capex to Depreciation Ratio - Capital expenditure relative to depreciation",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex depreciation ratio",
+      "replacement ratio"
+    ]
+  },
+  {
+    "metric_name": "capexToOperatingCashFlow",
+    "category": "Other",
+    "description": "Capex to Operating Cash Flow Ratio - Capital expenditure as percentage of operating cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex to OCF",
+      "capital intensity"
+    ]
+  },
+  {
+    "metric_name": "capexToRevenue",
+    "category": "Other",
+    "description": "Capex to Revenue Ratio - Capital expenditure as percentage of revenue",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex to sales",
+      "capital expenditure ratio"
+    ]
+  },
+  {
+    "metric_name": "capitalExpenditureCoverageRatio",
+    "category": "Other",
+    "description": "Capital Expenditure Coverage Ratio - Ability to fund capital expenditures from cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "capex coverage",
+      "capital expenditure coverage"
+    ]
+  },
+  {
+    "metric_name": "cashFlowCoverageRatios",
+    "category": "Other",
+    "description": "Cash Flow Coverage Ratios - Ability to cover obligations with cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "cash flow coverage",
+      "CF coverage"
+    ]
+  },
+  {
+    "metric_name": "companyEquityMultiplier",
+    "category": "Other",
+    "description": "Equity Multiplier - Total assets divided by shareholders equity",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "equity multiplier",
+      "leverage multiplier"
+    ]
+  },
+  {
+    "metric_name": "daysOfInventoryOnHand",
+    "category": "Other",
+    "description": "Days Inventory On Hand - Average number of days inventory is held",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "days inventory",
+      "DIO",
+      "inventory days"
+    ]
+  },
+  {
+    "metric_name": "daysPayablesOutstanding",
+    "category": "Other",
+    "description": "Days Payables Outstanding - Days to pay suppliers",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DPO",
+      "payable days"
+    ]
+  },
+  {
+    "metric_name": "daysSalesOutstanding",
+    "category": "Other",
+    "description": "Days Sales Outstanding - Days to collect customer payments",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "DSO",
+      "collection days"
+    ]
+  },
+  {
+    "metric_name": "debtToAssets",
+    "category": "Other",
+    "description": "Debt to Assets Ratio - Total debt as percentage of total assets",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "debt to assets",
+      "D/A ratio"
+    ]
+  },
+  {
+    "metric_name": "debtToEquity",
+    "category": "Other",
+    "description": "Debt to Equity - Total debt divided by total equity",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "debt to equity",
+      "D/E"
+    ]
+  },
+  {
+    "metric_name": "depreciationAndAmortization",
+    "category": "Other",
+    "description": "Depreciation and Amortization - Non-cash expenses for asset value reduction over time",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "D&A",
+      "depreciation and amortization",
+      "amortization and depreciation"
+    ]
+  },
+  {
+    "metric_name": "dividendPaidAndCapexCoverageRatio",
+    "category": "Other",
+    "description": "Dividend and Capex Coverage Ratio - Cash flow coverage of dividends and capital expenditures",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "dividend and capex coverage",
+      "total distribution coverage"
+    ]
+  },
+  {
+    "metric_name": "dividendPayoutRatio",
+    "category": "Other",
+    "description": "Dividend Payout Ratio - Percentage of earnings paid as dividends",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "payout ratio",
+      "dividend payout"
+    ]
+  },
+  {
+    "metric_name": "ebitda",
+    "category": "Other",
+    "description": "EBITDA - Earnings before interest, taxes, depreciation, and amortization",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBITDA",
+      "earnings before interest taxes depreciation amortization"
+    ]
+  },
+  {
+    "metric_name": "effectiveTaxRate",
+    "category": "Other",
+    "description": "Effective Tax Rate - Actual tax rate paid on earnings",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "tax rate",
+      "effective tax rate",
+      "ETR"
+    ]
+  },
+  {
+    "metric_name": "enterpriseValueMultiple",
+    "category": "Other",
+    "description": "Enterprise Value Multiple - EV divided by EBITDA",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV multiple",
+      "EV/EBITDA"
+    ]
+  },
+  {
+    "metric_name": "enterpriseValueOverEBITDA",
+    "category": "Other",
+    "description": "EV to EBITDA Ratio - Enterprise value divided by EBITDA",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV/EBITDA",
+      "enterprise value to EBITDA"
+    ]
+  },
+  {
+    "metric_name": "freeCashFlowOperatingCashFlowRatio",
+    "category": "Other",
+    "description": "Free Cash Flow to Operating Cash Flow Ratio - Free cash flow as percentage of operating cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "FCF to OCF",
+      "free cash flow ratio"
+    ]
+  },
+  {
+    "metric_name": "grahamNetNet",
+    "category": "Other",
+    "description": "Graham Net-Net - Net current asset value minus total liabilities (Benjamin Graham formula)",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "net-net",
+      "Graham net net",
+      "NCAV"
+    ]
+  },
+  {
+    "metric_name": "grahamNumber",
+    "category": "Other",
+    "description": "Graham Number - Fair value estimate using earnings and book value (Benjamin Graham formula)",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "Graham number",
+      "Graham value"
+    ]
+  },
+  {
+    "metric_name": "incomeQuality",
+    "category": "Other",
+    "description": "Income Quality Ratio - Operating cash flow divided by net income",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "earnings quality",
+      "cash flow quality"
+    ]
+  },
+  {
+    "metric_name": "intangiblesToTotalAssets",
+    "category": "Other",
+    "description": "Intangibles to Total Assets Ratio - Intangible assets as percentage of total assets",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "intangible ratio",
+      "intangibles ratio"
+    ]
+  },
+  {
+    "metric_name": "interestDebtPerShare",
+    "category": "Other",
+    "description": "Interest Debt Per Share - Interest-bearing debt per share",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "interest bearing debt per share"
+    ]
+  },
+  {
+    "metric_name": "investedCapital",
+    "category": "Other",
+    "description": "Invested Capital - Total capital invested in the business",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "total invested capital",
+      "capital employed"
+    ]
+  },
+  {
+    "metric_name": "marketCapitalization",
+    "category": "Other",
+    "description": "Market Capitalization - Total market value of outstanding shares",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "market cap",
+      "market capitalization",
+      "market value"
+    ]
+  },
+  {
+    "metric_name": "minusCashAndCashEquivalents",
+    "category": "Other",
+    "description": "Cash and Cash Equivalents (Negative) - Used for net debt calculations",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "minus cash",
+      "negative cash"
+    ]
+  },
+  {
+    "metric_name": "netCurrentAssetValue",
+    "category": "Other",
+    "description": "Net Current Asset Value - Current assets minus all liabilities",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "NCAV",
+      "net current assets"
+    ]
+  },
+  {
+    "metric_name": "netDebtToEBITDA",
+    "category": "Other",
+    "description": "Net Debt to EBITDA Ratio - Net debt divided by EBITDA",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "net debt to EBITDA",
+      "net leverage ratio"
+    ]
+  },
+  {
+    "metric_name": "operatingCashFlowSalesRatio",
+    "category": "Other",
+    "description": "Operating Cash Flow to Sales Ratio - Operating cash flow as percentage of revenue",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "OCF to sales",
+      "cash flow to revenue"
+    ]
+  },
+  {
+    "metric_name": "operatingCycle",
+    "category": "Other",
+    "description": "Operating Cycle - Days to convert inventory to cash (DIO + DSO)",
+    "unit": "days",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "operating cycle days"
+    ]
+  },
+  {
+    "metric_name": "pbRatio",
+    "category": "Other",
+    "description": "Price-to-Book Ratio - Market price divided by book value per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/B",
+      "price to book",
+      "price-to-book",
+      "market to book"
+    ]
+  },
+  {
+    "metric_name": "pfcfRatio",
+    "category": "Other",
+    "description": "Price to Free Cash Flow Ratio - Market price divided by free cash flow per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/FCF",
+      "price to FCF",
+      "PFCF"
+    ]
+  },
+  {
+    "metric_name": "pocfratio",
+    "category": "Other",
+    "description": "Price to Operating Cash Flow Ratio - Market price divided by operating cash flow per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/OCF",
+      "price to OCF",
+      "POCF"
+    ]
+  },
+  {
+    "metric_name": "priceBookValueRatio",
+    "category": "Other",
+    "description": "Price-to-Book Value Ratio - Market price divided by book value per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/B",
+      "price to book value",
+      "price book value"
+    ]
+  },
+  {
+    "metric_name": "priceCashFlowRatio",
+    "category": "Other",
+    "description": "Price to Cash Flow Ratio - Market price divided by cash flow per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/CF",
+      "price to cash flow"
+    ]
+  },
+  {
+    "metric_name": "priceEarningsRatio",
+    "category": "Other",
+    "description": "Price-to-Earnings Ratio - Market price divided by earnings per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/E",
+      "PE ratio",
+      "price to earnings"
+    ]
+  },
+  {
+    "metric_name": "priceEarningsToGrowthRatio",
+    "category": "Other",
+    "description": "PEG Ratio - P/E ratio divided by earnings growth rate",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "PEG",
+      "PEG ratio"
+    ]
+  },
+  {
+    "metric_name": "priceFairValue",
+    "category": "Other",
+    "description": "Price to Fair Value Ratio - Market price compared to intrinsic value",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "price to fair value",
+      "P/FV"
+    ]
+  },
+  {
+    "metric_name": "priceSalesRatio",
+    "category": "Other",
+    "description": "Price-to-Sales Ratio - Market cap divided by revenue",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/S",
+      "price to sales",
+      "price-to-sales",
+      "PSR"
+    ]
+  },
+  {
+    "metric_name": "priceToOperatingCashFlowsRatio",
+    "category": "Other",
+    "description": "Price to Operating Cash Flow Ratio - Market cap divided by operating cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/OCF",
+      "price to OCF"
+    ]
+  },
+  {
+    "metric_name": "ptbRatio",
+    "category": "Other",
+    "description": "Price-to-Book Ratio - Market price divided by tangible book value per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "PTB",
+      "price to tangible book",
+      "P/TB"
+    ]
+  },
+  {
+    "metric_name": "researchAndDdevelopementToRevenue",
+    "category": "Other",
+    "description": "R&D to Revenue Ratio - Research and development expense as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "R&D to revenue",
+      "R&D intensity"
+    ]
+  },
+  {
+    "metric_name": "returnOnTangibleAssets",
+    "category": "Other",
+    "description": "Return on Tangible Assets - Net income divided by tangible assets",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROTA",
+      "return on tangible assets"
+    ]
+  },
+  {
+    "metric_name": "roe",
+    "category": "Other",
+    "description": "Return on Equity (ROE) - Net income divided by shareholders equity",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROE",
+      "return on equity"
+    ]
+  },
+  {
+    "metric_name": "salesGeneralAndAdministrativeToRevenue",
+    "category": "Other",
+    "description": "SG&A to Revenue Ratio - Selling, general & administrative expenses as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "SG&A to revenue",
+      "SG&A ratio",
+      "SGA to revenue"
+    ]
+  },
+  {
+    "metric_name": "shareholdersEquityPerShare",
+    "category": "Other",
+    "description": "Shareholders Equity Per Share - Book value per share",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "equity per share",
+      "book value per share",
+      "BVPS"
+    ]
+  },
+  {
+    "metric_name": "shortTermCoverageRatios",
+    "category": "Other",
+    "description": "Short Term Coverage Ratios - Ability to cover short-term obligations",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "short term coverage"
+    ]
+  },
+  {
+    "metric_name": "stockBasedCompensation",
+    "category": "Other",
+    "description": "Stock-Based Compensation - Non-cash expense from employee equity compensation including stock options and restricted stock units",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "SBC",
+      "stock comp",
+      "equity compensation",
+      "stock-based comp",
+      "RSU expense",
+      "stock option expense"
+    ]
+  },
+  {
+    "metric_name": "stockBasedCompensationToRevenue",
+    "category": "Other",
+    "description": "Stock-Based Compensation to Revenue Ratio - Stock compensation as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "SBC to revenue",
+      "stock comp ratio"
+    ]
+  },
+  {
+    "metric_name": "tangibleAssetValue",
+    "category": "Other",
+    "description": "Tangible Asset Value - Total assets minus intangible assets",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "tangible assets",
+      "TAV"
+    ]
+  },
+  {
+    "metric_name": "workingCapital",
+    "category": "Other",
+    "description": "Working Capital - Current assets minus current liabilities",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "net working capital",
+      "WC"
+    ]
+  },
+  {
+    "metric_name": "bookValuePerShare",
+    "category": "Per-Share Metrics",
+    "description": "Book Value Per Share - Net asset value per share of common stock",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "BVPS",
+      "book value per share",
+      "equity per share",
+      "net asset value per share"
+    ]
+  },
+  {
+    "metric_name": "cashPerShare",
+    "category": "Per-Share Metrics",
+    "description": "Cash Per Share - Cash and equivalents per share of common stock",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "cash per share",
+      "CPS"
+    ]
+  },
+  {
+    "metric_name": "freeCashFlowPerShare",
+    "category": "Per-Share Metrics",
+    "description": "Free Cash Flow Per Share - Free cash flow divided by shares outstanding",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "FCF per share",
+      "free cash flow per share"
+    ]
+  },
+  {
+    "metric_name": "netIncomePerShare",
+    "category": "Per-Share Metrics",
+    "description": "Net Income Per Share - Net income divided by shares outstanding (same as EPS)",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "earnings per share",
+      "EPS",
+      "net earnings per share"
+    ]
+  },
+  {
+    "metric_name": "operatingCashFlowPerShare",
+    "category": "Per-Share Metrics",
+    "description": "Operating Cash Flow Per Share - Operating cash flow divided by shares outstanding",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "OCF per share",
+      "cash flow per share"
+    ]
+  },
+  {
+    "metric_name": "revenuePerShare",
+    "category": "Per-Share Metrics",
+    "description": "Revenue Per Share - Total revenue divided by shares outstanding",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "RPS",
+      "sales per share"
+    ]
+  },
+  {
+    "metric_name": "tangibleBookValuePerShare",
+    "category": "Per-Share Metrics",
+    "description": "Tangible Book Value Per Share - Tangible equity divided by shares outstanding",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "tangible BVPS",
+      "tangible book value"
+    ]
+  },
+  {
+    "metric_name": "ebitdaMargin",
+    "category": "Profitability & Returns",
+    "description": "EBITDA Margin - EBITDA as percentage of revenue, measuring operating profitability before non-cash charges",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBITDA margin",
+      "EBITDA to revenue",
+      "EBITDA ratio"
+    ]
+  },
+  {
+    "metric_name": "ebitPerRevenue",
+    "category": "Profitability & Returns",
+    "description": "EBIT Margin - Earnings before interest and taxes as percentage of revenue (operating margin before non-operating items)",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBIT margin",
+      "operating margin",
+      "EBIT to revenue",
+      "operating profit margin"
+    ]
+  },
+  {
+    "metric_name": "ebtPerEbit",
+    "category": "Profitability & Returns",
+    "description": "EBT to EBIT Ratio - Earnings before tax divided by EBIT",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EBT to EBIT",
+      "interest burden"
+    ]
+  },
+  {
+    "metric_name": "grossProfitMargin",
+    "category": "Profitability & Returns",
+    "description": "Gross Profit Margin - Gross profit as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "gross margin",
+      "GP margin"
+    ]
+  },
+  {
+    "metric_name": "netIncomePerEBT",
+    "category": "Profitability & Returns",
+    "description": "Net Income to EBT Ratio - Net income divided by earnings before tax (tax efficiency)",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "NI to EBT",
+      "net income to earnings before tax",
+      "tax efficiency"
+    ]
+  },
+  {
+    "metric_name": "netProfitMargin",
+    "category": "Profitability & Returns",
+    "description": "Net Profit Margin - Net income as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "net margin",
+      "profit margin",
+      "bottom line margin"
+    ]
+  },
+  {
+    "metric_name": "operatingProfitMargin",
+    "category": "Profitability & Returns",
+    "description": "Operating Profit Margin - Operating income (EBIT) as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "operating margin",
+      "EBIT margin",
+      "OP margin",
+      "EBIT to revenue"
+    ]
+  },
+  {
+    "metric_name": "pretaxProfitMargin",
+    "category": "Profitability & Returns",
+    "description": "Pretax Profit Margin - Earnings before tax as percentage of revenue",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "pretax margin",
+      "EBT margin"
+    ]
+  },
+  {
+    "metric_name": "returnOnAssets",
+    "category": "Profitability & Returns",
+    "description": "Return on Assets - Net income divided by total assets",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROA",
+      "return on assets"
+    ]
+  },
+  {
+    "metric_name": "returnOnCapitalEmployed",
+    "category": "Profitability & Returns",
+    "description": "Return on Capital Employed - Operating income divided by capital employed",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROCE",
+      "return on capital employed"
+    ]
+  },
+  {
+    "metric_name": "returnOnEquity",
+    "category": "Profitability & Returns",
+    "description": "Return on Equity - Net income divided by shareholders equity",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROE",
+      "return on equity"
+    ]
+  },
+  {
+    "metric_name": "roic",
+    "category": "Profitability & Returns",
+    "description": "Return on Invested Capital (ROIC) - Net operating profit after tax divided by invested capital",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "ROIC",
+      "return on invested capital"
+    ]
+  },
+  {
+    "metric_name": "earningsYield",
+    "category": "Valuation",
+    "description": "Earnings Yield - Earnings per share divided by stock price (inverse of P/E)",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "earnings yield",
+      "E/P ratio",
+      "inverse P/E"
+    ]
+  },
+  {
+    "metric_name": "enterpriseValue",
+    "category": "Valuation",
+    "description": "Enterprise Value - Market cap plus debt minus cash",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV",
+      "enterprise value",
+      "firm value"
+    ]
+  },
+  {
+    "metric_name": "evToFreeCashFlow",
+    "category": "Valuation",
+    "description": "EV to Free Cash Flow - Enterprise value divided by free cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV/FCF",
+      "EV to FCF",
+      "enterprise value to free cash flow"
+    ]
+  },
+  {
+    "metric_name": "evToOperatingCashFlow",
+    "category": "Valuation",
+    "description": "EV to Operating Cash Flow - Enterprise value divided by operating cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV/OCF",
+      "EV to OCF"
+    ]
+  },
+  {
+    "metric_name": "evToSales",
+    "category": "Valuation",
+    "description": "EV to Sales Ratio - Enterprise value divided by revenue",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "EV/Sales",
+      "EV to revenue",
+      "price to sales"
+    ]
+  },
+  {
+    "metric_name": "freeCashFlowYield",
+    "category": "Valuation",
+    "description": "Free Cash Flow Yield - Free cash flow per share divided by stock price",
+    "unit": "percentage",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "FCF yield",
+      "free cash flow yield"
+    ]
+  },
+  {
+    "metric_name": "marketCap",
+    "category": "Valuation",
+    "description": "Market Capitalization - Total market value of outstanding shares",
+    "unit": "currency",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "market cap",
+      "market value",
+      "equity value"
+    ]
+  },
+  {
+    "metric_name": "peRatio",
+    "category": "Valuation",
+    "description": "Price-to-Earnings Ratio - Market price divided by earnings per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/E",
+      "PE",
+      "price to earnings",
+      "price-to-earnings",
+      "earnings multiple",
+      "PE ratio"
+    ]
+  },
+  {
+    "metric_name": "priceToBookRatio",
+    "category": "Valuation",
+    "description": "Price-to-Book Ratio - Market price divided by book value per share",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/B",
+      "price to book"
+    ]
+  },
+  {
+    "metric_name": "priceToFreeCashFlowsRatio",
+    "category": "Valuation",
+    "description": "Price to Free Cash Flow Ratio - Market cap divided by free cash flow",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/FCF",
+      "price to FCF"
+    ]
+  },
+  {
+    "metric_name": "priceToSalesRatio",
+    "category": "Valuation",
+    "description": "Price-to-Sales Ratio - Market cap divided by revenue",
+    "unit": "ratio",
+    "data_coverage": "2006-2012",
+    "common_aliases": [
+      "P/S",
+      "price to sales",
+      "PSR"
+    ]
+  }
+]

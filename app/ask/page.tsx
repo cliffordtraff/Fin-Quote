@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
 import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
+import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
 import FinancialChart from '@/components/FinancialChart'
 import RecentQueries from '@/components/RecentQueries'
 import AuthModal from '@/components/AuthModal'
@@ -16,6 +17,7 @@ import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
 import type { Database } from '@/lib/database.types'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 const stripMarkdown = (text: string): string => {
   return text
@@ -145,6 +147,9 @@ const HEADER_HEIGHT_PX = 80
 const EXTRA_SCROLL_UP = 50  // Extra pixels to scroll up to hide previous content completely
 
 export default function AskPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [dataUsed, setDataUsed] = useState<{
@@ -157,6 +162,7 @@ export default function AskPage() {
   const [loadingStep, setLoadingStep] = useState<'analyzing' | 'selecting' | 'calling' | 'fetching' | 'calculating' | 'generating' | null>(null)
   const [loadingMessage, setLoadingMessage] = useState<string>('')
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string>('')
   const [queryLogId, setQueryLogId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(null)
@@ -229,26 +235,57 @@ export default function AskPage() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Load conversation history from localStorage on mount
+  // Load conversation from URL parameter or localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('finquote_conversation')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        setConversationHistory(parsed)
-      } catch (err) {
-        console.error('Failed to load conversation history:', err)
-        localStorage.removeItem('finquote_conversation')
+    const loadConversation = async () => {
+      const conversationId = searchParams.get('id')
+
+      // If authenticated and conversation ID in URL, load from database
+      if (user && conversationId) {
+        const { conversation, error } = await getConversation(conversationId)
+        if (error) {
+          console.error('Failed to load conversation:', error)
+          return
+        }
+
+        if (conversation) {
+          setCurrentConversationId(conversation.id)
+          // Convert database messages to conversation history format
+          const history: ConversationHistory = conversation.messages.map(msg => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: msg.created_at,
+            chartConfig: msg.chart_config as ChartConfig | undefined,
+            followUpQuestions: msg.follow_up_questions || undefined,
+            dataUsed: msg.data_used as any,
+          }))
+          setConversationHistory(history)
+        }
+      }
+      // Otherwise load from localStorage for non-authenticated users
+      else if (!user) {
+        const saved = localStorage.getItem('finquote_conversation')
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved)
+            setConversationHistory(parsed)
+          } catch (err) {
+            console.error('Failed to load conversation history:', err)
+            localStorage.removeItem('finquote_conversation')
+          }
+        }
       }
     }
-  }, [])
 
-  // Save conversation history to localStorage whenever it changes
+    loadConversation()
+  }, [user, searchParams])
+
+  // Save conversation history to localStorage for non-authenticated users only
   useEffect(() => {
-    if (conversationHistory.length > 0) {
+    if (!user && conversationHistory.length > 0) {
       localStorage.setItem('finquote_conversation', JSON.stringify(conversationHistory))
     }
-  }, [conversationHistory])
+  }, [conversationHistory, user])
 
   // Auto-focus textarea when user starts typing anywhere on the page
   useEffect(() => {
@@ -332,7 +369,7 @@ export default function AskPage() {
         if (!scrollContainerRef.current) return
 
         // Get all message containers
-        const messageContainers = scrollContainerRef.current.querySelectorAll('.space-y-6 > .space-y-4')
+        const messageContainers = scrollContainerRef.current.querySelectorAll('.space-y-0 > .space-y-1')
 
         // The user message is the last container
         const userMessageIndex = conversationHistory.length - 1
@@ -533,6 +570,41 @@ export default function AskPage() {
         setConversationHistory(prev => [...prev, assistantMessage])
         // Answer is already displayed during streaming - don't replace it!
 
+        // Save to database if user is authenticated
+        if (user) {
+          // Create new conversation if this is the first message
+          let convId = currentConversationId
+          if (!convId) {
+            const { conversation, error: createError } = await createConversation()
+            if (!createError && conversation) {
+              convId = conversation.id
+              setCurrentConversationId(convId)
+              // Update URL with conversation ID
+              router.push(`/ask?id=${convId}`)
+
+              // Save user message
+              await saveMessage(convId, 'user', userMessage.content)
+            }
+          } else {
+            // Save user message to existing conversation
+            await saveMessage(convId, 'user', userMessage.content)
+          }
+
+          // Save assistant message
+          if (convId) {
+            await saveMessage(convId, 'assistant', streamedAnswer, {
+              chart_config: receivedChart,
+              follow_up_questions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
+              data_used: receivedData,
+            })
+
+            // Auto-generate title after first exchange
+            if (conversationHistory.length === 0) {
+              await autoGenerateTitle(convId)
+            }
+          }
+        }
+
         // Reset feedback state
         setFeedback(null)
         setShowCommentBox(false)
@@ -725,9 +797,10 @@ export default function AskPage() {
     }
   }
 
-  // Clear conversation history
+  // Clear conversation history / Start new conversation
   const handleClearConversation = () => {
     setConversationHistory([])
+    setCurrentConversationId(null)
     localStorage.removeItem('finquote_conversation')
 
     // Generate new session ID for fresh conversation
@@ -743,6 +816,16 @@ export default function AskPage() {
     setFeedback(null)
     setShowCommentBox(false)
     setFeedbackComment('')
+
+    // Clear conversation ID from URL if authenticated
+    if (user) {
+      router.push('/ask')
+    }
+
+    // Focus the textarea after clearing
+    setTimeout(() => {
+      textareaRef.current?.focus()
+    }, 0)
   }
 
   // Handle clicking on a recent query
@@ -817,11 +900,14 @@ export default function AskPage() {
     return { tool: 'getAaplFinancialsByMetric', metric: 'revenue' }
   }
 
+  // Check if conversation is empty (center the input)
+  const isEmptyConversation = conversationHistory.length === 0
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
-        className={`hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-80 xl:w-96 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-30 transition-transform duration-300 ${
+        className={`hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-96 xl:w-[28rem] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-30 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -829,6 +915,7 @@ export default function AskPage() {
           userId={user?.id}
           sessionId={!user ? sessionId : undefined}
           onQueryClick={handleRecentQueryClick}
+          onNewChat={handleClearConversation}
           refreshTrigger={refreshQueriesTrigger}
         />
       </div>
@@ -837,7 +924,7 @@ export default function AskPage() {
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-lg ${
-          sidebarOpen ? 'xl:left-96 left-80' : 'left-0'
+          sidebarOpen ? 'xl:left-[28rem] left-96' : 'left-0'
         }`}
         title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
       >
@@ -853,8 +940,8 @@ export default function AskPage() {
       </button>
 
       {/* Header - fixed at top */}
-      <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 transition-[margin] ${flowPanelOffsetClass}`}>
-        <div className={`max-w-7xl mx-auto flex justify-between items-center ${flowPanelPaddingClass}`}>
+      <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4 transition-[margin] ${flowPanelOffsetClass}`}>
+        <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
           <div className="flex items-center gap-3">
             {conversationHistory.length > 0 && (
@@ -893,8 +980,8 @@ export default function AskPage() {
       </div>
 
       {/* Main scrollable content area - conversation */}
-      <div ref={scrollContainerRef} className={`lg:ml-80 xl:ml-96 flex-1 overflow-y-auto transition-[margin] pt-20 ${flowPanelOffsetClass}`}>
-        <div className="max-w-6xl mx-auto p-6 space-y-6 pb-32 lg:pb-[35vh]">
+      <div ref={scrollContainerRef} className={`lg:ml-96 xl:ml-[28rem] flex-1 overflow-y-auto transition-[margin] ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass}`}>
+        <div className={`max-w-6xl mx-auto p-6 space-y-0 ${isEmptyConversation ? '' : 'pb-32 lg:pb-[35vh]'}`}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
                 <p className="font-medium text-lg">Error</p>
@@ -908,38 +995,49 @@ export default function AskPage() {
               return (
                 <div
                   key={index}
-                  className="space-y-4"
+                  className={`space-y-1 ${index > 0 ? 'mt-6' : ''}`}
                   ref={isLastMessage ? latestMessageRef : null}
                 >
                   {message.role === 'user' ? (
                     // User question
-                    <div className="flex justify-end">
-                      <div className="group max-w-3xl">
+                    <div className="flex justify-end mt-6">
+                      <div className="group max-w-3xl relative">
                         <div className="bg-blue-600 text-white rounded-2xl px-6 py-4">
                           <p className="text-xl">{message.content}</p>
                         </div>
-                        {/* Copy button - appears on hover after 1 second, below and right-aligned */}
-                        <div className="flex justify-end mt-1">
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(message.content)
-                              // Optional: Add a toast notification here
-                            }}
-                            className="p-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100 group-hover:delay-1000"
-                            title="Copy question"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-                        </div>
+                        {/* Copy button - appears on hover after 1 second, absolutely positioned */}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(message.content)
+                          }}
+                          className="absolute -bottom-2 right-2 p-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100 group-hover:delay-1000"
+                          title="Copy question"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                   </div>
                 ) : (
                   // Assistant answer with chart and follow-up questions
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                      <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
+                  <div className="space-y-1">
+                    <div className="group relative">
+                      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                        <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
+                      </div>
+                      {/* Copy button - appears on hover, bottom right */}
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(message.content)
+                        }}
+                        className="absolute -bottom-2 right-2 p-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100 group-hover:delay-1000"
+                        title="Copy answer"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                     </div>
 
                     {/* Chart for this message */}
@@ -950,48 +1048,51 @@ export default function AskPage() {
                     )}
 
                     {/* Data table for financial_metrics type */}
-                    {message.dataUsed && message.dataUsed.type === 'financial_metrics' && message.dataUsed.data && message.dataUsed.data.length > 0 && (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    {message.dataUsed && message.dataUsed.type === 'financial_metrics' && message.dataUsed.data && message.dataUsed.data.length > 1 && (() => {
+                      // Check if all rows have the same metric (single metric query)
+                      const uniqueMetrics = Array.from(new Set(message.dataUsed.data.map((row: any) => row.metric_name)))
+                      const isSingleMetric = uniqueMetrics.length === 1
+                      const metricLabel = isSingleMetric ? uniqueMetrics[0] : 'Value'
+
+                      return (
+                        <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                          <table className="divide-y divide-gray-200 dark:divide-gray-700">
                             <thead className="bg-gray-50 dark:bg-gray-900">
                               <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                   Year
                                 </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                  Metric
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                  Value
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                  Category
+                                {!isSingleMetric && (
+                                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Metric
+                                  </th>
+                                )}
+                                <th scope="col" className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  {metricLabel}
                                 </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                               {message.dataUsed.data.map((row: any, idx: number) => (
                                 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {row.year}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                    {row.metric_name}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100 font-mono">
+                                  {!isSingleMetric && (
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                                      {row.metric_name}
+                                    </td>
+                                  )}
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100 font-mono">
                                     {typeof row.metric_value === 'number' ? row.metric_value.toFixed(2) : row.metric_value}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {row.metric_category}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
-                      </div>
-                    )}
+                      )
+                    })()}
 
                     {/* Follow-up questions for this message */}
                     {/* Only show follow-ups for the most recent assistant message */}
@@ -1132,9 +1233,9 @@ export default function AskPage() {
         </div>
       </div>
 
-      {/* Fixed bottom input bar */}
-      <div className={`lg:ml-80 xl:ml-96 fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-gray-900 pb-12 z-50 transition-[right] ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
-        <div className="max-w-6xl mx-auto">
+      {/* Fixed bottom input bar - centered when empty, bottom when conversation exists */}
+      <div className={`lg:ml-96 xl:ml-[28rem] ${isEmptyConversation ? 'fixed top-1/2 left-0 right-0 -translate-y-1/2' : 'fixed bottom-0 left-0 right-0 pb-12'} bg-gray-50 dark:bg-gray-900 z-50 transition-[right] ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
+        <div className="max-w-6xl mx-auto px-6">
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-slate-800 rounded-full px-6 py-5 border border-blue-300 dark:border-slate-700">
               {/* Textarea field */}
@@ -1143,9 +1244,11 @@ export default function AskPage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Enter') {
                     e.preventDefault()
-                    handleSubmitStreaming(e as any)
+                    if (question.trim()) {
+                      handleSubmitStreaming(e as any)
+                    }
                   }
                 }}
                 placeholder="Ask Anything"

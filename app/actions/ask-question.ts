@@ -325,7 +325,7 @@ export async function askQuestion(
     // Step 2: Execute the tool based on selection
     const toolExecutionStart = Date.now()
     let factsJson: string
-    let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages'; data: any[] }
+    let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
     let chartConfig: ChartConfig | null = null
 
     if (toolSelection.tool === 'getAaplFinancialsByMetric') {
@@ -441,6 +441,78 @@ export async function askQuestion(
 
       factsJson = JSON.stringify(toolResult.data, null, 2)
       dataUsed = { type: 'passages', data: toolResult.data }
+    } else if (toolSelection.tool === 'listMetrics') {
+      // Import at the top if not already imported
+      const { listMetrics } = await import('./list-metrics')
+
+      // Optional category filter
+      const category = toolSelection.args.category as string | undefined
+
+      const toolResult = await listMetrics(category ? { category } : undefined)
+
+      if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to list metrics'
+        return {
+          answer: '',
+          dataUsed: null,
+          chartConfig: null,
+          error: toolError,
+          queryLogId: null,
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'metrics_catalog', data: toolResult.data }
+    } else if (toolSelection.tool === 'getFinancialMetric') {
+      // Import at the top if not already imported
+      const { getFinancialMetrics } = await import('./get-financial-metric')
+
+      // Extract metric names (can be array or single string)
+      const metricNames = toolSelection.args.metricNames as string[]
+      const limit = toolSelection.args.limit || 5
+
+      if (!metricNames || metricNames.length === 0) {
+        return {
+          answer: '',
+          dataUsed: null,
+          chartConfig: null,
+          error: 'No metrics specified',
+          queryLogId: null,
+        }
+      }
+
+      if (limit < 1 || limit > 20) {
+        return {
+          answer: '',
+          dataUsed: null,
+          chartConfig: null,
+          error: 'Invalid limit (must be 1-20)',
+          queryLogId: null,
+        }
+      }
+
+      const toolResult = await getFinancialMetrics({
+        symbol: 'AAPL',
+        metricNames,
+        limit,
+      })
+
+      if (toolResult.error || !toolResult.data) {
+        toolError = toolResult.error || 'Failed to fetch financial metrics'
+        return {
+          answer: '',
+          dataUsed: null,
+          chartConfig: null,
+          error: toolError,
+          queryLogId: null,
+        }
+      }
+
+      factsJson = JSON.stringify(toolResult.data, null, 2)
+      dataUsed = { type: 'financial_metrics', data: toolResult.data }
+
+      // TODO: Generate chart for single metrics (similar to financial chart logic)
+      // For now, skip charts for advanced metrics
     } else {
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected', queryLogId: null }
     }

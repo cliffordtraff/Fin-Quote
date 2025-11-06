@@ -111,6 +111,15 @@
     "symbol": "AAPL",
     "year": 2025,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 12715000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 8.767754620526937,
     "metric_category": "Other",
@@ -160,6 +169,15 @@
     "metric_value": 0.21695214060169896,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 90711000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -282,6 +300,15 @@
     "symbol": "AAPL",
     "year": 2025,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11698000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 3.962254762581746,
     "metric_category": "Other",
@@ -295,6 +322,15 @@
     "metric_value": 0.1376752075707526,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 15421000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -322,6 +358,24 @@
     "metric_value": 0.029331635106467118,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 144427000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.347045975,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -484,6 +538,15 @@
     "metric_value": 8.350945137857687,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 98767000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -1092,6 +1155,15 @@
     "symbol": "AAPL",
     "year": 2025,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 12863000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2025,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.030908710811440764,
     "metric_category": "Other",
@@ -1362,6 +1434,15 @@
     "symbol": "AAPL",
     "year": 2024,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 9447000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 12.517624642743728,
     "metric_category": "Other",
@@ -1411,6 +1492,15 @@
     "metric_value": 0.16975259648963673,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 94949000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -1533,6 +1623,15 @@
     "symbol": "AAPL",
     "year": 2024,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11445000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 4.7912969490701345,
     "metric_category": "Other",
@@ -1546,6 +1645,15 @@
     "metric_value": 0.16252026969360758,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 15234000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -1573,6 +1681,24 @@
     "metric_value": 0.026818798327209237,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 134661000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3443707085,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -1735,6 +1861,15 @@
     "metric_value": 8.560310858143607,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 108807000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -2343,6 +2478,15 @@
     "symbol": "AAPL",
     "year": 2024,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 11688000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2024,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.02988990755303234,
     "metric_category": "Other",
@@ -2613,6 +2757,15 @@
     "symbol": "AAPL",
     "year": 2023,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 10959000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 10.08696048909572,
     "metric_category": "Other",
@@ -2662,6 +2815,15 @@
     "metric_value": 0.20621713876730807,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 77550000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -2784,6 +2946,15 @@
     "symbol": "AAPL",
     "year": 2023,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11519000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 4.254271859605911,
     "metric_category": "Other",
@@ -2797,6 +2968,15 @@
     "metric_value": 0.1549048920047425,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 15025000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -2824,6 +3004,24 @@
     "metric_value": 0.03598311584343425,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 125820000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3282674772,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -2986,6 +3184,15 @@
     "metric_value": 7.04878990731205,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 99584000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -3594,6 +3801,15 @@
     "symbol": "AAPL",
     "year": 2023,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 10833000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2023,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.028263563666723196,
     "metric_category": "Other",
@@ -3864,6 +4080,15 @@
     "symbol": "AAPL",
     "year": 2022,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 10708000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 11.407452372058275,
     "metric_category": "Other",
@@ -3913,6 +4138,15 @@
     "metric_value": 0.15356340351469652,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 89402000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -4035,6 +4269,15 @@
     "symbol": "AAPL",
     "year": 2022,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11104000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 4.781048181924929,
     "metric_category": "Other",
@@ -4048,6 +4291,15 @@
     "metric_value": 0.14870294480125848,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 14841000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -4075,6 +4327,24 @@
     "metric_value": 0.040913477615088595,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 133138000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3376326307,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -4237,6 +4507,15 @@
     "metric_value": 7.506148399131991,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 111443000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -4845,6 +5124,15 @@
     "symbol": "AAPL",
     "year": 2022,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 9038000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2022,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.022920005680550203,
     "metric_category": "Other",
@@ -5115,6 +5403,15 @@
     "symbol": "AAPL",
     "year": 2021,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 11085000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 9.385475868290483,
     "metric_category": "Other",
@@ -5164,6 +5461,15 @@
     "metric_value": 0.2784485300563432,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 85971000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -5286,6 +5592,15 @@
     "symbol": "AAPL",
     "year": 2021,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11284000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 4.071618659987476,
     "metric_category": "Other",
@@ -5299,6 +5614,15 @@
     "metric_value": 0.15279890156316012,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 14467000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -5326,6 +5650,24 @@
     "metric_value": 0.038585824129614886,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 123136000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3366054612,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -5488,6 +5830,15 @@
     "metric_value": 7.386213580471258,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 92953000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -6096,6 +6447,15 @@
     "symbol": "AAPL",
     "year": 2021,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 7906000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2021,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.021611898845597662,
     "metric_category": "Other",
@@ -6366,6 +6726,15 @@
     "symbol": "AAPL",
     "year": 2020,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 7309000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 11.037624846080176,
     "metric_category": "Other",
@@ -6415,6 +6784,15 @@
     "metric_value": 0.36071049035979963,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 72358000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -6537,6 +6915,15 @@
     "symbol": "AAPL",
     "year": 2020,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11056000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 3.771575502571295,
     "metric_category": "Other",
@@ -6550,6 +6937,15 @@
     "metric_value": 0.24526658654264863,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 14081000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -6577,6 +6973,24 @@
     "metric_value": 0.02946728952812424,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 81020000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.2951386992,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -6739,6 +7153,15 @@
     "metric_value": 6.055121757543674,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 73365000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -7347,6 +7770,15 @@
     "symbol": "AAPL",
     "year": 2020,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 6829000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2020,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.024876600550061016,
     "metric_category": "Other",
@@ -7617,6 +8049,15 @@
     "symbol": "AAPL",
     "year": 2019,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 10495000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 6.611815150071463,
     "metric_category": "Other",
@@ -7666,6 +8107,15 @@
     "metric_value": 0.46202160464632325,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 66897000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -7788,6 +8238,15 @@
     "symbol": "AAPL",
     "year": 2019,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 12547000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.8191679531973675,
     "metric_category": "Other",
@@ -7801,6 +8260,15 @@
     "metric_value": 0.25551976255972203,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 14119000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -7828,6 +8296,24 @@
     "metric_value": 0.05467822652278504,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 81860000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.31463559,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -7990,6 +8476,15 @@
     "metric_value": 6.960618545668575,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 58896000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -8598,6 +9093,15 @@
     "symbol": "AAPL",
     "year": 2019,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 6068000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2019,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.0233228531674956,
     "metric_category": "Other",
@@ -8868,6 +9372,15 @@
     "symbol": "AAPL",
     "year": 2018,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 13313000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.816420040561857,
     "metric_category": "Other",
@@ -8917,6 +9430,15 @@
     "metric_value": 0.22352474359306126,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 72738000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -9039,6 +9561,15 @@
     "symbol": "AAPL",
     "year": 2018,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 10903000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.86527289546716,
     "metric_category": "Other",
@@ -9052,6 +9583,15 @@
     "metric_value": 0.23033377567989788,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 13712000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -9079,6 +9619,24 @@
     "metric_value": 0.053213212804837894,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 87046000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3277396035,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -9241,6 +9799,15 @@
     "metric_value": 6.430248886306411,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 64121000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -9849,6 +10416,15 @@
     "symbol": "AAPL",
     "year": 2018,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 5340000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2018,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.020105800184491426,
     "metric_category": "Other",
@@ -10119,6 +10695,15 @@
     "symbol": "AAPL",
     "year": 2017,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 12795000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.019538882375928,
     "metric_category": "Other",
@@ -10168,6 +10753,15 @@
     "metric_value": 0.2012518102644474,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 32900000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -10290,6 +10884,15 @@
     "symbol": "AAPL",
     "year": 2017,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 10157000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.5123220153340635,
     "metric_category": "Other",
@@ -10303,6 +10906,15 @@
     "metric_value": 0.264089677566131,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 12769000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -10330,6 +10942,24 @@
     "metric_value": 0.060131976421677245,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 76569000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3340211312,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -10492,6 +11122,15 @@
     "metric_value": 6.785483823224699,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 51430000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -11100,6 +11739,15 @@
     "symbol": "AAPL",
     "year": 2017,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 4840000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2017,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.021113796382735545,
     "metric_category": "Other",
@@ -11370,6 +12018,15 @@
     "symbol": "AAPL",
     "year": 2016,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 13548000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 4.888618246235607,
     "metric_category": "Other",
@@ -11419,6 +12076,15 @@
     "metric_value": 0.2592714477381465,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 29722000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -11541,6 +12207,15 @@
     "symbol": "AAPL",
     "year": 2016,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 10505000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.5772822787765586,
     "metric_category": "Other",
@@ -11554,6 +12229,15 @@
     "metric_value": 0.26593998292730975,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 12150000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -11581,6 +12265,24 @@
     "metric_value": 0.07408652679479812,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 73333000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3400729924,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -11743,6 +12445,15 @@
     "metric_value": 7.9836727138097,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 52683000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -12351,6 +13062,15 @@
     "symbol": "AAPL",
     "year": 2016,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 4210000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2016,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.01952337007684139,
     "metric_category": "Other",
@@ -12621,6 +13341,15 @@
     "symbol": "AAPL",
     "year": 2015,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 11488000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 7.0739902506963785,
     "metric_category": "Other",
@@ -12670,6 +13399,15 @@
     "metric_value": 0.2620022329735765,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 35253000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -12792,6 +13530,15 @@
     "symbol": "AAPL",
     "year": 2015,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 11257000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 3.5257928760466832,
     "metric_category": "Other",
@@ -12805,6 +13552,15 @@
     "metric_value": 0.2165224557066337,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 11561000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -12832,6 +13588,24 @@
     "metric_value": 0.080896021739568,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 84505000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3615728558,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -12994,6 +13768,15 @@
     "metric_value": 10.400738729918562,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 69778000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -13602,6 +14385,15 @@
     "symbol": "AAPL",
     "year": 2015,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 3586000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2015,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.015343473889138481,
     "metric_category": "Other",
@@ -13872,6 +14664,15 @@
     "symbol": "AAPL",
     "year": 2014,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 9813000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 6.085091205543667,
     "metric_category": "Other",
@@ -13921,6 +14722,15 @@
     "metric_value": 0.21819442693229102,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 45000000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -14043,6 +14853,15 @@
     "symbol": "AAPL",
     "year": 2014,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 7946000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.8517598739194803,
     "metric_category": "Other",
@@ -14056,6 +14875,15 @@
     "metric_value": 0.2815995950392306,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 11126000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -14083,6 +14911,24 @@
     "metric_value": 0.06443435207812506,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 61813000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3381547635,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -14245,6 +15091,15 @@
     "metric_value": 8.863217610550814,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 49900000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -14853,6 +15708,15 @@
     "symbol": "AAPL",
     "year": 2014,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 2863000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2014,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.01566235400311825,
     "metric_category": "Other",
@@ -15123,6 +15987,15 @@
     "symbol": "AAPL",
     "year": 2013,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 9076000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.9129572498898195,
     "metric_category": "Other",
@@ -15172,6 +16045,15 @@
     "metric_value": 0.3266068074579688,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 22860000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -15294,6 +16176,15 @@
     "symbol": "AAPL",
     "year": 2013,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 6757000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 2.7324847250509166,
     "metric_category": "Other",
@@ -15307,6 +16198,15 @@
     "metric_value": 0.28522828522828525,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 10564000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -15334,6 +16234,24 @@
     "metric_value": 0.08291696490341736,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 57048000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3337897139,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -15496,6 +16414,15 @@
     "metric_value": 10.297644152557691,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 44590000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -16104,6 +17031,15 @@
     "symbol": "AAPL",
     "year": 2013,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 2253000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2013,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.013182376689485695,
     "metric_category": "Other",
@@ -16374,6 +17310,15 @@
     "symbol": "AAPL",
     "year": 2012,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 9402000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.409061901723038,
     "metric_category": "Other",
@@ -16423,6 +17368,15 @@
     "metric_value": 0.27881272378184835,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -16545,6 +17499,15 @@
     "symbol": "AAPL",
     "year": 2012,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 3277000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 4.277207737594617,
     "metric_category": "Other",
@@ -16558,6 +17521,15 @@
     "metric_value": 0.05961708959336736,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 2488000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -16585,6 +17557,24 @@
     "metric_value": 0.06690676489468497,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 59040000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3772331127,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -16747,6 +17737,15 @@
     "metric_value": 10.128656484597464,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 41454000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -17355,6 +18354,15 @@
     "symbol": "AAPL",
     "year": 2012,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 1740000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2012,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.011117642548623713,
     "metric_category": "Other",
@@ -17625,6 +18633,15 @@
     "symbol": "AAPL",
     "year": 2011,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 7452000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.036097691894794,
     "metric_category": "Other",
@@ -17674,6 +18691,15 @@
     "metric_value": 0.35091169109760456,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -17796,6 +18822,15 @@
     "symbol": "AAPL",
     "year": 2011,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 1814000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 5.036097691894794,
     "metric_category": "Other",
@@ -17809,6 +18844,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -17836,6 +18880,24 @@
     "metric_value": 0.06936647557266848,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 36019000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.3327421039,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -17998,6 +19060,15 @@
     "metric_value": 13.919120483476918,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 30077000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -18606,6 +19677,15 @@
     "symbol": "AAPL",
     "year": 2011,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 1168000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2011,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.010789938013284187,
     "metric_category": "Other",
@@ -18876,6 +19956,15 @@
     "symbol": "AAPL",
     "year": 2010,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 2121000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 8.767090994813767,
     "metric_category": "Other",
@@ -18925,6 +20014,15 @@
     "metric_value": 0.5434321011485378,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -19047,6 +20145,15 @@
     "symbol": "AAPL",
     "year": 2010,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 1027000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 8.767090994813767,
     "metric_category": "Other",
@@ -19060,6 +20167,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -19087,6 +20203,24 @@
     "metric_value": 0.05270940060408496,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 19412000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.2976159448,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -19249,6 +20383,15 @@
     "metric_value": 13.679739932885907,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 16474000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -19857,6 +21000,15 @@
     "symbol": "AAPL",
     "year": 2010,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 879000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2010,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.013476427750095821,
     "metric_category": "Other",
@@ -20127,6 +21279,15 @@
     "symbol": "AAPL",
     "year": 2009,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 1213000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 8.37510305028854,
     "metric_category": "Other",
@@ -20176,6 +21337,15 @@
     "metric_value": 0.45741352337910657,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -20298,6 +21468,15 @@
     "symbol": "AAPL",
     "year": 2009,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 734000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 8.37510305028854,
     "metric_category": "Other",
@@ -20311,6 +21490,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -20338,6 +21526,24 @@
     "metric_value": 0.050590026765330566,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 12474000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.2907353455,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -20500,6 +21706,15 @@
     "metric_value": 14.524373730534869,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 8946000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -21108,6 +22323,15 @@
     "symbol": "AAPL",
     "year": 2009,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 710000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2009,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.016548187856893135,
     "metric_category": "Other",
@@ -21378,6 +22602,15 @@
     "symbol": "AAPL",
     "year": 2008,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 1199000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 8.003336113427856,
     "metric_category": "Other",
@@ -21427,6 +22660,15 @@
     "metric_value": 1.045242496259132,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -21549,6 +22791,15 @@
     "symbol": "AAPL",
     "year": 2008,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 409000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 8.003336113427856,
     "metric_category": "Other",
@@ -21562,6 +22813,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -21589,6 +22849,24 @@
     "metric_value": 0.042757814243349485,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 7304000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.2248837711,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -21751,6 +23029,15 @@
     "metric_value": 13.229735234215886,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 8397000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -22359,6 +23646,15 @@
     "symbol": "AAPL",
     "year": 2008,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 516000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2008,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.015887188644970598,
     "metric_category": "Other",
@@ -22629,6 +23925,15 @@
     "symbol": "AAPL",
     "year": 2007,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 986000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 5.547667342799189,
     "metric_category": "Other",
@@ -22678,6 +23983,15 @@
     "metric_value": 1.0077586206896552,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 3000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -22800,6 +24114,15 @@
     "symbol": "AAPL",
     "year": 2007,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 317000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 5.547667342799189,
     "metric_category": "Other",
@@ -22813,6 +24136,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -22840,6 +24172,24 @@
     "metric_value": 0.02634483217460363,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 4724000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.1967841373,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -23002,6 +24352,15 @@
     "metric_value": 13.103711790393014,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 4484000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -23610,6 +24969,15 @@
     "symbol": "AAPL",
     "year": 2007,
     "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 242000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2007,
+    "period": "FY",
     "metric_name": "stockBasedCompensationToRevenue",
     "metric_value": 0.01008081313005082,
     "metric_category": "Other",
@@ -23880,6 +25248,15 @@
     "symbol": "AAPL",
     "year": 2006,
     "period": "FY",
+    "metric_name": "capitalExpenditure",
+    "metric_value": 657000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
     "metric_name": "capitalExpenditureCoverageRatio",
     "metric_value": 3.3789954337899544,
     "metric_category": "Other",
@@ -23929,6 +25306,15 @@
     "metric_value": 0.9920844327176781,
     "metric_category": "Leverage & Solvency",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "commonStockRepurchased",
+    "metric_value": 355000000,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -24051,6 +25437,15 @@
     "symbol": "AAPL",
     "year": 2006,
     "period": "FY",
+    "metric_name": "depreciationAndAmortization",
+    "metric_value": 225000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
     "metric_name": "dividendPaidAndCapexCoverageRatio",
     "metric_value": 3.3789954337899544,
     "metric_category": "Other",
@@ -24064,6 +25459,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "dividendsPaid",
+    "metric_value": 0,
+    "metric_category": "Capital Returns & Share Data",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -24091,6 +25495,24 @@
     "metric_value": 0.03060354718653082,
     "metric_category": "Valuation",
     "data_source": "FMP:key-metrics"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "ebitda",
+    "metric_value": 2678000000,
+    "metric_category": "Other",
+    "data_source": "FMP:income-statement"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "ebitdaMargin",
+    "metric_value": 0.1386487186,
+    "metric_category": "Profitability & Returns",
+    "data_source": "FMP:income-statement"
   },
   {
     "symbol": "AAPL",
@@ -24253,6 +25675,15 @@
     "metric_value": 15.078064012490241,
     "metric_category": "Efficiency & Working Capital",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "freeCashFlow",
+    "metric_value": 1563000000,
+    "metric_category": "Cash Flow",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",
@@ -24856,6 +26287,15 @@
     "metric_value": 0,
     "metric_category": "Other",
     "data_source": "FMP:ratios"
+  },
+  {
+    "symbol": "AAPL",
+    "year": 2006,
+    "period": "FY",
+    "metric_name": "stockBasedCompensation",
+    "metric_value": 163000000,
+    "metric_category": "Other",
+    "data_source": "FMP:cash-flow-statement"
   },
   {
     "symbol": "AAPL",

@@ -45,7 +45,8 @@ Every user question follows this pattern:
 Defined in `lib/tools.ts` (TOOL_MENU):
 
 1. **getAaplFinancialsByMetric** - Income statement, balance sheet, cash flow metrics
-   - Metrics: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
+   - Core metrics: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
+   - Extended metrics: 139 additional financial metrics available (P/E ratio, ROE, debt ratios, growth rates, etc.)
    - Can calculate ratios: gross margin, net margin, ROE, ROA, debt-to-equity, etc.
 
 2. **getPrices** - Stock price history
@@ -58,11 +59,16 @@ Defined in `lib/tools.ts` (TOOL_MENU):
    - Uses pgvector for embedding-based search
    - Returns relevant text passages with citations
 
+**Future tools (planned):**
+- `listMetrics` - Discovery tool for browsing the catalog of 139 financial metrics
+- Enhanced metric tool with alias resolution ("P/E ratio" → `peRatio`)
+
 ### Data Storage (Supabase)
 
 **Tables:**
 - `company` - Company metadata (symbol, name, sector)
-- `financials_std` - Standardized financial metrics by year
+- `financials_std` - Standardized financial metrics by year (core metrics)
+- `financial_metrics` - Extended metrics (139 metrics including ratios, growth rates, valuations)
 - `filings` - SEC filing metadata
 - `filing_chunks` - Text chunks with embeddings for semantic search (1536-dim vectors)
 - `price_history` - Daily stock prices
@@ -91,12 +97,24 @@ npm run build                  # Production build
 npm run lint                   # Run ESLint
 ```
 
+### Data Export
+```bash
+npm run export                 # Export financial data to Excel
+npm run export:catalog         # Export metrics catalog to Excel
+```
+
 ### Database Scripts
 
 **Financial Data:**
 ```bash
+# Core metrics (financials_std table)
 npx tsx scripts/fetch-aapl-data.ts        # Fetch financial data from API
 npx tsx scripts/ingest-financials.ts      # Load data into Supabase
+
+# Extended metrics (financial_metrics table - 139 metrics)
+npm run setup:metrics                     # Create financial_metrics table
+npm run fetch:metrics                     # Fetch metrics from FMP API
+npm run ingest:metrics                    # Load metrics into Supabase
 ```
 
 **SEC Filings:**
@@ -212,6 +230,25 @@ For questions like "What's AAPL's ROE?", the system:
 
 This pattern works for: gross margin, net margin, operating margin, ROE, ROA, debt-to-equity, asset turnover, etc.
 
+### Extended Metrics System (139 Metrics)
+
+**Phase 4 Addition**: Beyond the 9 core metrics, the system now has access to 139 financial metrics from FMP API:
+
+**Categories:**
+- **Valuation Ratios**: P/E, P/B, P/S, EV/EBITDA, PEG ratio
+- **Profitability & Returns**: ROE, ROA, ROIC, profit margins (gross, operating, net)
+- **Leverage & Solvency**: Debt ratios, interest coverage, current/quick ratios
+- **Efficiency**: Asset turnover, inventory turnover, receivables turnover
+- **Growth Rates**: Revenue growth, earnings growth, dividend growth
+- **Per-Share Metrics**: EPS, book value per share, operating cash flow per share
+- **Dividends**: Dividend yield, payout ratio, dividend per share
+
+**Two-Layer Architecture (Planned):**
+1. **Discovery Layer**: `listMetrics` tool for browsing available metrics by category
+2. **Execution Layer**: Enhanced tool with alias resolution (e.g., "P/E" → `peRatio`, "return on equity" → `returnOnEquity`)
+
+**Current State**: Metrics stored in `financial_metrics` table, available via scripts, not yet exposed in Q&A tools
+
 ### Conversation History
 
 The system maintains conversation context:
@@ -298,6 +335,7 @@ Run with `npx tsx scripts/evaluate.ts`:
 - **Row limits**: Financials (1-10 years), Filings (1-10 filings), Prices (7/30/90 days)
 - **No free-form SQL**: LLM cannot write arbitrary queries; must use predefined tools
 - **Server-side secrets**: API keys never exposed to browser; all in server actions
+- **Metric coverage**: Extended metrics available from 2006-2025 (Financial Modeling Prep API)
 
 ---
 
@@ -310,6 +348,8 @@ Comprehensive planning docs in `docs/`:
 - `COST_TRACKING_SETUP.md` - Token usage and cost analysis
 - `STORAGE_SETUP.md` - Supabase storage configuration for SEC filings
 - `PHASE_*_IMPLEMENTATION.md` - Detailed phase-by-phase implementation notes
+- `METRIC_DISCOVERY_EXECUTION_PLAN.md` - Two-layer architecture for 139 metrics integration
+- `FINANCIAL_METRIC_ROUTER_RECOMMENDATION.md` - Router design for metric handling
 
 ---
 

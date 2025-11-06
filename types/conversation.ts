@@ -8,6 +8,10 @@ export type Message = {
   timestamp: string
   chartConfig?: ChartConfig | null
   followUpQuestions?: string[]
+  dataUsed?: {
+    type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'
+    data: any[]
+  } | null
 }
 
 export type ConversationHistory = Message[]

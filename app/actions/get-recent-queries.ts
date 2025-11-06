@@ -56,6 +56,27 @@ export async function getRecentQueries(params?: {
   }
 }
 
+export async function deleteQuery(queryId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createServerClient()
+
+    const { error } = await supabase
+      .from('query_logs')
+      .delete()
+      .eq('id', queryId)
+
+    if (error) {
+      console.error('Error deleting query:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to delete query:', error)
+    return { success: false, error: 'Failed to delete query' }
+  }
+}
+
 export async function clearQueryHistory(params?: {
   userId?: string
   sessionId?: string

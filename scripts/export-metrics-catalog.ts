@@ -349,17 +349,6 @@ async function exportMetricsCatalog() {
   // ==========================================
   const filename = `exports/aapl-metrics-catalog-${new Date().toISOString().split('T')[0]}.xlsx`
 
-  try {
-    { header: 'Metric Name', key: 'name', width: 28 },
-    { header: 'Database Field', key: 'field', width: 22 },
-    { header: 'Category', key: 'category', width: 20 },
-    { header: 'Description', key: 'description', width: 55 },
-    { header: 'Unit', key: 'unit', width: 16 },
-    { header: 'Data Type', key: 'dataType', width: 12 },
-  ]
-
-  // Template handles all header styling
-
   // Add raw metrics
   rawMetrics.forEach((metric) => {
     rawSheet.addRow({
@@ -509,8 +498,6 @@ async function exportMetricsCatalog() {
   // ==========================================
   // Save File
   // ==========================================
-  const filename = `exports/aapl-metrics-catalog-${new Date().toISOString().split('T')[0]}.xlsx`
-
   try {
     await workbook.xlsx.writeFile(filename)
     console.log(`✅ Metrics catalog created successfully!`)

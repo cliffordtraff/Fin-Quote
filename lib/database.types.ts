@@ -166,9 +166,83 @@ export interface Database {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          role: 'user' | 'assistant'
+          content: string
+          created_at: string
+          chart_config: Json | null
+          follow_up_questions: string[] | null
+          data_used: Json | null
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          role: 'user' | 'assistant'
+          content: string
+          created_at?: string
+          chart_config?: Json | null
+          follow_up_questions?: string[] | null
+          data_used?: Json | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          role?: 'user' | 'assistant'
+          content?: string
+          chart_config?: Json | null
+          follow_up_questions?: string[] | null
+          data_used?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {}
-    Functions: {}
+    Functions: {
+      generate_conversation_title: {
+        Args: { conversation_id: string }
+        Returns: string
+      }
+    }
     Enums: {}
     CompositeTypes: {}
   }
@@ -179,8 +253,14 @@ export type Company = Database['public']['Tables']['company']['Row']
 export type Financial = Database['public']['Tables']['financials_std']['Row']
 export type Filing = Database['public']['Tables']['filings']['Row']
 export type FinancialMetric = Database['public']['Tables']['financial_metrics']['Row']
+export type Conversation = Database['public']['Tables']['conversations']['Row']
+export type Message = Database['public']['Tables']['messages']['Row']
 
 // Type for joined data
 export type CompanyWithFinancials = Company & {
   financials_std: Financial[]
+}
+
+export type ConversationWithMessages = Conversation & {
+  messages: Message[]
 }

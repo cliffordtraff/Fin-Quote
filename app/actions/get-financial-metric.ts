@@ -1,11 +1,17 @@
 'use server'
 
 /**
- * Server action to fetch financial metrics from the new financial_metrics table
- * Supports 139 metrics including P/E, Market Cap, ROE, Debt-to-Equity, etc.
+ * Server action to fetch financial metrics from the financial_metrics table
+ * Supports 50+ metrics including P/E, Market Cap, ROE, Debt-to-Equity, etc.
+ *
+ * Features:
+ * - Alias resolution: "P/E" → "peRatio", "ROE" → "returnOnEquity"
+ * - Multi-metric queries: fetch multiple metrics in one call
+ * - Flexible filtering by year range
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/supabase/server'
+import { resolveMetricNames } from '@/lib/metric-resolver'
 
 export interface FinancialMetricParams {
   symbol: string
@@ -30,7 +36,7 @@ export async function getFinancialMetric(
   error: string | null
 }> {
   try {
-    const supabase = createClient()
+    const supabase = createServerClient()
 
     // Build query
     let query = supabase
@@ -68,28 +74,52 @@ export async function getFinancialMetric(
 
 /**
  * Get multiple metrics for a single year (useful for comparisons)
+ * NOW WITH ALIAS SUPPORT - accepts flexible metric names
+ *
+ * @example
+ * getFinancialMetrics({
+ *   symbol: 'AAPL',
+ *   metricNames: ['P/E', 'ROE', 'debt to equity'], // Aliases work!
+ *   limit: 5
+ * })
  */
 export async function getFinancialMetrics(params: {
   symbol: string
-  metricNames: string[] // Array of metric names
+  metricNames: string[] // Array of metric names (canonical OR aliases)
   year?: number
   yearStart?: number
   yearEnd?: number
+  limit?: number // Number of years per metric (default: 5, max: 20)
 }): Promise<{
   data: FinancialMetricResult[] | null
   error: string | null
+  unresolved?: string[] // Metrics that couldn't be resolved
 }> {
   try {
-    const supabase = createClient()
+    // 1. Resolve all metric names (aliases → canonical)
+    const { resolved, unresolved } = await resolveMetricNames(params.metricNames)
+
+    // 2. If any metrics couldn't be resolved, return error with suggestions
+    if (unresolved.length > 0) {
+      return {
+        data: null,
+        error: `Could not resolve these metrics: ${unresolved.join(', ')}. Use listMetrics to see available metrics.`,
+        unresolved
+      }
+    }
+
+    // 3. Query database with resolved canonical names
+    const supabase = createServerClient()
 
     let query = supabase
       .from('financial_metrics')
       .select('year, metric_name, metric_value, metric_category, data_source')
       .eq('symbol', params.symbol)
-      .in('metric_name', params.metricNames)
+      .in('metric_name', resolved) // Use resolved canonical names
       .order('year', { ascending: false })
       .order('metric_name', { ascending: true })
 
+    // 4. Apply year filters
     if (params.year) {
       query = query.eq('year', params.year)
     } else {
@@ -101,8 +131,9 @@ export async function getFinancialMetrics(params: {
       }
     }
 
-    // Limit to prevent too much data
-    query = query.limit(100)
+    // 5. Apply limit (default: 5 years per metric, max: 20)
+    const limit = Math.min(params.limit || 5, 20)
+    query = query.limit(limit * resolved.length)
 
     const { data, error } = await query
 
@@ -130,7 +161,7 @@ export async function getMetricsByCategory(params: {
   error: string | null
 }> {
   try {
-    const supabase = createClient()
+    const supabase = createServerClient()
 
     let query = supabase
       .from('financial_metrics')

@@ -244,7 +244,9 @@ Available Tools:
 
    Use for 50+ advanced metrics including:
    - Valuation: P/E ratio, P/B ratio, PEG ratio, EV/EBITDA, market cap
-   - Profitability: ROE, ROA, ROIC, profit margins, EBIT margin
+   - Profitability Margins: gross margin, operating margin, net margin, EBIT margin, EBITDA margin, pretax margin
+   - Cash Flow: free cash flow, capex, buybacks, dividends paid, stock-based compensation
+   - Returns: ROE, ROA, ROIC, return on capital employed
    - Leverage: debt-to-equity, current ratio, quick ratio, cash ratio
    - Growth: revenue growth, EPS growth, dividend growth
    - Efficiency: asset turnover, inventory turnover, cash conversion cycle
@@ -264,6 +266,9 @@ Available Tools:
    Examples:
    - "What's Apple's P/E ratio?" → {"metricNames": ["P/E"], "limit": 5}
    - "Show me ROE trend" → {"metricNames": ["ROE"], "limit": 4}
+   - "What's Apple's free cash flow?" → {"metricNames": ["free cash flow"], "limit": 5}
+   - "How much did Apple spend on buybacks?" → {"metricNames": ["buybacks"], "limit": 5}
+   - "Show me capex trend" → {"metricNames": ["capex"], "limit": 4}
    - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 5}
    - "Dividend yield for 2023" → {"metricNames": ["dividend yield"], "limit": 20}
 
@@ -430,7 +435,9 @@ General Instructions:
 - If trend is relevant (and the user asked for it), describe it (e.g., increasing/decreasing/flat).
 - Do not invent numbers or sources.
 - Respond in plain text sentences. Do NOT use Markdown formatting (no bullet lists, bold, italics, tables, or code blocks).
-- When more than four data points are relevant, do not list each one. Write at most two sentences: the first calls out the earliest year/value, latest year/value, and any notable high/low; the second describes the overall trend and tells the user to check the data table below for the full yearly breakdown.
+- When there is only ONE data point, provide a concise single-sentence answer with the year and value. Do NOT mention any chart or table.
+- When there are 2-4 data points, list them briefly in your answer.
+- When more than four data points are relevant, do not list each one. Write at most two sentences: the first calls out the earliest year/value, latest year/value, and any notable high/low; the second describes the overall trend and tells the user to check the chart and data table below for the full yearly breakdown.
 
 Examples:
 - Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020, exact number)

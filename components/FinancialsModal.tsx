@@ -104,10 +104,10 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
     }
 
     return (
-      <tr className="hover:bg-gray-50">
-        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{label}</td>
+      <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">{label}</td>
         {values.map((value, idx) => (
-          <td key={idx} className="px-4 py-3 text-sm text-gray-900 text-right">
+          <td key={idx} className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">
             {formatFn(value)}
           </td>
         ))}
@@ -128,10 +128,10 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
     const values = years.map(calculator)
 
     return (
-      <tr className="hover:bg-gray-50">
-        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{label}</td>
+      <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">{label}</td>
         {values.map((value, idx) => (
-          <td key={idx} className="px-4 py-3 text-sm text-gray-900 text-right">
+          <td key={idx} className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">
             {formatFn(value)}
           </td>
         ))}
@@ -141,20 +141,20 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-2xl font-bold">Company Financials</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Company Financials</h2>
             {company && (
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {company.name} ({company.symbol}) - {company.sector}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-2xl leading-none"
           >
             ×
           </button>
@@ -165,20 +165,20 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
           {loading && (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading financials...</p>
+              <p className="mt-4 text-gray-600 dark:text-gray-400">Loading financials...</p>
             </div>
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <h3 className="text-red-800 font-semibold mb-2">Error Loading Data</h3>
-              <p className="text-red-600">{error}</p>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <h3 className="text-red-800 dark:text-red-400 font-semibold mb-2">Error Loading Data</h3>
+              <p className="text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
 
           {!loading && !error && financials.length === 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-yellow-800">No financial data available.</p>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+              <p className="text-yellow-800 dark:text-yellow-400">No financial data available.</p>
             </div>
           )}
 
@@ -186,7 +186,7 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse">
                 <thead>
-                  <tr className="bg-gray-900 text-white">
+                  <tr className="bg-gray-900 dark:bg-gray-950 text-white">
                     <th className="px-4 py-3 text-left text-sm font-medium uppercase tracking-wider">
                       Metric
                     </th>
@@ -197,33 +197,33 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {/* Period Info */}
-                  <tr className="bg-gray-100">
-                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">
+                  <tr className="bg-gray-100 dark:bg-gray-700">
+                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">
                       Period Information
                     </td>
                   </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">Period End Date</td>
+                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">Period End Date</td>
                     {years.map(year => (
-                      <td key={year} className="px-4 py-3 text-sm text-gray-900 text-right">
+                      <td key={year} className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">
                         12/31/{year}
                       </td>
                     ))}
                   </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">Period Length</td>
+                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">Period Length</td>
                     {years.map(year => (
-                      <td key={year} className="px-4 py-3 text-sm text-gray-900 text-right">
+                      <td key={year} className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right">
                         12 Months
                       </td>
                     ))}
                   </tr>
 
                   {/* Income Statement */}
-                  <tr className="bg-gray-100">
-                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">
+                  <tr className="bg-gray-100 dark:bg-gray-700">
+                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">
                       Income Statement
                     </td>
                   </tr>
@@ -235,8 +235,8 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
                   <MetricRow label="EPS" field="eps" formatFn={(v) => v !== null ? v.toFixed(2) : '—'} />
 
                   {/* Balance Sheet */}
-                  <tr className="bg-gray-100">
-                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">
+                  <tr className="bg-gray-100 dark:bg-gray-700">
+                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">
                       Balance Sheet
                     </td>
                   </tr>
@@ -245,8 +245,8 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
                   <MetricRow label="Shareholders Equity" field="shareholders_equity" />
 
                   {/* Financial Ratios */}
-                  <tr className="bg-gray-100">
-                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">
+                  <tr className="bg-gray-100 dark:bg-gray-700">
+                    <td colSpan={1 + years.length} className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">
                       Financial Ratios
                     </td>
                   </tr>

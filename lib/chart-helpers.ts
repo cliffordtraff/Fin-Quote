@@ -26,6 +26,9 @@ export function generateFinancialChart(
   const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
   if (validData.length === 0) return null
 
+  // Don't generate chart for single data point
+  if (validData.length === 1) return null
+
   const categories = validData.map((d) => d.year.toString())
 
   // ===============================================

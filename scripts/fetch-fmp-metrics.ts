@@ -53,6 +53,14 @@ const CATEGORY_MAP: Record<string, string> = {
   operatingProfitMargin: 'Profitability & Returns',
   pretaxProfitMargin: 'Profitability & Returns',
   netProfitMargin: 'Profitability & Returns',
+  ebitdaMargin: 'Profitability & Returns',
+
+  // Cash Flow
+  freeCashFlow: 'Cash Flow',
+  capitalExpenditure: 'Cash Flow',
+  stockBasedCompensation: 'Other',
+  commonStockRepurchased: 'Capital Returns & Share Data',
+  dividendsPaid: 'Capital Returns & Share Data',
 
   // Leverage & Solvency
   debtRatio: 'Leverage & Solvency',
@@ -274,6 +282,26 @@ interface FMPEnterpriseValue {
   enterpriseValue: number
 }
 
+interface FMPIncomeStatement {
+  date: string
+  symbol: string
+  period: string
+  ebitda: number
+  ebitdaratio: number
+  depreciationAndAmortization: number
+}
+
+interface FMPCashFlowStatement {
+  date: string
+  symbol: string
+  period: string
+  freeCashFlow: number
+  capitalExpenditure: number
+  commonStockRepurchased: number
+  dividendsPaid: number
+  stockBasedCompensation: number
+}
+
 interface MetricRecord {
   symbol: string
   year: number
@@ -292,20 +320,26 @@ async function fetchFMPData() {
     ratios: `https://financialmodelingprep.com/api/v3/ratios/${SYMBOL}?period=annual&limit=20&apikey=${FMP_API_KEY}`,
     growth: `https://financialmodelingprep.com/api/v3/financial-growth/${SYMBOL}?period=annual&limit=20&apikey=${FMP_API_KEY}`,
     enterpriseValue: `https://financialmodelingprep.com/api/v3/enterprise-values/${SYMBOL}?period=annual&limit=20&apikey=${FMP_API_KEY}`,
+    incomeStatement: `https://financialmodelingprep.com/api/v3/income-statement/${SYMBOL}?period=annual&limit=20&apikey=${FMP_API_KEY}`,
+    cashFlowStatement: `https://financialmodelingprep.com/api/v3/cash-flow-statement/${SYMBOL}?period=annual&limit=20&apikey=${FMP_API_KEY}`,
   }
 
   // Fetch all endpoints in parallel
-  const [keyMetrics, ratios, growth, enterpriseValues] = await Promise.all([
+  const [keyMetrics, ratios, growth, enterpriseValues, incomeStatements, cashFlowStatements] = await Promise.all([
     fetch(endpoints.keyMetrics).then((r) => r.json()) as Promise<FMPKeyMetrics[]>,
     fetch(endpoints.ratios).then((r) => r.json()) as Promise<FMPRatios[]>,
     fetch(endpoints.growth).then((r) => r.json()) as Promise<FMPGrowth[]>,
     fetch(endpoints.enterpriseValue).then((r) => r.json()) as Promise<FMPEnterpriseValue[]>,
+    fetch(endpoints.incomeStatement).then((r) => r.json()) as Promise<FMPIncomeStatement[]>,
+    fetch(endpoints.cashFlowStatement).then((r) => r.json()) as Promise<FMPCashFlowStatement[]>,
   ])
 
   console.log(`✅ Key Metrics: ${keyMetrics.length} years`)
   console.log(`✅ Ratios: ${ratios.length} years`)
   console.log(`✅ Growth: ${growth.length} years`)
-  console.log(`✅ Enterprise Values: ${enterpriseValues.length} years\\n`)
+  console.log(`✅ Enterprise Values: ${enterpriseValues.length} years`)
+  console.log(`✅ Income Statements: ${incomeStatements.length} years`)
+  console.log(`✅ Cash Flow Statements: ${cashFlowStatements.length} years\\n`)
 
   // Transform to key-value format
   const metrics: MetricRecord[] = []
@@ -394,6 +428,68 @@ async function fetchFMPData() {
         metric_value: value,
         metric_category: CATEGORY_MAP[key] || 'Other',
         data_source: 'FMP:enterprise-values',
+      })
+    })
+  })
+
+  // Process Income Statements (for EBITDA metrics)
+  incomeStatements.forEach((item) => {
+    const year = new Date(item.date).getFullYear()
+    const ebitdaMetrics = {
+      ebitda: item.ebitda,
+      ebitdaMargin: item.ebitdaratio, // Rename ebitdaratio to ebitdaMargin for clarity
+      depreciationAndAmortization: item.depreciationAndAmortization,
+    }
+
+    Object.entries(ebitdaMetrics).forEach(([key, value]) => {
+      if (typeof value !== 'number' || value === null) return
+
+      // Skip duplicates
+      const isDuplicate = metrics.some(
+        (m) => m.year === year && m.metric_name === key
+      )
+      if (isDuplicate) return
+
+      metrics.push({
+        symbol: SYMBOL,
+        year,
+        period: 'FY',
+        metric_name: key,
+        metric_value: value,
+        metric_category: key === 'ebitdaMargin' ? 'Profitability & Returns' : 'Other',
+        data_source: 'FMP:income-statement',
+      })
+    })
+  })
+
+  // Process Cash Flow Statements (for FCF and capital allocation)
+  cashFlowStatements.forEach((item) => {
+    const year = new Date(item.date).getFullYear()
+    const cashFlowMetrics = {
+      freeCashFlow: item.freeCashFlow,
+      capitalExpenditure: Math.abs(item.capitalExpenditure), // Make positive (FMP returns negative)
+      commonStockRepurchased: Math.abs(item.commonStockRepurchased), // Make positive (FMP returns negative)
+      dividendsPaid: Math.abs(item.dividendsPaid), // Make positive (FMP returns negative)
+      stockBasedCompensation: item.stockBasedCompensation,
+    }
+
+    Object.entries(cashFlowMetrics).forEach(([key, value]) => {
+      if (typeof value !== 'number' || value === null || isNaN(value)) return
+
+      // Skip duplicates
+      const isDuplicate = metrics.some(
+        (m) => m.year === year && m.metric_name === key
+      )
+      if (isDuplicate) return
+
+      metrics.push({
+        symbol: SYMBOL,
+        year,
+        period: 'FY',
+        metric_name: key,
+        metric_value: value,
+        metric_category: CATEGORY_MAP[key] || 'Cash Flow',
+        data_source: 'FMP:cash-flow-statement',
       })
     })
   })

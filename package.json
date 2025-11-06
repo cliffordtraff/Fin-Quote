@@ -11,7 +11,8 @@
     "export:catalog": "npx tsx scripts/export-metrics-catalog.ts",
     "setup:metrics": "npx tsx scripts/setup-financial-metrics.ts",
     "fetch:metrics": "npx tsx scripts/fetch-fmp-metrics.ts",
-    "ingest:metrics": "npx tsx scripts/ingest-fmp-metrics.ts"
+    "ingest:metrics": "npx tsx scripts/ingest-fmp-metrics.ts",
+    "generate:catalog": "npx tsx scripts/generate-metrics-catalog.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
