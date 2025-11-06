@@ -127,6 +127,45 @@ export interface Database {
         }
         Relationships: []
       }
+      financial_metrics: {
+        Row: {
+          id: number
+          symbol: string
+          year: number
+          period: string | null
+          metric_name: string
+          metric_value: number | null
+          metric_category: string | null
+          data_source: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          symbol: string
+          year: number
+          period?: string | null
+          metric_name: string
+          metric_value?: number | null
+          metric_category?: string | null
+          data_source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          symbol?: string
+          year?: number
+          period?: string | null
+          metric_name?: string
+          metric_value?: number | null
+          metric_category?: string | null
+          data_source?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {}
     Functions: {}
@@ -139,6 +178,7 @@ export interface Database {
 export type Company = Database['public']['Tables']['company']['Row']
 export type Financial = Database['public']['Tables']['financials_std']['Row']
 export type Filing = Database['public']['Tables']['filings']['Row']
+export type FinancialMetric = Database['public']['Tables']['financial_metrics']['Row']
 
 // Type for joined data
 export type CompanyWithFinancials = Company & {
