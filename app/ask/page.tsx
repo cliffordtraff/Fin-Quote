@@ -148,8 +148,8 @@ export default function AskPage() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [dataUsed, setDataUsed] = useState<{
-    type: 'financials' | 'prices' | 'filings' | 'passages'
-    data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
+    type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'
+    data: FinancialData[] | PriceData[] | FilingData[] | PassageData[] | any[]
   } | null>(null)
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [error, setError] = useState('')
@@ -526,6 +526,7 @@ export default function AskPage() {
           timestamp: new Date().toISOString(),
           chartConfig: receivedChart,
           followUpQuestions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
+          dataUsed: receivedData,
         }
 
         // Add only assistant message (user message was already added at the start)
@@ -913,9 +914,26 @@ export default function AskPage() {
                   {message.role === 'user' ? (
                     // User question
                     <div className="flex justify-end">
-                    <div className="bg-blue-600 text-white rounded-2xl px-6 py-4 max-w-3xl">
-                      <p className="text-xl">{message.content}</p>
-                    </div>
+                      <div className="group max-w-3xl">
+                        <div className="bg-blue-600 text-white rounded-2xl px-6 py-4">
+                          <p className="text-xl">{message.content}</p>
+                        </div>
+                        {/* Copy button - appears on hover after 1 second, below and right-aligned */}
+                        <div className="flex justify-end mt-1">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(message.content)
+                              // Optional: Add a toast notification here
+                            }}
+                            className="p-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all opacity-0 group-hover:opacity-100 group-hover:delay-1000"
+                            title="Copy question"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                   </div>
                 ) : (
                   // Assistant answer with chart and follow-up questions
@@ -928,6 +946,50 @@ export default function AskPage() {
                     {message.chartConfig && (
                       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
                         <FinancialChart config={message.chartConfig} />
+                      </div>
+                    )}
+
+                    {/* Data table for financial_metrics type */}
+                    {message.dataUsed && message.dataUsed.type === 'financial_metrics' && message.dataUsed.data && message.dataUsed.data.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
+                              <tr>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Year
+                                </th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Metric
+                                </th>
+                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Value
+                                </th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Category
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                              {message.dataUsed.data.map((row: any, idx: number) => (
+                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    {row.year}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                                    {row.metric_name}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100 font-mono">
+                                    {typeof row.metric_value === 'number' ? row.metric_value.toFixed(2) : row.metric_value}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {row.metric_category}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
 

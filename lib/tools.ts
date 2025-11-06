@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
 
 export type ToolDefinition = {
   name: ToolName
@@ -43,6 +43,23 @@ export const TOOL_MENU: ToolDefinition[] = [
       limit: 'integer 1–10 (defaults to 5)',
     },
     notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
+  },
+  {
+    name: 'listMetrics',
+    description: 'Get catalog of all available financial metrics to discover what data is available.',
+    args: {
+      category: 'optional: Valuation | Profitability & Returns | Growth | Leverage & Solvency | Efficiency & Working Capital | Capital Returns & Share Data | Per-Share Metrics | Market Data | Other',
+    },
+    notes: 'Use this when uncertain which metrics are available or to browse metrics by category. Returns metric names, descriptions, units, and common aliases.',
+  },
+  {
+    name: 'getFinancialMetric',
+    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 50+ other metrics.',
+    args: {
+      metricNames: 'array of metric names (canonical or common aliases like "P/E", "ROE", "debt to equity")',
+      limit: 'integer 1–20 (defaults to 5) - number of years to fetch',
+    },
+    notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call.',
   },
 ]
 
@@ -198,12 +215,68 @@ Available Tools:
 
    args: {"query": "<keywords>", "limit": 5}
 
+5. listMetrics - DISCOVER available financial metrics
+
+   Use when:
+   - User asks "what metrics do you have?"
+   - User wants to browse metrics by category
+   - Uncertain which metric name to use for getFinancialMetric
+
+   CATEGORY FILTER (optional):
+   - Valuation: P/E, P/B, EV/EBITDA, market cap, etc.
+   - Profitability & Returns: ROE, ROA, ROIC, margins
+   - Growth: revenue growth, EPS growth, asset growth
+   - Leverage & Solvency: debt ratios, liquidity ratios
+   - Efficiency & Working Capital: turnover ratios, cycle days
+   - Capital Returns & Share Data: dividend yield, payout ratio
+   - Per-Share Metrics: EPS, book value per share, cash per share
+   - Market Data: stock metrics, valuation metrics
+   - Other: miscellaneous metrics
+
+   Examples:
+   - "What valuation metrics do you have?" → {"category": "Valuation"}
+   - "Show me all metrics" → {} (no category)
+   - "What debt metrics are available?" → {"category": "Leverage & Solvency"}
+
+   args: {"category": "<optional category name>"}
+
+6. getFinancialMetric - GET advanced financial metrics
+
+   Use for 50+ advanced metrics including:
+   - Valuation: P/E ratio, P/B ratio, PEG ratio, EV/EBITDA, market cap
+   - Profitability: ROE, ROA, ROIC, profit margins, EBIT margin
+   - Leverage: debt-to-equity, current ratio, quick ratio, cash ratio
+   - Growth: revenue growth, EPS growth, dividend growth
+   - Efficiency: asset turnover, inventory turnover, cash conversion cycle
+   - And many more...
+
+   METRIC NAME FLEXIBILITY:
+   - Accepts canonical names: "peRatio", "returnOnEquity", "debtEquityRatio"
+   - Accepts common aliases: "P/E", "ROE", "debt to equity"
+   - Can handle multiple metrics in one call
+
+   LIMIT RULES (same as getAaplFinancialsByMetric):
+   - Specific year → limit: 20
+   - Number specified → use that number
+   - "trend", "history" → limit: 4
+   - Default → limit: 5
+
+   Examples:
+   - "What's Apple's P/E ratio?" → {"metricNames": ["P/E"], "limit": 5}
+   - "Show me ROE trend" → {"metricNames": ["ROE"], "limit": 4}
+   - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 5}
+   - "Dividend yield for 2023" → {"metricNames": ["dividend yield"], "limit": 20}
+
+   args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>}
+
 TOOL SELECTION LOGIC:
 
-1. Numbers/metrics over time? → getAaplFinancialsByMetric
-2. Stock price? → getPrices
-3. List filings? → getRecentFilings
-4. Qualitative content search? → searchFilings
+1. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
+2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
+3. User asks "what metrics available"? → listMetrics
+4. Stock price? → getPrices
+5. List filings? → getRecentFilings
+6. Qualitative content search? → searchFilings
 
 Return ONLY JSON - examples:
 
@@ -213,16 +286,23 @@ Return ONLY JSON - examples:
 {"tool":"getPrices","args":{"range":"30d"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+{"tool":"listMetrics","args":{"category":"Valuation"}}
+{"tool":"listMetrics","args":{}}
+{"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":5}}
+{"tool":"getFinancialMetric","args":{"metricNames":["ROE","debt to equity"],"limit":10}}
 
-CRITICAL EXAMPLES - Ratio Questions:
+CRITICAL EXAMPLES - Advanced Metrics:
 Q: "What is AAPL's debt to equity ratio?"
-A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
+A: {"tool":"getFinancialMetric","args":{"metricNames":["debt to equity"],"limit":5}}
 
-Q: "Show me debt-to-equity trend"
-A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":10}}
+Q: "Show me P/E ratio trend"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":4}}
 
-Q: "What's the D/E ratio in 2024?"
-A: {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":20}}`
+Q: "What's the ROE in 2023?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"limit":20}}
+
+Q: "Compare P/E and PEG ratio"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":5}}`
 
 // New function that returns structured messages for caching
 export const buildToolSelectionMessages = (userQuestion: string) => [
@@ -279,11 +359,13 @@ ${factsJson}
 
 CRITICAL VALIDATION RULES - Follow These Exactly:
 
-1. NUMBERS - Use EXACT numbers from the data:
+1. NUMBERS - Use EXACT numbers from the data with proper formatting:
    - Copy numbers precisely from the facts JSON
-   - Format large numbers with B (billions) or M (millions)
+   - Format large dollar amounts with B (billions) or M (millions)
    - Example: 383285000000 → "$383.3B" (NOT "$383B" or "around $380B")
-   - NEVER round significantly or estimate
+   - Format ratios and percentages with 2 decimal places maximum
+   - Example: 34.092882867601105 → "34.09" (NOT "34.092882867601105")
+   - NEVER round significantly or estimate, but do round to 2 decimal places for readability
    - If a number is 383.285B, say "$383.3B" not "$383B"
 
 2. YEARS - ONLY mention years that appear in the facts:

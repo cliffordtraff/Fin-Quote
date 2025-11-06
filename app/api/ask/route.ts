@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
 
           const toolExecutionStart = Date.now()
           let factsJson: string
-          let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages'; data: any[] }
+          let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
           let chartConfig: any = null
 
           // Execute the selected tool
@@ -372,6 +372,145 @@ export async function POST(req: NextRequest) {
 
             factsJson = JSON.stringify(toolResult.data, null, 2)
             dataUsed = { type: 'passages', data: toolResult.data }
+          } else if (toolSelection.tool === 'listMetrics') {
+            const { listMetrics } = await import('@/app/actions/list-metrics')
+            const category = toolSelection.args.category as string | undefined
+
+            const toolResult = await listMetrics(category ? { category } : undefined)
+
+            if (toolResult.error || !toolResult.data) {
+              flow.failStep('tool_execution', {
+                summary: 'Metrics catalog fetch failed',
+                why: toolResult.error || 'No data returned',
+                details: { category },
+              })
+              sendEvent('error', { message: toolResult.error || 'Failed to list metrics' })
+              controller.close()
+              return
+            }
+
+            factsJson = JSON.stringify(toolResult.data, null, 2)
+            dataUsed = { type: 'metrics_catalog', data: toolResult.data }
+          } else if (toolSelection.tool === 'getFinancialMetric') {
+            const { getFinancialMetrics } = await import('@/app/actions/get-financial-metric')
+            const metricNames = toolSelection.args.metricNames as string[]
+            const limit = toolSelection.args.limit || 5
+
+            if (!metricNames || metricNames.length === 0) {
+              flow.failStep('tool_execution', {
+                summary: 'Failed to execute tool',
+                why: 'No metrics specified',
+              })
+              sendEvent('error', { message: 'No metrics specified' })
+              controller.close()
+              return
+            }
+
+            if (limit < 1 || limit > 20) {
+              flow.failStep('tool_execution', {
+                summary: 'Failed to execute tool',
+                why: `Invalid limit "${limit}"`,
+                details: { limit },
+              })
+              sendEvent('error', { message: 'Invalid limit (must be 1-20)' })
+              controller.close()
+              return
+            }
+
+            const toolResult = await getFinancialMetrics({
+              symbol: 'AAPL',
+              metricNames,
+              limit,
+            })
+
+            if (toolResult.error || !toolResult.data) {
+              flow.failStep('tool_execution', {
+                summary: 'Financial metrics fetch failed',
+                why: toolResult.error || 'No data returned',
+                details: { metricNames, unresolved: toolResult.unresolved },
+              })
+              sendEvent('error', { message: toolResult.error || 'Failed to fetch financial metrics' })
+              controller.close()
+              return
+            }
+
+            factsJson = JSON.stringify(toolResult.data, null, 2)
+            dataUsed = { type: 'financial_metrics', data: toolResult.data }
+
+            // Generate chart for metrics that benefit from visualization
+            // Categories: Growth, Profitability & Returns, Valuation, Per-Share Metrics, Market Data, Efficiency
+            const shouldGenerateChart = (category: string, metricName: string): boolean => {
+              const chartCategories = [
+                'Growth',
+                'Profitability & Returns',
+                'Valuation',
+                'Per-Share Metrics',
+                'Market Data',
+                'Efficiency & Working Capital',
+              ]
+
+              // Also include specific "Other" metrics that are actually valuation metrics
+              const valuationMetricsInOther = [
+                'priceEarningsRatio',
+                'priceBookValueRatio',
+                'priceSalesRatio',
+                'priceCashFlowRatio',
+                'priceEarningsToGrowthRatio',
+                'priceToOperatingCashFlowsRatio',
+                'pfcfRatio',
+                'pocfratio',
+                'pbRatio',
+                'ptbRatio',
+                'enterpriseValueMultiple',
+                'enterpriseValueOverEBITDA',
+              ]
+
+              return chartCategories.includes(category) ||
+                     (category === 'Other' && valuationMetricsInOther.includes(metricName))
+            }
+
+            // Check if we should generate a chart (only for single metric queries)
+            if (toolResult.data.length > 0 && metricNames.length === 1) {
+              const firstRow = toolResult.data[0]
+              const category = firstRow.metric_category
+              const metricName = firstRow.metric_name
+
+              if (shouldGenerateChart(category, metricName)) {
+                flow.startStep({
+                  step: 'chart_generation',
+                  group: 'answering',
+                  summary: `Preparing ${metricName} chart`,
+                  why: 'Visualizing metric trend over time',
+                  details: { metric: metricName, category, source: 'financial_metrics' },
+                })
+
+                // Transform data to chart format
+                const sortedData = toolResult.data.sort((a: any, b: any) => a.year - b.year)
+
+                // Determine chart type based on metric name/category
+                const isPercentage = metricName.toLowerCase().includes('margin') ||
+                  metricName.toLowerCase().includes('yield') ||
+                  metricName.toLowerCase().includes('growth') ||
+                  metricName.toLowerCase().includes('return')
+
+                chartConfig = {
+                  type: 'line',
+                  categories: sortedData.map((row: any) => row.year.toString()),
+                  data: sortedData.map((row: any) => row.metric_value),
+                  xAxisLabel: 'Year',
+                  yAxisLabel: isPercentage ? 'Percentage (%)' : 'Value',
+                  title: `AAPL ${metricName}`,
+                  color: '#3b82f6',
+                }
+
+                flow.completeStep({
+                  step: 'chart_generation',
+                  summary: `Prepared line chart`,
+                  why: 'Chart ready for display alongside answer',
+                  details: { metric: metricName, pointCount: sortedData.length },
+                })
+              }
+            }
           } else {
             flow.failStep('tool_execution', {
               summary: 'Failed to execute tool',
