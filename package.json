@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "export": "npx tsx scripts/export-to-excel.ts",
+    "export:catalog": "npx tsx scripts/export-metrics-catalog.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.39.3",
     "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
     "highcharts": "^12.4.0",
     "highcharts-react-official": "^3.2.3",
     "next": "^14.2.0",

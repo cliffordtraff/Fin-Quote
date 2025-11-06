@@ -1,5 +1,7 @@
 # Prompt Evaluation & Continuous Improvement System
 
+> Important: The Fin Quote runtime uses the OpenAI Responses API exclusively. Any usage of Chat Completions in this document is for historical context or testing examples only.
+
 ## Overview
 
 This document outlines the complete system for evaluating and continuously improving the AI prompts used in Fin Quote. The goal is to measure prompt performance objectively, identify failure patterns, and systematically improve answer quality over time.
@@ -688,7 +690,7 @@ npm run evaluate-prompts -- --v1=1 --v2=2 --mode=full
 - Can't tell if improvement is real or random variation
 - "Flaky" tests waste time and reduce confidence
 
-**Implementation:**
+**Implementation** (legacy example using Chat Completions; in production prefer Responses API):
 ```typescript
 const selectionResponse = await openai.chat.completions.create({
   model: process.env.OPENAI_MODEL || 'gpt-5-nano',

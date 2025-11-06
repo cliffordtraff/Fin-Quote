@@ -17,6 +17,8 @@
 
 This document explores a fundamental challenge when building LLM-powered applications: **the semantic impedance mismatch between user language, LLM outputs, and database schemas**.
 
+> Important: Fin Quote uses the OpenAI Responses API exclusively in runtime code. Any references or snippets using Chat Completions in this document are legacy or for comparison only. Prefer the Responses API for all new work.
+
 ### Our Specific Case
 
 In our financial Q&A system, users ask questions like:
@@ -1121,6 +1123,8 @@ const tools = [{
   }
 }]
 
+// Legacy snippet below uses Chat Completions for illustration only.
+// In Fin Quote, prefer the Responses API.
 const response = await openai.chat.completions.create({
   model: "gpt-4",
   messages: [{role: "user", content: "What's the debt to equity ratio?"}],
@@ -1140,7 +1144,7 @@ const response = await openai.chat.completions.create({
 
 ✅ Use structured function calling when:
 - You want the LLM to ONLY select from valid options (strict enforcement)
-- You're using Chat Completions API
+- You're using Chat Completions API (note: Fin Quote uses Responses API)
 - You need complex parameter validation (nested objects, specific formats)
 - You want the LLM to call multiple tools in sequence
 

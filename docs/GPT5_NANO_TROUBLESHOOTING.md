@@ -1,5 +1,7 @@
 # GPT-5-Nano Migration Troubleshooting
 
+> Note: Fin Quote uses the OpenAI Responses API exclusively in production/runtime paths. Any Chat Completions references in this document are historical or for comparison during migration notes.
+
 ## Timeline of Issues and Fixes
 
 ### Initial Goal
@@ -245,7 +247,7 @@ Answer generation doesn't use `response_format: { type: 'json_object' }`, but ma
 
 **Test**: Add `response_format: { type: 'text' }` to answer generation
 
-**Potential Fix**:
+**Potential Fix** (legacy example using Chat Completions; prefer Responses API in Fin Quote):
 ```typescript
 const answerResponse = await openai.chat.completions.create({
   model: process.env.OPENAI_MODEL || 'gpt-4o-mini',

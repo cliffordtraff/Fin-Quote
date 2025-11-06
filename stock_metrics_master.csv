@@ -1,0 +1,97 @@
+Metric Name,Category,Short Description,Common Synonyms,Formula/Notes
+Market Cap,Valuation,Equity value = share price × shares outstanding.,,Equity value = share price × shares outstanding.
+Enterprise Value (EV),Valuation,Total firm value = equity + debt − cash.,EV,Total firm value = equity + debt − cash.
+P/E (TTM),Valuation,Price divided by trailing 12‑month EPS.,Price/Earnings; trailing PE,Price divided by trailing 12‑month EPS.
+Forward P/E,Valuation,Price divided by next 12‑month EPS estimate.,Forward PE; next-12m PE; NTM PE,Price divided by next 12‑month EPS estimate.
+PEG Ratio,Valuation,P/E divided by EPS growth rate.,,P/E divided by EPS growth rate.
+Price/Sales,Valuation,Market cap divided by revenue.,P/S,Market cap divided by revenue.
+Price/Book,Valuation,Market cap divided by book equity.,P/B,Market cap divided by book equity.
+EV/Revenue,Valuation,Enterprise value divided by revenue.,,Enterprise value divided by revenue.
+EV/EBITDA,Valuation,EV divided by EBITDA.,Enterprise value to EBITDA,EV divided by EBITDA.
+EV/FCF,Valuation,EV divided by free cash flow.,,EV divided by free cash flow.
+EBITDA Margin,Profitability & Returns,EBITDA / Revenue.,,EBITDA / Revenue.
+Return on Invested Capital (ROIC),Profitability & Returns,NOPAT / Invested capital.,ROIC,NOPAT / Invested capital.
+Revenue Growth (YoY),Growth,Revenue % change vs prior year.,,Revenue % change vs prior year.
+EPS Growth (YoY),Growth,EPS % change vs prior year.,,EPS % change vs prior year.
+EBITDA Growth,Growth,EBITDA % change.,,EBITDA % change.
+FCF Growth,Growth,Free cash flow % change.,,Free cash flow % change.
+Inventory Turnover,Efficiency & Working Capital,COGS / Avg inventory.,,COGS / Avg inventory.
+Days Inventory Outstanding (DIO),Efficiency & Working Capital,Days inventory on hand.,,Days inventory on hand.
+Days Sales Outstanding (DSO),Efficiency & Working Capital,Days to collect receivables.,,Days to collect receivables.
+Days Payables Outstanding (DPO),Efficiency & Working Capital,Days to pay suppliers.,,Days to pay suppliers.
+Cash Conversion Cycle,Efficiency & Working Capital,DIO + DSO − DPO.,,DIO + DSO − DPO.
+Debt/Equity,Leverage & Solvency,Total debt / equity.,,Total debt / equity.
+Net Debt/EBITDA,Leverage & Solvency,(Debt − cash) / EBITDA.,,(Debt − cash) / EBITDA.
+Current Ratio,Leverage & Solvency,Current assets / current liabilities.,,Current assets / current liabilities.
+Quick Ratio,Leverage & Solvency,(CA − inventory) / CL.,,(CA − inventory) / CL.
+Altman Z-Score,Leverage & Solvency,Bankruptcy risk model.,,Bankruptcy risk model.
+Free Cash Flow,Cash Flow & Core Financials,Operating CF − capex.,FCF,Operating CF − capex.
+Capex,Cash Flow & Core Financials,Capital expenditures.,Capital expenditures,Capital expenditures.
+FCF Margin,Profitability & Returns,FCF / Revenue.,,FCF / Revenue.
+EPS (Basic),Per-Share Metrics,Earnings per basic share.,,Earnings per basic share.
+EPS (Diluted),Per-Share Metrics,Earnings per diluted share.,,Earnings per diluted share.
+Book Value per Share,Per-Share Metrics,Equity / shares.,,Equity / shares.
+Tangible BVPS,Per-Share Metrics,Tangible equity / shares.,,Tangible equity / shares.
+Revenue per Share,Cash Flow & Core Financials,Revenue / shares.,,Revenue / shares.
+Dividend per Share,Capital Returns & Share Data,Cash dividend per share.,DPS,Cash dividend per share.
+Dividend Yield,Capital Returns & Share Data,Dividend / share price.,,Dividend / share price.
+Payout Ratio,Leverage & Solvency,Dividends / earnings (or FCF).,,Dividends / earnings (or FCF).
+Dividend Growth (5Y CAGR),Growth,5‑year dividend CAGR.,,5‑year dividend CAGR.
+Beta,Risk & Volatility,Sensitivity vs market.,,Sensitivity vs market.
+Revenue,Cash Flow & Core Financials,Sales over the period.,,Sales over the period.
+Gross Profit,Other,Revenue − COGS.,,Revenue − COGS.
+Operating Income,Other,EBIT; profit from operations.,EBIT,EBIT; profit from operations.
+Net Income,Cash Flow & Core Financials,Profit after all expenses.,,Profit after all expenses.
+EPS,Per-Share Metrics,,,
+Total Assets,Other,,,
+Total Liabilities,Other,,,
+Shareholders Equity,Other,,,
+Operating Cash Flow,Cash Flow & Core Financials,Cash from operations.,CFO; cash from operations,Cash from operations.
+Gross Margin,Profitability & Returns,Gross profit / revenue.,GM,Gross profit / revenue.
+Operating Margin,Profitability & Returns,Operating income / revenue.,OM,Operating income / revenue.
+Net Margin,Profitability & Returns,Net income / revenue.,Profit margin,Net income / revenue.
+ROE (Return on Equity),Profitability & Returns,Net income / equity.,ROE,Net income / equity.
+ROA (Return on Assets),Profitability & Returns,Net income / assets.,ROA,Net income / assets.
+Debt-to-Equity Ratio,Leverage & Solvency,Debt / equity.,,Debt / equity.
+Debt-to-Assets Ratio,Leverage & Solvency,Debt / assets.,,Debt / assets.
+Asset Turnover,Efficiency & Working Capital,Revenue / assets.,,Revenue / assets.
+EBIT Margin,Profitability & Returns,EBIT / Revenue.,,EBIT / Revenue.
+EBITDA,Other,"Earnings before interest, taxes, depreciation, amortization.","Earnings before interest, taxes, depreciation, amortization","Earnings before interest, taxes, depreciation, amortization."
+Earnings Yield,Valuation,1 / P/E.,E/P,1 / P/E.
+NOPAT (Net Operating Profit After Tax),Profitability & Returns,Operating profit after tax.,,Operating profit after tax.
+Economic Value Added (EVA),Profitability & Returns,NOPAT − (WACC × invested capital).,,NOPAT − (WACC × invested capital).
+Fixed Asset Turnover,Efficiency & Working Capital,Revenue / net PP&E.,,Revenue / net PP&E.
+Operating Cash Flow Margin,Profitability & Returns,CFO / Revenue.,,CFO / Revenue.
+Cash Conversion Ratio (Operating CF / Net Income),Leverage & Solvency,CFO / Net income.,,CFO / Net income.
+Accrual Ratio,Leverage & Solvency,"Net income − CFO, scaled by assets or income.",,"Net income − CFO, scaled by assets or income."
+Price/FCF,Valuation,Price divided by FCF per share.,,Price divided by FCF per share.
+EV/EBIT,Valuation,EV / EBIT.,,EV / EBIT.
+Price/Operating Cash Flow,Valuation,Price / CFO per share.,,Price / CFO per share.
+FCF Yield,Valuation,FCF / Market cap.,,FCF / Market cap.
+Interest Coverage Ratio (EBIT / Interest Expense),Leverage & Solvency,EBIT / interest expense.,,EBIT / interest expense.
+Net Debt,Leverage & Solvency,Debt − cash & equivalents.,,Debt − cash & equivalents.
+Debt/Capital Ratio,Leverage & Solvency,Debt / (Debt + Equity).,,Debt / (Debt + Equity).
+Buyback Yield,Capital Returns & Share Data,Net repurchases / market cap.,,Net repurchases / market cap.
+Total Shareholder Yield,Capital Returns & Share Data,Dividend + buyback + net debt paydown.,,Dividend + buyback + net debt paydown.
+Retention Ratio,Leverage & Solvency,1 − payout ratio.,,1 − payout ratio.
+3-Year Revenue CAGR,Growth,3‑year compound revenue growth.,,3‑year compound revenue growth.
+3-Year EPS CAGR,Growth,3‑year compound EPS growth.,,3‑year compound EPS growth.
+Operating Income Growth (YoY),Growth,Operating income % change.,,Operating income % change.
+Effective Tax Rate,Other,Tax expense / pre‑tax income.,,Tax expense / pre‑tax income.
+Capex/Depreciation Ratio,Leverage & Solvency,Capex relative to depreciation.,,Capex relative to depreciation.
+WACC (Weighted Average Cost of Capital),Cash Flow & Core Financials,Blended cost of debt & equity.,,Blended cost of debt & equity.
+Tangible Equity Ratio,Leverage & Solvency,Tangible equity / assets.,,Tangible equity / assets.
+Price/Tangible Book,Valuation,Price / tangible book value per share.,,Price / tangible book value per share.
+EV/Invested Capital (EV/IC),Valuation,EV / invested capital.,,EV / invested capital.
+Financial Leverage (Assets/Equity),Leverage & Solvency,Assets / equity.,,Assets / equity.
+Net Debt/FCF,Leverage & Solvency,Net debt / FCF.,,Net debt / FCF.
+Working Capital,Efficiency & Working Capital,Current assets − current liabilities.,,Current assets − current liabilities.
+Net Working Capital / Revenue,Efficiency & Working Capital,NWC / revenue.,,NWC / revenue.
+Realized Volatility (30D),Risk & Volatility,"Std. dev. of daily returns, 30D.",,"Std. dev. of daily returns, 30D."
+Realized Volatility (90D),Risk & Volatility,"Std. dev. of daily returns, 90D.",,"Std. dev. of daily returns, 90D."
+Max Drawdown,Risk & Volatility,Peak‑to‑trough decline.,,Peak‑to‑trough decline.
+Value at Risk (VaR),Risk & Volatility,Loss at a confidence level.,,Loss at a confidence level.
+Cash & Equivalents,Other,Cash and short‑term investments.,,Cash and short‑term investments.
+Shares Outstanding (Basic),Capital Returns & Share Data,Basic share count.,,Basic share count.
+Shares Outstanding (Diluted),Capital Returns & Share Data,Diluted share count.,,Diluted share count.
+Free Cash Flow per Share,Cash Flow & Core Financials,FCF / shares.,,FCF / shares.
