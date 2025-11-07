@@ -61,6 +61,79 @@ const formatMetricValue = (value: number, yAxisLabel: string): string => {
   return formatNumberValue(value, 1)
 }
 
+/**
+ * Extracts years from question and returns filtered year range based on distance-based context
+ * Option A: Distance-Based Context
+ * - Current year (2025): Show 3 years before → [2022, 2023, 2024, 2025]
+ * - Other years: Show 2 years before and 2 years after → [year-2, year-1, year, year+1, year+2]
+ * - 3+ years mentioned: Show exact years only (no context)
+ */
+const getFilteredYearRange = (question: string, availableData: any[]): any[] => {
+  if (!question || !availableData || availableData.length === 0) {
+    return availableData
+  }
+
+  const currentYear = new Date().getFullYear()
+
+  // Extract explicit years (e.g., 2023, 2024, 2025)
+  const explicitYears = [...question.matchAll(/\b(20\d{2})\b/g)].map(match => parseInt(match[1]))
+
+  // Extract "last N years" or "past N years"
+  const lastYearsMatch = question.match(/(?:last|past)\s+(\d+)\s+years?/i)
+  let mentionedYears: number[] = []
+
+  if (lastYearsMatch) {
+    const n = parseInt(lastYearsMatch[1])
+    // "last 5 years" means current year back to current-4
+    for (let i = 0; i < n; i++) {
+      mentionedYears.push(currentYear - i)
+    }
+  } else if (explicitYears.length > 0) {
+    mentionedYears = [...new Set(explicitYears)] // Remove duplicates
+  }
+
+  // If no years mentioned, default to last 5 years
+  if (mentionedYears.length === 0) {
+    const last5Years = []
+    for (let i = 0; i < 5; i++) {
+      last5Years.push(currentYear - i)
+    }
+    return availableData.filter(row =>
+      last5Years.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  const yearCount = mentionedYears.length
+
+  // Rule: If 3+ years mentioned, show exact years only
+  if (yearCount >= 3) {
+    return availableData.filter(row =>
+      mentionedYears.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  // Rule: If 1-2 years mentioned, add context
+  const latestMentionedYear = Math.max(...mentionedYears)
+  const earliestMentionedYear = Math.min(...mentionedYears)
+
+  let minYear: number
+  let maxYear: number
+
+  if (latestMentionedYear === currentYear) {
+    // Current year: show 3 years before
+    minYear = currentYear - 3
+    maxYear = currentYear
+  } else {
+    // Past year(s): show 2 years before and 2 years after
+    minYear = earliestMentionedYear - 2
+    maxYear = latestMentionedYear + 2
+  }
+
+  return availableData.filter(row =>
+    row.year >= minYear && row.year <= maxYear
+  ).sort((a, b) => a.year - b.year)
+}
+
 const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): string => {
   const cleanedAnswer = stripMarkdown(rawAnswer)
 
@@ -177,6 +250,7 @@ export default function AskPage() {
   const [flowFilter, setFlowFilter] = useState<FlowFilter>('all')
   const flowPanelOffsetClass = flowPanelOpen ? 'lg:mr-[420px]' : ''
   const flowPanelPaddingClass = flowPanelOpen ? 'lg:pr-[420px]' : ''
+  const [dataReceived, setDataReceived] = useState(false)
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -421,6 +495,7 @@ export default function AskPage() {
     setChartConfig(null)
     setFollowUpQuestions([])
     setFlowEvents([])
+    setDataReceived(false)
 
     // Create user message
     const userMessage: Message = {
@@ -516,6 +591,7 @@ export default function AskPage() {
               receivedChart = data.chartConfig
               setDataUsed(data.dataUsed)
               setChartConfig(data.chartConfig)
+              setDataReceived(true)
               break
 
             case 'answer':
@@ -923,7 +999,7 @@ export default function AskPage() {
       {/* Sidebar Toggle Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-lg ${
+        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[60] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-lg ${
           sidebarOpen ? 'xl:left-[28rem] left-96' : 'left-0'
         }`}
         title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
@@ -980,7 +1056,7 @@ export default function AskPage() {
       </div>
 
       {/* Main scrollable content area - conversation */}
-      <div ref={scrollContainerRef} className={`lg:ml-96 xl:ml-[28rem] flex-1 overflow-y-auto transition-[margin] ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass}`}>
+      <div ref={scrollContainerRef} className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} flex-1 overflow-y-auto transition-[margin] duration-300 ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass}`}>
         <div className={`max-w-6xl mx-auto p-6 space-y-0 ${isEmptyConversation ? '' : 'pb-32 lg:pb-[35vh]'}`}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
@@ -1002,7 +1078,7 @@ export default function AskPage() {
                     // User question
                     <div className="flex justify-end mt-6">
                       <div className="group max-w-3xl relative">
-                        <div className="bg-blue-600 text-white rounded-2xl px-6 py-4">
+                        <div className="bg-[#152843] text-white rounded-2xl px-6 py-4">
                           <p className="text-xl">{message.content}</p>
                         </div>
                         {/* Copy button - appears on hover after 1 second, absolutely positioned */}
@@ -1040,59 +1116,93 @@ export default function AskPage() {
                       </button>
                     </div>
 
-                    {/* Chart for this message */}
-                    {message.chartConfig && (
-                      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
-                        <FinancialChart config={message.chartConfig} />
-                      </div>
-                    )}
+                    {/* Chart and data tables wrapper */}
+                    <div className="w-full max-w-5xl mx-auto space-y-4">
+                      {/* Chart for this message */}
+                      {message.chartConfig && (
+                        <div className="w-full bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
+                          <FinancialChart config={message.chartConfig} />
+                        </div>
+                      )}
 
-                    {/* Data table for financial_metrics type */}
-                    {message.dataUsed && message.dataUsed.type === 'financial_metrics' && message.dataUsed.data && message.dataUsed.data.length > 1 && (() => {
-                      // Check if all rows have the same metric (single metric query)
-                      const uniqueMetrics = Array.from(new Set(message.dataUsed.data.map((row: any) => row.metric_name)))
-                      const isSingleMetric = uniqueMetrics.length === 1
-                      const metricLabel = isSingleMetric ? uniqueMetrics[0] : 'Value'
+                    {/* Data table for standard financials type */}
+                    {message.dataUsed && message.dataUsed.type === 'financials' && message.dataUsed.data && message.dataUsed.data.length > 1 && (() => {
+                      const data = message.dataUsed.data as FinancialData[]
 
+                      // Get the user's question from the previous message
+                      const userQuestion = index > 0 ? conversationHistory[index - 1].content : ''
+
+                      // Apply smart filtering based on years mentioned in question
+                      const filteredData = getFilteredYearRange(userQuestion, data)
+
+                      // Always use horizontal layout
                       return (
-                        <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                          <table className="divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-900">
-                              <tr>
-                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                  Year
-                                </th>
-                                {!isSingleMetric && (
-                                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    Metric
-                                  </th>
-                                )}
-                                <th scope="col" className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                  {metricLabel}
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                              {message.dataUsed.data.map((row: any, idx: number) => (
-                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {row.year}
-                                  </td>
-                                  {!isSingleMetric && (
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                      {row.metric_name}
-                                    </td>
-                                  )}
-                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-gray-100 font-mono">
-                                    {typeof row.metric_value === 'number' ? row.metric_value.toFixed(2) : row.metric_value}
-                                  </td>
+                        <div className="flex justify-center">
+                          <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700">
+                              <thead className="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                  {filteredData.map((row, idx) => (
+                                    <th key={idx} scope="col" className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                      {row.year}
+                                    </th>
+                                  ))}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody className="bg-white dark:bg-gray-800">
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                  {filteredData.map((row, idx) => (
+                                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
+                                      ${(row.value / 1_000_000_000).toFixed(2)}B
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )
                     })()}
+
+                    {/* Data table for financial_metrics type */}
+                    {message.dataUsed && message.dataUsed.type === 'financial_metrics' && message.dataUsed.data && message.dataUsed.data.length > 1 && (() => {
+                      const data = message.dataUsed.data
+
+                      // Get the user's question from the previous message
+                      const userQuestion = index > 0 ? conversationHistory[index - 1].content : ''
+
+                      // Apply smart filtering based on years mentioned in question
+                      const filteredData = getFilteredYearRange(userQuestion, data)
+
+                      // Always use horizontal layout
+                      return (
+                        <div className="flex justify-center">
+                          <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <table className="divide-y divide-gray-200 dark:divide-gray-700">
+                              <thead className="bg-gray-50 dark:bg-gray-900">
+                                <tr>
+                                  {filteredData.map((row: any, idx: number) => (
+                                    <th key={idx} scope="col" className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                      {row.year}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white dark:bg-gray-800">
+                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                  {filteredData.map((row: any, idx: number) => (
+                                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
+                                      {typeof row.metric_value === 'number' ? row.metric_value.toFixed(2) : row.metric_value}
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                    </div>
 
                     {/* Follow-up questions for this message */}
                     {/* Only show follow-ups for the most recent assistant message */}
@@ -1113,37 +1223,34 @@ export default function AskPage() {
 
             {/* Show current streaming answer (text only - chart appears when complete) */}
             {loading && answer && (
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+              <div className="space-y-4">
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+                </div>
+
+                {/* Loading indicator for chart/table - only show if data hasn't been received yet */}
+                {!dataReceived && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="flex gap-2">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Generating chart and data table...</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Copy and feedback section (shown only when not loading and has answer) */}
+            {/* Feedback section (shown only when not loading and has answer) */}
             {!loading && answer && (
               <div className="space-y-6">
-                {/* Copy, feedback and comment section */}
+                {/* Feedback and comment section */}
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                    {/* Copy button */}
-                    <div className="relative mb-6">
-                      <button
-                        onClick={handleCopyAnswer}
-                        className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
-                        title={copied ? 'Copied!' : 'Copy answer'}
-                      >
-                        {copied ? (
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-
                   {/* Feedback Section */}
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-4">
                       <p className="text-base text-gray-600 dark:text-gray-400">Was this answer helpful?</p>
                       <div className="flex gap-2">
@@ -1234,8 +1341,8 @@ export default function AskPage() {
       </div>
 
       {/* Fixed bottom input bar - centered when empty, bottom when conversation exists */}
-      <div className={`lg:ml-96 xl:ml-[28rem] ${isEmptyConversation ? 'fixed top-1/2 left-0 right-0 -translate-y-1/2' : 'fixed bottom-0 left-0 right-0 pb-12'} bg-gray-50 dark:bg-gray-900 z-50 transition-[right] ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
-        <div className="max-w-6xl mx-auto px-6">
+      <div className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} ${isEmptyConversation ? 'fixed top-1/2 left-0 right-0 -translate-y-1/2' : 'fixed bottom-0 left-0 right-0 pb-12'} bg-gray-50 dark:bg-gray-900 z-50 transition-[margin,right] duration-300 ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
+        <div className="max-w-4xl mx-auto px-6">
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-slate-800 rounded-full px-6 py-5 border border-blue-300 dark:border-slate-700">
               {/* Textarea field */}
@@ -1263,14 +1370,10 @@ export default function AskPage() {
                 type="submit"
                 disabled={loading || !question.trim()}
                 className="flex-shrink-0 w-11 h-11 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                title="Send message"
+                title={loading ? "Stop" : "Send message"}
               >
                 {loading ? (
-                  <div className="flex gap-0.5">
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                  </div>
+                  <div className="w-4 h-4 bg-white rounded-sm"></div>
                 ) : (
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />

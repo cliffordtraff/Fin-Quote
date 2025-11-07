@@ -18,19 +18,30 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, onNewCh
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const loadQueries = async () => {
+  const loadQueries = async (showLoading = true) => {
     if (!userId && !sessionId) return
 
-    setLoading(true)
+    if (showLoading) {
+      setLoading(true)
+    }
     const data = await getRecentQueries({ userId, sessionId })
     setQueries(data)
-    setLoading(false)
+    if (showLoading) {
+      setLoading(false)
+    }
   }
 
-  // Load queries on mount and when userId, sessionId, or refreshTrigger changes
+  // Load queries on mount
   useEffect(() => {
-    loadQueries()
-  }, [userId, sessionId, refreshTrigger])
+    loadQueries(true)  // Show loading spinner on initial load
+  }, [userId, sessionId])
+
+  // Silently refresh when refreshTrigger changes (no loading spinner)
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      loadQueries(false)  // Silent background refresh
+    }
+  }, [refreshTrigger])
 
   // Close menu when clicking outside
   useEffect(() => {

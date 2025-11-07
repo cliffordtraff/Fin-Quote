@@ -11,6 +11,79 @@ export function shouldGenerateChart(dataType: string): boolean {
 }
 
 /**
+ * Extracts years from question and returns filtered year range based on distance-based context
+ * Option A: Distance-Based Context
+ * - Current year (2025): Show 3 years before → [2022, 2023, 2024, 2025]
+ * - Other years: Show 2 years before and 2 years after → [year-2, year-1, year, year+1, year+2]
+ * - 3+ years mentioned: Show exact years only (no context)
+ */
+function getFilteredYearRange(question: string, availableData: any[]): any[] {
+  if (!question || !availableData || availableData.length === 0) {
+    return availableData
+  }
+
+  const currentYear = new Date().getFullYear()
+
+  // Extract explicit years (e.g., 2023, 2024, 2025)
+  const explicitYears = [...question.matchAll(/\b(20\d{2})\b/g)].map(match => parseInt(match[1]))
+
+  // Extract "last N years" or "past N years"
+  const lastYearsMatch = question.match(/(?:last|past)\s+(\d+)\s+years?/i)
+  let mentionedYears: number[] = []
+
+  if (lastYearsMatch) {
+    const n = parseInt(lastYearsMatch[1])
+    // "last 5 years" means current year back to current-4
+    for (let i = 0; i < n; i++) {
+      mentionedYears.push(currentYear - i)
+    }
+  } else if (explicitYears.length > 0) {
+    mentionedYears = [...new Set(explicitYears)] // Remove duplicates
+  }
+
+  // If no years mentioned, default to last 5 years
+  if (mentionedYears.length === 0) {
+    const last5Years = []
+    for (let i = 0; i < 5; i++) {
+      last5Years.push(currentYear - i)
+    }
+    return availableData.filter(row =>
+      last5Years.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  const yearCount = mentionedYears.length
+
+  // Rule: If 3+ years mentioned, show exact years only
+  if (yearCount >= 3) {
+    return availableData.filter(row =>
+      mentionedYears.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  // Rule: If 1-2 years mentioned, add context
+  const latestMentionedYear = Math.max(...mentionedYears)
+  const earliestMentionedYear = Math.min(...mentionedYears)
+
+  let minYear: number
+  let maxYear: number
+
+  if (latestMentionedYear === currentYear) {
+    // Current year: show 3 years before
+    minYear = currentYear - 3
+    maxYear = currentYear
+  } else {
+    // Past year(s): show 2 years before and 2 years after
+    minYear = earliestMentionedYear - 2
+    maxYear = latestMentionedYear + 2
+  }
+
+  return availableData.filter(row =>
+    row.year >= minYear && row.year <= maxYear
+  ).sort((a, b) => a.year - b.year)
+}
+
+/**
  * Converts financial data to chart configuration
  */
 export function generateFinancialChart(
@@ -21,8 +94,11 @@ export function generateFinancialChart(
   // Edge case: no data
   if (!data || data.length === 0) return null
 
+  // Apply smart filtering based on user question
+  const filteredData = userQuestion ? getFilteredYearRange(userQuestion, data) : data
+
   // Sort by year ascending
-  const sortedData = [...data].sort((a, b) => a.year - b.year)
+  const sortedData = [...filteredData].sort((a, b) => a.year - b.year)
   const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
   if (validData.length === 0) return null
 
