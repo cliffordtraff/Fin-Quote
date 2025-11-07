@@ -157,7 +157,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         ? fullscreenSize?.height ?? '100%'
         : 800, // Extra large: 800px for maximum visibility, 100%/viewport in fullscreen
       width: isFullscreen ? fullscreenSize?.width ?? undefined : undefined, // Full width in fullscreen mode
-      backgroundColor: isDark ? '#111827' : 'transparent', // Dark: gray-900, Light: transparent
+      backgroundColor: isDark ? 'rgb(33, 33, 33)' : 'transparent', // Dark: custom dark gray, Light: transparent
       // Minimize whitespace in fullscreen while keeping axes readable
       spacingTop: isFullscreen ? 16 : 36,
       spacingBottom: isFullscreen ? 8 : 16,
@@ -198,7 +198,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         },
       },
       gridLineWidth: 0,
-      lineColor: isDark ? '#374151' : '#e5e7eb', // Dark: gray-700, Light: gray-200
+      lineColor: isDark ? 'rgb(50, 50, 50)' : '#e5e7eb', // Dark: lighter gray, Light: gray-200
     },
     yAxis: {
       title: {
@@ -222,7 +222,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           return Number.isFinite(raw) ? raw.toLocaleString('en-US') : String(this.value ?? '')
         },
       },
-      gridLineColor: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
+      gridLineColor: isDark ? 'rgb(50, 50, 50)' : '#f3f4f6', // Dark: lighter gray, Light: gray-100
       gridLineWidth: 1,
     },
     legend: {
@@ -404,7 +404,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-[rgb(60,60,60)] rounded-lg shadow-sm border border-gray-200 dark:border-[rgb(50,50,50)] hover:bg-gray-50 dark:hover:bg-[rgb(70,70,70)] transition-colors"
         title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (
@@ -473,7 +473,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           <div className="flex justify-between items-center mb-2">
             <button
               onClick={() => setShowDataTable(!showDataTable)}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
+              className="text-sm text-blue-600 dark:text-white hover:text-blue-800 dark:hover:text-gray-300 font-medium flex items-center gap-2"
             >
               {showDataTable ? (
                 <>
@@ -510,7 +510,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           </div>
 
           {showDataTable && (
-            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 dark:bg-gray-800 border-[10px] border-gray-200 dark:border-[rgb(50,50,50)] rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-100 dark:bg-gray-900">

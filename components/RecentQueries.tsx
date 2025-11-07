@@ -117,8 +117,13 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, onNewCh
 
   return (
     <div className="h-full flex flex-col">
+      {/* Website Title */}
+      <div className="px-4 py-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
+      </div>
+
       {/* New Chat Button */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-gray-200 dark:border-[rgb(26,26,26)] mt-4">
         <button
           onClick={onNewChat}
           className="w-full flex items-center gap-3 px-4 h-16 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
@@ -131,12 +136,12 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, onNewCh
       </div>
 
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-200 dark:border-[rgb(26,26,26)] flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-400">Chats</h2>
       </div>
 
       {/* Query List */}
-      <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 dark:[&::-webkit-scrollbar-track]:bg-gray-800 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full dark:[&::-webkit-scrollbar-thumb]:hover:bg-gray-500">
+      <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 dark:[&::-webkit-scrollbar-track]:bg-[rgb(26,26,26)] [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-[rgb(60,60,60)] [&::-webkit-scrollbar-thumb]:rounded-full dark:[&::-webkit-scrollbar-thumb]:hover:bg-[rgb(70,70,70)]">
         {queries.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <svg
@@ -156,15 +161,15 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, onNewCh
             <p className="text-lg text-gray-400 dark:text-gray-500 mt-1">Your conversations will appear here</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="divide-y divide-gray-100 dark:divide-[rgb(30,30,30)]">
             {queries.map((query) => (
               <div
                 key={query.id}
                 onClick={() => onQueryClick(query.question)}
-                className="relative w-full px-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group h-16 flex items-center cursor-pointer"
+                className="relative w-full px-4 hover:bg-gray-50 dark:hover:bg-[rgb(40,40,40)] transition-colors group h-16 flex items-center cursor-pointer"
               >
                 <div className="flex-1 text-left pr-16 max-w-[440px]">
-                  <p className="text-xl text-gray-900 dark:text-gray-100 font-light truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  <p className="text-xl text-gray-900 dark:text-gray-100 font-light truncate">
                     {query.question}
                   </p>
                 </div>
@@ -212,7 +217,7 @@ export default function RecentQueries({ userId, sessionId, onQueryClick, onNewCh
 
       {/* Footer hint */}
       {queries.length > 0 && (
-        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-[rgb(26,26,26)] bg-gray-50 dark:bg-[rgb(26,26,26)]">
           <p className="text-lg text-gray-500 dark:text-gray-400 text-center">
             Click any question to ask it again
           </p>

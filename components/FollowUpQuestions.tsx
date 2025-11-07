@@ -20,7 +20,7 @@ const FollowUpQuestions = forwardRef<HTMLDivElement, FollowUpQuestionsProps>(
             <button
               key={index}
               onClick={() => onQuestionClick(question)}
-              className="text-left px-0 py-2 text-lg text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline transition-colors duration-200"
+              className="text-left px-0 py-2 text-lg text-blue-600 dark:text-white hover:text-blue-800 dark:hover:text-gray-300 hover:underline transition-colors duration-200"
             >
               {question}
             </button>

@@ -980,10 +980,10 @@ export default function AskPage() {
   const isEmptyConversation = conversationHistory.length === 0
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
-        className={`hidden lg:block fixed left-0 top-[80px] h-[calc(100vh-80px)] w-96 xl:w-[28rem] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-30 transition-transform duration-300 ${
+        className={`hidden lg:block fixed left-0 top-0 h-screen w-96 xl:w-[28rem] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-50 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -999,7 +999,7 @@ export default function AskPage() {
       {/* Sidebar Toggle Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[60] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-lg ${
+        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[70] bg-white dark:bg-[rgb(45,45,45)] border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)] transition-all shadow-lg ${
           sidebarOpen ? 'xl:left-[28rem] left-96' : 'left-0'
         }`}
         title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
@@ -1016,9 +1016,8 @@ export default function AskPage() {
       </button>
 
       {/* Header - fixed at top */}
-      <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4 transition-[margin] ${flowPanelOffsetClass}`}>
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fin Quote</h1>
+      <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-[rgb(33,33,33)] bg-white dark:bg-[rgb(33,33,33)] px-6 py-4 transition-[margin] ${flowPanelOffsetClass}`}>
+        <div className="flex justify-end items-center">
           <div className="flex items-center gap-3">
             {conversationHistory.length > 0 && (
               <button
@@ -1056,8 +1055,8 @@ export default function AskPage() {
       </div>
 
       {/* Main scrollable content area - conversation */}
-      <div ref={scrollContainerRef} className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} flex-1 overflow-y-auto transition-[margin] duration-300 ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass}`}>
-        <div className={`max-w-6xl mx-auto p-6 space-y-0 ${isEmptyConversation ? '' : 'pb-32 lg:pb-[35vh]'}`}>
+      <div ref={scrollContainerRef} className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} flex-1 overflow-y-auto transition-[margin] duration-300 ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass} relative z-50 pointer-events-none`}>
+        <div className={`max-w-6xl mx-auto p-6 space-y-0 ${isEmptyConversation ? '' : 'pb-32 lg:pb-[35vh]'} pointer-events-auto`}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
                 <p className="font-medium text-lg">Error</p>
@@ -1078,7 +1077,7 @@ export default function AskPage() {
                     // User question
                     <div className="flex justify-end mt-6">
                       <div className="group max-w-3xl relative">
-                        <div className="bg-[#152843] text-white rounded-2xl px-6 py-4">
+                        <div className="bg-gray-100 dark:bg-[rgb(55,55,55)] text-gray-900 dark:text-white rounded-2xl px-6 py-4">
                           <p className="text-xl">{message.content}</p>
                         </div>
                         {/* Copy button - appears on hover after 1 second, absolutely positioned */}
@@ -1099,7 +1098,7 @@ export default function AskPage() {
                   // Assistant answer with chart and follow-up questions
                   <div className="space-y-1">
                     <div className="group relative">
-                      <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                      <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                         <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
                       </div>
                       {/* Copy button - appears on hover, bottom right */}
@@ -1120,7 +1119,7 @@ export default function AskPage() {
                     <div className="w-full max-w-5xl mx-auto space-y-4">
                       {/* Chart for this message */}
                       {message.chartConfig && (
-                        <div className="w-full bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-6">
+                        <div className="w-full bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] p-6">
                           <FinancialChart config={message.chartConfig} />
                         </div>
                       )}
@@ -1137,23 +1136,23 @@ export default function AskPage() {
 
                       // Always use horizontal layout
                       return (
-                        <div className="flex justify-center">
-                          <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="flex justify-center overflow-x-auto">
+                          <div className="inline-block bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] overflow-hidden">
                             <table className="divide-y divide-gray-200 dark:divide-gray-700">
-                              <thead className="bg-gray-50 dark:bg-gray-900">
+                              <thead className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
                                 <tr>
                                   {filteredData.map((row, idx) => (
-                                    <th key={idx} scope="col" className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    <th key={idx} scope="col" className="px-3 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                       {row.year}
                                     </th>
                                   ))}
                                 </tr>
                               </thead>
-                              <tbody className="bg-white dark:bg-gray-800">
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <tbody className="bg-white dark:bg-[rgb(33,33,33)]">
+                                <tr className="hover:bg-gray-50 dark:hover:bg-[rgb(40,40,40)]">
                                   {filteredData.map((row, idx) => (
-                                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
-                                      ${(row.value / 1_000_000_000).toFixed(2)}B
+                                    <td key={idx} className="px-3 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
+                                      ${(row.value / 1_000_000_000).toFixed(1)}B
                                     </td>
                                   ))}
                                 </tr>
@@ -1176,10 +1175,10 @@ export default function AskPage() {
 
                       // Always use horizontal layout
                       return (
-                        <div className="flex justify-center">
-                          <div className="inline-block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="flex justify-center overflow-x-auto">
+                          <div className="inline-block bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] overflow-hidden">
                             <table className="divide-y divide-gray-200 dark:divide-gray-700">
-                              <thead className="bg-gray-50 dark:bg-gray-900">
+                              <thead className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
                                 <tr>
                                   {filteredData.map((row: any, idx: number) => (
                                     <th key={idx} scope="col" className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1188,13 +1187,25 @@ export default function AskPage() {
                                   ))}
                                 </tr>
                               </thead>
-                              <tbody className="bg-white dark:bg-gray-800">
-                                <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                  {filteredData.map((row: any, idx: number) => (
-                                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
-                                      {typeof row.metric_value === 'number' ? row.metric_value.toFixed(2) : row.metric_value}
-                                    </td>
-                                  ))}
+                              <tbody className="bg-white dark:bg-[rgb(33,33,33)]">
+                                <tr className="hover:bg-gray-50 dark:hover:bg-[rgb(40,40,40)]">
+                                  {filteredData.map((row: any, idx: number) => {
+                                    let displayValue = row.metric_value
+                                    if (typeof row.metric_value === 'number') {
+                                      // If value is in billions (> 1 billion), format as $XXX.XB
+                                      if (Math.abs(row.metric_value) >= 1_000_000_000) {
+                                        const billions = row.metric_value / 1_000_000_000
+                                        displayValue = `$${billions.toFixed(1)}B`
+                                      } else {
+                                        displayValue = row.metric_value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 })
+                                      }
+                                    }
+                                    return (
+                                      <td key={idx} className="px-3 py-4 whitespace-nowrap text-base text-center text-gray-900 dark:text-gray-100 font-mono">
+                                        {displayValue}
+                                      </td>
+                                    )
+                                  })}
                                 </tr>
                               </tbody>
                             </table>
@@ -1221,16 +1232,32 @@ export default function AskPage() {
               )
             })}
 
+            {/* Loading status indicator - positioned like answer */}
+            {loading && !answer && (
+              <div className="space-y-1 mt-6">
+                <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
+                  <p className="text-gray-600 dark:text-gray-400 text-xl">
+                    {loadingStep === 'analyzing' && 'Analyzing...'}
+                    {loadingStep === 'selecting' && 'Selecting Tool...'}
+                    {loadingStep === 'calling' && 'Calling API...'}
+                    {loadingStep === 'fetching' && 'Fetching Data...'}
+                    {loadingStep === 'calculating' && 'Calculating...'}
+                    {loadingStep === 'generating' && 'Generating Answer...'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Show current streaming answer (text only - chart appears when complete) */}
             {loading && answer && (
               <div className="space-y-4">
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                   <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
                 </div>
 
                 {/* Loading indicator for chart/table - only show if data hasn't been received yet */}
                 {!dataReceived && (
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex gap-2">
                         <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -1248,7 +1275,7 @@ export default function AskPage() {
             {!loading && answer && (
               <div className="space-y-6">
                 {/* Feedback and comment section */}
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                   {/* Feedback Section */}
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-4">
@@ -1341,10 +1368,10 @@ export default function AskPage() {
       </div>
 
       {/* Fixed bottom input bar - centered when empty, bottom when conversation exists */}
-      <div className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} ${isEmptyConversation ? 'fixed top-1/2 left-0 right-0 -translate-y-1/2' : 'fixed bottom-0 left-0 right-0 pb-12'} bg-gray-50 dark:bg-gray-900 z-50 transition-[margin,right] duration-300 ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
+      <div className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} ${isEmptyConversation ? 'fixed top-1/2 left-0 right-0 -translate-y-1/2' : 'fixed bottom-0 left-0 right-0 pb-12'} bg-gray-50 dark:bg-[rgb(33,33,33)] z-50 transition-[margin,right] duration-300 ${flowPanelOpen ? 'lg:right-[420px]' : ''}`}>
         <div className="max-w-4xl mx-auto px-6">
           <form onSubmit={handleSubmitStreaming}>
-            <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-slate-800 rounded-full px-6 py-5 border border-blue-300 dark:border-slate-700">
+            <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
               {/* Textarea field */}
               <textarea
                 ref={textareaRef}
@@ -1369,7 +1396,7 @@ export default function AskPage() {
               <button
                 type="submit"
                 disabled={loading || !question.trim()}
-                className="flex-shrink-0 w-11 h-11 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
                 title={loading ? "Stop" : "Send message"}
               >
                 {loading ? (
@@ -1382,19 +1409,6 @@ export default function AskPage() {
               </button>
             </div>
 
-            {/* Loading status below input */}
-            {loading && (
-              <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-semibold">
-                  {loadingStep === 'analyzing' && 'Analyzing...'}
-                  {loadingStep === 'selecting' && 'Selecting Tool...'}
-                  {loadingStep === 'calling' && 'Calling API...'}
-                  {loadingStep === 'fetching' && 'Fetching Data...'}
-                  {loadingStep === 'calculating' && 'Calculating...'}
-                  {loadingStep === 'generating' && 'Generating Answer...'}
-                </span>
-              </div>
-            )}
           </form>
         </div>
       </div>
