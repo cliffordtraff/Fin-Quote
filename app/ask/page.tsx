@@ -658,6 +658,10 @@ export default function AskPage() {
               // Update URL with conversation ID
               router.push(`/ask?id=${convId}`)
 
+              // Refresh sidebar immediately after creating conversation
+              console.log('[ask/page] New conversation created, refreshing sidebar')
+              setRefreshQueriesTrigger(prev => prev + 1)
+
               // Save user message
               await saveMessage(convId, 'user', userMessage.content)
             }
@@ -677,6 +681,9 @@ export default function AskPage() {
             // Auto-generate title after first exchange
             if (conversationHistory.length === 0) {
               await autoGenerateTitle(convId)
+              // Refresh sidebar again to show the generated title
+              console.log('[ask/page] Title generated, refreshing sidebar')
+              setRefreshQueriesTrigger(prev => prev + 1)
             }
           }
         }
@@ -687,7 +694,12 @@ export default function AskPage() {
         setFeedbackComment('')
 
         // Refresh recent queries sidebar
-        setRefreshQueriesTrigger(prev => prev + 1)
+        console.log('[ask/page] Incrementing refreshQueriesTrigger')
+        setRefreshQueriesTrigger(prev => {
+          const newValue = prev + 1
+          console.log('[ask/page] refreshQueriesTrigger:', prev, '->', newValue)
+          return newValue
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
@@ -874,7 +886,7 @@ export default function AskPage() {
   }
 
   // Clear conversation history / Start new conversation
-  const handleClearConversation = () => {
+  const handleClearConversation = async () => {
     setConversationHistory([])
     setCurrentConversationId(null)
     localStorage.removeItem('finquote_conversation')
@@ -893,8 +905,20 @@ export default function AskPage() {
     setShowCommentBox(false)
     setFeedbackComment('')
 
-    // Clear conversation ID from URL if authenticated
+    // Create new conversation immediately if authenticated
     if (user) {
+      console.log('[ask/page] Creating new conversation on New Chat click')
+      const { conversation, error: createError } = await createConversation()
+      if (!createError && conversation) {
+        setCurrentConversationId(conversation.id)
+        router.push(`/ask?id=${conversation.id}`)
+
+        // Refresh sidebar to show the new conversation
+        console.log('[ask/page] New conversation created, refreshing sidebar')
+        setRefreshQueriesTrigger(prev => prev + 1)
+      }
+    } else {
+      // Clear conversation ID from URL if not authenticated
       router.push('/ask')
     }
 
@@ -993,6 +1017,7 @@ export default function AskPage() {
           onQueryClick={handleRecentQueryClick}
           onNewChat={handleClearConversation}
           refreshTrigger={refreshQueriesTrigger}
+          currentConversationId={currentConversationId}
         />
       </div>
 

@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/supabase/server'
 import { Database } from '@/lib/database.types'
 import type { Conversation, Message, ConversationWithMessages } from '@/lib/database.types'
 
@@ -12,13 +12,17 @@ type NewMessage = Database['public']['Tables']['messages']['Insert']
  */
 export async function getConversations(): Promise<{ conversations: Conversation[] | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    console.log('[SERVER] getConversations called')
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
+      console.log('[SERVER] getConversations: Not authenticated')
       return { conversations: null, error: 'Not authenticated' }
     }
+
+    console.log('[SERVER] getConversations: Fetching for userId:', user.id)
 
     const { data, error } = await supabase
       .from('conversations')
@@ -27,13 +31,18 @@ export async function getConversations(): Promise<{ conversations: Conversation[
       .order('updated_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching conversations:', error)
+      console.error('[SERVER] Error fetching conversations:', error)
       return { conversations: null, error: error.message }
+    }
+
+    console.log('[SERVER] getConversations: Returned', data?.length || 0, 'conversations')
+    if (data && data.length > 0) {
+      console.log('[SERVER] Conversation titles:', data.map(c => c.title))
     }
 
     return { conversations: data, error: null }
   } catch (err) {
-    console.error('Unexpected error in getConversations:', err)
+    console.error('[SERVER] Unexpected error in getConversations:', err)
     return { conversations: null, error: 'An unexpected error occurred' }
   }
 }
@@ -45,7 +54,7 @@ export async function getConversation(
   conversationId: string
 ): Promise<{ conversation: ConversationWithMessages | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -96,13 +105,17 @@ export async function createConversation(
   title?: string
 ): Promise<{ conversation: Conversation | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    console.log('[SERVER] createConversation called with title:', title || 'New Conversation')
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
+      console.log('[SERVER] createConversation: Not authenticated')
       return { conversation: null, error: 'Not authenticated' }
     }
+
+    console.log('[SERVER] createConversation: Creating for userId:', user.id)
 
     const newConversation: NewConversation = {
       user_id: user.id,
@@ -116,13 +129,14 @@ export async function createConversation(
       .single()
 
     if (error) {
-      console.error('Error creating conversation:', error)
+      console.error('[SERVER] Error creating conversation:', error)
       return { conversation: null, error: error.message }
     }
 
+    console.log('[SERVER] createConversation: Successfully created conversation with id:', data.id)
     return { conversation: data, error: null }
   } catch (err) {
-    console.error('Unexpected error in createConversation:', err)
+    console.error('[SERVER] Unexpected error in createConversation:', err)
     return { conversation: null, error: 'An unexpected error occurred' }
   }
 }
@@ -141,11 +155,13 @@ export async function saveMessage(
   }
 ): Promise<{ message: Message | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    console.log('[SERVER] saveMessage called for conversation:', conversationId, 'role:', role)
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
+      console.log('[SERVER] saveMessage: Not authenticated')
       return { message: null, error: 'Not authenticated' }
     }
 
@@ -158,6 +174,7 @@ export async function saveMessage(
       .single()
 
     if (convError || !conversation) {
+      console.log('[SERVER] saveMessage: Conversation not found or access denied')
       return { message: null, error: 'Conversation not found or access denied' }
     }
 
@@ -177,13 +194,14 @@ export async function saveMessage(
       .single()
 
     if (error) {
-      console.error('Error saving message:', error)
+      console.error('[SERVER] Error saving message:', error)
       return { message: null, error: error.message }
     }
 
+    console.log('[SERVER] saveMessage: Successfully saved', role, 'message to conversation', conversationId)
     return { message: data, error: null }
   } catch (err) {
-    console.error('Unexpected error in saveMessage:', err)
+    console.error('[SERVER] Unexpected error in saveMessage:', err)
     return { message: null, error: 'An unexpected error occurred' }
   }
 }
@@ -196,7 +214,7 @@ export async function updateConversationTitle(
   title: string
 ): Promise<{ conversation: Conversation | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -231,7 +249,7 @@ export async function deleteConversation(
   conversationId: string
 ): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -265,7 +283,7 @@ export async function autoGenerateTitle(
   conversationId: string
 ): Promise<{ title: string | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -328,7 +346,7 @@ export async function migrateLocalStorageConversation(
   }>
 ): Promise<{ conversationId: string | null; error: string | null }> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
