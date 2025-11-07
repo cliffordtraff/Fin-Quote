@@ -101,10 +101,12 @@ Available Tools:
    - "equity", "book value", "shareholders equity" → shareholders_equity
 
    Cash Flow:
-   - "cash flow", "operating cash", "free cash flow", "FCF", "cash flow margin" → operating_cash_flow
+   - "operating cash flow", "cash from operations", "OCF" → operating_cash_flow
+   - "free cash flow", "FCF", "unlevered free cash flow" → Use getFinancialMetric tool
+   - "capex", "capital expenditures", "buybacks", "dividends paid", "stock-based compensation" → Use getFinancialMetric tool
 
    Other (use closest available):
-   - "R&D", "research", "development", "capex", "buybacks", "dividends", "margins", "ratios" → operating_income
+   - "R&D", "research", "development", "margins", "ratios" → operating_income
 
    LIMIT RULES - CRITICAL:
 
