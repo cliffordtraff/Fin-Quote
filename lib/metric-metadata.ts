@@ -151,12 +151,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     commonAliases: ['days inventory', 'DIO', 'inventory days']
   },
 
-  daysOfInventoryOutstanding: {
-    description: 'Days of Inventory Outstanding - Days to sell inventory',
-    unit: 'days',
-    commonAliases: ['DIO', 'inventory turnover days', 'days sales of inventory']
-  },
-
   daysOfPayablesOutstanding: {
     description: 'Days Payables Outstanding - Average days to pay suppliers',
     unit: 'days',
@@ -167,18 +161,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     description: 'Days Sales Outstanding - Average days to collect receivables',
     unit: 'days',
     commonAliases: ['DSO', 'receivables days', 'collection period']
-  },
-
-  daysPayablesOutstanding: {
-    description: 'Days Payables Outstanding - Days to pay suppliers',
-    unit: 'days',
-    commonAliases: ['DPO', 'payable days']
-  },
-
-  daysSalesOutstanding: {
-    description: 'Days Sales Outstanding - Days to collect customer payments',
-    unit: 'days',
-    commonAliases: ['DSO', 'collection days']
   },
 
   debtEquityRatio: {
@@ -197,18 +179,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     description: 'Debt Ratio - Total debt divided by total assets',
     unit: 'ratio',
     commonAliases: ['debt ratio', 'total debt ratio', 'debt to assets']
-  },
-
-  debtToAssets: {
-    description: 'Debt to Assets Ratio - Total debt as percentage of total assets',
-    unit: 'ratio',
-    commonAliases: ['debt to assets', 'D/A ratio']
-  },
-
-  debtToEquity: {
-    description: 'Debt to Equity - Total debt divided by total equity',
-    unit: 'ratio',
-    commonAliases: ['debt to equity', 'D/E']
   },
 
   dividendPaidAndCapexCoverageRatio: {
@@ -294,12 +264,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     description: 'Enterprise Value Multiple - EV divided by EBITDA',
     unit: 'ratio',
     commonAliases: ['EV multiple', 'EV/EBITDA']
-  },
-
-  enterpriseValueOverEBITDA: {
-    description: 'EV to EBITDA Ratio - Enterprise value divided by EBITDA',
-    unit: 'ratio',
-    commonAliases: ['EV/EBITDA', 'enterprise value to EBITDA']
   },
 
   epsdilutedGrowth: {
@@ -597,12 +561,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     commonAliases: ['EBIT growth', 'operating profit growth']
   },
 
-  operatingProfitMargin: {
-    description: 'Operating Profit Margin - Operating income (EBIT) as percentage of revenue',
-    unit: 'percentage',
-    commonAliases: ['operating margin', 'EBIT margin', 'OP margin', 'EBIT to revenue']
-  },
-
   // P
   payablesTurnover: {
     description: 'Payables Turnover Ratio - Number of times payables are paid per period',
@@ -658,18 +616,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     commonAliases: ['P/CF', 'price to cash flow']
   },
 
-  priceEarningsRatio: {
-    description: 'Price-to-Earnings Ratio - Market price divided by earnings per share',
-    unit: 'ratio',
-    commonAliases: ['P/E', 'PE ratio', 'price to earnings']
-  },
-
-  priceBookValueRatio: {
-    description: 'Price-to-Book Value Ratio - Market price divided by book value per share',
-    unit: 'ratio',
-    commonAliases: ['P/B', 'price to book value', 'price book value']
-  },
-
   priceEarningsToGrowthRatio: {
     description: 'PEG Ratio - P/E ratio divided by earnings growth rate',
     unit: 'ratio',
@@ -686,30 +632,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     description: 'Price-to-Sales Ratio - Market cap divided by revenue',
     unit: 'ratio',
     commonAliases: ['P/S', 'price to sales', 'price-to-sales', 'PSR']
-  },
-
-  priceToBookRatio: {
-    description: 'Price-to-Book Ratio - Market price divided by book value per share',
-    unit: 'ratio',
-    commonAliases: ['P/B', 'price to book']
-  },
-
-  priceToFreeCashFlowsRatio: {
-    description: 'Price to Free Cash Flow Ratio - Market cap divided by free cash flow',
-    unit: 'ratio',
-    commonAliases: ['P/FCF', 'price to FCF']
-  },
-
-  priceToOperatingCashFlowsRatio: {
-    description: 'Price to Operating Cash Flow Ratio - Market cap divided by operating cash flow',
-    unit: 'ratio',
-    commonAliases: ['P/OCF', 'price to OCF']
-  },
-
-  priceToSalesRatio: {
-    description: 'Price-to-Sales Ratio - Market cap divided by revenue',
-    unit: 'ratio',
-    commonAliases: ['P/S', 'price to sales', 'PSR']
   },
 
   ptbRatio: {
@@ -780,12 +702,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     commonAliases: ['ROTA', 'return on tangible assets']
   },
 
-  roe: {
-    description: 'Return on Equity (ROE) - Net income divided by shareholders equity',
-    unit: 'percentage',
-    commonAliases: ['ROE', 'return on equity']
-  },
-
   roic: {
     description: 'Return on Invested Capital (ROIC) - Net operating profit after tax divided by invested capital',
     unit: 'percentage',
@@ -827,12 +743,6 @@ export const METRIC_METADATA: Record<string, MetricMetadata> = {
     description: 'Shareholders Equity Growth - Year-over-year growth in shareholders equity',
     unit: 'percentage',
     commonAliases: ['equity growth', 'book value growth']
-  },
-
-  shareholdersEquityPerShare: {
-    description: 'Shareholders Equity Per Share - Book value per share',
-    unit: 'currency',
-    commonAliases: ['equity per share', 'book value per share', 'BVPS']
   },
 
   shortTermCoverageRatios: {

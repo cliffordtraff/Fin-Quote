@@ -13,6 +13,31 @@ dotenv.config({ path: '.env.local' })
 const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
 const SYMBOL = 'AAPL'
 
+/**
+ * Metrics to skip during ingestion (duplicates from different FMP endpoints)
+ * We prefer the shorter/cleaner names:
+ * - peRatio (not priceEarningsRatio)
+ * - pbRatio (not priceBookValueRatio or priceToBookRatio)
+ * - etc.
+ */
+const SKIP_METRICS = new Set([
+  'daysOfInventoryOutstanding', // Duplicate of daysOfInventoryOnHand
+  'daysPayablesOutstanding', // Duplicate of daysOfPayablesOutstanding
+  'daysSalesOutstanding', // Duplicate of daysOfSalesOutstanding
+  'debtToAssets', // Duplicate of debtRatio
+  'debtToEquity', // Duplicate of debtEquityRatio
+  'enterpriseValueOverEBITDA', // Duplicate of enterpriseValueMultiple
+  'operatingProfitMargin', // Duplicate of ebitPerRevenue
+  'priceEarningsRatio', // Duplicate of peRatio
+  'priceBookValueRatio', // Duplicate of pbRatio
+  'priceToBookRatio', // Duplicate of pbRatio
+  'priceToFreeCashFlowsRatio', // Duplicate of pfcfRatio
+  'priceToOperatingCashFlowsRatio', // Duplicate of pocfratio
+  'priceToSalesRatio', // Duplicate of priceSalesRatio
+  'roe', // Duplicate of returnOnEquity
+  'shareholdersEquityPerShare', // Duplicate of bookValuePerShare
+])
+
 // Category mapping based on stock_metrics_master.csv
 const CATEGORY_MAP: Record<string, string> = {
   // Valuation metrics
@@ -350,6 +375,7 @@ async function fetchFMPData() {
     Object.entries(item).forEach(([key, value]) => {
       if (key === 'date' || key === 'symbol' || key === 'period') return
       if (typeof value !== 'number' || value === null) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       metrics.push({
         symbol: SYMBOL,
@@ -369,6 +395,7 @@ async function fetchFMPData() {
     Object.entries(item).forEach(([key, value]) => {
       if (key === 'date' || key === 'symbol' || key === 'period') return
       if (typeof value !== 'number' || value === null) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       // Skip duplicates from key-metrics
       const isDuplicate = metrics.some(
@@ -394,6 +421,7 @@ async function fetchFMPData() {
     Object.entries(item).forEach(([key, value]) => {
       if (key === 'date' || key === 'symbol' || key === 'period') return
       if (typeof value !== 'number' || value === null) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       metrics.push({
         symbol: SYMBOL,
@@ -413,6 +441,7 @@ async function fetchFMPData() {
     Object.entries(item).forEach(([key, value]) => {
       if (key === 'date' || key === 'symbol') return
       if (typeof value !== 'number' || value === null) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       // Skip duplicates
       const isDuplicate = metrics.some(
@@ -443,6 +472,7 @@ async function fetchFMPData() {
 
     Object.entries(ebitdaMetrics).forEach(([key, value]) => {
       if (typeof value !== 'number' || value === null) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       // Skip duplicates
       const isDuplicate = metrics.some(
@@ -475,6 +505,7 @@ async function fetchFMPData() {
 
     Object.entries(cashFlowMetrics).forEach(([key, value]) => {
       if (typeof value !== 'number' || value === null || isNaN(value)) return
+      if (SKIP_METRICS.has(key)) return // Skip known duplicates
 
       // Skip duplicates
       const isDuplicate = metrics.some(

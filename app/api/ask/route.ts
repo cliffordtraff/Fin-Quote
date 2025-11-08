@@ -515,18 +515,15 @@ export async function POST(req: NextRequest) {
 
               // Also include specific "Other" metrics that are actually valuation metrics
               const valuationMetricsInOther = [
-                'priceEarningsRatio',
-                'priceBookValueRatio',
-                'priceSalesRatio',
+                'peRatio', // Price to Earnings
+                'pbRatio', // Price to Book
+                'priceSalesRatio', // Price to Sales
                 'priceCashFlowRatio',
-                'priceEarningsToGrowthRatio',
-                'priceToOperatingCashFlowsRatio',
-                'pfcfRatio',
-                'pocfratio',
-                'pbRatio',
-                'ptbRatio',
-                'enterpriseValueMultiple',
-                'enterpriseValueOverEBITDA',
+                'priceEarningsToGrowthRatio', // PEG Ratio
+                'pfcfRatio', // Price to Free Cash Flow
+                'pocfratio', // Price to Operating Cash Flow
+                'ptbRatio', // Price to Tangible Book
+                'enterpriseValueMultiple', // EV/EBITDA
               ]
 
               return chartCategories.includes(category) ||
