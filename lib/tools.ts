@@ -21,11 +21,13 @@ export const TOOL_MENU: ToolDefinition[] = [
   },
   {
     name: 'getPrices',
-    description: 'Get AAPL stock price history for recent periods.',
+    description: 'Get AAPL stock price history. Supports preset ranges (7d to 20y) or custom date ranges.',
     args: {
-      range: '7d | 30d | 90d',
+      range: '7d | 30d | 90d | 365d | ytd | 3y | 5y | 10y | 20y | max',
+      from: 'YYYY-MM-DD (for custom date range)',
+      to: 'YYYY-MM-DD (optional, defaults to today)',
     },
-    notes: 'Returns daily closing prices. Ticker is fixed to AAPL for MVP.',
+    notes: 'Use preset ranges for common timeframes or custom dates for specific periods. Returns daily closing prices.',
   },
   {
     name: 'getRecentFilings',
@@ -87,8 +89,13 @@ Available Tools:
    Income/Profitability:
    - "sales", "revenue", "top line" → revenue
    - "profit", "earnings", "bottom line", "profitability" → net_income
-   - "EPS", "earnings per share", "P/E ratio", "PE" → eps
+   - "EPS", "earnings per share" → eps
    - "operating profit", "EBIT" → operating_income
+
+   Valuation Ratios (use getFinancialMetric tool):
+   - "P/E ratio", "PE ratio", "price to earnings" → Use getFinancialMetric tool with metricNames: ["P/E"]
+   - "P/B ratio", "price to book" → Use getFinancialMetric tool with metricNames: ["P/B"]
+   - "PEG ratio" → Use getFinancialMetric tool with metricNames: ["PEG"]
 
    Calculated Ratios (✨ NOW NATIVE - use directly):
    - "gross margin", "gross profit margin" → gross_margin
@@ -105,8 +112,11 @@ Available Tools:
    - "free cash flow", "FCF", "unlevered free cash flow" → Use getFinancialMetric tool
    - "capex", "capital expenditures", "buybacks", "dividends paid", "stock-based compensation" → Use getFinancialMetric tool
 
+   Research & Development:
+   - "R&D", "research and development", "R&D spending", "R&D expense" → Use getFinancialMetric tool with metricNames: ["R&D to revenue"] or ["research and development"]
+
    Other (use closest available):
-   - "R&D", "research", "development", "margins", "ratios" → operating_income
+   - "margins", "ratios" (when not specific) → operating_income
 
    LIMIT RULES - CRITICAL:
 
@@ -143,37 +153,62 @@ Available Tools:
 
 2. getPrices - Stock PRICE history
 
-   SUPPORTED RANGES:
-   - 7d (one week)
-   - 30d (one month)
-   - 90d (one quarter)
+   TWO MODES:
+   A) Preset Ranges (use for common timeframes)
+   B) Custom Dates (use for specific date ranges)
 
-   RANGE MAPPING - CRITICAL:
+   MODE A: PRESET RANGES (for common timeframes)
 
-   For 7d (use when):
-   - "today", "current price", "now", "latest"
-   - "this week", "past week", "5 days"
-   - "recent" or "recently" (without other context)
+   Available presets:
+   - 7d, 30d, 90d, 365d, ytd
+   - 3y, 5y, 10y, 20y (multi-year ranges)
+   - max (all available data, ~20+ years)
 
-   For 30d (use when):
-   - "month", "30 days", "this month", "past month"
-   - "price" (ambiguous, default to 30d)
-   - "how's the stock doing" (ambiguous, default to 30d)
+   ⚠️ IMPORTANT: These are the ONLY valid preset values. If user asks for a timeframe not in this list (e.g., 15 years, 7 years, 2 years), use MODE B (Custom Dates) instead.
 
-   For 90d (use when):
-   - "quarter", "Q1", "90 days", "3 months"
-   - "6 months", "half year" (closest available)
-   - "year", "YTD", "12 months", "annual" (closest available)
-   - "long term", "historical"
+   MAPPING GUIDE:
+
+   Days (7d, 30d, 90d, 365d):
+   - "today", "this week", "past week" → 7d
+   - "month", "30 days", "this month" → 30d
+   - "quarter", "3 months", "90 days" → 90d
+   - "past year", "last 12 months" → 365d
+
+   Special:
+   - "YTD", "year to date", "this year" → ytd
+   - "since January", "start of year" → ytd
+
+   Multi-Year:
+   - "3 years", "past 3 years", "last 3 years" → 3y
+   - "5 years", "5 year history", "past 5 years" → 5y
+   - "10 years", "decade", "past decade" → 10y
+   - "15 years", "past 15 years" → {"from": "2010-11-08"} (USE MODE B - calculate exact date)
+   - "20 years", "two decades" → 20y
+   - "all time", "maximum", "complete history", "all available" → max
+
+   ⚠️ CRITICAL: For ANY year count not in the preset list (2y, 4y, 6y, 7y, 8y, 9y, 11y-19y, etc.), you MUST use MODE B with calculated dates. DO NOT use "max" as a fallback.
+
+   MODE B: CUSTOM DATES (use when user specifies exact dates)
+
+   When user asks for specific date ranges:
+   - "from Jan 2020 to June 2023" → {"from": "2020-01-01", "to": "2023-06-30"}
+   - "prices between 2015 and 2020" → {"from": "2015-01-01", "to": "2020-12-31"}
+   - "from March 2018 to now" → {"from": "2018-03-01"}
+
+   Date format: YYYY-MM-DD
+   "to" is optional (defaults to today)
 
    Examples:
-   - "What's the price?" → 30d (ambiguous defaults to month)
-   - "How's the stock doing?" → 30d
-   - "Price today" → 7d
-   - "Show me 1 year performance" → 90d
-   - "6 month chart" → 90d
+   - "What's the price?" → {"range": "30d"}
+   - "5 year price history" → {"range": "5y"}
+   - "Show me all time performance" → {"range": "max"}
+   - "Past decade" → {"range": "10y"}
+   - "Show YTD performance" → {"range": "ytd"}
+   - "Last 15 years" → {"from": "2010-11-08"} (MODE B: 15y not a preset, calculate date)
+   - "Past 7 years" → {"from": "2018-11-08"} (MODE B: 7y not a preset, calculate date)
+   - "From 2020 to 2023" → {"from": "2020-01-01", "to": "2023-12-31"}
 
-   args: {"range": "7d" | "30d" | "90d"}
+   args: {"range": "<preset>"} OR {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}
 
 3. getRecentFilings - LIST SEC filings metadata
 
@@ -267,6 +302,7 @@ Available Tools:
 
    Examples:
    - "What's Apple's P/E ratio?" → {"metricNames": ["P/E"], "limit": 5}
+   - "What's the price to book ratio?" → {"metricNames": ["price to book"], "limit": 5}
    - "Show me ROE trend" → {"metricNames": ["ROE"], "limit": 4}
    - "What's Apple's free cash flow?" → {"metricNames": ["free cash flow"], "limit": 5}
    - "How much did Apple spend on buybacks?" → {"metricNames": ["buybacks"], "limit": 5}
@@ -291,6 +327,7 @@ Return ONLY JSON - examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
 {"tool":"getPrices","args":{"range":"30d"}}
+{"tool":"getPrices","args":{"range":"ytd"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
 {"tool":"listMetrics","args":{"category":"Valuation"}}
@@ -374,6 +411,7 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Example: 34.092882867601105 → "34.09" (NOT "34.092882867601105")
    - NEVER round significantly or estimate, but do round to 2 decimal places for readability
    - If a number is 383.285B, say "$383.3B" not "$383B"
+   - For stock prices, ALWAYS add '$' before the price: "$243.85" not "243.85"
 
 2. YEARS - ONLY mention years that appear in the facts:
    - Before mentioning any year, verify it exists in the facts JSON
@@ -402,6 +440,14 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    IMPORTANT: The facts JSON often includes multiple fields per row to enable ratio calculations.
    For example, if the metric is "total_liabilities", the JSON will also include "shareholders_equity" and "total_assets".
    These additional fields are provided specifically so you can calculate ratios. USE THEM.
+
+   STOCK PRICE PERFORMANCE:
+   - Percentage Change = ((ending_price - starting_price) / starting_price) × 100
+   - For price data, ALWAYS calculate and include the percentage change
+   - Format: "up X%" or "down X%" with 2 decimal places
+   - Example: Start: $243.85, End: $267.93 → ((267.93 - 243.85) / 243.85) × 100 = 9.88% → "up 9.88%"
+   - Include the percentage change and starting/ending prices in your answer
+   - Example: "AAPL is up 9.88% from $243.85 to $267.93 over the period."
 
    PROFITABILITY RATIOS:
    - Gross Margin = (gross_profit / revenue) × 100
@@ -438,11 +484,14 @@ General Instructions:
 - Do not invent numbers or sources.
 - Respond in plain text sentences. Do NOT use Markdown formatting (no bullet lists, bold, italics, tables, or code blocks).
 - When there is only ONE data point, provide a concise single-sentence answer with the year and value. Do NOT mention any chart or table.
-- When there are 2-4 data points, list them briefly in your answer.
-- When more than four data points are relevant, do not list each one. Write at most two sentences: the first calls out the earliest year/value, latest year/value, and any notable high/low; the second describes the overall trend and tells the user to check the chart and data table below for the full yearly breakdown.
+- When there are 2-4 data points AND the user did NOT explicitly ask for a chart/graph, list them briefly in your answer.
+- When there are 2-4 data points AND the user explicitly asked for a chart/graph/visualization, briefly mention the key values and direct them to check the chart below.
+- When more than four data points are relevant, do not list each one. Write at most two sentences: the first calls out the earliest year/value, latest year/value, and any notable high/low WITH the percentage change; the second describes the overall trend and tells the user to check the chart and data table below for the full yearly breakdown.
 
 Examples:
 - Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020, exact number)
 - Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend, exact numbers)
 - Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)
-- Question: "What's the gross margin?" → Answer: "AAPL's gross margin in 2024 is 46.2% (gross profit of $180.7B divided by revenue of $391.0B)." (Calculate ratio from data)`
+- Question: "What's the gross margin?" → Answer: "AAPL's gross margin in 2024 is 46.2% (gross profit of $180.7B divided by revenue of $391.0B)." (Calculate ratio from data)
+- Question: "Chart of debt to equity ratio last 5 years" → Answer: "The debt-to-equity ratio decreased from 2.61 in 2022 to 0.11 in 2025; check the chart below for the full trend." (User asked for chart, direct them to it)
+- Question: "Show year to date performance" → Answer: "AAPL is up 9.88% year-to-date, from $243.85 to $267.93 as of the latest date in the data. Check the data table below for the full yearly breakdown." (Calculate percentage, format prices with $, mention trend)`

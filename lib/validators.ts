@@ -81,11 +81,17 @@ function detectRatioMetrics(data: any[]): {
   }
 
   const firstRow = data[0]
-  const hasRevenue = 'revenue' in firstRow && firstRow.revenue != null
-  const hasShareholders = 'shareholders_equity' in firstRow && firstRow.shareholders_equity != null
-  const hasLiabilities = 'total_liabilities' in firstRow && firstRow.total_liabilities != null
-  const hasAssets = 'total_assets' in firstRow && firstRow.total_assets != null
-  const primaryMetric = firstRow.metric || undefined
+
+  // Handle summary objects (for price data) - they don't have financial metrics
+  if (firstRow && typeof firstRow === 'object' && 'summary' in firstRow) {
+    return { hasRevenue: false, hasShareholders: false, hasLiabilities: false, hasAssets: false }
+  }
+
+  const hasRevenue = firstRow && 'revenue' in firstRow && firstRow.revenue != null
+  const hasShareholders = firstRow && 'shareholders_equity' in firstRow && firstRow.shareholders_equity != null
+  const hasLiabilities = firstRow && 'total_liabilities' in firstRow && firstRow.total_liabilities != null
+  const hasAssets = firstRow && 'total_assets' in firstRow && firstRow.total_assets != null
+  const primaryMetric = firstRow && firstRow.metric ? firstRow.metric : undefined
 
   return { hasRevenue, hasShareholders, hasLiabilities, hasAssets, primaryMetric }
 }
@@ -95,6 +101,12 @@ function detectRatioMetrics(data: any[]): {
  */
 function calculateRatios(data: any[]): number[] {
   const ratios: number[] = []
+
+  // Guard: if data is not an array or is a summary object, return empty ratios
+  if (!Array.isArray(data) || (data.length > 0 && data[0] && 'summary' in data[0])) {
+    return ratios
+  }
+
   const { hasRevenue, hasShareholders, hasLiabilities, hasAssets, primaryMetric } = detectRatioMetrics(data)
 
   for (const row of data) {
@@ -287,17 +299,21 @@ export function validateNumbers(answer: string, data: any[]): ValidationResult {
   if (mentionedNumbers.length > 0) {
     // Extract all numeric values from the data
     const dataNumbers: number[] = []
-    for (const row of data) {
-      if (row.value !== undefined && row.value !== null) {
-        dataNumbers.push(Number(row.value))
-      }
-      // Also check for price data
-      if (row.close !== undefined && row.close !== null) {
-        dataNumbers.push(Number(row.close))
-      }
-      // Include related metrics for validation
-      if (row.revenue !== undefined && row.revenue !== null) {
-        dataNumbers.push(Number(row.revenue))
+
+    // Guard: skip validation if data is not an array or is a summary object
+    if (Array.isArray(data) && !(data.length > 0 && data[0] && 'summary' in data[0])) {
+      for (const row of data) {
+        if (row.value !== undefined && row.value !== null) {
+          dataNumbers.push(Number(row.value))
+        }
+        // Also check for price data
+        if (row.close !== undefined && row.close !== null) {
+          dataNumbers.push(Number(row.close))
+        }
+        // Include related metrics for validation
+        if (row.revenue !== undefined && row.revenue !== null) {
+          dataNumbers.push(Number(row.revenue))
+        }
       }
     }
 
@@ -438,9 +454,12 @@ export async function validateYears(
 
   // Extract years from data
   const dataYears: Set<number> = new Set()
-  for (const row of data) {
-    if (row.year !== undefined && row.year !== null) {
-      dataYears.add(Number(row.year))
+
+  // Guard: skip if data is not an array or is a summary object
+  if (Array.isArray(data) && !(data.length > 0 && data[0] && 'summary' in data[0])) {
+    for (const row of data) {
+      if (row.year !== undefined && row.year !== null) {
+        dataYears.add(Number(row.year))
     }
     // Also check for date fields in filing data
     if (row.filing_date) {
@@ -451,6 +470,7 @@ export async function validateYears(
       const year = new Date(row.period_end_date).getFullYear()
       dataYears.add(year)
     }
+  }
   }
 
   const availableYears = Array.from(dataYears).sort()
@@ -587,12 +607,16 @@ export function validateFilings(answer: string, data: any[]): ValidationResult {
 
   // Extract filing info from data
   const dataFilings: Array<{ type: string; date: string }> = []
-  for (const row of data) {
-    if (row.filing_type && row.filing_date) {
-      dataFilings.push({
-        type: row.filing_type.toUpperCase(),
-        date: row.filing_date,
-      })
+
+  // Guard: skip if data is not an array or is a summary object
+  if (Array.isArray(data) && !(data.length > 0 && data[0] && 'summary' in data[0])) {
+    for (const row of data) {
+      if (row.filing_type && row.filing_date) {
+        dataFilings.push({
+          type: row.filing_type.toUpperCase(),
+          date: row.filing_date,
+        })
+      }
     }
   }
 

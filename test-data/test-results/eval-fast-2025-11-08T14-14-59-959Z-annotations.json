@@ -1,0 +1,60 @@
+{
+  "evaluation_file": "eval-fast-2025-11-08T14-14-59-959Z.json",
+  "timestamp": "2025-11-08T14:37:28.124Z",
+  "annotations": [
+    {
+      "question_id": 18,
+      "action": "update_prompt",
+      "comment": "Agreed with Claude: **Verdict:** AI is correct\n\n**Reasoning:** The user's request for \"1 year stock performance\" clearly indicates an interest in viewing stock data over a 365-day period. The expected output of 90 days does not align with the user's specified timeframe of one year.\n\n**Recommended Action:** Update the golden test\n\n**Suggested Fix:** Change the golden test arguments to reflect a 365-day range to accurately match the user's request for one year of stock performance.",
+      "updated_at": "2025-11-08T14:19:48.594Z"
+    },
+    {
+      "question_id": 20,
+      "action": "update_prompt",
+      "comment": "Agreed with Claude: **Verdict:** Need more context\n\n**Reasoning:** The user’s request for \"all historical prices\" is ambiguous without additional context. It is unclear whether the user desires a comprehensive historical dataset (which could imply a longer range like 365 days or more) or a more recent history (like 90 days). The expected output assumes a specific timeframe without explicit user instruction.\n\n**Recommended Action:** Needs clarification\n\n**Suggested Fix:** Clarify the user's intent regarding the timeframe for \"all historical prices\" to determine whether they mean a shorter or longer historical range. Adjust the expected output accordingly once the user's intent is clear.",
+      "updated_at": "2025-11-08T14:26:07.907Z"
+    },
+    {
+      "question_id": 39,
+      "action": "update_prompt",
+      "comment": "Agreed with Claude: **Verdict:** Golden test is correct\n\n**Reasoning:** The user's question specifically asks about Apple's profitability, which aligns with the \"Profitability & Returns\" category in financial metrics. The golden test correctly identifies this category, while the AI's output lacks specificity by not providing any category, potentially leading to a less relevant or overly broad response.\n\n**Recommended Action:** Update the AI's output to match the golden test\n\n**Suggested Fix:** Ensure that the AI includes the \"Profitability & Returns\" category in its arguments when the user inquires about profitability-related metrics.",
+      "updated_at": "2025-11-08T14:27:00.238Z"
+    },
+    {
+      "question_id": 56,
+      "action": "",
+      "comment": "We need to get clarification from the user on what filings they want.",
+      "updated_at": "2025-11-08T14:32:53.243Z"
+    },
+    {
+      "question_id": 71,
+      "action": "",
+      "comment": "In this scenario was can go with what the AI chose - 30 days is fine. When the user asks this we don't need to ask for clarification, we can just show 30D of stock history.",
+      "updated_at": "2025-11-08T14:34:12.843Z"
+    },
+    {
+      "question_id": 73,
+      "action": "update_prompt",
+      "comment": "Agreed with Claude: **Verdict:** AI is correct\n\n**Reasoning:** The user's request for the \"price over the past year\" clearly indicates a desire for data spanning a full year. The AI's output of \"365d\" aligns with this request, whereas the golden test's \"90d\" only covers approximately three months, which does not fulfill the user's query for a year-long range.\n\n**Recommended Action:** Update the golden test\n\n**Suggested Fix:** Change the expected output in the golden test to use \"365d\" for the range argument to accurately reflect the user's request for a year's worth of data.",
+      "updated_at": "2025-11-08T14:34:33.251Z"
+    },
+    {
+      "question_id": 85,
+      "action": "skip",
+      "comment": "No they are clearly asking for company specific information.\n",
+      "updated_at": "2025-11-08T14:36:15.216Z"
+    },
+    {
+      "question_id": 88,
+      "action": "update_prompt",
+      "comment": "Agreed with Claude: **Verdict:** AI is correct\n\n**Reasoning:** The user asked about the \"cash position,\" which is a specific financial metric. However, understanding a company's cash position often involves related metrics like the \"current ratio\" and \"cash ratio,\" as they provide context on liquidity and cash availability. The AI's inclusion of these additional metrics offers a more comprehensive view, aligning with what a user might need to fully understand the cash position.\n\n**Recommended Action:** Update the golden test\n\n**Suggested Fix:** Modify the golden test to include \"current ratio\" and \"cash ratio\" in addition to \"cash position\" to provide a more complete financial picture.",
+      "updated_at": "2025-11-08T14:36:39.953Z"
+    },
+    {
+      "question_id": 93,
+      "action": "skip",
+      "comment": "In this scenario it is likely the case that the user's previous questions are about a particular stock and that we can infer from the context and question history which stock it is.\n",
+      "updated_at": "2025-11-08T14:37:26.787Z"
+    }
+  ]
+}

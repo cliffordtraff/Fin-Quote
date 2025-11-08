@@ -3,7 +3,7 @@
 import OpenAI from 'openai'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
-import { getAaplPrices, PriceRange } from './prices'
+import { getAaplPrices, PriceRange, PriceParams } from './prices'
 import { getRecentFilings } from './filings'
 import { searchFilings, FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
@@ -57,7 +57,7 @@ const extractResponseText = (response: any): string | undefined => {
 }
 
 export type FinancialData = { year: number; value: number; metric: string }
-export type PriceData = { date: string; close: number }
+export type PriceData = { date: string; open: number; high: number; low: number; close: number; volume: number }
 export type FilingData = {
   filing_type: string
   filing_date: string
@@ -295,6 +295,12 @@ export async function askQuestion(
     toolSelectionCompletionTokens = selectionResponse.usage?.output_tokens
     toolSelectionTotalTokens = selectionResponse.usage?.total_tokens
 
+    console.log('🎯 TOOL SELECTION TOKENS:', {
+      input: toolSelectionPromptTokens,
+      output: toolSelectionCompletionTokens,
+      total: toolSelectionTotalTokens
+    })
+
     // Extract content from Responses API output
     let selectionContent: string | undefined = extractResponseText(selectionResponse as any)
 
@@ -368,13 +374,37 @@ export async function askQuestion(
       // Generate chart for financial data (pass user question to detect margin vs raw value requests)
       chartConfig = generateFinancialChart(toolResult.data, metric, userQuestion)
     } else if (toolSelection.tool === 'getPrices') {
-      // Validate range
-      const range = toolSelection.args.range as PriceRange
-      if (range !== '7d' && range !== '30d' && range !== '90d') {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range', queryLogId: null }
+      // Support both preset ranges and custom dates
+      let priceParams: PriceParams
+
+      if ('range' in toolSelection.args) {
+        // Preset range mode
+        const range = toolSelection.args.range as PriceRange
+        const allowedRanges: PriceRange[] = ['7d', '30d', '90d', '365d', 'ytd', '3y', '5y', '10y', '20y', 'max']
+        if (!allowedRanges.includes(range)) {
+          return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range', queryLogId: null }
+        }
+        priceParams = { range }
+      } else if ('from' in toolSelection.args) {
+        // Custom date range mode
+        const from = toolSelection.args.from as string
+        const to = toolSelection.args.to as string | undefined
+
+        // Basic date format validation
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (!dateRegex.test(from)) {
+          return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid from date format', queryLogId: null }
+        }
+        if (to && !dateRegex.test(to)) {
+          return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid to date format', queryLogId: null }
+        }
+
+        priceParams = to ? { from, to } : { from }
+      } else {
+        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid getPrices args: must have range or from', queryLogId: null }
       }
 
-      const toolResult = await getAaplPrices({ range })
+      const toolResult = await getAaplPrices(priceParams)
 
       if (toolResult.error || !toolResult.data) {
         toolError = toolResult.error || 'Failed to fetch price data'
@@ -387,11 +417,37 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
-      dataUsed = { type: 'prices', data: toolResult.data }
+      // Limit data sent to LLM to prevent JSON serialization errors
+      // For large datasets, provide summary statistics instead of all data points
+      const MAX_PRICE_POINTS_FOR_LLM = 50
+      let dataForLLM: any
 
-      // Generate chart for price data
-      chartConfig = generatePriceChart(toolResult.data, range)
+      if (toolResult.data.length > MAX_PRICE_POINTS_FOR_LLM) {
+        // Provide summary data instead of all points
+        const first = toolResult.data[0]
+        const last = toolResult.data[toolResult.data.length - 1]
+        const prices = toolResult.data.map(d => d.close)
+        const high = Math.max(...prices)
+        const low = Math.min(...prices)
+
+        dataForLLM = {
+          summary: `${toolResult.data.length} daily price records`,
+          dateRange: { from: first.date, to: last.date },
+          priceRange: { high, low, start: first.close, end: last.close },
+          note: "Full price data available in chart"
+        }
+        console.log('📊 Using SUMMARY for LLM:', toolResult.data.length, 'records →', JSON.stringify(dataForLLM).length, 'chars')
+      } else {
+        dataForLLM = toolResult.data
+        console.log('📊 Using FULL data for LLM:', toolResult.data.length, 'records')
+      }
+
+      factsJson = JSON.stringify(dataForLLM)
+      dataUsed = { type: 'prices', data: dataForLLM }
+
+      // Generate chart for price data (use range if available, otherwise use from-to)
+      const chartLabel = 'range' in priceParams ? priceParams.range : `${priceParams.from} to ${priceParams.to || 'today'}`
+      chartConfig = generatePriceChart(toolResult.data, chartLabel)
     } else if (toolSelection.tool === 'getRecentFilings') {
       // Validate limit
       const limit = toolSelection.args.limit || 5
@@ -525,7 +581,9 @@ export async function askQuestion(
 
     // Debug logging
     console.log('🔍 DEBUG - Question:', userQuestion)
-    console.log('🔍 DEBUG - Facts JSON:', factsJson.substring(0, 500))
+    console.log('🔍 DEBUG - Facts JSON LENGTH:', factsJson.length, 'characters')
+    console.log('🔍 DEBUG - Facts JSON PREVIEW:', factsJson.substring(0, 500))
+    console.log('🔍 DEBUG - Facts JSON FULL:', factsJson)
     console.log('🔍 DEBUG - Prompt (first 800 chars):', answerPrompt.substring(0, 800))
 
     // Build messages array with conversation history
@@ -571,6 +629,11 @@ export async function askQuestion(
     answerCompletionTokens = answerResponse.usage?.output_tokens
     answerTotalTokens = answerResponse.usage?.total_tokens
 
+    console.log('💬 ANSWER GENERATION TOKENS:', {
+      input: answerPromptTokens,
+      output: answerCompletionTokens,
+      total: answerTotalTokens
+    })
     console.log('🔍 DEBUG - Answer response:', JSON.stringify(answerResponse, null, 2))
 
     // Extract answer from Responses API output

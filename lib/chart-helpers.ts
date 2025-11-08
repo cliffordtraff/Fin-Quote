@@ -287,26 +287,30 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
 
   // Limit data points to prevent JSON serialization issues
   // For very large datasets, we'll pre-aggregate the data
-  const MAX_DATA_POINTS = 500 // Safe limit for JSON serialization (500 points × 5 OHLC values = 2500 numbers)
+  const MAX_DATA_POINTS = 100 // Safe limit for JSON serialization (100 points × 5 OHLC values = 500 numbers)
   let dataToUse = validData
 
   if (validData.length > MAX_DATA_POINTS) {
-    // Pre-aggregate to weekly data for very large datasets
-    const weeklyData: typeof validData = []
-    for (let i = 0; i < validData.length; i += 7) {
-      const weekData = validData.slice(i, Math.min(i + 7, validData.length))
-      if (weekData.length > 0) {
-        weeklyData.push({
-          date: weekData[0].date,
-          open: weekData[0].open,
-          high: Math.max(...weekData.map(d => d.high)),
-          low: Math.min(...weekData.map(d => d.low)),
-          close: weekData[weekData.length - 1].close,
-          volume: weekData.reduce((sum, d) => sum + d.volume, 0)
+    // Determine aggregation period based on data size
+    // For very large datasets (> 500 points), use monthly aggregation
+    // Otherwise use weekly
+    const daysPerPeriod = validData.length > 500 ? 30 : 7
+
+    const aggregatedData: typeof validData = []
+    for (let i = 0; i < validData.length; i += daysPerPeriod) {
+      const periodData = validData.slice(i, Math.min(i + daysPerPeriod, validData.length))
+      if (periodData.length > 0) {
+        aggregatedData.push({
+          date: periodData[0].date,
+          open: periodData[0].open,
+          high: Math.max(...periodData.map(d => d.high)),
+          low: Math.min(...periodData.map(d => d.low)),
+          close: periodData[periodData.length - 1].close,
+          volume: periodData.reduce((sum, d) => sum + d.volume, 0)
         })
       }
     }
-    dataToUse = weeklyData
+    dataToUse = aggregatedData
   }
 
   // Convert to OHLC candlestick data [timestamp, open, high, low, close] for Highcharts

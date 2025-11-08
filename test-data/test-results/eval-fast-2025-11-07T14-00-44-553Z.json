@@ -1,0 +1,1575 @@
+{
+  "mode": "fast",
+  "timestamp": "2025-11-07T14:00:44.553Z",
+  "total_questions": 100,
+  "correct_tool": 0,
+  "correct_args": 0,
+  "fully_correct": 0,
+  "accuracy": {
+    "tool_selection": 0,
+    "args_selection": 0,
+    "overall": 0
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 251,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 144,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 102,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 4,
+      "question": "What are AAPL's risk factors?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 166,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 5,
+      "question": "Show me recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 140,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 6,
+      "question": "What's the net income trend?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 207,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 7,
+      "question": "How's the stock doing?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 144,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 8,
+      "question": "Tell me about supply chain risks",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "supply chain risks",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 137,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 9,
+      "question": "Show me EPS over 5 years",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "eps",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 653,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 10,
+      "question": "What are the last 3 10-Ks?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 3
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 153,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 11,
+      "question": "Show operating income for the last 4 years",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 113,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 12,
+      "question": "What's the gross profit over the past 3 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "gross_profit",
+        "limit": 3
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 99,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 13,
+      "question": "Show me R&D spending history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 95,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 14,
+      "question": "Get me the last year's revenue",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 1
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 117,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 15,
+      "question": "What's the stock price today?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 114,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 16,
+      "question": "Show 5 day stock chart",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 158,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 17,
+      "question": "What's the 90 day price trend?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 114,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 18,
+      "question": "Show me 1 year stock performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 133,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 19,
+      "question": "Get 5 year stock price history",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 102,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 20,
+      "question": "Show all historical prices",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 105,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 21,
+      "question": "Find information about product strategy",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "product strategy",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 123,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 22,
+      "question": "What does the company say about competition?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "competition",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 213,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 23,
+      "question": "Show me the latest 10 filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 196,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 24,
+      "question": "What's the operating margin trend?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 122,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 25,
+      "question": "Show me total assets over time",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 199,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 26,
+      "question": "What's the free cash flow?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_cash_flow",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 134,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 27,
+      "question": "Show share buyback history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_cash_flow",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 130,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 28,
+      "question": "What are capital expenditures?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "capital expenditures",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 403,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 29,
+      "question": "How has debt changed?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_liabilities",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 111,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 30,
+      "question": "Show cash and equivalents",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 111,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 31,
+      "question": "What's the current price movement?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 120,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 32,
+      "question": "Has the stock gone up or down recently?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 98,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 33,
+      "question": "Tell me about executive compensation",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "executive compensation",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 125,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 34,
+      "question": "What does Apple say about iPhone sales?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "iPhone sales",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 135,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 35,
+      "question": "Find mentions of China in filings",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "China",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 110,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 36,
+      "question": "Search for regulatory issues",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "regulatory issues",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 128,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 37,
+      "question": "Show most recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 116,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 38,
+      "question": "List the filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 115,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 39,
+      "question": "What's Apple's profitability?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 161,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 40,
+      "question": "Show sales figures",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 105,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 41,
+      "question": "What's the P/E ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "eps",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 123,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 42,
+      "question": "Show return on equity",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 151,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 43,
+      "question": "What's the price to book ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 560,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 44,
+      "question": "Show dividend payments",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_cash_flow",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 108,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 45,
+      "question": "What's AAPL's market cap?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 1
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 134,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 46,
+      "question": "Chart this week's prices",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 124,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 47,
+      "question": "What was the price last month?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 89,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 48,
+      "question": "Compare this quarter to last",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 109,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 49,
+      "question": "Show year to date performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 127,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 50,
+      "question": "Historical stock performance",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 138,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 51,
+      "question": "What about environmental initiatives?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "environmental initiatives",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 112,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 52,
+      "question": "Find information on privacy policies",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "privacy policies",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 126,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 53,
+      "question": "Search for AI and machine learning mentions",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "AI machine learning",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 120,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 54,
+      "question": "What do they say about App Store?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "App Store",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 155,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 55,
+      "question": "Find mentions of tariffs",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "tariffs",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 121,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 56,
+      "question": "Get the last 2 years of filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 115,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 57,
+      "question": "Show me just the most recent filing",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 106,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 58,
+      "question": "List all available reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 20
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 140,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 59,
+      "question": "What's the earnings per share trend over 10 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "eps",
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 137,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 60,
+      "question": "Show me gross margin",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "gross_profit",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 136,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 61,
+      "question": "Cost of revenue history",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "gross_profit",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 99,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 62,
+      "question": "What are SG&A expenses?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "SG&A expenses",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 108,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 63,
+      "question": "Show current ratio",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 132,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 64,
+      "question": "What's the quick ratio?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 127,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 65,
+      "question": "Show debt to equity ratio",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_liabilities",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 183,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 66,
+      "question": "What's the interest coverage?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 139,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 67,
+      "question": "Show working capital trend",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 189,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 68,
+      "question": "What's inventory turnover?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 127,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 69,
+      "question": "Show asset turnover",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 139,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 70,
+      "question": "What's the price last week?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 183,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 71,
+      "question": "How's it trading?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 124,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 72,
+      "question": "Stock chart for last quarter",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 293,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 73,
+      "question": "Show price over the past year",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 162,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 74,
+      "question": "Long term price history",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 132,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 75,
+      "question": "Search for climate change risks",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "climate change risks",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 482,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 76,
+      "question": "What about cybersecurity threats?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "cybersecurity threats",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 120,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 77,
+      "question": "Find patent information",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "patents",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 97,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 78,
+      "question": "Search board of directors",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "board of directors",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 107,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 79,
+      "question": "What about services revenue?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "services revenue",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 98,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 80,
+      "question": "Show the 5 most recent reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 124,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 81,
+      "question": "Get filing history",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 140,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 82,
+      "question": "What filings are available?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 113,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 83,
+      "question": "Show last 2 annual reports",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 2
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 121,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 84,
+      "question": "What's the most recent 10-K?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 130,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 85,
+      "question": "How much did revenue grow?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 128,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 86,
+      "question": "Is profitability improving?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "net_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 111,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 87,
+      "question": "Compare margins over time",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_income",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 111,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 88,
+      "question": "How's cash position?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "total_assets",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 130,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 89,
+      "question": "Are they buying back stock?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "operating_cash_flow",
+        "limit": 4
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 102,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 90,
+      "question": "Latest price",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "7d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 136,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 91,
+      "question": "Price action this month",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 113,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 92,
+      "question": "6 month chart",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 127,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 93,
+      "question": "All time high?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "90d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 578,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 94,
+      "question": "Search sustainability report",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "sustainability",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 100,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 95,
+      "question": "Find acquisition mentions",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "acquisitions",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 122,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 96,
+      "question": "What do they say about the economy?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "economy",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 102,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 97,
+      "question": "Legal proceedings?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "legal proceedings",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 108,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 98,
+      "question": "Last filing",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 1
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 547,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 99,
+      "question": "Show last 15 filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 15
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 116,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    },
+    {
+      "question_id": 100,
+      "question": "Available reports?",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 10
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 116,
+      "error": "400 Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
+    }
+  ],
+  "llm_judge_enabled": false
+}

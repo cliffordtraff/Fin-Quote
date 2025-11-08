@@ -1,0 +1,2229 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluation Report - 11/7/2025</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: #2d3748;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .header .subtitle {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      padding: 40px;
+      background: #f7fafc;
+    }
+
+    .metric-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      transition: transform 0.2s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .metric-label {
+      font-size: 14px;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-detail {
+      font-size: 14px;
+      color: #a0aec0;
+      margin-top: 8px;
+    }
+
+    .section {
+      padding: 40px;
+    }
+
+    .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 28px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    th {
+      background: #f7fafc;
+      padding: 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #4a5568;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    td {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:hover {
+      background: #f7fafc;
+    }
+
+    .category-name {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .category-stats {
+      width: 300px;
+    }
+
+    .progress-bar {
+      background: #e2e8f0;
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+    }
+
+    .category-score {
+      font-weight: 700;
+      font-size: 18px;
+      color: #667eea;
+    }
+
+    .category-count {
+      color: #718096;
+      font-size: 14px;
+    }
+
+    .question-id {
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .question-text {
+      max-width: 400px;
+      color: #2d3748;
+    }
+
+    .issue-type {
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .error-tool {
+      background: #fed7d7;
+      color: #c53030;
+    }
+
+    .error-args {
+      background: #feebc8;
+      color: #c05621;
+    }
+
+    .semantic-match {
+      background: linear-gradient(135deg, #d4e4ff 0%, #e9d5ff 100%);
+      color: #5b21b6;
+      font-weight: 600;
+    }
+
+    .btn-details {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .btn-details:hover {
+      background: #764ba2;
+    }
+
+    .details-row {
+      background: #f7fafc;
+    }
+
+    .details-content {
+      padding: 24px;
+      background: white;
+      border-radius: 8px;
+      margin: 8px;
+    }
+
+    .detail-section {
+      margin-bottom: 16px;
+    }
+
+    .detail-section strong {
+      color: #4a5568;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
+    code {
+      background: #edf2f7;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      color: #2d3748;
+    }
+
+    pre {
+      background: #edf2f7;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin-top: 8px;
+      color: #2d3748;
+    }
+
+    .error-message {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 4px solid #c53030;
+      margin-top: 16px;
+    }
+
+    .footer {
+      padding: 24px 40px;
+      background: #f7fafc;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      color: #718096;
+      font-size: 14px;
+    }
+
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: white;
+      border: 2px solid #e2e8f0;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #4a5568;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .filter-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-color: transparent;
+      color: white;
+    }
+
+    .category-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+
+    @media (max-width: 768px) {
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .category-stats {
+        width: 100%;
+      }
+
+      .section {
+        padding: 24px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Evaluation Report</h1>
+      <p class="subtitle">Generated: 11/7/2025, 10:53:54 AM</p>
+      <button onclick="saveAnnotatedHTML()" style="margin-top: 16px; background: white; color: #667eea; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+        💾 Save Feedback to HTML
+      </button>
+    </div>
+
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-label">Tool Accuracy</div>
+        <div class="metric-value">98%</div>
+        <div class="metric-detail">98/100 correct</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Exact Match</div>
+        <div class="metric-value">76%</div>
+        <div class="metric-detail">76/100 fully correct</div>
+      </div>
+
+      <div class="metric-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="metric-label">Semantic Match ✨</div>
+        <div class="metric-value">79%</div>
+        <div class="metric-detail">79/100 correct</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency</div>
+        <div class="metric-value">1812<span style="font-size: 24px;">ms</span></div>
+        <div class="metric-detail">Routing time</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Accuracy by Category</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Progress</th>
+            <th>Score</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+        <tr>
+          <td class="category-name">Financials</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 82.35294117647058%"></div>
+            </div>
+          </td>
+          <td class="category-score">82%</td>
+          <td class="category-count">(14/17)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Prices</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 91.30434782608695%"></div>
+            </div>
+          </td>
+          <td class="category-score">91%</td>
+          <td class="category-count">(21/23)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Search Filings</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 77.77777777777779%"></div>
+            </div>
+          </td>
+          <td class="category-score">78%</td>
+          <td class="category-count">(7/9)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">List Filings</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 64.70588235294117%"></div>
+            </div>
+          </td>
+          <td class="category-score">65%</td>
+          <td class="category-count">(11/17)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Other</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 67.64705882352942%"></div>
+            </div>
+          </td>
+          <td class="category-score">68%</td>
+          <td class="category-count">(23/34)</td>
+        </tr>
+      
+        </tbody>
+      </table>
+    </div>
+
+    
+    <div style="background: #f7fafc; border-left: 4px solid #4299e1; padding: 16px; margin: 24px 0; border-radius: 6px;">
+      <strong>📖 Understanding the Results:</strong>
+      <p style="margin: 8px 0 0 0; color: #2d3748;">
+        • <strong>📋 Test Expects</strong> = What the golden test says is correct (created by humans, can have errors)<br>
+        • <strong>🤖 AI Chose</strong> = What the AI actually returned (what production would do)<br>
+        • When they differ, check if the AI is wrong OR if the test has an error!
+      </p>
+    </div>
+    
+
+    
+    <div class="section">
+      <h2 class="section-title">⚠️ Needs Attention (<span id="error-count">21</span>)</h2>
+      <p style="color: #e53e3e; margin-bottom: 16px;">These questions have wrong tool selection or semantically incorrect arguments.</p>
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterErrorsByCategory('all')" data-category="all">All</button>
+        <button class="filter-btn" onclick="filterErrorsByCategory('Other')" data-category="Other">Other</button><button class="filter-btn" onclick="filterErrorsByCategory('Financials')" data-category="Financials">Financials</button><button class="filter-btn" onclick="filterErrorsByCategory('List Filings')" data-category="List Filings">List Filings</button><button class="filter-btn" onclick="filterErrorsByCategory('Prices')" data-category="Prices">Prices</button><button class="filter-btn" onclick="filterErrorsByCategory('Search Filings')" data-category="Search Filings">Search Filings</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Question</th>
+            <th>Category</th>
+            <th>Issue</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="errors-body">
+          
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q13</td>
+          <td class="question-text">"Show me R&D spending history"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(13)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-13" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "operating_income",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "R&D",
+  "limit": 4
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-13"
+                    class="action-dropdown"
+                    onchange="saveFeedback(13)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-13"
+                    class="comment-field"
+                    onchange="saveFeedback(13)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Financials" class="question-row">
+          <td class="question-id">Q14</td>
+          <td class="question-text">"Get me the last year's revenue"</td>
+          <td><span class="category-badge">Financials</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(14)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-14" class="details-row" data-category="Financials" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 1
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 1
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-14"
+                    class="action-dropdown"
+                    onchange="saveFeedback(14)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-14"
+                    class="comment-field"
+                    onchange="saveFeedback(14)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Financials" class="question-row">
+          <td class="question-id">Q25</td>
+          <td class="question-text">"Show me total assets over time"</td>
+          <td><span class="category-badge">Financials</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(25)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-25" class="details-row" data-category="Financials" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 20
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-25"
+                    class="action-dropdown"
+                    onchange="saveFeedback(25)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-25"
+                    class="comment-field"
+                    onchange="saveFeedback(25)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q27</td>
+          <td class="question-text">"Show share buyback history"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(27)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-27" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getFinancialMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getFinancialMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "stock buyback"
+  ],
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "buybacks"
+  ],
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-27"
+                    class="action-dropdown"
+                    onchange="saveFeedback(27)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-27"
+                    class="comment-field"
+                    onchange="saveFeedback(27)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q29</td>
+          <td class="question-text">"How has debt changed?"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(29)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-29" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>null</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "debt",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>null</pre>
+              </div>
+              <div class="error-message">Error: Cannot read properties of undefined (reading 'toLowerCase')</div>
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-29"
+                    class="action-dropdown"
+                    onchange="saveFeedback(29)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-29"
+                    class="comment-field"
+                    onchange="saveFeedback(29)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q30</td>
+          <td class="question-text">"Show cash and equivalents"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(30)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-30" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "cash and equivalents",
+  "limit": 4
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-30"
+                    class="action-dropdown"
+                    onchange="saveFeedback(30)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-30"
+                    class="comment-field"
+                    onchange="saveFeedback(30)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q37</td>
+          <td class="question-text">"Show most recent filings"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(37)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-37" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 1
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-37"
+                    class="action-dropdown"
+                    onchange="saveFeedback(37)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-37"
+                    class="comment-field"
+                    onchange="saveFeedback(37)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q49</td>
+          <td class="question-text">"Show year to date performance"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(49)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-49" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getPrices</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getPrices</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "range": "90d"
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "range": "7d"
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-49"
+                    class="action-dropdown"
+                    onchange="saveFeedback(49)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-49"
+                    class="comment-field"
+                    onchange="saveFeedback(49)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Search Filings" class="question-row">
+          <td class="question-id">Q53</td>
+          <td class="question-text">"Search for AI and machine learning mentions"</td>
+          <td><span class="category-badge">Search Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(53)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-53" class="details-row" data-category="Search Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>searchFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "query": "AI machine learning",
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "query": "AI",
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-53"
+                    class="action-dropdown"
+                    onchange="saveFeedback(53)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-53"
+                    class="comment-field"
+                    onchange="saveFeedback(53)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q56</td>
+          <td class="question-text">"Get the last 2 years of filings"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(56)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-56" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 2
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-56"
+                    class="action-dropdown"
+                    onchange="saveFeedback(56)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-56"
+                    class="comment-field"
+                    onchange="saveFeedback(56)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q58</td>
+          <td class="question-text">"List all available reports"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(58)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-58" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 20
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-58"
+                    class="action-dropdown"
+                    onchange="saveFeedback(58)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-58"
+                    class="comment-field"
+                    onchange="saveFeedback(58)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Financials" class="question-row">
+          <td class="question-id">Q61</td>
+          <td class="question-text">"Cost of revenue history"</td>
+          <td><span class="category-badge">Financials</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(61)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-61" class="details-row" data-category="Financials" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "gross_profit",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "cost_of_revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-61"
+                    class="action-dropdown"
+                    onchange="saveFeedback(61)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-61"
+                    class="comment-field"
+                    onchange="saveFeedback(61)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q62</td>
+          <td class="question-text">"What are SG&A expenses?"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(62)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-62" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "selling_general_and_administrative_expenses",
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "operating_expense",
+  "limit": 4
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-62"
+                    class="action-dropdown"
+                    onchange="saveFeedback(62)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-62"
+                    class="comment-field"
+                    onchange="saveFeedback(62)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Prices" class="question-row">
+          <td class="question-id">Q71</td>
+          <td class="question-text">"How's it trading?"</td>
+          <td><span class="category-badge">Prices</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(71)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-71" class="details-row" data-category="Prices" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getPrices</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getPrices</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "range": "7d"
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "range": "30d"
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-71"
+                    class="action-dropdown"
+                    onchange="saveFeedback(71)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-71"
+                    class="comment-field"
+                    onchange="saveFeedback(71)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q77</td>
+          <td class="question-text">"Find patent information"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(77)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-77" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>searchFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "query": "patents",
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "query": "patent information",
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-77"
+                    class="action-dropdown"
+                    onchange="saveFeedback(77)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-77"
+                    class="comment-field"
+                    onchange="saveFeedback(77)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q81</td>
+          <td class="question-text">"Get filing history"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(81)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-81" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-81"
+                    class="action-dropdown"
+                    onchange="saveFeedback(81)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-81"
+                    class="comment-field"
+                    onchange="saveFeedback(81)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q82</td>
+          <td class="question-text">"What filings are available?"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(82)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-82" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-82"
+                    class="action-dropdown"
+                    onchange="saveFeedback(82)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-82"
+                    class="comment-field"
+                    onchange="saveFeedback(82)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q88</td>
+          <td class="question-text">"How's cash position?"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(88)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-88" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getFinancialMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "cash position"
+  ],
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "operating_cash_flow",
+  "limit": 4
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-88"
+                    class="action-dropdown"
+                    onchange="saveFeedback(88)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-88"
+                    class="comment-field"
+                    onchange="saveFeedback(88)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Search Filings" class="question-row">
+          <td class="question-id">Q94</td>
+          <td class="question-text">"Search sustainability report"</td>
+          <td><span class="category-badge">Search Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(94)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-94" class="details-row" data-category="Search Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>searchFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "query": "sustainability",
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "query": "sustainability report",
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-94"
+                    class="action-dropdown"
+                    onchange="saveFeedback(94)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-94"
+                    class="comment-field"
+                    onchange="saveFeedback(94)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q95</td>
+          <td class="question-text">"Find acquisition mentions"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(95)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-95" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>searchFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "query": "acquisitions",
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "query": "acquisition"
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-95"
+                    class="action-dropdown"
+                    onchange="saveFeedback(95)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-95"
+                    class="comment-field"
+                    onchange="saveFeedback(95)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="List Filings" class="question-row">
+          <td class="question-id">Q100</td>
+          <td class="question-text">"Available reports?"</td>
+          <td><span class="category-badge">List Filings</span></td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(100)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-100" class="details-row" data-category="List Filings" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getRecentFilings</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "limit": 5
+}</pre>
+              </div>
+              
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-100"
+                    class="action-dropdown"
+                    onchange="saveFeedback(100)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-100"
+                    class="comment-field"
+                    onchange="saveFeedback(100)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        </tbody>
+      </table>
+    </div>
+    
+
+    
+    <div class="section">
+      <h2 class="section-title">✨ Minor Variations (<span id="variation-count">4</span>)</h2>
+      <p style="color: #667eea; margin-bottom: 16px;">These questions are semantically correct but use different metric aliases or flexible year ranges.</p>
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterVariationsByCategory('all')" data-category="all">All</button>
+        <button class="filter-btn" onclick="filterVariationsByCategory('Other')" data-category="Other">Other</button><button class="filter-btn" onclick="filterVariationsByCategory('Financials')" data-category="Financials">Financials</button><button class="filter-btn" onclick="filterVariationsByCategory('List Filings')" data-category="List Filings">List Filings</button><button class="filter-btn" onclick="filterVariationsByCategory('Prices')" data-category="Prices">Prices</button><button class="filter-btn" onclick="filterVariationsByCategory('Search Filings')" data-category="Search Filings">Search Filings</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Question</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="variations-body">
+          
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q41</td>
+          <td class="question-text">"What's the P/E ratio?"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type semantic-match">SEMANTIC MATCH ✨</td>
+          <td class="details">
+            <button onclick="toggleDetails(41)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-41" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getFinancialMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getFinancialMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "P/E ratio"
+  ],
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "P/E"
+  ],
+  "limit": 5
+}</pre>
+              </div>
+              <div class="detail-section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 4px solid #667eea;">
+                <strong>✨ Why this is acceptable:</strong><br>
+                This uses equivalent metric names or acceptable year ranges for open-ended questions.
+              </div>
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-41"
+                    class="action-dropdown"
+                    onchange="saveFeedback(41)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-41"
+                    class="comment-field"
+                    onchange="saveFeedback(41)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Prices" class="question-row">
+          <td class="question-id">Q43</td>
+          <td class="question-text">"What's the price to book ratio?"</td>
+          <td><span class="category-badge">Prices</span></td>
+          <td class="issue-type semantic-match">SEMANTIC MATCH ✨</td>
+          <td class="details">
+            <button onclick="toggleDetails(43)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-43" class="details-row" data-category="Prices" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getFinancialMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getFinancialMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "price to book"
+  ],
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "P/B"
+  ],
+  "limit": 5
+}</pre>
+              </div>
+              <div class="detail-section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 4px solid #667eea;">
+                <strong>✨ Why this is acceptable:</strong><br>
+                This uses equivalent metric names or acceptable year ranges for open-ended questions.
+              </div>
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-43"
+                    class="action-dropdown"
+                    onchange="saveFeedback(43)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-43"
+                    class="comment-field"
+                    onchange="saveFeedback(43)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Financials" class="question-row">
+          <td class="question-id">Q60</td>
+          <td class="question-text">"Show me gross margin"</td>
+          <td><span class="category-badge">Financials</span></td>
+          <td class="issue-type semantic-match">SEMANTIC MATCH ✨</td>
+          <td class="details">
+            <button onclick="toggleDetails(60)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-60" class="details-row" data-category="Financials" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metric": "gross_margin",
+  "limit": 4
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metric": "gross_margin",
+  "limit": 5
+}</pre>
+              </div>
+              <div class="detail-section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 4px solid #667eea;">
+                <strong>✨ Why this is acceptable:</strong><br>
+                This uses equivalent metric names or acceptable year ranges for open-ended questions.
+              </div>
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-60"
+                    class="action-dropdown"
+                    onchange="saveFeedback(60)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-60"
+                    class="comment-field"
+                    onchange="saveFeedback(60)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        <tr data-category="Other" class="question-row">
+          <td class="question-id">Q67</td>
+          <td class="question-text">"Show working capital trend"</td>
+          <td><span class="category-badge">Other</span></td>
+          <td class="issue-type semantic-match">SEMANTIC MATCH ✨</td>
+          <td class="details">
+            <button onclick="toggleDetails(67)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-67" class="details-row" data-category="Other" style="display: none;">
+          <td colspan="5">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>📋 Test Expects (Tool):</strong> <code>getFinancialMetric</code><br>
+                <strong>🤖 AI Chose (Tool):</strong> <code>getFinancialMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>📋 Test Expects (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "working capital"
+  ],
+  "limit": 5
+}</pre>
+                <strong>🤖 AI Chose (Arguments):</strong>
+                <pre>{
+  "metricNames": [
+    "working capital"
+  ],
+  "limit": 4
+}</pre>
+              </div>
+              <div class="detail-section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 4px solid #667eea;">
+                <strong>✨ Why this is acceptable:</strong><br>
+                This uses equivalent metric names or acceptable year ranges for open-ended questions.
+              </div>
+
+              <div class="annotation-section">
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <strong style="color: #667eea; font-size: 14px;">📝 Your Feedback:</strong>
+                <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px; margin-top: 12px;">
+                  <select
+                    id="action-67"
+                    class="action-dropdown"
+                    onchange="saveFeedback(67)"
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; cursor: pointer;">
+                    <option value="">Select action...</option>
+                    <option value="fix_bug">🐛 Fix Bug</option>
+                    <option value="update_golden_test">📋 Update Golden Test</option>
+                    <option value="add_alias">🔗 Add Alias</option>
+                    <option value="update_prompt">✏️ Update Prompt</option>
+                    <option value="skip">⏭️ Skip (acceptable)</option>
+                  </select>
+                  <textarea
+                    id="comment-67"
+                    class="comment-field"
+                    onchange="saveFeedback(67)"
+                    placeholder="Add your notes about this failure..."
+                    style="padding: 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-height: 80px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical;"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      
+        </tbody>
+      </table>
+    </div>
+    
+
+    
+
+    <div class="footer">
+      Fin Quote Evaluation Report | Mode: fast | Questions: 100
+    </div>
+  </div>
+
+  <!-- Feedback storage embedded in HTML -->
+  <script id="feedback-data" type="application/json">
+  {
+    "evaluation_file": "eval-fast-2025-11-07T16-53-54-480Z.json",
+    "timestamp": "2025-11-07T17:46:33.285Z",
+    "annotations": []
+  }
+  </script>
+
+  <script>
+    // Load feedback from embedded storage on page load
+    function loadFeedback() {
+      const feedbackScript = document.getElementById('feedback-data');
+      const feedback = JSON.parse(feedbackScript.textContent);
+
+      feedback.annotations.forEach(annotation => {
+        const actionSelect = document.getElementById(`action-${annotation.question_id}`);
+        const commentField = document.getElementById(`comment-${annotation.question_id}`);
+
+        if (actionSelect) actionSelect.value = annotation.action || '';
+        if (commentField) commentField.value = annotation.comment || '';
+      });
+    }
+
+    // Save feedback to embedded storage
+    function saveFeedback(questionId) {
+      const actionSelect = document.getElementById(`action-${questionId}`);
+      const commentField = document.getElementById(`comment-${questionId}`);
+
+      const action = actionSelect.value;
+      const comment = commentField.value;
+
+      // Get current feedback data
+      const feedbackScript = document.getElementById('feedback-data');
+      const feedback = JSON.parse(feedbackScript.textContent);
+
+      // Find or create annotation for this question
+      let annotation = feedback.annotations.find(a => a.question_id === questionId);
+      if (!annotation) {
+        annotation = { question_id: questionId };
+        feedback.annotations.push(annotation);
+      }
+
+      // Update annotation
+      annotation.action = action;
+      annotation.comment = comment;
+      annotation.updated_at = new Date().toISOString();
+
+      // Remove annotation if both fields are empty
+      if (!action && !comment) {
+        feedback.annotations = feedback.annotations.filter(a => a.question_id !== questionId);
+      }
+
+      // Update timestamp
+      feedback.timestamp = new Date().toISOString();
+
+      // Save back to script tag
+      feedbackScript.textContent = JSON.stringify(feedback, null, 2);
+
+      // Visual feedback
+      const container = actionSelect.closest('.annotation-section');
+      container.style.background = '#f0fdf4';
+      setTimeout(() => {
+        container.style.background = '';
+      }, 500);
+    }
+
+    // Save annotated HTML file
+    function saveAnnotatedHTML() {
+      // Get the entire HTML document with updated feedback
+      const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+      // Create blob and download
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'eval-fast-2025-11-07T16-53-54-480Z-annotated.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Show success message
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = '✅ Saved!';
+      btn.style.background = '#48bb78';
+      btn.style.color = 'white';
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = 'white';
+        btn.style.color = '#667eea';
+      }, 2000);
+    }
+
+    // Load feedback on page load
+    document.addEventListener('DOMContentLoaded', loadFeedback);
+
+    function toggleDetails(questionId) {
+      const row = document.getElementById('details-' + questionId);
+      if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    function filterErrorsByCategory(category) {
+      const container = document.getElementById('errors-body');
+      if (!container) return;
+
+      const section = container.closest('.section');
+      const buttons = section.querySelectorAll('.filter-btn');
+
+      // Update button states
+      buttons.forEach(btn => {
+        if (btn.dataset.category === category) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      // Filter rows
+      const questionRows = container.querySelectorAll('.question-row');
+      let visibleCount = 0;
+
+      questionRows.forEach(row => {
+        const rowCategory = row.getAttribute('data-category');
+        const detailsRow = row.nextElementSibling; // The details row immediately follows
+
+        if (category === 'all' || rowCategory === category) {
+          row.style.display = 'table-row';
+          if (detailsRow && detailsRow.classList.contains('details-row')) {
+            // Keep details visible if they were visible, hidden if hidden
+            // Just make sure they're not forced to display:none by category filter
+            if (detailsRow.style.display !== 'none') {
+              detailsRow.style.display = 'table-row';
+            }
+          }
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+          if (detailsRow && detailsRow.classList.contains('details-row')) {
+            detailsRow.style.display = 'none';
+          }
+        }
+      });
+
+      // Update count
+      const countElement = document.getElementById('error-count');
+      if (countElement) countElement.textContent = visibleCount;
+    }
+
+    function filterVariationsByCategory(category) {
+      const container = document.getElementById('variations-body');
+      if (!container) return;
+
+      const section = container.closest('.section');
+      const buttons = section.querySelectorAll('.filter-btn');
+
+      // Update button states
+      buttons.forEach(btn => {
+        if (btn.dataset.category === category) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      // Filter rows
+      const questionRows = container.querySelectorAll('.question-row');
+      let visibleCount = 0;
+
+      questionRows.forEach(row => {
+        const rowCategory = row.getAttribute('data-category');
+        const detailsRow = row.nextElementSibling; // The details row immediately follows
+
+        if (category === 'all' || rowCategory === category) {
+          row.style.display = 'table-row';
+          if (detailsRow && detailsRow.classList.contains('details-row')) {
+            // Keep details visible if they were visible, hidden if hidden
+            if (detailsRow.style.display !== 'none') {
+              detailsRow.style.display = 'table-row';
+            }
+          }
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+          if (detailsRow && detailsRow.classList.contains('details-row')) {
+            detailsRow.style.display = 'none';
+          }
+        }
+      });
+
+      // Update count
+      const countElement = document.getElementById('variation-count');
+      if (countElement) countElement.textContent = visibleCount;
+    }
+  </script>
+</body>
+</html>
+  

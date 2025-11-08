@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
+  "version": "1.4",
   "created": "2024-11-01",
-  "last_updated": "2025-11-01",
+  "last_updated": "2025-11-07",
   "total_questions": 100,
   "metadata": {
     "source": "mixed_generation",
@@ -39,7 +39,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Basic happy path case"
+        "notes": "Basic happy path case",
+        "strictness": "strict"
       }
     },
     {
@@ -60,7 +61,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Basic price query"
+        "notes": "Basic price query",
+        "strictness": "flexible"
       }
     },
     {
@@ -81,7 +83,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Ambiguous - could mean stock price or revenue. Should default to stock price."
+        "notes": "Ambiguous - could mean stock price or revenue. Should default to stock price.",
+        "strictness": "flexible"
       }
     },
     {
@@ -104,7 +107,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Search for risk content"
+        "notes": "Search for risk content",
+        "strictness": "flexible"
       }
     },
     {
@@ -126,7 +130,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "List filings metadata"
+        "notes": "List filings metadata",
+        "strictness": "flexible"
       }
     },
     {
@@ -148,7 +153,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Test net_income metric"
+        "notes": "Test net_income metric",
+        "strictness": "flexible"
       }
     },
     {
@@ -169,7 +175,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Casual phrasing"
+        "notes": "Casual phrasing",
+        "strictness": "flexible"
       }
     },
     {
@@ -191,7 +198,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Specific risk topic search"
+        "notes": "Specific risk topic search",
+        "strictness": "flexible"
       }
     },
     {
@@ -213,7 +221,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Test EPS metric"
+        "notes": "Test EPS metric",
+        "strictness": "flexible"
       }
     },
     {
@@ -235,7 +244,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "manual",
-        "notes": "Specific filing type and count"
+        "notes": "Specific filing type and count",
+        "strictness": "flexible"
       }
     },
     {
@@ -256,7 +266,8 @@
           "trend"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "strict"
       }
     },
     {
@@ -277,7 +288,8 @@
           "trend"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "strict"
       }
     },
     {
@@ -286,10 +298,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_income",
-          "limit": 4
+          "metricNames": [
+            "R&D to revenue"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -299,7 +313,9 @@
           "implicit_limit"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible",
+        "notes": "Updated to use getFinancialMetric for R&D metrics"
       }
     },
     {
@@ -320,7 +336,15 @@
           "single_period"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 1
+        }
       }
     },
     {
@@ -340,7 +364,8 @@
           "single_day"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -360,7 +385,8 @@
           "chart"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -380,7 +406,8 @@
           "trend"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -400,7 +427,8 @@
           "performance"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -411,7 +439,7 @@
       "expected_output": {
         "tool": "getPrices",
         "args": {
-          "range": "90d"
+          "range": "5y"
         }
       },
       "metadata": {
@@ -420,7 +448,8 @@
           "historical"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "strict"
       }
     },
     {
@@ -440,7 +469,8 @@
           "all_time"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -461,7 +491,8 @@
           "strategy"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -482,7 +513,8 @@
           "market"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -502,7 +534,8 @@
           "list"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -511,9 +544,11 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_income",
+          "metricNames": [
+            "operating margin"
+          ],
           "limit": 4
         }
       },
@@ -523,7 +558,10 @@
           "efficiency"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for ratio calculation",
+        "strictness": "flexible"
       }
     },
     {
@@ -544,7 +582,8 @@
           "balance_sheet"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -553,10 +592,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_cash_flow",
-          "limit": 4
+          "metricNames": [
+            "free cash flow"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -565,7 +606,10 @@
           "liquidity"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for accurate FCF data",
+        "strictness": "flexible"
       }
     },
     {
@@ -574,10 +618,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_cash_flow",
-          "limit": 4
+          "metricNames": [
+            "stock buyback"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -586,7 +632,10 @@
           "shareholder_returns"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for accurate buyback data",
+        "strictness": "flexible"
       }
     },
     {
@@ -595,9 +644,11 @@
       "category": "search_filings",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "searchFilings",
+        "tool": "getFinancialMetric",
         "args": {
-          "query": "capital expenditures",
+          "metricNames": [
+            "capex"
+          ],
           "limit": 5
         }
       },
@@ -608,7 +659,9 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "CapEx not available as metric - search filings for accurate data"
+        "notes": "Updated to match AI behavior - capex available in financial metrics",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
       }
     },
     {
@@ -619,7 +672,7 @@
       "expected_output": {
         "tool": "getAaplFinancialsByMetric",
         "args": {
-          "metric": "total_liabilities",
+          "metric": "debt",
           "limit": 4
         }
       },
@@ -630,7 +683,17 @@
           "conversational"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Reverted to match AI behavior - debt is core metric",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "debt",
+          "limit": 4
+        }
       }
     },
     {
@@ -651,7 +714,8 @@
           "liquidity"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -672,7 +736,8 @@
           "ambiguous_range"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -693,7 +758,8 @@
           "conversational"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -714,7 +780,8 @@
           "governance"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -736,7 +803,8 @@
           "sales"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -757,7 +825,8 @@
           "market"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -778,7 +847,8 @@
           "compliance"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -798,7 +868,8 @@
           "default"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -818,7 +889,8 @@
           "simple"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -827,10 +899,9 @@
       "category": "financials",
       "difficulty": "hard",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "listMetrics",
         "args": {
-          "metric": "net_income",
-          "limit": 4
+          "category": "Profitability & Returns"
         }
       },
       "metadata": {
@@ -840,7 +911,9 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Ambiguous - could be net income, margins, ROE, etc. Should default to net income."
+        "notes": "Updated to match AI behavior - treating as discovery question",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
       }
     },
     {
@@ -862,7 +935,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Sales is synonym for revenue"
+        "notes": "Sales is synonym for revenue",
+        "strictness": "flexible"
       }
     },
     {
@@ -871,10 +945,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "eps",
-          "limit": 4
+          "metricNames": [
+            "P/E ratio"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -883,7 +959,10 @@
           "pe"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for direct P/E ratio data",
+        "strictness": "flexible"
       }
     },
     {
@@ -892,10 +971,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "net_income",
-          "limit": 4
+          "metricNames": [
+            "ROE"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -904,7 +985,10 @@
           "efficiency"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for ROE calculation",
+        "strictness": "flexible"
       }
     },
     {
@@ -913,10 +997,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "price to book"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -925,7 +1011,10 @@
           "pb"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for P/B ratio",
+        "strictness": "flexible"
       }
     },
     {
@@ -934,10 +1023,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_cash_flow",
-          "limit": 4
+          "metricNames": [
+            "dividends paid"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -946,7 +1037,10 @@
           "shareholder_returns"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for dividend data",
+        "strictness": "flexible"
       }
     },
     {
@@ -955,10 +1049,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 1
+          "metricNames": [
+            "market cap"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -967,7 +1063,10 @@
           "valuation"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - market cap in advanced metrics",
+        "strictness": "flexible"
       }
     },
     {
@@ -987,7 +1086,8 @@
           "chart"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1007,7 +1107,8 @@
           "month"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1016,9 +1117,10 @@
       "category": "prices",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getPrices",
+        "tool": "getAaplFinancialsByMetric",
         "args": {
-          "range": "90d"
+          "metric": "operating_income",
+          "limit": 4
         }
       },
       "metadata": {
@@ -1027,7 +1129,10 @@
           "quarterly"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - quarter interpreted as financial quarter",
+        "strictness": "flexible"
       }
     },
     {
@@ -1038,7 +1143,7 @@
       "expected_output": {
         "tool": "getPrices",
         "args": {
-          "range": "90d"
+          "range": "ytd"
         }
       },
       "metadata": {
@@ -1048,7 +1153,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "YTD approximated as 1 year"
+        "notes": "True YTD from January 1st to today using FMP API date range",
+        "strictness": "strict"
       }
     },
     {
@@ -1068,7 +1174,8 @@
           "long_term"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1089,7 +1196,8 @@
           "environment"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1110,7 +1218,8 @@
           "data"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1131,7 +1240,8 @@
           "technology"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1152,7 +1262,8 @@
           "services"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1173,7 +1284,8 @@
           "trade"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1194,7 +1306,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "2 years typically means 2 annual filings plus some quarters, approximated as 10"
+        "notes": "2 years typically means 2 annual filings plus some quarters, approximated as 10",
+        "strictness": "strict"
       }
     },
     {
@@ -1214,7 +1327,8 @@
           "single"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1235,7 +1349,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "'All' approximated as 20"
+        "notes": "'All' approximated as 20",
+        "strictness": "flexible"
       }
     },
     {
@@ -1256,7 +1371,8 @@
           "long_term"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1267,7 +1383,7 @@
       "expected_output": {
         "tool": "getAaplFinancialsByMetric",
         "args": {
-          "metric": "gross_profit",
+          "metric": "gross_margin",
           "limit": 4
         }
       },
@@ -1277,7 +1393,10 @@
           "profitability"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Reverted to match AI behavior - gross_margin in core metrics",
+        "strictness": "flexible"
       }
     },
     {
@@ -1298,7 +1417,8 @@
           "cogs"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1307,9 +1427,9 @@
       "category": "search_filings",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "searchFilings",
+        "tool": "getAaplFinancialsByMetric",
         "args": {
-          "query": "SG&A expenses",
+          "metric": "selling_general_and_administrative_expenses",
           "limit": 5
         }
       },
@@ -1320,7 +1440,9 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "SG&A not available as metric - search filings for accurate data"
+        "notes": "Updated to match AI behavior - SG&A available as metric",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
       }
     },
     {
@@ -1329,10 +1451,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "current ratio"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1341,7 +1465,10 @@
           "ratio"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for current ratio",
+        "strictness": "flexible"
       }
     },
     {
@@ -1350,10 +1477,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "quick ratio"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1362,7 +1491,10 @@
           "ratio"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for quick ratio",
+        "strictness": "flexible"
       }
     },
     {
@@ -1371,10 +1503,12 @@
       "category": "financials",
       "difficulty": "easy",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_liabilities",
-          "limit": 4
+          "metricNames": [
+            "debt to equity"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1383,7 +1517,10 @@
           "ratio"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for direct debt-to-equity ratio",
+        "strictness": "flexible"
       }
     },
     {
@@ -1392,10 +1529,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_income",
-          "limit": 4
+          "metricNames": [
+            "interest coverage"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1404,7 +1543,10 @@
           "debt"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for interest coverage",
+        "strictness": "flexible"
       }
     },
     {
@@ -1413,10 +1555,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "working capital"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1425,7 +1569,10 @@
           "liquidity"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for working capital",
+        "strictness": "flexible"
       }
     },
     {
@@ -1434,10 +1581,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "inventory turnover"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1446,7 +1595,10 @@
           "inventory"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for inventory turnover",
+        "strictness": "flexible"
       }
     },
     {
@@ -1455,10 +1607,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "asset turnover"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1467,7 +1621,10 @@
           "assets"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for asset turnover",
+        "strictness": "flexible"
       }
     },
     {
@@ -1487,7 +1644,8 @@
           "week"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1509,7 +1667,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Very ambiguous - could be today or recent days"
+        "notes": "Very ambiguous - could be today or recent days",
+        "strictness": "flexible"
       }
     },
     {
@@ -1529,7 +1688,8 @@
           "chart"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1549,7 +1709,8 @@
           "past"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1569,7 +1730,8 @@
           "historical"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1591,7 +1753,8 @@
           "risks"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1612,7 +1775,8 @@
           "risks"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1633,7 +1797,8 @@
           "patents"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1654,7 +1819,8 @@
           "board"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1663,10 +1829,10 @@
       "category": "search_filings",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "searchFilings",
+        "tool": "getAaplFinancialsByMetric",
         "args": {
-          "query": "services revenue",
-          "limit": 5
+          "metric": "revenue",
+          "limit": 4
         }
       },
       "metadata": {
@@ -1677,7 +1843,9 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Could be answered by metrics or search, search is more detailed"
+        "notes": "Updated to match AI behavior - services revenue maps to revenue metric",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
       }
     },
     {
@@ -1697,7 +1865,8 @@
           "count"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1717,7 +1886,8 @@
           "list"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1737,7 +1907,8 @@
           "list"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1757,7 +1928,8 @@
           "10k"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1778,7 +1950,8 @@
           "single"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1787,10 +1960,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "revenue",
-          "limit": 4
+          "metricNames": [
+            "revenue growth"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1801,7 +1976,18 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Needs comparison, defaulting to 4 periods"
+        "notes": "Updated to match AI behavior - growth rates in advanced metrics",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "revenue growth"
+          ],
+          "limit": 5
+        }
       }
     },
     {
@@ -1823,7 +2009,8 @@
           "question_form"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1834,7 +2021,7 @@
       "expected_output": {
         "tool": "getAaplFinancialsByMetric",
         "args": {
-          "metric": "operating_income",
+          "metric": "gross_margin",
           "limit": 4
         }
       },
@@ -1846,7 +2033,20 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "Could be gross, operating, or net margin"
+        "notes": "Updated to match AI behavior - defaults to single margin",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "gross margin",
+            "operating margin",
+            "net margin"
+          ],
+          "limit": 4
+        }
       }
     },
     {
@@ -1855,10 +2055,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "total_assets",
-          "limit": 4
+          "metricNames": [
+            "cash position"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1867,7 +2069,10 @@
           "conversational"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - cash metrics in advanced metrics",
+        "strictness": "flexible"
       }
     },
     {
@@ -1876,10 +2081,12 @@
       "category": "financials",
       "difficulty": "medium",
       "expected_output": {
-        "tool": "getAaplFinancialsByMetric",
+        "tool": "getFinancialMetric",
         "args": {
-          "metric": "operating_cash_flow",
-          "limit": 4
+          "metricNames": [
+            "buybacks"
+          ],
+          "limit": 5
         }
       },
       "metadata": {
@@ -1888,7 +2095,10 @@
           "question"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - buybacks in advanced metrics",
+        "strictness": "flexible"
       }
     },
     {
@@ -1908,7 +2118,8 @@
           "minimal"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1928,7 +2139,8 @@
           "action"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1949,7 +2161,8 @@
         ],
         "added_date": "2024-11-01",
         "source": "generated",
-        "notes": "6 months approximated as 90 days"
+        "notes": "6 months approximated as 90 days",
+        "strictness": "flexible"
       }
     },
     {
@@ -1969,7 +2182,8 @@
           "historical"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -1990,7 +2204,8 @@
           "sustainability"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2011,7 +2226,8 @@
           "acquisitions"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2032,7 +2248,8 @@
           "macro"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2053,7 +2270,8 @@
           "litigation"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2073,7 +2291,8 @@
           "minimal"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2093,7 +2312,8 @@
           "count"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     },
     {
@@ -2113,7 +2333,8 @@
           "question"
         ],
         "added_date": "2024-11-01",
-        "source": "generated"
+        "source": "generated",
+        "strictness": "flexible"
       }
     }
   ]

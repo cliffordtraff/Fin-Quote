@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAaplFinancialsByMetric, FinancialMetric } from '@/app/actions/financials'
-import { getAaplPrices, PriceRange } from '@/app/actions/prices'
+import { getAaplPrices, PriceRange, PriceParams } from '@/app/actions/prices'
 import { getRecentFilings } from '@/app/actions/filings'
 import { searchFilings } from '@/app/actions/search-filings'
 import { buildToolSelectionMessages, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
@@ -250,41 +250,121 @@ export async function POST(req: NextRequest) {
               })
             }
           } else if (toolSelection.tool === 'getPrices') {
-            const range = toolSelection.args.range as PriceRange
-            if (range !== '7d' && range !== '30d' && range !== '90d') {
+            // Support both preset ranges and custom dates
+            let priceParams: PriceParams
+            let chartLabel: string
+
+            if ('range' in toolSelection.args) {
+              // Preset range mode
+              const range = toolSelection.args.range as PriceRange
+              const allowedRanges: PriceRange[] = ['7d', '30d', '90d', '365d', 'ytd', '3y', '5y', '10y', '20y', 'max']
+              if (!allowedRanges.includes(range)) {
+                flow.failStep('tool_execution', {
+                  summary: 'Failed to execute tool',
+                  why: `Invalid price range "${range}"`,
+                  details: { range },
+                })
+                sendEvent('error', { message: 'Invalid range' })
+                controller.close()
+                return
+              }
+              priceParams = { range }
+              chartLabel = range
+            } else if ('from' in toolSelection.args) {
+              // Custom date range mode
+              const from = toolSelection.args.from as string
+              const to = toolSelection.args.to as string | undefined
+
+              // Basic date format validation
+              const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+              if (!dateRegex.test(from)) {
+                flow.failStep('tool_execution', {
+                  summary: 'Failed to execute tool',
+                  why: `Invalid from date format "${from}"`,
+                  details: { from },
+                })
+                sendEvent('error', { message: 'Invalid from date format' })
+                controller.close()
+                return
+              }
+              if (to && !dateRegex.test(to)) {
+                flow.failStep('tool_execution', {
+                  summary: 'Failed to execute tool',
+                  why: `Invalid to date format "${to}"`,
+                  details: { to },
+                })
+                sendEvent('error', { message: 'Invalid to date format' })
+                controller.close()
+                return
+              }
+
+              priceParams = to ? { from, to } : { from }
+              chartLabel = `${from} to ${to || 'today'}`
+            } else {
               flow.failStep('tool_execution', {
                 summary: 'Failed to execute tool',
-                why: `Invalid price range "${range}"`,
-                details: { range },
+                why: 'Invalid getPrices args: must have range or from',
+                details: toolSelection.args,
               })
-              sendEvent('error', { message: 'Invalid range' })
+              sendEvent('error', { message: 'Invalid getPrices args: must have range or from' })
               controller.close()
               return
             }
 
-            const toolResult = await getAaplPrices({ range })
+            const toolResult = await getAaplPrices(priceParams)
 
             if (toolResult.error || !toolResult.data) {
               flow.failStep('tool_execution', {
                 summary: 'Price data fetch failed',
                 why: toolResult.error || 'No data returned',
-                details: { range },
+                details: priceParams,
               })
               sendEvent('error', { message: toolResult.error || 'Failed to fetch price data' })
               controller.close()
               return
             }
 
-            factsJson = JSON.stringify(toolResult.data, null, 2)
-            dataUsed = { type: 'prices', data: toolResult.data }
+            // Limit data sent to LLM and client to prevent JSON serialization errors
+            // For large datasets, provide summary statistics instead of all data points
+            const MAX_PRICE_POINTS_FOR_LLM = 50
+            let dataForLLM: any
+            let dataForClient: any
+
+            if (toolResult.data.length > MAX_PRICE_POINTS_FOR_LLM) {
+              // Provide summary data instead of all points
+              // Note: data is sorted most recent first (descending by date)
+              const mostRecent = toolResult.data[0]
+              const oldest = toolResult.data[toolResult.data.length - 1]
+              const prices = toolResult.data.map(d => d.close)
+              const high = Math.max(...prices)
+              const low = Math.min(...prices)
+
+              const summaryData = {
+                summary: `${toolResult.data.length} daily price records`,
+                dateRange: { from: oldest.date, to: mostRecent.date },
+                priceRange: { high, low, startPrice: oldest.close, endPrice: mostRecent.close },
+                note: "Full price data available in chart"
+              }
+
+              dataForLLM = summaryData
+              dataForClient = summaryData  // Send summary to client too to prevent streaming errors
+              console.log('📊 Using SUMMARY for LLM & client:', toolResult.data.length, 'records →', JSON.stringify(summaryData).length, 'chars')
+            } else {
+              dataForLLM = toolResult.data
+              dataForClient = toolResult.data
+              console.log('📊 Using FULL data for LLM & client:', toolResult.data.length, 'records')
+            }
+
+            factsJson = JSON.stringify(dataForLLM)  // NO pretty-printing (no , null, 2)
+            dataUsed = { type: 'prices', data: dataForClient }
             flow.startStep({
               step: 'chart_generation',
               group: 'answering',
-              summary: `Preparing ${range} price chart`,
-              why: 'Visualizing recent price movement',
-              details: { range, source: 'prices' },
+              summary: `Preparing ${chartLabel} price chart`,
+              why: 'Visualizing price movement',
+              details: { priceParams, source: 'prices' },
             })
-            chartConfig = generatePriceChart(toolResult.data, range)
+            chartConfig = generatePriceChart(toolResult.data, chartLabel)  // Chart still gets full dataset
             if (chartConfig) {
               const pointCount =
                 Array.isArray((chartConfig as any)?.data) && (chartConfig as any).data.length
@@ -296,13 +376,13 @@ export async function POST(req: NextRequest) {
                 step: 'chart_generation',
                 summary: `Prepared ${chartConfig.type ?? 'line'} chart`,
                 why: 'Chart ready for display alongside answer',
-                details: { range, pointCount },
+                details: { chartLabel, pointCount },
               })
             } else {
               flow.warnStep('chart_generation', {
                 summary: 'Chart not generated',
                 why: 'Insufficient data to build chart',
-                details: { range },
+                details: { chartLabel },
               })
             }
           } else if (toolSelection.tool === 'getRecentFilings') {

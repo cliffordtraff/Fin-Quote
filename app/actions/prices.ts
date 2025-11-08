@@ -57,9 +57,11 @@ export async function getAaplPrices(params: PriceParams): Promise<{
         toDate = todayStr
       } else if (range === 'max') {
         // Maximum available data (FMP has ~20+ years for AAPL)
-        // Don't set from/to, API will return all data
-        fromDate = null
-        toDate = null
+        // Must explicitly set from parameter to get more than 5 years (API default limit)
+        const twentyYearsAgo = new Date(today)
+        twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20)
+        fromDate = twentyYearsAgo.toISOString().split('T')[0]
+        toDate = todayStr
       } else if (range.endsWith('y')) {
         // Multi-year ranges: 3y, 5y, 10y, 20y
         const years = parseInt(range.slice(0, -1))
