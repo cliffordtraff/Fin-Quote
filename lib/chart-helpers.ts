@@ -120,7 +120,6 @@ export function generateFinancialChart(
       categories,
       yAxisLabel: 'Ratio',
       xAxisLabel: 'Year',
-      color: '#EF4444', // Red for leverage metrics
     }
   }
 
@@ -133,7 +132,6 @@ export function generateFinancialChart(
       categories,
       yAxisLabel: 'Margin (%)',
       xAxisLabel: 'Year',
-      color: '#10B981', // Green for profitability
     }
   }
 
@@ -146,7 +144,6 @@ export function generateFinancialChart(
       categories,
       yAxisLabel: 'ROE (%)',
       xAxisLabel: 'Year',
-      color: '#3B82F6', // Blue for returns
     }
   }
 
@@ -258,6 +255,7 @@ export function generateFinancialChart(
 
 /**
  * Converts price data to chart configuration
+ * Now returns time-series data with timestamps for Highcharts dataGrouping
  */
 export function generatePriceChart(data: PriceData[], range: string): ChartConfig | null {
   // Edge case: no data
@@ -287,22 +285,127 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
     }
   }
 
-  // Extract dates and prices
-  const categories = validData.map((d) => formatDateLabel(d.date))
-  const values = validData.map((d) => parseFloat(d.close.toFixed(2)))
+  // Limit data points to prevent JSON serialization issues
+  // For very large datasets, we'll pre-aggregate the data
+  const MAX_DATA_POINTS = 500 // Safe limit for JSON serialization (500 points × 5 OHLC values = 2500 numbers)
+  let dataToUse = validData
+
+  if (validData.length > MAX_DATA_POINTS) {
+    // Pre-aggregate to weekly data for very large datasets
+    const weeklyData: typeof validData = []
+    for (let i = 0; i < validData.length; i += 7) {
+      const weekData = validData.slice(i, Math.min(i + 7, validData.length))
+      if (weekData.length > 0) {
+        weeklyData.push({
+          date: weekData[0].date,
+          open: weekData[0].open,
+          high: Math.max(...weekData.map(d => d.high)),
+          low: Math.min(...weekData.map(d => d.low)),
+          close: weekData[weekData.length - 1].close,
+          volume: weekData.reduce((sum, d) => sum + d.volume, 0)
+        })
+      }
+    }
+    dataToUse = weeklyData
+  }
+
+  // Convert to OHLC candlestick data [timestamp, open, high, low, close] for Highcharts
+  // Add additional validation to ensure no NaN, null, or Infinity values
+  const candlestickData = dataToUse
+    .filter((d) =>
+      d.open != null && Number.isFinite(d.open) &&
+      d.high != null && Number.isFinite(d.high) &&
+      d.low != null && Number.isFinite(d.low) &&
+      d.close != null && Number.isFinite(d.close)
+    )
+    .map((d) => {
+      const timestamp = new Date(d.date).getTime()
+      if (!Number.isFinite(timestamp)) {
+        return null
+      }
+
+      const open = parseFloat(d.open.toFixed(2))
+      const high = parseFloat(d.high.toFixed(2))
+      const low = parseFloat(d.low.toFixed(2))
+      const close = parseFloat(d.close.toFixed(2))
+
+      // Double-check all values are finite after toFixed
+      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) {
+        return null
+      }
+
+      return [timestamp, open, high, low, close]
+    })
+    .filter((item): item is [number, number, number, number, number] => item !== null)
+
+  // Also prepare volume data [timestamp, volume] for volume chart
+  const volumeData = dataToUse
+    .filter((d) => d.volume != null && Number.isFinite(d.volume))
+    .map((d) => {
+      const timestamp = new Date(d.date).getTime()
+      if (!Number.isFinite(timestamp) || !Number.isFinite(d.volume)) {
+        return null
+      }
+      return [timestamp, d.volume]
+    })
+    .filter((item): item is [number, number] => item !== null)
 
   // Get first and last date for title
   const firstDate = new Date(validData[0].date)
   const lastDate = new Date(validData[validData.length - 1].date)
 
-  return {
-    type: 'line', // Line charts are better for time-series price data
+  // Determine appropriate data grouping based on data point count
+  let dataGroupingUnits: [string, number[]][]
+  const dataPointCount = dataToUse.length
+
+  if (dataPointCount <= 90) {
+    // 0-90 days: Daily grouping only
+    dataGroupingUnits = [['day', [1]]]
+  } else if (dataPointCount <= 500) {
+    // 91-500 days (~2 years): Daily and weekly
+    dataGroupingUnits = [
+      ['day', [1]],
+      ['week', [1]]
+    ]
+  } else {
+    // 500+ days (2+ years): Daily, weekly, and monthly
+    dataGroupingUnits = [
+      ['day', [1]],
+      ['week', [1]],
+      ['month', [1]]
+    ]
+  }
+
+  // Ensure we have valid candlestick data
+  if (candlestickData.length === 0) {
+    return null
+  }
+
+  // Create the config object
+  const config = {
+    type: 'candlestick' as const, // Candlestick charts show OHLC data
     title: `AAPL Stock Price (${formatDateRange(firstDate, lastDate)})`,
-    data: values,
-    categories,
+    data: candlestickData, // OHLC format: [timestamp, open, high, low, close]
+    volumeData, // Separate volume data for optional volume chart
+    categories: [] as string[], // Empty for time-series charts (uses timestamps instead)
     yAxisLabel: 'Stock Price ($)',
     xAxisLabel: 'Date',
+    dataGrouping: {
+      enabled: true,
+      units: dataGroupingUnits,
+      approximation: 'ohlc', // Use OHLC aggregation for candlesticks
+    },
   }
+
+  // Validate that the config can be serialized to JSON
+  try {
+    JSON.stringify(config)
+  } catch (error) {
+    console.error('Chart config cannot be serialized to JSON:', error)
+    return null
+  }
+
+  return config
 }
 
 /**

@@ -49,13 +49,18 @@ export default function FinancialChart({ config }: FinancialChartProps) {
 
   // Ensure component only renders after mounting (client-side only)
   useEffect(() => {
-    // Load exporting module on client side only
+    // Load stock and exporting modules on client side only
     if (typeof window !== 'undefined' && Highcharts) {
       try {
+        // Load Stock module for data grouping
+        const HighchartsStock = require('highcharts/modules/stock')
+        HighchartsStock(Highcharts)
+
+        // Load exporting module
         const HighchartsExporting = require('highcharts/modules/exporting')
         HighchartsExporting(Highcharts)
       } catch (error) {
-        console.warn('Highcharts exporting module not loaded:', error)
+        console.warn('Highcharts modules not loaded:', error)
       }
     }
     setIsMounted(true)
@@ -113,6 +118,24 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     }
   }, [isFullscreen, resizeChart])
 
+  // Prevent scroll propagation when hovering over chart to avoid accidental page scrolling
+  useEffect(() => {
+    const chartElement = chartContainerRef.current
+    if (!chartElement) return
+
+    const preventScrollPropagation = (e: WheelEvent) => {
+      // Prevent the scroll event from bubbling up to the page
+      e.stopPropagation()
+      // Note: We don't preventDefault() because we still want Highcharts to handle zooming
+    }
+
+    chartElement.addEventListener('wheel', preventScrollPropagation, { passive: false })
+
+    return () => {
+      chartElement.removeEventListener('wheel', preventScrollPropagation)
+    }
+  }, [])
+
   // Toggle fullscreen
   const toggleFullscreen = async () => {
     if (!chartContainerRef.current) return
@@ -149,6 +172,9 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     )
   }
 
+  // Detect if this is a time-series chart (timestamp data) or category chart
+  const isTimeSeries = config.categories.length === 0 && Array.isArray(config.data) && config.data.length > 0 && Array.isArray(config.data[0])
+
   // Highcharts configuration with polish and animations
   const options: Highcharts.Options = {
     chart: {
@@ -169,6 +195,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       style: {
         fontFamily: 'inherit', // Use Tailwind font
       },
+      zoomType: isTimeSeries ? 'x' : undefined, // Enable zoom for time-series charts
     },
     title: {
       text: config.title,
@@ -178,7 +205,27 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
       },
     },
-    xAxis: {
+    xAxis: isTimeSeries ? {
+      // Time-series configuration with datetime axis
+      type: 'datetime',
+      title: {
+        text: config.xAxisLabel,
+        style: {
+          fontSize: '18px',
+          fontWeight: '500',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
+        },
+      },
+      labels: {
+        style: {
+          fontSize: '16px',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
+        },
+      },
+      gridLineWidth: 0,
+      lineColor: isDark ? 'rgb(50, 50, 50)' : '#e5e7eb', // Dark: lighter gray, Light: gray-200
+    } : {
+      // Category-based configuration (for financial charts)
       categories: config.categories,
       title: {
         text: config.xAxisLabel,
@@ -265,6 +312,33 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           lineWidth: 2,
           lineColor: isDark ? '#111827' : '#ffffff', // Dark: gray-900, Light: white border around dots
         },
+        // Data grouping for time-series charts (only applies if config includes dataGrouping)
+        ...(config.dataGrouping && {
+          dataGrouping: {
+            enabled: config.dataGrouping.enabled,
+            units: config.dataGrouping.units as any,
+            approximation: config.dataGrouping.approximation,
+            groupPixelWidth: 10, // Minimum pixel width before grouping kicks in
+          },
+        }),
+      },
+      candlestick: {
+        animation: isInitialRender ? false : {
+          duration: 400,
+        },
+        color: '#ef4444', // Red for down candles (Tailwind red-500)
+        upColor: '#22c55e', // Green for up candles (Tailwind green-500)
+        lineColor: isDark ? '#dc2626' : '#b91c1c', // Dark red border (Tailwind red-600/700)
+        upLineColor: isDark ? '#16a34a' : '#15803d', // Dark green border (Tailwind green-600/700)
+        // Data grouping for candlestick charts
+        ...(config.dataGrouping && {
+          dataGrouping: {
+            enabled: config.dataGrouping.enabled,
+            units: config.dataGrouping.units as any,
+            approximation: config.dataGrouping.approximation,
+            groupPixelWidth: 10,
+          },
+        }),
       },
       series: {
         animation: isInitialRender ? false : {
@@ -274,14 +348,26 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     },
     series: [
       {
-        type: config.type, // Dynamic: column or line based on data type
-        name: config.yAxisLabel,
+        type: config.type, // Dynamic: column, line, or candlestick
+        name: config.type === 'candlestick' ? 'AAPL' : config.yAxisLabel,
         data: config.data,
-        color: config.color ?? '#3b82f6', // Blue color (Tailwind blue-500)
+        // Candlestick-specific colors
+        ...(config.type === 'candlestick' ? {
+          color: '#ef4444', // Red for down candles (Tailwind red-500)
+          upColor: '#22c55e', // Green for up candles (Tailwind green-500)
+          lineColor: isDark ? '#dc2626' : '#b91c1c', // Dark red border (Tailwind red-600/700)
+          upLineColor: isDark ? '#16a34a' : '#15803d', // Dark green border (Tailwind green-600/700)
+        } : {
+          color: config.color ?? '#3b82f6', // Blue color for non-candlestick charts (Tailwind blue-500)
+        }),
+        id: 'primary', // ID for linking volume series
       },
     ],
     credits: {
       enabled: false, // Remove Highcharts.com branding
+    },
+    accessibility: {
+      enabled: false, // Disable accessibility module to suppress warning
     },
     exporting: {
       enabled: true,
