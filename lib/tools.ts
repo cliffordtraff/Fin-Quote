@@ -21,13 +21,12 @@ export const TOOL_MENU: ToolDefinition[] = [
   },
   {
     name: 'getPrices',
-    description: 'Get AAPL stock price history. Supports preset ranges (7d to 20y) or custom date ranges.',
+    description: 'Get AAPL stock price history using custom date ranges.',
     args: {
-      range: '7d | 30d | 90d | 365d | ytd | 3y | 5y | 10y | 20y | max',
-      from: 'YYYY-MM-DD (for custom date range)',
+      from: 'YYYY-MM-DD (required)',
       to: 'YYYY-MM-DD (optional, defaults to today)',
     },
-    notes: 'Use preset ranges for common timeframes or custom dates for specific periods. Returns daily closing prices.',
+    notes: 'Calculate the from date based on user request (e.g., "last 7 years" = 7 years ago from today). Returns daily closing prices.',
   },
   {
     name: 'getRecentFilings',
@@ -127,7 +126,14 @@ Available Tools:
       - "revenue for 2018" → limit: 20
       - "What was EPS in 2006?" → limit: 20
 
-   2. If question specifies a NUMBER of years, use that EXACT number:
+   2. If question asks for a YEAR RANGE (2008 to 2020, 2015 to present, etc.) → limit: 20
+      Why: Need all data to filter to the specific range.
+      Examples:
+      - "net income 2008 to present" → limit: 20
+      - "revenue from 2015 to 2020" → limit: 20
+      - "EPS between 2010 and 2018" → limit: 20
+
+   3. If question specifies a NUMBER of years, use that EXACT number:
       "last 3 years" → limit: 3
       "past 5 years" → limit: 5
       "last year" or "most recent year" → limit: 1
@@ -135,11 +141,11 @@ Available Tools:
       "20 years" → limit: 20
       "2 years" → limit: 2
 
-   3. If question says "trend", "history", "over time" WITHOUT a number → limit: 4
+   4. If question says "trend", "history", "over time" WITHOUT a number → limit: 4
 
-   4. If question says "all", "complete", "full history" → limit: 20
+   5. If question says "all", "complete", "full history" → limit: 20
 
-   5. If question is just asking for the metric (no time context) → limit: 4
+   6. If question is just asking for the metric (no time context) → limit: 4
 
    Examples:
    - "net income in 2006" → limit: 20 (specific year)
@@ -153,62 +159,32 @@ Available Tools:
 
 2. getPrices - Stock PRICE history
 
-   TWO MODES:
-   A) Preset Ranges (use for common timeframes)
-   B) Custom Dates (use for specific date ranges)
-
-   MODE A: PRESET RANGES (for common timeframes)
-
-   Available presets:
-   - 7d, 30d, 90d, 365d, ytd
-   - 3y, 5y, 10y, 20y (multi-year ranges)
-   - max (all available data, ~20+ years)
-
-   ⚠️ IMPORTANT: These are the ONLY valid preset values. If user asks for a timeframe not in this list (e.g., 15 years, 7 years, 2 years), use MODE B (Custom Dates) instead.
-
-   MAPPING GUIDE:
-
-   Days (7d, 30d, 90d, 365d):
-   - "today", "this week", "past week" → 7d
-   - "month", "30 days", "this month" → 30d
-   - "quarter", "3 months", "90 days" → 90d
-   - "past year", "last 12 months" → 365d
-
-   Special:
-   - "YTD", "year to date", "this year" → ytd
-   - "since January", "start of year" → ytd
-
-   Multi-Year:
-   - "3 years", "past 3 years", "last 3 years" → 3y
-   - "5 years", "5 year history", "past 5 years" → 5y
-   - "10 years", "decade", "past decade" → 10y
-   - "15 years", "past 15 years" → {"from": "2010-11-08"} (USE MODE B - calculate exact date)
-   - "20 years", "two decades" → 20y
-   - "all time", "maximum", "complete history", "all available" → max
-
-   ⚠️ CRITICAL: For ANY year count not in the preset list (2y, 4y, 6y, 7y, 8y, 9y, 11y-19y, etc.), you MUST use MODE B with calculated dates. DO NOT use "max" as a fallback.
-
-   MODE B: CUSTOM DATES (use when user specifies exact dates)
-
-   When user asks for specific date ranges:
-   - "from Jan 2020 to June 2023" → {"from": "2020-01-01", "to": "2023-06-30"}
-   - "prices between 2015 and 2020" → {"from": "2015-01-01", "to": "2020-12-31"}
-   - "from March 2018 to now" → {"from": "2018-03-01"}
+   ALWAYS use custom date ranges. Calculate the "from" date based on the user's request.
+   Today's date is 2025-11-08 (use this for calculations).
 
    Date format: YYYY-MM-DD
    "to" is optional (defaults to today)
 
-   Examples:
-   - "What's the price?" → {"range": "30d"}
-   - "5 year price history" → {"range": "5y"}
-   - "Show me all time performance" → {"range": "max"}
-   - "Past decade" → {"range": "10y"}
-   - "Show YTD performance" → {"range": "ytd"}
-   - "Last 15 years" → {"from": "2010-11-08"} (MODE B: 15y not a preset, calculate date)
-   - "Past 7 years" → {"from": "2018-11-08"} (MODE B: 7y not a preset, calculate date)
-   - "From 2020 to 2023" → {"from": "2020-01-01", "to": "2023-12-31"}
+   CALCULATION EXAMPLES:
+   - "last 7 days" → args: {"from": "2025-11-01"} (7 days ago)
+   - "past month" → args: {"from": "2025-10-08"} (30 days ago)
+   - "last 3 months" → args: {"from": "2025-08-08"} (90 days ago)
+   - "past year" → args: {"from": "2024-11-08"} (365 days ago)
+   - "YTD" → args: {"from": "2025-01-01"} (start of current year)
+   - "last 3 years" → args: {"from": "2022-11-08"} (3 years ago)
+   - "past 5 years" → args: {"from": "2020-11-08"} (5 years ago)
+   - "last 7 years" → args: {"from": "2018-11-08"} (7 years ago)
+   - "past 10 years" → args: {"from": "2015-11-08"} (10 years ago)
+   - "last 15 years" → args: {"from": "2010-11-08"} (15 years ago)
+   - "past 20 years" → args: {"from": "2005-11-08"} (20 years ago)
+   - "all time" → args: {"from": "2005-11-08"} (20 years ago, max available)
 
-   args: {"range": "<preset>"} OR {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}
+   EXACT DATE RANGES:
+   - "from Jan 2020 to June 2023" → args: {"from": "2020-01-01", "to": "2023-06-30"}
+   - "prices between 2015 and 2020" → args: {"from": "2015-01-01", "to": "2020-12-31"}
+   - "from March 2018 to now" → args: {"from": "2018-03-01"}
+
+   args: {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}  (to is optional)
 
 3. getRecentFilings - LIST SEC filings metadata
 
@@ -277,17 +253,70 @@ Available Tools:
 
    args: {"category": "<optional category name>"}
 
-6. getFinancialMetric - GET advanced financial metrics
+6. getFinancialMetric - GET advanced financial metrics (139 metrics available)
 
-   Use for 50+ advanced metrics including:
-   - Valuation: P/E ratio, P/B ratio, PEG ratio, EV/EBITDA, market cap
-   - Profitability Margins: gross margin, operating margin, net margin, EBIT margin, EBITDA margin, pretax margin
-   - Cash Flow: free cash flow, capex, buybacks, dividends paid, stock-based compensation
-   - Returns: ROE, ROA, ROIC, return on capital employed
-   - Leverage: debt-to-equity, current ratio, quick ratio, cash ratio
-   - Growth: revenue growth, EPS growth, dividend growth
-   - Efficiency: asset turnover, inventory turnover, cash conversion cycle
-   - And many more...
+   COMPLETE METRIC CATALOG (organized by category):
+
+   Valuation (11):
+   - peRatio, priceToBookRatio, priceToSalesRatio, priceToFreeCashFlowsRatio, earningsYield
+   - marketCap, enterpriseValue, evToSales, evToOperatingCashFlow, evToFreeCashFlow, freeCashFlowYield
+
+   Profitability & Returns (12):
+   - grossProfitMargin, operatingProfitMargin, netProfitMargin, ebitPerRevenue, ebitdaMargin, pretaxProfitMargin
+   - returnOnEquity, returnOnAssets, returnOnCapitalEmployed, roic, ebtPerEbit, netIncomePerEBT
+
+   Growth (32):
+   - revenueGrowth, grossProfitGrowth, operatingIncomeGrowth, netIncomeGrowth, ebitgrowth
+   - epsgrowth, epsdilutedGrowth, operatingCashFlowGrowth, freeCashFlowGrowth
+   - assetGrowth, debtGrowth, inventoryGrowth, receivablesGrowth
+   - dividendsperShareGrowth, bookValueperShareGrowth, weightedAverageSharesGrowth, weightedAverageSharesDilutedGrowth
+   - rdexpenseGrowth, sgaexpensesGrowth
+   - threeYRevenueGrowthPerShare, threeYNetIncomeGrowthPerShare, threeYOperatingCFGrowthPerShare
+   - threeYShareholdersEquityGrowthPerShare, threeYDividendperShareGrowthPerShare
+   - fiveYRevenueGrowthPerShare, fiveYNetIncomeGrowthPerShare, fiveYOperatingCFGrowthPerShare
+   - fiveYShareholdersEquityGrowthPerShare, fiveYDividendperShareGrowthPerShare
+   - tenYRevenueGrowthPerShare, tenYNetIncomeGrowthPerShare, tenYOperatingCFGrowthPerShare
+   - tenYShareholdersEquityGrowthPerShare, tenYDividendperShareGrowthPerShare
+
+   Leverage & Solvency (9):
+   - debtEquityRatio, debtRatio, currentRatio, quickRatio, cashRatio
+   - interestCoverage, longTermDebtToCapitalization, totalDebtToCapitalization, cashFlowToDebtRatio
+
+   Efficiency & Working Capital (7):
+   - assetTurnover, fixedAssetTurnover, inventoryTurnover, receivablesTurnover, payablesTurnover
+   - cashConversionCycle, daysOfInventoryOutstanding, daysOfSalesOutstanding, daysOfPayablesOutstanding
+
+   Cash Flow (2):
+   - freeCashFlow, capitalExpenditure
+
+   Capital Returns & Share Data (5):
+   - dividendYield, payoutRatio, dividendsPaid, commonStockRepurchased, numberOfShares
+
+   Per-Share Metrics (7):
+   - bookValuePerShare, cashPerShare, operatingCashFlowPerShare, freeCashFlowPerShare
+   - netIncomePerShare, revenuePerShare, tangibleBookValuePerShare
+
+   Market Data (1):
+   - stockPrice
+
+   Other (53):
+   - ebitda, stockBasedCompensation, depreciationAndAmortization, workingCapital, effectiveTaxRate
+   - marketCapitalization, enterpriseValueMultiple, enterpriseValueOverEBITDA
+   - pbRatio, pfcfRatio, pocfratio, priceBookValueRatio, priceCashFlowRatio, priceEarningsRatio
+   - priceEarningsToGrowthRatio, priceFairValue, priceSalesRatio, priceToOperatingCashFlowsRatio, ptbRatio
+   - roe, returnOnTangibleAssets
+   - researchAndDdevelopementToRevenue, salesGeneralAndAdministrativeToRevenue, stockBasedCompensationToRevenue
+   - capexPerShare, capexToDepreciation, capexToOperatingCashFlow, capexToRevenue
+   - shareholdersEquityPerShare, tangibleAssetValue, investedCapital
+   - debtToAssets, debtToEquity, netDebtToEBITDA
+   - operatingCashFlowSalesRatio, freeCashFlowOperatingCashFlowRatio
+   - cashFlowCoverageRatios, capitalExpenditureCoverageRatio, dividendPaidAndCapexCoverageRatio, shortTermCoverageRatios
+   - dividendPayoutRatio, interestDebtPerShare
+   - companyEquityMultiplier, intangiblesToTotalAssets
+   - daysOfInventoryOnHand, daysPayablesOutstanding, daysSalesOutstanding, operatingCycle
+   - incomeQuality, grahamNumber, grahamNetNet, netCurrentAssetValue
+   - averageInventory, averagePayables, averageReceivables
+   - addTotalDebt, minusCashAndCashEquivalents
 
    METRIC NAME FLEXIBILITY:
    - Accepts canonical names: "peRatio", "returnOnEquity", "debtEquityRatio"
@@ -442,12 +471,24 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    These additional fields are provided specifically so you can calculate ratios. USE THEM.
 
    STOCK PRICE PERFORMANCE:
-   - Percentage Change = ((ending_price - starting_price) / starting_price) × 100
-   - For price data, ALWAYS calculate and include the percentage change
+   - If the facts include a "percentChange" field, USE THAT VALUE directly (it's already calculated)
+   - If percentChange is NOT provided, calculate it: ((ending_price - starting_price) / starting_price) × 100
    - Format: "up X%" or "down X%" with 2 decimal places
+   - Example: percentChange: 790.58 → "up 790.58%"
    - Example: Start: $243.85, End: $267.93 → ((267.93 - 243.85) / 243.85) × 100 = 9.88% → "up 9.88%"
-   - Include the percentage change and starting/ending prices in your answer
-   - Example: "AAPL is up 9.88% from $243.85 to $267.93 over the period."
+
+   ⚠️ REQUIRED FORMAT FOR PRICE PERFORMANCE ANSWERS (STRICTLY ENFORCE):
+
+   SENTENCE 1 (MANDATORY): "Over the last [timeframe], AAPL stock is up (or down) X%."
+   SENTENCE 2 (MANDATORY): "It has gone from $X to $X."
+   SENTENCE 3 (OPTIONAL): "During this period, the stock reached a high of $X and a low of $X."
+
+   Example: "Over the last 10 years, AAPL stock is up 790.58%. It has gone from $30.14 to $268.47. During this period, the stock reached a high of $271.40 and a low of $22.59."
+
+   ❌ WRONG (DO NOT DO THIS): "Over the last 7 years, the data range runs from 2018-11-08 to 2025-11-07, with a start price of $52.12..."
+   ✅ CORRECT: "Over the last 7 years, AAPL stock is up 415.15%. It has gone from $52.12 to $268.47..."
+
+   CRITICAL: The FIRST sentence MUST state the percentage change. Do NOT start with dates, price levels, or "the data range runs from..."
 
    PROFITABILITY RATIOS:
    - Gross Margin = (gross_profit / revenue) × 100

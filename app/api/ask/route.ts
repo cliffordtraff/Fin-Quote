@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createServerClient } from '@/lib/supabase/server'
 import { getAaplFinancialsByMetric, FinancialMetric } from '@/app/actions/financials'
-import { getAaplPrices, PriceRange, PriceParams } from '@/app/actions/prices'
+import { getAaplPrices, PriceParams } from '@/app/actions/prices'
 import { getRecentFilings } from '@/app/actions/filings'
 import { searchFilings } from '@/app/actions/search-filings'
 import { buildToolSelectionMessages, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
@@ -250,66 +250,46 @@ export async function POST(req: NextRequest) {
               })
             }
           } else if (toolSelection.tool === 'getPrices') {
-            // Support both preset ranges and custom dates
-            let priceParams: PriceParams
-            let chartLabel: string
-
-            if ('range' in toolSelection.args) {
-              // Preset range mode
-              const range = toolSelection.args.range as PriceRange
-              const allowedRanges: PriceRange[] = ['7d', '30d', '90d', '365d', 'ytd', '3y', '5y', '10y', '20y', 'max']
-              if (!allowedRanges.includes(range)) {
-                flow.failStep('tool_execution', {
-                  summary: 'Failed to execute tool',
-                  why: `Invalid price range "${range}"`,
-                  details: { range },
-                })
-                sendEvent('error', { message: 'Invalid range' })
-                controller.close()
-                return
-              }
-              priceParams = { range }
-              chartLabel = range
-            } else if ('from' in toolSelection.args) {
-              // Custom date range mode
-              const from = toolSelection.args.from as string
-              const to = toolSelection.args.to as string | undefined
-
-              // Basic date format validation
-              const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-              if (!dateRegex.test(from)) {
-                flow.failStep('tool_execution', {
-                  summary: 'Failed to execute tool',
-                  why: `Invalid from date format "${from}"`,
-                  details: { from },
-                })
-                sendEvent('error', { message: 'Invalid from date format' })
-                controller.close()
-                return
-              }
-              if (to && !dateRegex.test(to)) {
-                flow.failStep('tool_execution', {
-                  summary: 'Failed to execute tool',
-                  why: `Invalid to date format "${to}"`,
-                  details: { to },
-                })
-                sendEvent('error', { message: 'Invalid to date format' })
-                controller.close()
-                return
-              }
-
-              priceParams = to ? { from, to } : { from }
-              chartLabel = `${from} to ${to || 'today'}`
-            } else {
+            // Only support custom date ranges
+            if (!('from' in toolSelection.args)) {
               flow.failStep('tool_execution', {
                 summary: 'Failed to execute tool',
-                why: 'Invalid getPrices args: must have range or from',
+                why: 'Invalid getPrices args: must have from date',
                 details: toolSelection.args,
               })
-              sendEvent('error', { message: 'Invalid getPrices args: must have range or from' })
+              sendEvent('error', { message: 'Invalid getPrices args: must have from date' })
               controller.close()
               return
             }
+
+            const from = toolSelection.args.from as string
+            const to = toolSelection.args.to as string | undefined
+
+            // Basic date format validation
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+            if (!dateRegex.test(from)) {
+              flow.failStep('tool_execution', {
+                summary: 'Failed to execute tool',
+                why: `Invalid from date format "${from}"`,
+                details: { from },
+              })
+              sendEvent('error', { message: 'Invalid from date format' })
+              controller.close()
+              return
+            }
+            if (to && !dateRegex.test(to)) {
+              flow.failStep('tool_execution', {
+                summary: 'Failed to execute tool',
+                why: `Invalid to date format "${to}"`,
+                details: { to },
+              })
+              sendEvent('error', { message: 'Invalid to date format' })
+              controller.close()
+              return
+            }
+
+            const priceParams: PriceParams = to ? { from, to } : { from }
+            const chartLabel = `${from} to ${to || 'today'}`
 
             const toolResult = await getAaplPrices(priceParams)
 
@@ -339,10 +319,14 @@ export async function POST(req: NextRequest) {
               const high = Math.max(...prices)
               const low = Math.min(...prices)
 
+              // Calculate percentage change
+              const percentChange = ((mostRecent.close - oldest.close) / oldest.close) * 100
+
               const summaryData = {
                 summary: `${toolResult.data.length} daily price records`,
                 dateRange: { from: oldest.date, to: mostRecent.date },
                 priceRange: { high, low, startPrice: oldest.close, endPrice: mostRecent.close },
+                percentChange: percentChange,
                 note: "Full price data available in chart"
               }
 
