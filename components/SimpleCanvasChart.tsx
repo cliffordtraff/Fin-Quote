@@ -66,7 +66,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     // ====================
 
     // Define colors based on current theme (dark/light mode)
-    const bgColor = isDark ? '#111827' : '#f9fafb'    // Background matches page
+    const bgColor = isDark ? 'rgb(33,33,33)' : '#f9fafb'    // Background matches page
     const gridColor = isDark ? '#374151' : '#e5e7eb'  // Gridlines
     const upColor = '#10b981'   // Green for candles where close > open (price went up)
     const downColor = '#ef4444' // Red for candles where close < open (price went down)

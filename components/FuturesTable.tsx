@@ -29,9 +29,9 @@ export default function FuturesTable({ futures }: FuturesTableProps) {
 
   return (
     <div className="w-full max-w-sm">
-      <div className="bg-gray-800 dark:bg-gray-900 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-4 gap-3 px-4 py-1 bg-gray-700 dark:bg-gray-800 text-gray-300 text-xs font-semibold">
+        <div className="grid grid-cols-4 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
           <div>Futures</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>

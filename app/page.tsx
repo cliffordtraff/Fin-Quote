@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Navigation from '@/components/Navigation'
+import RecentQueries from '@/components/RecentQueries'
 import SimpleCanvasChart from '@/components/SimpleCanvasChart'
 import FuturesTable from '@/components/FuturesTable'
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
 import { getFuturesData } from '@/app/actions/futures'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { User } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
+import { useRouter } from 'next/navigation'
 
 interface MarketData {
   currentPrice: number
@@ -31,6 +36,38 @@ export default function Home() {
   const [futuresData, setFuturesData] = useState<FutureData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [sessionId, setSessionId] = useState<string>('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const supabase = createClientComponentClient<Database>()
+  const router = useRouter()
+
+  // Generate or retrieve session ID on mount
+  useEffect(() => {
+    let id = localStorage.getItem('finquote_session_id')
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem('finquote_session_id', id)
+    }
+    setSessionId(id)
+  }, [])
+
+  // Auth state management
+  useEffect(() => {
+    // Get current user on mount
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+    })
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     async function fetchData() {
@@ -113,9 +150,48 @@ export default function Home() {
     return `$${value.toFixed(decimals)}`
   }
 
+  const handleQueryClick = (conversationId: string) => {
+    router.push(`/chatbot?id=${conversationId}`)
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)]">
       <Navigation />
+
+      {/* Sidebar - fixed position overlay */}
+      <div
+        className={`hidden lg:block fixed left-0 top-0 h-screen w-96 xl:w-[28rem] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-50 transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <RecentQueries
+          userId={user?.id}
+          sessionId={!user ? sessionId : undefined}
+          onQueryClick={handleQueryClick}
+          onNewChat={() => router.push('/chatbot')}
+          refreshTrigger={0}
+          currentConversationId={null}
+        />
+      </div>
+
+      {/* Sidebar Toggle Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[70] bg-white dark:bg-[rgb(45,45,45)] border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)] transition-all shadow-lg ${
+          sidebarOpen ? 'xl:left-[28rem] left-96' : 'left-0'
+        }`}
+        title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+      >
+        {sidebarOpen ? (
+          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </button>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {loading ? (
@@ -131,7 +207,7 @@ export default function Home() {
             <div className="flex gap-6">
             {/* SPX Chart */}
             {spxData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
                 <div className="mb-0">
                   <div className="flex items-baseline justify-between">
                     <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
@@ -168,7 +244,7 @@ export default function Home() {
 
             {/* Nasdaq Chart */}
             {nasdaqData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
                 <div className="mb-0">
                   <div className="flex items-baseline justify-between">
                     <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
@@ -205,7 +281,7 @@ export default function Home() {
 
             {/* Dow Chart */}
             {dowData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
                 <div className="mb-0">
                   <div className="flex items-baseline justify-between">
                     <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
@@ -242,7 +318,7 @@ export default function Home() {
 
             {/* Russell 2000 Chart */}
             {russellData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
                 <div className="mb-0">
                   <div className="flex items-baseline justify-between">
                     <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
