@@ -9,22 +9,21 @@ export default function Navigation() {
   const pathname = usePathname()
 
   const navItems = [
-    { name: 'Home', href: '/' },
     { name: 'Chatbot', href: '/chatbot' },
     { name: 'Admin', href: '/admin' },
   ]
 
   return (
     <nav className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-52">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Nav Links */}
-          <div className="flex items-center space-x-8">
+          <div className="flex items-center space-x-20">
             <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
               Fin Quote
             </Link>
 
-            <div className="hidden md:flex space-x-4">
+            <div className="hidden md:flex space-x-2">
               {navItems.map((item) => {
                 const isActive = pathname === item.href ||
                   (item.href !== '/' && pathname.startsWith(item.href))
@@ -47,7 +46,7 @@ export default function Navigation() {
           </div>
 
           {/* Right side: Theme toggle and User menu */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-6">
             <ThemeToggle />
             <UserMenu />
           </div>

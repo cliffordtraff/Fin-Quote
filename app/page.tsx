@@ -99,7 +99,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-600 dark:text-gray-400">Loading market data...</div>
@@ -109,18 +109,18 @@ export default function Home() {
             <div className="text-red-600 dark:text-red-400">{error}</div>
           </div>
         ) : (
-          <div className="flex gap-4 justify-center">
+          <div className="flex gap-6 justify-center">
             {/* SPX Chart */}
             {spxData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
-                <div>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+                <div className="mb-0">
                   <div className="flex items-baseline justify-between">
-                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
+                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
                     <span className="text-xs text-gray-600 dark:text-gray-400">
                       {new Date(spxData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <span
-                      className={`text-sm font-medium mr-12 ${
+                      className={`text-xs font-medium mr-12 ${
                         spxData.priceChange >= 0
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
@@ -149,15 +149,15 @@ export default function Home() {
 
             {/* Nasdaq Chart */}
             {nasdaqData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
-                <div>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+                <div className="mb-0">
                   <div className="flex items-baseline justify-between">
-                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
+                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
                     <span className="text-xs text-gray-600 dark:text-gray-400">
                       {new Date(nasdaqData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <span
-                      className={`text-sm font-medium mr-12 ${
+                      className={`text-xs font-medium mr-12 ${
                         nasdaqData.priceChange >= 0
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
@@ -186,15 +186,15 @@ export default function Home() {
 
             {/* Dow Chart */}
             {dowData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
-                <div>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+                <div className="mb-0">
                   <div className="flex items-baseline justify-between">
-                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
+                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
                     <span className="text-xs text-gray-600 dark:text-gray-400">
                       {new Date(dowData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <span
-                      className={`text-sm font-medium mr-12 ${
+                      className={`text-xs font-medium mr-12 ${
                         dowData.priceChange >= 0
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
@@ -223,15 +223,15 @@ export default function Home() {
 
             {/* Russell 2000 Chart */}
             {russellData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
-                <div>
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+                <div className="mb-0">
                   <div className="flex items-baseline justify-between">
-                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
+                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
                     <span className="text-xs text-gray-600 dark:text-gray-400">
                       {new Date(russellData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <span
-                      className={`text-sm font-medium mr-12 ${
+                      className={`text-xs font-medium mr-12 ${
                         russellData.priceChange >= 0
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
