@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import Navigation from '@/components/Navigation'
 import SimpleCanvasChart from '@/components/SimpleCanvasChart'
+import FuturesTable from '@/components/FuturesTable'
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
+import { getFuturesData } from '@/app/actions/futures'
 
 interface MarketData {
   currentPrice: number
@@ -13,23 +15,33 @@ interface MarketData {
   priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }>
 }
 
+interface FutureData {
+  symbol: string
+  name: string
+  price: number
+  change: number
+  changesPercentage: number
+}
+
 export default function Home() {
   const [spxData, setSpxData] = useState<MarketData | null>(null)
   const [nasdaqData, setNasdaqData] = useState<MarketData | null>(null)
   const [dowData, setDowData] = useState<MarketData | null>(null)
   const [russellData, setRussellData] = useState<MarketData | null>(null)
+  const [futuresData, setFuturesData] = useState<FutureData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch SPX, Nasdaq, Dow, and Russell data in parallel
-        const [spxResult, nasdaqResult, dowResult, russellResult] = await Promise.all([
+        // Fetch SPX, Nasdaq, Dow, Russell, and Futures data in parallel
+        const [spxResult, nasdaqResult, dowResult, russellResult, futuresResult] = await Promise.all([
           getAaplMarketData(),
           getNasdaqMarketData(),
           getDowMarketData(),
-          getRussellMarketData()
+          getRussellMarketData(),
+          getFuturesData()
         ])
 
         if ('error' in spxResult) {
@@ -71,6 +83,12 @@ export default function Home() {
           })
           setRussellData(russellResult as MarketData)
         }
+
+        if ('error' in futuresResult) {
+          console.error('Futures data error:', futuresResult.error)
+        } else {
+          setFuturesData(futuresResult.futures)
+        }
       } catch (err) {
         setError('Failed to load market data')
         console.error(err)
@@ -109,7 +127,8 @@ export default function Home() {
             <div className="text-red-600 dark:text-red-400">{error}</div>
           </div>
         ) : (
-          <div className="flex gap-6 justify-center">
+          <div className="flex flex-col items-center">
+            <div className="flex gap-6">
             {/* SPX Chart */}
             {spxData && (
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
@@ -255,6 +274,14 @@ export default function Home() {
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+            </div>
+
+            {/* Futures Table */}
+            {futuresData.length > 0 && (
+              <div className="mt-[500px] self-start ml-[-50px]">
+                <FuturesTable futures={futuresData} />
               </div>
             )}
           </div>
