@@ -13,6 +13,7 @@ import FollowUpQuestions from '@/components/FollowUpQuestions'
 import FlowVisualization, { FlowFilter } from '@/components/FlowVisualization'
 import FinancialsModal from '@/components/FinancialsModal'
 import ThemeToggle from '@/components/ThemeToggle'
+import Navigation from '@/components/Navigation'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
@@ -1004,7 +1005,9 @@ export default function AskPage() {
   const isEmptyConversation = conversationHistory.length === 0
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
+    <>
+      <Navigation />
+      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
       {/* Sidebar - fixed position overlay */}
       <div
         className={`hidden lg:block fixed left-0 top-0 h-screen w-96 xl:w-[28rem] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-50 transition-transform duration-300 ${
@@ -1461,6 +1464,7 @@ export default function AskPage() {
         isOpen={showFinancialsModal}
         onClose={() => setShowFinancialsModal(false)}
       />
-    </div>
+      </div>
+    </>
   )
 }
