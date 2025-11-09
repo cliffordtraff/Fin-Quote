@@ -3,44 +3,73 @@
 import { useEffect, useState } from 'react'
 import Navigation from '@/components/Navigation'
 import SimpleCanvasChart from '@/components/SimpleCanvasChart'
-import { getAaplMarketData } from '@/app/actions/market-data'
+import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
 
 interface MarketData {
   currentPrice: number
   priceChange: number
   priceChangePercent: number
   date: string
-  financials: {
-    year: number
-    revenue: number
-    netIncome: number
-    eps: number
-    totalAssets: number
-    shareholdersEquity: number
-  }
   priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }>
 }
 
 export default function Home() {
-  const [marketData, setMarketData] = useState<MarketData | null>(null)
+  const [spxData, setSpxData] = useState<MarketData | null>(null)
+  const [nasdaqData, setNasdaqData] = useState<MarketData | null>(null)
+  const [dowData, setDowData] = useState<MarketData | null>(null)
+  const [russellData, setRussellData] = useState<MarketData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const marketResult = await getAaplMarketData()
+        // Fetch SPX, Nasdaq, Dow, and Russell data in parallel
+        const [spxResult, nasdaqResult, dowResult, russellResult] = await Promise.all([
+          getAaplMarketData(),
+          getNasdaqMarketData(),
+          getDowMarketData(),
+          getRussellMarketData()
+        ])
 
-        if ('error' in marketResult) {
-          setError(marketResult.error)
+        if ('error' in spxResult) {
+          setError(spxResult.error)
         } else {
-          console.log('Market data received:', {
-            hasPriceHistory: !!marketResult.priceHistory,
-            priceHistoryLength: marketResult.priceHistory?.length,
-            firstCandle: marketResult.priceHistory?.[0],
-            lastCandle: marketResult.priceHistory?.[marketResult.priceHistory?.length - 1]
+          console.log('SPX data received:', {
+            hasPriceHistory: !!spxResult.priceHistory,
+            priceHistoryLength: spxResult.priceHistory?.length,
           })
-          setMarketData(marketResult as MarketData)
+          setSpxData(spxResult as MarketData)
+        }
+
+        if ('error' in nasdaqResult) {
+          setError(nasdaqResult.error)
+        } else {
+          console.log('Nasdaq data received:', {
+            hasPriceHistory: !!nasdaqResult.priceHistory,
+            priceHistoryLength: nasdaqResult.priceHistory?.length,
+          })
+          setNasdaqData(nasdaqResult as MarketData)
+        }
+
+        if ('error' in dowResult) {
+          setError(dowResult.error)
+        } else {
+          console.log('Dow data received:', {
+            hasPriceHistory: !!dowResult.priceHistory,
+            priceHistoryLength: dowResult.priceHistory?.length,
+          })
+          setDowData(dowResult as MarketData)
+        }
+
+        if ('error' in russellResult) {
+          setError(russellResult.error)
+        } else {
+          console.log('Russell data received:', {
+            hasPriceHistory: !!russellResult.priceHistory,
+            priceHistoryLength: russellResult.priceHistory?.length,
+          })
+          setRussellData(russellResult as MarketData)
         }
       } catch (err) {
         setError('Failed to load market data')
@@ -79,45 +108,157 @@ export default function Home() {
           <div className="flex items-center justify-center h-64">
             <div className="text-red-600 dark:text-red-400">{error}</div>
           </div>
-        ) : marketData ? (
-          <div className="space-y-6">
-            {/* Stock Price Card with Chart */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-2" style={{ maxWidth: '350px' }}>
-              <div>
-                <div className="flex items-baseline justify-between">
-                  <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">AAPL</h2>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {new Date(marketData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                  <span
-                    className={`text-sm font-medium mr-12 ${
-                      marketData.priceChange >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}
-                  >
-                    {marketData.priceChange >= 0 ? '+' : ''}
-                    {marketData.priceChange.toFixed(2)} (
-                    {marketData.priceChangePercent >= 0 ? '+' : ''}
-                    {marketData.priceChangePercent.toFixed(2)}%)
-                  </span>
+        ) : (
+          <div className="flex gap-4 justify-center">
+            {/* SPX Chart */}
+            {spxData && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {new Date(spxData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <span
+                      className={`text-sm font-medium mr-12 ${
+                        spxData.priceChange >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {spxData.priceChange >= 0 ? '+' : ''}
+                      {spxData.priceChange.toFixed(2)} (
+                      {spxData.priceChangePercent >= 0 ? '+' : ''}
+                      {spxData.priceChangePercent.toFixed(2)}%)
+                    </span>
+                  </div>
                 </div>
+
+                {/* Simple Canvas Chart */}
+                {spxData.priceHistory && spxData.priceHistory.length > 0 ? (
+                  <SimpleCanvasChart data={spxData.priceHistory} />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {spxData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
 
-              {/* Simple Canvas Chart */}
-              {marketData.priceHistory && marketData.priceHistory.length > 0 ? (
-                <SimpleCanvasChart data={marketData.priceHistory} />
-              ) : (
-                <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {marketData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
-                  </p>
+            {/* Nasdaq Chart */}
+            {nasdaqData && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {new Date(nasdaqData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <span
+                      className={`text-sm font-medium mr-12 ${
+                        nasdaqData.priceChange >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {nasdaqData.priceChange >= 0 ? '+' : ''}
+                      {nasdaqData.priceChange.toFixed(2)} (
+                      {nasdaqData.priceChangePercent >= 0 ? '+' : ''}
+                      {nasdaqData.priceChangePercent.toFixed(2)}%)
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
 
+                {/* Simple Canvas Chart */}
+                {nasdaqData.priceHistory && nasdaqData.priceHistory.length > 0 ? (
+                  <SimpleCanvasChart data={nasdaqData.priceHistory} />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {nasdaqData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dow Chart */}
+            {dowData && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {new Date(dowData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <span
+                      className={`text-sm font-medium mr-12 ${
+                        dowData.priceChange >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {dowData.priceChange >= 0 ? '+' : ''}
+                      {dowData.priceChange.toFixed(2)} (
+                      {dowData.priceChangePercent >= 0 ? '+' : ''}
+                      {dowData.priceChangePercent.toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Simple Canvas Chart */}
+                {dowData.priceHistory && dowData.priceHistory.length > 0 ? (
+                  <SimpleCanvasChart data={dowData.priceHistory} yAxisInterval={100} />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {dowData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Russell 2000 Chart */}
+            {russellData && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 pt-2 pb-2 pl-2 pr-0" style={{ width: '350px', minWidth: '350px' }}>
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {new Date(russellData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <span
+                      className={`text-sm font-medium mr-12 ${
+                        russellData.priceChange >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {russellData.priceChange >= 0 ? '+' : ''}
+                      {russellData.priceChange.toFixed(2)} (
+                      {russellData.priceChangePercent >= 0 ? '+' : ''}
+                      {russellData.priceChangePercent.toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Simple Canvas Chart */}
+                {russellData.priceHistory && russellData.priceHistory.length > 0 ? (
+                  <SimpleCanvasChart data={russellData.priceHistory} yAxisInterval={1} />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {russellData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        ) : null}
+        )}
       </main>
     </div>
   )

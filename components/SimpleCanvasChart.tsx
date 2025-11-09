@@ -22,9 +22,10 @@ import { useTheme } from '@/components/ThemeProvider'
 // Each candle contains: date/time, open price, high price, low price, close price
 interface SimpleCanvasChartProps {
   data: Array<{ date: string; open: number; high: number; low: number; close: number }>
+  yAxisInterval?: number  // Optional: custom interval for y-axis labels (e.g., 10, 100, 1000)
 }
 
-export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
+export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasChartProps) {
   // React ref to access the canvas DOM element
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -102,7 +103,7 @@ export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
     const chartHeight = chartBottom - chartTop
 
     const chartLeft = 5                    // Leave 5px on left
-    const chartRight = rect.width - 40     // Leave 40px on right for y-axis labels
+    const chartRight = rect.width - 45     // Leave 45px on right for y-axis labels
     const chartWidth = chartRight - chartLeft
 
     // Calculate width of each candlestick
@@ -246,23 +247,23 @@ export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
     // ====================
 
     ctx.fillStyle = textColor       // Set text color
-    ctx.font = '12px monospace'     // Set font (monospace for consistent spacing)
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'     // Set font
     ctx.textAlign = 'left'          // Align text to the left
 
     // Calculate price range for labels
     const priceMin = minPrice - padding  // Lowest price on chart
     const priceMax = maxPrice + padding  // Highest price on chart
     const totalRange = priceMax - priceMin
-    const interval = 1  // Use $1 increments between labels
+    const interval = yAxisInterval || 10  // Use custom interval or default to $10
 
-    // Round down to nearest dollar for clean starting point
+    // Round down to nearest interval for clean starting point
     const niceMin = Math.floor(priceMin / interval) * interval
 
-    // Draw 7 price labels aligned with gridlines (matching number of vertical gridlines)
+    // Draw 6 price labels (skip the lowest one)
     const numPriceLabels = 7
-    for (let i = 0; i < numPriceLabels; i++) {
+    for (let i = 0; i < numPriceLabels - 1; i++) {  // Skip last label (i=6, the lowest)
       // Calculate price for this label (counting down from top)
-      // i=0 -> highest price, i=6 -> lowest price
+      // i=0 -> highest price, i=5 -> second lowest price
       const price = niceMin + (interval * (numPriceLabels - 1 - i))
 
       // Align label with gridline position
@@ -270,15 +271,15 @@ export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
       const y = chartTop + (chartHeight / (numPriceLabels - 1)) * i
 
       // Draw the price label (e.g., "270")
-      // Position it 5px to the right of the chart, 3px below the gridline
-      ctx.fillText(`${Math.round(price)}`, chartRight + 5, y + 3)
+      // Position it 2px to the right of the chart, 3px below the gridline
+      ctx.fillText(`${Math.round(price)}`, chartRight + 2, y + 3)
     }
 
     // ====================
     // DRAW X-AXIS TIME/DATE LABELS
     // ====================
 
-    ctx.font = '12px monospace'  // Set font
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'  // Set font
     ctx.textAlign = 'center'     // Center-align text
 
     if (data.length > 0) {
