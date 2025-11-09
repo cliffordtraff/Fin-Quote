@@ -3,6 +3,41 @@
 import { createServerClient } from '@/lib/supabase/server'
 
 /**
+ * Aggregate 1-minute candles into 10-minute candles
+ * Takes 10 consecutive 1-min candles and combines them into one 10-min candle
+ */
+function aggregateTo10MinCandles(oneMinCandles: Array<{ date: string; open: number; high: number; low: number; close: number }>) {
+  const tenMinCandles = []
+
+  // Group every 10 candles together
+  for (let i = 0; i < oneMinCandles.length; i += 10) {
+    const chunk = oneMinCandles.slice(i, i + 10)
+
+    // Skip incomplete chunks (less than 10 candles)
+    if (chunk.length < 10) continue
+
+    // For a 10-minute candle:
+    // - date: use the timestamp of the last (most recent) candle in the group
+    // - open: first candle's open (oldest in the group)
+    // - high: maximum high across all 10 candles
+    // - low: minimum low across all 10 candles
+    // - close: last candle's close (most recent in the group)
+
+    const tenMinCandle = {
+      date: chunk[0].date, // Most recent timestamp (FMP returns newest first)
+      open: chunk[chunk.length - 1].open, // Oldest candle's open
+      high: Math.max(...chunk.map(c => c.high)), // Highest high
+      low: Math.min(...chunk.map(c => c.low)), // Lowest low
+      close: chunk[0].close // Most recent candle's close
+    }
+
+    tenMinCandles.push(tenMinCandle)
+  }
+
+  return tenMinCandles
+}
+
+/**
  * Fetch latest AAPL stock price and key metrics for homepage
  */
 export async function getAaplMarketData() {
@@ -43,9 +78,9 @@ export async function getAaplMarketData() {
     const quoteJson = await quoteResponse.json()
     const priceData = quoteJson[0] // FMP returns array with one item
 
-    // Try to fetch intraday data (5-minute intervals)
-    // FMP Premium tier includes intraday data for last 5 trading days
-    const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/5min/AAPL?apikey=${apiKey}`
+    // Fetch 1-minute intraday data and aggregate into 10-minute candles
+    // FMP Premium tier includes 1-minute data for last 3 trading days
+    const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/1min/AAPL?apikey=${apiKey}`
     const intradayResponse = await fetch(intradayUrl, {
       next: { revalidate: 300 }, // Cache for 5 minutes
     })
@@ -58,7 +93,7 @@ export async function getAaplMarketData() {
       if (intradayJson && 'Error Message' in intradayJson) {
         console.log('FMP API Error:', intradayJson['Error Message'])
       } else if (intradayJson && Array.isArray(intradayJson) && intradayJson.length > 0) {
-        console.log('FMP Intraday Response:', {
+        console.log('FMP Intraday Response (1-min):', {
           totalCandles: intradayJson.length,
           firstCandle: intradayJson[0],
           lastCandle: intradayJson[intradayJson.length - 1]
@@ -73,10 +108,15 @@ export async function getAaplMarketData() {
           candle.date.startsWith(mostRecentDate)
         )
 
-        console.log(`Filtered to ${todayCandles.length} candles from ${mostRecentDate}`)
+        console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate}`)
+
+        // Aggregate 1-minute candles into 10-minute candles
+        const tenMinCandles = aggregateTo10MinCandles(todayCandles)
+
+        console.log(`Aggregated into ${tenMinCandles.length} 10-min candles`)
 
         // Reverse so oldest is first (chronological order for chart)
-        priceHistory = todayCandles.reverse()
+        priceHistory = tenMinCandles.reverse()
       } else {
         console.log('FMP Intraday: No data available (possibly weekend/market closed)')
       }

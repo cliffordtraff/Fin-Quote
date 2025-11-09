@@ -135,27 +135,51 @@ export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
     // DRAW VERTICAL GRIDLINES (at hourly intervals)
     // ====================
 
-    // Loop through each candle in the data
-    data.forEach((candle, index) => {
-      const date = new Date(candle.date)  // Parse the date string
-      const minutes = date.getMinutes()   // Get minutes (0-59)
-      const hours = date.getHours()       // Get hours (0-23)
+    // Find candles closest to key times: 9:30 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM
+    const targetTimes = [
+      { hour: 9, minute: 30 },  // Market open
+      { hour: 10, minute: 0 },
+      { hour: 11, minute: 0 },
+      { hour: 12, minute: 0 },
+      { hour: 13, minute: 0 },  // 1 PM
+      { hour: 14, minute: 0 },  // 2 PM
+      { hour: 15, minute: 0 },  // 3 PM
+    ]
 
-      // Draw vertical line at:
-      // - 9:30 AM (market open)
-      // - Every hour (minutes === 0)
-      // - Last candle (market close)
-      if ((hours === 9 && minutes === 30) || minutes === 0 || index === data.length - 1) {
-        // Calculate x position for this candle
-        // Spread candles evenly across chart width, center on candle
-        const x = chartLeft + (index * (chartWidth / data.length)) + candleWidth / 2
+    // For each target time, find the closest candle
+    targetTimes.forEach(target => {
+      let closestIndex = -1
+      let smallestDiff = Infinity
 
-        ctx.beginPath()            // Start a new path
-        ctx.moveTo(x, chartTop)    // Move to top of chart
-        ctx.lineTo(x, chartBottom) // Draw line to bottom of chart
-        ctx.stroke()               // Actually draw the line
+      data.forEach((candle, index) => {
+        const date = new Date(candle.date)
+        const candleMinutesFromMidnight = date.getHours() * 60 + date.getMinutes()
+        const targetMinutesFromMidnight = target.hour * 60 + target.minute
+
+        const diff = Math.abs(candleMinutesFromMidnight - targetMinutesFromMidnight)
+
+        if (diff < smallestDiff) {
+          smallestDiff = diff
+          closestIndex = index
+        }
+      })
+
+      // Draw gridline at the closest candle
+      if (closestIndex !== -1) {
+        const x = chartLeft + (closestIndex * (chartWidth / data.length)) + candleWidth / 2
+        ctx.beginPath()
+        ctx.moveTo(x, chartTop)
+        ctx.lineTo(x, chartBottom)
+        ctx.stroke()
       }
     })
+
+    // Always draw gridline at last candle (market close)
+    const lastX = chartLeft + ((data.length - 1) * (chartWidth / data.length)) + candleWidth / 2
+    ctx.beginPath()
+    ctx.moveTo(lastX, chartTop)
+    ctx.lineTo(lastX, chartBottom)
+    ctx.stroke()
 
     // Reset line dash (turn off dotted pattern for candlesticks)
     ctx.setLineDash([])
@@ -268,39 +292,45 @@ export default function SimpleCanvasChart({ data }: SimpleCanvasChartProps) {
         // INTRADAY: Show time labels (10AM, 11AM, 12PM, etc.)
         // ====================
 
-        const hourLabels = []  // Array to store label positions and text
+        // Target times for labels (no label for 9:30 AM, just gridline)
+        const labelTimes = [
+          { hour: 10, minute: 0, label: '10AM' },
+          { hour: 11, minute: 0, label: '11AM' },
+          { hour: 12, minute: 0, label: '12PM' },
+          { hour: 13, minute: 0, label: '1PM' },
+          { hour: 14, minute: 0, label: '2PM' },
+          { hour: 15, minute: 0, label: '3PM' },
+        ]
 
-        // Loop through each candle to find hourly marks (no label for 9:30 AM)
-        data.forEach((candle, index) => {
-          const date = new Date(candle.date)
-          const minutes = date.getMinutes()
-          const hours = date.getHours()
+        const hourLabels = []
 
-          // Show label at:
-          // - Top of each hour (minutes === 0)
-          // - Market close (last candle)
-          // Note: 9:30 AM has a gridline but no label
-          if (minutes === 0 || index === data.length - 1) {
-            let label
+        // Find candles closest to each target time
+        labelTimes.forEach(target => {
+          let closestIndex = -1
+          let smallestDiff = Infinity
 
-            // Special case: if last candle isn't on the hour, show "4PM" (market close)
-            if (index === data.length - 1 && minutes !== 0) {
-              label = '4PM'
-            } else {
-              // Format time as "10AM", "11AM", "12PM", etc.
-              label = date.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                hour12: true
-              }).replace(' ', '')  // Remove space between number and AM/PM
+          data.forEach((candle, index) => {
+            const date = new Date(candle.date)
+            const candleMinutesFromMidnight = date.getHours() * 60 + date.getMinutes()
+            const targetMinutesFromMidnight = target.hour * 60 + target.minute
+
+            const diff = Math.abs(candleMinutesFromMidnight - targetMinutesFromMidnight)
+
+            if (diff < smallestDiff) {
+              smallestDiff = diff
+              closestIndex = index
             }
+          })
 
-            // Calculate x position for this label (center of candle)
-            const x = chartLeft + (index * (chartWidth / data.length)) + candleWidth / 2
-
-            // Store label for drawing
-            hourLabels.push({ x, label })
+          if (closestIndex !== -1) {
+            const x = chartLeft + (closestIndex * (chartWidth / data.length)) + candleWidth / 2
+            hourLabels.push({ x, label: target.label })
           }
         })
+
+        // Always add 4PM label at the end
+        const lastX = chartLeft + ((data.length - 1) * (chartWidth / data.length)) + candleWidth / 2
+        hourLabels.push({ x: lastX, label: '4PM' })
 
         // Draw all the time labels
         hourLabels.forEach(({ x, label }) => {
