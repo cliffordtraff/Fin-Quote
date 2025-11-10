@@ -23,9 +23,11 @@ import { useTheme } from '@/components/ThemeProvider'
 interface SimpleCanvasChartProps {
   data: Array<{ date: string; open: number; high: number; low: number; close: number }>
   yAxisInterval?: number  // Optional: custom interval for y-axis labels (e.g., 10, 100, 1000)
+  labelIntervalMultiplier?: number  // Optional: multiplier for label interval (default: 2)
+  previousClose?: number  // Optional: previous day's closing price for reference line
 }
 
-export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasChartProps) {
+export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMultiplier = 2, previousClose }: SimpleCanvasChartProps) {
   // React ref to access the canvas DOM element
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -83,6 +85,11 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     // Extract all high and low prices from the data
     const prices = data.flatMap(d => [d.high, d.low])
 
+    // Include previous close in price range calculation to ensure it's always visible
+    if (previousClose !== undefined) {
+      prices.push(previousClose)
+    }
+
     // Find the highest and lowest prices in the dataset
     const maxPrice = Math.max(...prices)  // e.g., $273
     const minPrice = Math.min(...prices)  // e.g., $266
@@ -106,37 +113,78 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     const chartRight = rect.width - 45     // Leave 45px on right for y-axis labels
     const chartWidth = chartRight - chartLeft
 
-    // Calculate width of each candlestick
-    // Divide available width by number of candles, subtract 2px for spacing
-    const candleWidth = Math.max(2, chartWidth / data.length - 2)
+    // ====================
+    // CALCULATE CANDLE INTERVAL & FULL DAY RANGE
+    // ====================
+
+    // Determine candle interval (in minutes) from the data
+    let candleIntervalMinutes = 1 // Default to 1-minute candles
+    if (data.length >= 2) {
+      const firstTime = new Date(data[0].date).getTime()
+      const secondTime = new Date(data[1].date).getTime()
+      candleIntervalMinutes = (secondTime - firstTime) / (1000 * 60)
+    }
+
+    // Calculate total expected candles for full trading day (9:30 AM to 4:00 PM = 390 minutes)
+    const tradingDayMinutes = 390
+    const totalExpectedCandles = Math.ceil(tradingDayMinutes / candleIntervalMinutes)
+
+    // Calculate width of each candlestick based on FULL DAY, not just current data
+    const candleWidth = Math.max(2, chartWidth / totalExpectedCandles - 2)
 
     // ====================
-    // DRAW HORIZONTAL GRIDLINES
+    // CALCULATE PRICE LABEL POSITIONS (for gridlines and labels)
+    // ====================
+
+    // Calculate price range for labels - use actual data range with padding
+    const priceMin = minPrice - padding  // Lowest price on chart
+    const priceMax = maxPrice + padding  // Highest price on chart
+    const totalRange = priceMax - priceMin
+    const interval = yAxisInterval || 10  // Use custom interval or default to $10
+
+    // Find nice numbers divisible by interval that cover the range
+    // Round outward to ensure we cover the full range
+    const niceMin = Math.floor(priceMin / interval) * interval
+    const niceMax = Math.ceil(priceMax / interval) * interval
+
+    // Generate nice price labels in increments of multiplier x interval (e.g., 20 if interval is 10 and multiplier is 2)
+    const labelInterval = interval * labelIntervalMultiplier
+    const priceLabels = []
+    for (let price = niceMin; price <= niceMax; price += labelInterval) {
+      // Calculate y position for this price
+      const normalizedPosition = (priceMax - price) / totalRange
+      const y = chartTop + (normalizedPosition * chartHeight)
+
+      // Only show if within visible chart area
+      if (y >= chartTop && y <= chartBottom) {
+        priceLabels.push({ price, y })
+      }
+    }
+
+    // ====================
+    // DRAW HORIZONTAL GRIDLINES (at price label positions)
     // ====================
 
     ctx.strokeStyle = gridColor  // Set line color
     ctx.lineWidth = 1            // Set line thickness
     ctx.setLineDash([2, 3])      // Set dotted pattern: 2px line, 3px gap
 
-    // Draw 5 horizontal lines (excluding top and bottom edges) for 7 total positions
-    // This matches the number of vertical gridlines (7 hourly marks)
-    const numHorizontalLines = 7 // Total positions including edges
-    for (let i = 1; i < numHorizontalLines - 1; i++) {
-      // Calculate y position for this gridline
-      // Divides chart into 6 equal sections vertically
-      const y = chartTop + (chartHeight / (numHorizontalLines - 1)) * i
-
-      ctx.beginPath()           // Start a new path
-      ctx.moveTo(chartLeft, y)  // Move to left edge
-      ctx.lineTo(chartRight, y) // Draw line to right edge
-      ctx.stroke()              // Actually draw the line
-    }
+    // Draw gridlines at each price label position (except top and bottom)
+    priceLabels.forEach(({ y }, index) => {
+      // Skip first and last to avoid gridlines at edges
+      if (index > 0 && index < priceLabels.length - 1) {
+        ctx.beginPath()           // Start a new path
+        ctx.moveTo(chartLeft, y)  // Move to left edge
+        ctx.lineTo(chartRight, y) // Draw line to right edge
+        ctx.stroke()              // Actually draw the line
+      }
+    })
 
     // ====================
     // DRAW VERTICAL GRIDLINES (at hourly intervals)
     // ====================
 
-    // Find candles closest to key times: 9:30 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM
+    // Draw gridlines at key times: 9:30 AM, 10 AM, 11 AM, 12 PM, 1 PM, 2 PM, 3 PM, 4 PM
     const targetTimes = [
       { hour: 9, minute: 30 },  // Market open
       { hour: 10, minute: 0 },
@@ -145,42 +193,26 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
       { hour: 13, minute: 0 },  // 1 PM
       { hour: 14, minute: 0 },  // 2 PM
       { hour: 15, minute: 0 },  // 3 PM
+      { hour: 16, minute: 0 },  // 4 PM (market close)
     ]
 
-    // For each target time, find the closest candle
+    // Market open time reference
+    const marketOpenMinutes = 9 * 60 + 30
+
+    // Draw gridline at each target time
     targetTimes.forEach(target => {
-      let closestIndex = -1
-      let smallestDiff = Infinity
+      const targetMinutesFromMidnight = target.hour * 60 + target.minute
+      const minutesSinceOpen = targetMinutesFromMidnight - marketOpenMinutes
+      const targetSlot = Math.floor(minutesSinceOpen / candleIntervalMinutes)
 
-      data.forEach((candle, index) => {
-        const date = new Date(candle.date)
-        const candleMinutesFromMidnight = date.getHours() * 60 + date.getMinutes()
-        const targetMinutesFromMidnight = target.hour * 60 + target.minute
+      // Calculate x position based on slot within full trading day
+      const x = chartLeft + (targetSlot * (chartWidth / totalExpectedCandles)) + candleWidth / 2
 
-        const diff = Math.abs(candleMinutesFromMidnight - targetMinutesFromMidnight)
-
-        if (diff < smallestDiff) {
-          smallestDiff = diff
-          closestIndex = index
-        }
-      })
-
-      // Draw gridline at the closest candle
-      if (closestIndex !== -1) {
-        const x = chartLeft + (closestIndex * (chartWidth / data.length)) + candleWidth / 2
-        ctx.beginPath()
-        ctx.moveTo(x, chartTop)
-        ctx.lineTo(x, chartBottom)
-        ctx.stroke()
-      }
+      ctx.beginPath()
+      ctx.moveTo(x, chartTop)
+      ctx.lineTo(x, chartBottom)
+      ctx.stroke()
     })
-
-    // Always draw gridline at last candle (market close)
-    const lastX = chartLeft + ((data.length - 1) * (chartWidth / data.length)) + candleWidth / 2
-    ctx.beginPath()
-    ctx.moveTo(lastX, chartTop)
-    ctx.lineTo(lastX, chartBottom)
-    ctx.stroke()
 
     // Reset line dash (turn off dotted pattern for candlesticks)
     ctx.setLineDash([])
@@ -189,10 +221,23 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     // DRAW CANDLESTICKS
     // ====================
 
+    // Market open time reference (9:30 AM)
+    const marketOpenHour = 9
+    const marketOpenMinute = 30
+
     // Loop through each candle and draw it
     data.forEach((candle, index) => {
-      // Calculate x position (center of this candle)
-      const x = chartLeft + (index * (chartWidth / data.length)) + candleWidth / 2
+      // Calculate candle position based on its actual time
+      const candleDate = new Date(candle.date)
+      const candleMinutesFromMidnight = candleDate.getHours() * 60 + candleDate.getMinutes()
+      const marketOpenMinutes = marketOpenHour * 60 + marketOpenMinute
+      const minutesSinceOpen = candleMinutesFromMidnight - marketOpenMinutes
+
+      // Calculate which "slot" this candle belongs to
+      const candleSlot = Math.floor(minutesSinceOpen / candleIntervalMinutes)
+
+      // Calculate x position based on slot within full trading day
+      const x = chartLeft + (candleSlot * (chartWidth / totalExpectedCandles)) + candleWidth / 2
 
       // Convert price values to y-coordinates on canvas
       // Canvas y-coordinates go DOWN from top, so we subtract from chartBottom
@@ -243,6 +288,29 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     })
 
     // ====================
+    // DRAW PREVIOUS CLOSE LINE
+    // ====================
+
+    if (previousClose !== undefined) {
+      // Calculate y position for previous close
+      const prevCloseY = chartBottom - ((previousClose - minPrice + padding) / (priceRange + padding * 2)) * chartHeight
+
+      // Set line style: red color, dotted pattern
+      ctx.strokeStyle = '#ef4444'  // Red color
+      ctx.lineWidth = 1
+      ctx.setLineDash([4, 4])  // 4px dash, 4px gap
+
+      // Draw horizontal line from left to right
+      ctx.beginPath()
+      ctx.moveTo(chartLeft, prevCloseY)
+      ctx.lineTo(chartRight, prevCloseY)
+      ctx.stroke()
+
+      // Reset line dash for other elements
+      ctx.setLineDash([])
+    }
+
+    // ====================
     // DRAW Y-AXIS PRICE LABELS
     // ====================
 
@@ -250,30 +318,10 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
     ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'     // Set font
     ctx.textAlign = 'left'          // Align text to the left
 
-    // Calculate price range for labels
-    const priceMin = minPrice - padding  // Lowest price on chart
-    const priceMax = maxPrice + padding  // Highest price on chart
-    const totalRange = priceMax - priceMin
-    const interval = yAxisInterval || 10  // Use custom interval or default to $10
-
-    // Round down to nearest interval for clean starting point
-    const niceMin = Math.floor(priceMin / interval) * interval
-
-    // Draw 6 price labels (skip the lowest one)
-    const numPriceLabels = 7
-    for (let i = 0; i < numPriceLabels - 1; i++) {  // Skip last label (i=6, the lowest)
-      // Calculate price for this label (counting down from top)
-      // i=0 -> highest price, i=5 -> second lowest price
-      const price = niceMin + (interval * (numPriceLabels - 1 - i))
-
-      // Align label with gridline position
-      // Gridlines are at chartTop + (chartHeight / 6) * i
-      const y = chartTop + (chartHeight / (numPriceLabels - 1)) * i
-
-      // Draw the price label (e.g., "270")
-      // Position it 2px to the right of the chart, 3px below the gridline
+    // Draw the price labels (using priceLabels array calculated earlier)
+    priceLabels.forEach(({ price, y }) => {
       ctx.fillText(`${Math.round(price)}`, chartRight + 2, y + 3)
-    }
+    })
 
     // ====================
     // DRAW X-AXIS TIME/DATE LABELS
@@ -301,37 +349,22 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
           { hour: 13, minute: 0, label: '1PM' },
           { hour: 14, minute: 0, label: '2PM' },
           { hour: 15, minute: 0, label: '3PM' },
+          { hour: 16, minute: 0, label: '4PM' },
         ]
 
         const hourLabels = []
+        const marketOpenMinutesLabel = 9 * 60 + 30
 
-        // Find candles closest to each target time
+        // Position labels at exact time positions (not based on closest data)
         labelTimes.forEach(target => {
-          let closestIndex = -1
-          let smallestDiff = Infinity
+          const targetMinutesFromMidnight = target.hour * 60 + target.minute
+          const minutesSinceOpen = targetMinutesFromMidnight - marketOpenMinutesLabel
+          const targetSlot = Math.floor(minutesSinceOpen / candleIntervalMinutes)
 
-          data.forEach((candle, index) => {
-            const date = new Date(candle.date)
-            const candleMinutesFromMidnight = date.getHours() * 60 + date.getMinutes()
-            const targetMinutesFromMidnight = target.hour * 60 + target.minute
-
-            const diff = Math.abs(candleMinutesFromMidnight - targetMinutesFromMidnight)
-
-            if (diff < smallestDiff) {
-              smallestDiff = diff
-              closestIndex = index
-            }
-          })
-
-          if (closestIndex !== -1) {
-            const x = chartLeft + (closestIndex * (chartWidth / data.length)) + candleWidth / 2
-            hourLabels.push({ x, label: target.label })
-          }
+          // Calculate x position based on slot within full trading day
+          const x = chartLeft + (targetSlot * (chartWidth / totalExpectedCandles)) + candleWidth / 2
+          hourLabels.push({ x, label: target.label })
         })
-
-        // Always add 4PM label at the end
-        const lastX = chartLeft + ((data.length - 1) * (chartWidth / data.length)) + candleWidth / 2
-        hourLabels.push({ x: lastX, label: '4PM' })
 
         // Draw all the time labels
         hourLabels.forEach(({ x, label }) => {
@@ -367,7 +400,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval }: SimpleCanvasC
       }
     }
 
-  }, [data, isDark])  // Re-run this effect when data or theme changes
+  }, [data, isDark, previousClose, yAxisInterval, labelIntervalMultiplier])  // Re-run this effect when data, theme, or previousClose changes
 
   // ====================
   // RENDER
