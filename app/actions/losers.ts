@@ -1,5 +1,8 @@
 'use server'
 
+import { getCurrentMarketSession } from '@/lib/market-utils'
+import { deriveLosers } from './scan-extended-hours'
+
 export interface LoserData {
   symbol: string
   name: string
@@ -9,7 +12,10 @@ export interface LoserData {
   volume: number
 }
 
-export async function getLosersData() {
+/**
+ * Fetch losers from regular hours endpoint (FMP dedicated endpoint)
+ */
+async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?: string }> {
   const apiKey = process.env.FMP_API_KEY
 
   if (!apiKey) {
@@ -67,5 +73,36 @@ export async function getLosersData() {
   } catch (error) {
     console.error('Error fetching losers data:', error)
     return { error: 'Failed to load losers data' }
+  }
+}
+
+/**
+ * Main entry point with smart routing based on market session
+ */
+export async function getLosersData() {
+  const session = getCurrentMarketSession()
+
+  console.log(`[Losers] Current session: ${session}`)
+
+  try {
+    if (session === 'premarket') {
+      // Use pre-market scanner (reads from shared cache)
+      console.log('[Losers] Using pre-market scanner')
+      const losers = await deriveLosers('premarket')
+      return { losers }
+    } else if (session === 'afterhours') {
+      // Use after-hours scanner (reads from shared cache)
+      console.log('[Losers] Using after-hours scanner')
+      const losers = await deriveLosers('afterhours')
+      return { losers }
+    } else {
+      // Regular hours or closed: use dedicated FMP endpoint
+      console.log('[Losers] Using regular hours endpoint')
+      return await fetchRegularHoursLosers()
+    }
+  } catch (error) {
+    console.error('[Losers] Error, falling back to regular hours:', error)
+    // Fallback to regular hours endpoint on error
+    return await fetchRegularHoursLosers()
   }
 }
