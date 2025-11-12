@@ -16,7 +16,7 @@ async function checkPgVector() {
   console.log('Checking pgvector extension...\n')
 
   // Check if pgvector extension is installed
-  const { data: extensions, error: extError } = await supabase.rpc('exec_sql', {
+  const { data: extensions, error: extError } = await (supabase as any).rpc('exec_sql', {
     sql: "SELECT * FROM pg_extension WHERE extname = 'vector';"
   })
 

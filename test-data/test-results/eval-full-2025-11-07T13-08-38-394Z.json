@@ -1,0 +1,87 @@
+{
+  "mode": "full",
+  "timestamp": "2025-11-07T13:08:38.393Z",
+  "total_questions": 3,
+  "correct_tool": 1,
+  "correct_args": 1,
+  "fully_correct": 1,
+  "accuracy": {
+    "tool_selection": 33.33333333333333,
+    "args_selection": 33.33333333333333,
+    "overall": 33.33333333333333
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2697,
+      "error": "400 Could not finish the message because max_tokens or model output limit was reached. Please try again with higher max_tokens."
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 3827,
+      "answer": "No answer generated",
+      "source_data": {
+        "range": "30d",
+        "prices": "mock price data"
+      },
+      "answer_latency_ms": 3303,
+      "quality_score": {
+        "accuracy": 1,
+        "relevance": 1,
+        "completeness": 1,
+        "insight": 1,
+        "overall": 1,
+        "reasoning": "The AI's answer did not provide any information or data, despite being given mock price data for a 30-day range. It failed to address the user's request for stock prices, resulting in a complete lack of accuracy, relevance, completeness, and insight. The answer is essentially non-existent, leading to the lowest possible scores across all criteria."
+      }
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2484,
+      "error": "JSON parse error: "
+    }
+  ],
+  "llm_judge_enabled": true,
+  "quality_stats": {
+    "avg_accuracy": 1,
+    "avg_relevance": 1,
+    "avg_completeness": 1,
+    "avg_insight": 1,
+    "avg_overall": 1,
+    "excellent_count": 0,
+    "good_count": 0,
+    "poor_count": 1
+  }
+}

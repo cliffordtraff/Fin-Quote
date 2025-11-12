@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import Highcharts from 'highcharts'
+import Highcharts, { AxisLabelsFormatterContextObject } from 'highcharts'
+import { useTheme } from '@/components/ThemeProvider'
+import type { ChartConfig } from '@/types/chart'
 
 // Critical: Dynamic import with ssr: false to prevent Next.js hydration errors
 // Highcharts needs the browser DOM and can't render on the server
@@ -10,47 +12,128 @@ const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
   ssr: false,
 })
 
-export type ChartConfig = {
-  type: 'column' | 'line'
-  title: string
-  data: number[]
-  categories: string[]
-  yAxisLabel: string
-  xAxisLabel: string
-}
-
 interface FinancialChartProps {
   config: ChartConfig
 }
 
 export default function FinancialChart({ config }: FinancialChartProps) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenSize, setFullscreenSize] = useState<{ width: number; height: number } | null>(null)
   const [showDataTable, setShowDataTable] = useState(false)
+  const [isInitialRender, setIsInitialRender] = useState(true)
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
+  const chartInstanceRef = useRef<Highcharts.Chart | null>(null)
+  const chartWrapperRef = useRef<HTMLDivElement | null>(null)
+  // Force Highcharts to follow the surrounding wrapper dimensions (especially in fullscreen)
+  const resizeChart = useCallback((sizeOverride?: { width: number; height: number }) => {
+    const chart = chartInstanceRef.current
+    const wrapperEl = chartWrapperRef.current
+
+    if (!chart || (!wrapperEl && !sizeOverride)) {
+      return
+    }
+
+    const width = sizeOverride?.width ?? wrapperEl?.clientWidth ?? 0
+    const height = sizeOverride?.height ?? wrapperEl?.clientHeight ?? 0
+
+    if (!width || !height) {
+      return
+    }
+
+    chart.setSize(width, height, false)
+    chart.reflow()
+  }, [])
 
   // Ensure component only renders after mounting (client-side only)
   useEffect(() => {
-    // Load exporting module on client side only
+    // Load stock and exporting modules on client side only
     if (typeof window !== 'undefined' && Highcharts) {
       try {
+        // Load Stock module for data grouping
+        const HighchartsStock = require('highcharts/modules/stock')
+        HighchartsStock(Highcharts)
+
+        // Load exporting module
         const HighchartsExporting = require('highcharts/modules/exporting')
         HighchartsExporting(Highcharts)
       } catch (error) {
-        console.warn('Highcharts exporting module not loaded:', error)
+        console.warn('Highcharts modules not loaded:', error)
       }
     }
     setIsMounted(true)
+
+    // After first render, disable initial render flag
+    const timer = setTimeout(() => {
+      setIsInitialRender(false)
+    }, 100)
+
+    return () => clearTimeout(timer)
   }, [])
 
   // Handle fullscreen change events
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
+
+      requestAnimationFrame(() => {
+        resizeChart()
+      })
     }
 
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [resizeChart])
+
+  useEffect(() => {
+    if (!chartInstanceRef.current) {
+      return
+    }
+
+    if (!isFullscreen) {
+      setFullscreenSize(null)
+      requestAnimationFrame(() => {
+        chartInstanceRef.current?.reflow()
+      })
+      return
+    }
+
+    const updateFullscreenSize = () => {
+      if (typeof window === 'undefined') return
+      const nextSize = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }
+      setFullscreenSize(nextSize)
+      requestAnimationFrame(() => resizeChart(nextSize))
+    }
+
+    updateFullscreenSize()
+    window.addEventListener('resize', updateFullscreenSize)
+
+    return () => {
+      window.removeEventListener('resize', updateFullscreenSize)
+    }
+  }, [isFullscreen, resizeChart])
+
+  // Prevent scroll propagation when hovering over chart to avoid accidental page scrolling
+  useEffect(() => {
+    const chartElement = chartContainerRef.current
+    if (!chartElement) return
+
+    const preventScrollPropagation = (e: WheelEvent) => {
+      // Prevent the scroll event from bubbling up to the page
+      e.stopPropagation()
+      // Note: We don't preventDefault() because we still want Highcharts to handle zooming
+    }
+
+    chartElement.addEventListener('wheel', preventScrollPropagation, { passive: false })
+
+    return () => {
+      chartElement.removeEventListener('wheel', preventScrollPropagation)
+    }
   }, [])
 
   // Toggle fullscreen
@@ -70,10 +153,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
 
   // Copy table data to clipboard
   const copyToClipboard = () => {
-    const csvData = [
-      [config.xAxisLabel, config.yAxisLabel].join(','),
-      ...config.categories.map((cat, i) => `${cat},${config.data[i]}`).join('\n'),
-    ].join('\n')
+    const rows = config.categories.map((cat, i) => `${cat},${config.data[i]}`)
+    const csvData = [[config.xAxisLabel, config.yAxisLabel].join(',')].concat(rows).join('\n')
 
     navigator.clipboard.writeText(csvData).then(() => {
       alert('Data copied to clipboard!')
@@ -85,72 +166,110 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[550px] bg-gray-50 animate-pulse rounded flex items-center justify-center">
-        <p className="text-gray-400">Loading chart...</p>
+      <div className="w-full h-[800px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+        <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
   }
+
+  // Detect if this is a time-series chart (timestamp data) or category chart
+  const isTimeSeries = config.categories.length === 0 && Array.isArray(config.data) && config.data.length > 0 && Array.isArray(config.data[0])
 
   // Highcharts configuration with polish and animations
   const options: Highcharts.Options = {
     chart: {
       type: config.type,
-      height: isFullscreen ? '100%' : 550, // Larger default: 550px (was 400px), full height in fullscreen
-      backgroundColor: 'transparent',
-      animation: {
-        duration: 800,
-        easing: 'easeOutQuart',
+      height: isFullscreen
+        ? fullscreenSize?.height ?? '100%'
+        : 800, // Extra large: 800px for maximum visibility, 100%/viewport in fullscreen
+      width: isFullscreen ? fullscreenSize?.width ?? undefined : undefined, // Full width in fullscreen mode
+      backgroundColor: isDark ? 'rgb(33, 33, 33)' : 'transparent', // Dark: custom dark gray, Light: transparent
+      // Minimize whitespace in fullscreen while keeping axes readable
+      spacingTop: isFullscreen ? 16 : 36,
+      spacingBottom: isFullscreen ? 8 : 16,
+      spacingLeft: 24,
+      spacingRight: 24,
+      animation: isInitialRender ? false : {
+        duration: 400, // Faster, smoother animation
       },
       style: {
         fontFamily: 'inherit', // Use Tailwind font
       },
+      zoomType: isTimeSeries ? 'x' : undefined, // Enable zoom for time-series charts
     },
     title: {
       text: config.title,
       style: {
-        fontSize: '16px',
+        fontSize: '28px',
         fontWeight: '600',
-        color: '#1f2937', // gray-800
+        color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
       },
     },
-    xAxis: {
-      categories: config.categories,
+    xAxis: isTimeSeries ? {
+      // Time-series configuration with datetime axis
+      type: 'datetime',
       title: {
         text: config.xAxisLabel,
         style: {
-          fontSize: '12px',
+          fontSize: '18px',
           fontWeight: '500',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       labels: {
         style: {
-          fontSize: '11px',
-          color: '#6b7280', // gray-500
+          fontSize: '16px',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       gridLineWidth: 0,
+      lineColor: isDark ? 'rgb(50, 50, 50)' : '#e5e7eb', // Dark: lighter gray, Light: gray-200
+    } : {
+      // Category-based configuration (for financial charts)
+      categories: config.categories,
+      title: {
+        text: config.xAxisLabel,
+        style: {
+          fontSize: '18px',
+          fontWeight: '500',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
+        },
+      },
+      labels: {
+        style: {
+          fontSize: '16px',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
+        },
+        formatter: function (this: AxisLabelsFormatterContextObject) {
+          return String(this.value ?? '')
+        },
+      },
+      gridLineWidth: 0,
+      lineColor: isDark ? 'rgb(50, 50, 50)' : '#e5e7eb', // Dark: lighter gray, Light: gray-200
     },
     yAxis: {
       title: {
         text: config.yAxisLabel,
         style: {
-          fontSize: '12px',
+          fontSize: '18px',
           fontWeight: '500',
-          color: '#6b7280', // gray-500
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
+      minPadding: 0,
+      maxPadding: 0.08, // Leave headroom so column labels rendered above bars are visible
       labels: {
         style: {
-          fontSize: '11px',
-          color: '#6b7280', // gray-500
+          fontSize: '16px',
+          color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
-        formatter: function () {
-          // Format large numbers with commas
-          return this.value.toLocaleString('en-US')
+        y: isFullscreen ? -4 : 0,
+        formatter: function (this: AxisLabelsFormatterContextObject) {
+          const raw = typeof this.value === 'number' ? this.value : Number(this.value)
+          return Number.isFinite(raw) ? raw.toLocaleString('en-US') : String(this.value ?? '')
         },
       },
-      gridLineColor: '#f3f4f6', // gray-100
+      gridLineColor: isDark ? 'rgb(50, 50, 50)' : '#f3f4f6', // Dark: lighter gray, Light: gray-100
       gridLineWidth: 1,
     },
     legend: {
@@ -158,30 +277,30 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     },
     plotOptions: {
       column: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
         dataLabels: {
           enabled: true, // Show values on top of bars
-          format: '{y}',
+          inside: false,
+          format: config.yAxisLabel.includes('%') ? '{y}%' : '{y}',
+          verticalAlign: 'bottom', // Anchor to the bar top when positioned outside
+          y: -6, // Keep a small gap between label and bar
+          crop: false,
+          overflow: 'allow',
           style: {
-            fontSize: '11px',
+            fontSize: '16px',
             fontWeight: '600',
-            color: '#1f2937', // gray-800
+            color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
             textOutline: 'none',
           },
         },
         borderRadius: 4, // Rounded corners on bars
         borderWidth: 0,
-        states: {
-          hover: {
-            brightness: 0.1, // Subtle hover effect
-          },
-        },
       },
       line: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
         dataLabels: {
           enabled: false, // Hide labels on line charts for cleaner look
@@ -191,35 +310,64 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           radius: 4, // Medium-sized dots
           fillColor: '#3b82f6', // Blue
           lineWidth: 2,
-          lineColor: '#ffffff', // White border around dots
-          states: {
-            hover: {
-              radius: 6, // Slightly larger on hover
-            },
-          },
+          lineColor: isDark ? '#111827' : '#ffffff', // Dark: gray-900, Light: white border around dots
         },
-        states: {
-          hover: {
-            lineWidthPlus: 1, // Slightly thicker on hover
+        // Data grouping for time-series charts (only applies if config includes dataGrouping)
+        ...(config.dataGrouping && {
+          dataGrouping: {
+            enabled: config.dataGrouping.enabled,
+            units: config.dataGrouping.units as any,
+            approximation: config.dataGrouping.approximation,
+            groupPixelWidth: 10, // Minimum pixel width before grouping kicks in
           },
+        }),
+      },
+      candlestick: {
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
+        color: '#ef4444', // Red for down candles (Tailwind red-500)
+        upColor: '#22c55e', // Green for up candles (Tailwind green-500)
+        lineColor: isDark ? '#dc2626' : '#b91c1c', // Dark red border (Tailwind red-600/700)
+        upLineColor: isDark ? '#16a34a' : '#15803d', // Dark green border (Tailwind green-600/700)
+        // Data grouping for candlestick charts
+        ...(config.dataGrouping && {
+          dataGrouping: {
+            enabled: config.dataGrouping.enabled,
+            units: config.dataGrouping.units as any,
+            approximation: config.dataGrouping.approximation,
+            groupPixelWidth: 10,
+          },
+        }),
       },
       series: {
-        animation: {
-          duration: 800,
+        animation: isInitialRender ? false : {
+          duration: 400,
         },
       },
     },
     series: [
       {
-        type: config.type, // Dynamic: column or line based on data type
-        name: config.yAxisLabel,
+        type: config.type, // Dynamic: column, line, or candlestick
+        name: config.type === 'candlestick' ? 'AAPL' : config.yAxisLabel,
         data: config.data,
-        color: '#3b82f6', // Blue color (Tailwind blue-500)
+        // Candlestick-specific colors
+        ...(config.type === 'candlestick' ? {
+          color: '#ef4444', // Red for down candles (Tailwind red-500)
+          upColor: '#22c55e', // Green for up candles (Tailwind green-500)
+          lineColor: isDark ? '#dc2626' : '#b91c1c', // Dark red border (Tailwind red-600/700)
+          upLineColor: isDark ? '#16a34a' : '#15803d', // Dark green border (Tailwind green-600/700)
+        } : {
+          color: config.color ?? '#3b82f6', // Blue color for non-candlestick charts (Tailwind blue-500)
+        }),
+        id: 'primary', // ID for linking volume series
       },
     ],
     credits: {
       enabled: false, // Remove Highcharts.com branding
+    },
+    accessibility: {
+      enabled: false, // Disable accessibility module to suppress warning
     },
     exporting: {
       enabled: true,
@@ -235,18 +383,10 @@ export default function FinancialChart({ config }: FinancialChartProps) {
             'downloadXLS',
           ],
           theme: {
-            fill: '#f3f4f6', // gray-100
-            stroke: '#e5e7eb', // gray-200
-            states: {
-              hover: {
-                fill: '#e5e7eb', // gray-200
-              },
-              select: {
-                fill: '#d1d5db', // gray-300
-              },
-            },
+            fill: isDark ? '#374151' : '#f3f4f6', // Dark: gray-700, Light: gray-100
+            stroke: isDark ? '#4b5563' : '#e5e7eb', // Dark: gray-600, Light: gray-200
           },
-          symbolStroke: '#6b7280', // gray-500
+          symbolStroke: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
       filename: config.title.replace(/[^a-z0-9]/gi, '_').toLowerCase(),
@@ -269,8 +409,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       },
     },
     tooltip: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e5e7eb', // gray-200
+      backgroundColor: isDark ? '#1f2937' : '#ffffff', // Dark: gray-800, Light: white
+      borderColor: isDark ? '#374151' : '#e5e7eb', // Dark: gray-700, Light: gray-200
       borderRadius: 8,
       borderWidth: 1,
       shadow: {
@@ -281,11 +421,11 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         width: 4,
       },
       style: {
-        fontSize: '12px',
-        color: '#1f2937', // gray-800
+        fontSize: '16px',
+        color: isDark ? '#f9fafb' : '#1f2937', // Dark: gray-50, Light: gray-800
       },
-      headerFormat: '<div style="font-weight: 600; margin-bottom: 4px;">{point.x}</div>',
-      pointFormat: '<div style="color: #6b7280;">{series.name}: <span style="font-weight: 600; color: #1f2937;">{point.y}</span></div>',
+      headerFormat: `<div style="font-weight: 600; margin-bottom: 4px; font-size: 16px; color: ${isDark ? '#f9fafb' : '#1f2937'};">{point.key}</div>`,
+      pointFormat: `<div style="color: ${isDark ? '#9ca3af' : '#6b7280'}; font-size: 16px;">{series.name}: <span style="font-weight: 600; color: ${isDark ? '#f9fafb' : '#1f2937'};">{point.y}</span></div>`,
       useHTML: true,
     },
     // Responsive behavior
@@ -297,20 +437,20 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           },
           chartOptions: {
             chart: {
-              height: 300, // Shorter on small screens
+              height: 400, // Larger on small screens too
             },
             xAxis: {
               labels: {
                 rotation: -45, // Rotate labels on mobile
                 style: {
-                  fontSize: '10px',
+                  fontSize: '14px',
                 },
               },
             },
             yAxis: {
               labels: {
                 style: {
-                  fontSize: '10px',
+                  fontSize: '14px',
                 },
               },
             },
@@ -335,19 +475,28 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   return (
     <div
       ref={chartContainerRef}
-      className={`w-full relative ${isFullscreen ? 'bg-white p-8' : ''}`}
-      style={isFullscreen ? { height: '100vh' } : undefined}
+      className={`w-full relative ${isFullscreen ? 'bg-white dark:bg-gray-900 flex flex-col h-full' : ''}`}
+      style={
+        isFullscreen
+          ? {
+              height: '100%',
+              minHeight: '100vh',
+              width: '100%',
+              maxWidth: '100%',
+            }
+          : undefined
+      }
     >
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-2 right-2 z-10 p-2 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-[rgb(60,60,60)] rounded-lg shadow-sm border border-gray-200 dark:border-[rgb(50,50,50)] hover:bg-gray-50 dark:hover:bg-[rgb(70,70,70)] transition-colors"
         title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (
           // Exit fullscreen icon
           <svg
-            className="w-5 h-5 text-gray-700"
+            className="w-5 h-5 text-gray-700 dark:text-gray-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -362,7 +511,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         ) : (
           // Enter fullscreen icon
           <svg
-            className="w-5 h-5 text-gray-700"
+            className="w-5 h-5 text-gray-700 dark:text-gray-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -377,7 +526,32 @@ export default function FinancialChart({ config }: FinancialChartProps) {
         )}
       </button>
 
-      <HighchartsReact highcharts={Highcharts} options={options} />
+      <div className={isFullscreen ? 'flex-1 w-full min-h-0' : ''}>
+        <div
+          ref={chartWrapperRef}
+          className={isFullscreen ? 'w-full h-full flex flex-1 min-h-0 items-stretch' : ''}
+        >
+          <HighchartsReact
+            highcharts={Highcharts}
+            options={options}
+            callback={(chart: Highcharts.Chart) => {
+              chartInstanceRef.current = chart
+              requestAnimationFrame(() => resizeChart())
+            }}
+            containerProps={{
+              className: isFullscreen ? 'flex-1 min-h-0' : undefined,
+              style: isFullscreen
+                ? {
+                    width: '100%',
+                    height: '100%',
+                    flex: 1,
+                    minHeight: 0,
+                  }
+                : {},
+            }}
+          />
+        </div>
+      </div>
 
       {/* Data Table Section */}
       {!isFullscreen && (
@@ -385,7 +559,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           <div className="flex justify-between items-center mb-2">
             <button
               onClick={() => setShowDataTable(!showDataTable)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2"
+              className="text-sm text-blue-600 dark:text-white hover:text-blue-800 dark:hover:text-gray-300 font-medium flex items-center gap-2"
             >
               {showDataTable ? (
                 <>
@@ -406,7 +580,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
             {showDataTable && (
               <button
                 onClick={copyToClipboard}
-                className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -422,24 +596,24 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           </div>
 
           {showDataTable && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 dark:bg-gray-800 border-[10px] border-gray-200 dark:border-[rgb(50,50,50)] rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-100">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-100 dark:bg-gray-900">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         {config.xAxisLabel}
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         {config.yAxisLabel}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {config.categories.map((category, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{category}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right font-medium">
                           {config.data[index].toLocaleString('en-US')}
                         </td>
                       </tr>

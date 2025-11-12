@@ -11,59 +11,251 @@ export function shouldGenerateChart(dataType: string): boolean {
 }
 
 /**
+ * Extracts years from question and returns filtered year range based on distance-based context
+ * Option A: Distance-Based Context
+ * - Current year (2025): Show 3 years before → [2022, 2023, 2024, 2025]
+ * - Other years: Show 2 years before and 2 years after → [year-2, year-1, year, year+1, year+2]
+ * - 3+ years mentioned: Show exact years only (no context)
+ */
+function getFilteredYearRange(question: string, availableData: any[]): any[] {
+  if (!question || !availableData || availableData.length === 0) {
+    return availableData
+  }
+
+  const currentYear = new Date().getFullYear()
+
+  // Extract explicit years (e.g., 2023, 2024, 2025)
+  const explicitYears = [...question.matchAll(/\b(20\d{2})\b/g)].map(match => parseInt(match[1]))
+
+  // Extract "last N years" or "past N years"
+  const lastYearsMatch = question.match(/(?:last|past)\s+(\d+)\s+years?/i)
+  let mentionedYears: number[] = []
+
+  if (lastYearsMatch) {
+    const n = parseInt(lastYearsMatch[1])
+    // "last 5 years" means current year back to current-4
+    for (let i = 0; i < n; i++) {
+      mentionedYears.push(currentYear - i)
+    }
+  } else if (explicitYears.length > 0) {
+    mentionedYears = [...new Set(explicitYears)] // Remove duplicates
+  }
+
+  // If no years mentioned, default to last 5 years
+  if (mentionedYears.length === 0) {
+    const last5Years = []
+    for (let i = 0; i < 5; i++) {
+      last5Years.push(currentYear - i)
+    }
+    return availableData.filter(row =>
+      last5Years.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  const yearCount = mentionedYears.length
+
+  // Rule: If 3+ years mentioned, show exact years only
+  if (yearCount >= 3) {
+    return availableData.filter(row =>
+      mentionedYears.includes(row.year)
+    ).sort((a, b) => a.year - b.year)
+  }
+
+  // Rule: If 1-2 years mentioned, add context
+  const latestMentionedYear = Math.max(...mentionedYears)
+  const earliestMentionedYear = Math.min(...mentionedYears)
+
+  let minYear: number
+  let maxYear: number
+
+  if (latestMentionedYear === currentYear) {
+    // Current year: show 3 years before
+    minYear = currentYear - 3
+    maxYear = currentYear
+  } else {
+    // Past year(s): show 2 years before and 2 years after
+    minYear = earliestMentionedYear - 2
+    maxYear = latestMentionedYear + 2
+  }
+
+  return availableData.filter(row =>
+    row.year >= minYear && row.year <= maxYear
+  ).sort((a, b) => a.year - b.year)
+}
+
+/**
  * Converts financial data to chart configuration
  */
 export function generateFinancialChart(
   data: FinancialData[],
-  metric: string
+  metric: string,
+  userQuestion?: string
 ): ChartConfig | null {
   // Edge case: no data
   if (!data || data.length === 0) return null
 
-  // Edge case: single data point
-  if (data.length === 1) {
-    // Still show chart but user should know it's just one point
-    const categories = [data[0].year.toString()]
-    const values = [formatFinancialValue(data[0].value)]
-    const metricName = formatMetricName(metric)
+  // Apply smart filtering based on user question
+  const filteredData = userQuestion ? getFilteredYearRange(userQuestion, data) : data
 
+  // Sort by year ascending
+  const sortedData = [...filteredData].sort((a, b) => a.year - b.year)
+  const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
+  if (validData.length === 0) return null
+
+  // Don't generate chart for single data point
+  if (validData.length === 1) return null
+
+  const categories = validData.map((d) => d.year.toString())
+
+  // ===============================================
+  // HANDLE NATIVE CALCULATED METRICS
+  // ===============================================
+
+  if (metric === 'debt_to_equity_ratio') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(2)))
     return {
-      type: 'column',
-      title: `AAPL ${metricName} (${categories[0]})`,
+      type: 'line',
+      title: `AAPL Debt-to-Equity Ratio (${categories[0]}-${categories[categories.length - 1]})`,
       data: values,
       categories,
-      yAxisLabel: `${metricName} ($B)`,
+      yAxisLabel: 'Ratio',
       xAxisLabel: 'Year',
     }
   }
 
-  // Sort by year ascending
-  const sortedData = [...data].sort((a, b) => a.year - b.year)
+  if (metric === 'gross_margin') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(1)))
+    return {
+      type: 'column',
+      title: `AAPL Gross Margin (${categories[0]}-${categories[categories.length - 1]})`,
+      data: values,
+      categories,
+      yAxisLabel: 'Margin (%)',
+      xAxisLabel: 'Year',
+    }
+  }
 
-  // Filter out any invalid/null values
-  const validData = sortedData.filter((d) => d.value != null && !isNaN(d.value))
+  if (metric === 'roe') {
+    const values = validData.map((d) => parseFloat(d.value.toFixed(1)))
+    return {
+      type: 'line',
+      title: `AAPL Return on Equity (${categories[0]}-${categories[categories.length - 1]})`,
+      data: values,
+      categories,
+      yAxisLabel: 'ROE (%)',
+      xAxisLabel: 'Year',
+    }
+  }
 
-  if (validData.length === 0) return null
+  // ===============================================
+  // HANDLE RAW METRICS (with prompt-based calculations)
+  // ===============================================
 
-  // Extract years and values
-  const categories = validData.map((d) => d.year.toString())
-  const values = validData.map((d) => formatFinancialValue(d.value))
+  // Check if this is a margin/ratio calculation (has both value and revenue)
+  const hasRevenue = data[0] && 'revenue' in data[0] && data[0].revenue != null
+  const hasShareholders = data[0] && 'shareholders_equity' in data[0]
+  const hasLiabilities = data[0] && 'total_liabilities' in data[0]
+  const hasAssets = data[0] && 'total_assets' in data[0]
 
-  // Generate human-readable metric name
-  const metricName = formatMetricName(metric)
+  // Only calculate margins if the user explicitly asked for them
+  const userAskedForMargin = userQuestion?.toLowerCase().includes('margin') || userQuestion?.toLowerCase().includes('percent')
+  const isMarginCalculation = hasRevenue && userAskedForMargin && (metric === 'gross_profit' || metric === 'operating_income' || metric === 'net_income')
+  const isCashFlowMargin = hasRevenue && userAskedForMargin && metric === 'operating_cash_flow'
+
+  // Only calculate ratios if user explicitly asked for them
+  const userAskedForROE = userQuestion?.toLowerCase().includes('roe') || userQuestion?.toLowerCase().includes('return on equity')
+  const userAskedForROA = userQuestion?.toLowerCase().includes('roa') || userQuestion?.toLowerCase().includes('return on assets')
+  const userAskedForDebtRatio = userQuestion?.toLowerCase().includes('debt') && (userQuestion?.toLowerCase().includes('equity') || userQuestion?.toLowerCase().includes('assets'))
+  const userAskedForTurnover = userQuestion?.toLowerCase().includes('turnover')
+
+  const isROECalculation = hasShareholders && metric === 'net_income' && userAskedForROE
+  const isROACalculation = hasAssets && metric === 'net_income' && userAskedForROA
+  const isDebtToEquityCalculation = hasLiabilities && metric === 'shareholders_equity' && userAskedForDebtRatio
+  const isDebtToAssetsCalculation = hasAssets && metric === 'total_liabilities' && userAskedForDebtRatio
+  const isAssetTurnover = hasRevenue && metric === 'total_assets' && userAskedForTurnover
+
+  // Calculate values based on type
+  let values: number[]
+  let yAxisLabel: string
+  let metricName: string
+
+  if (isMarginCalculation) {
+    // Calculate margin percentages
+    values = validData.map((d: any) => {
+      const margin = (d.value / d.revenue) * 100
+      return parseFloat(margin.toFixed(1))
+    })
+    metricName = metric === 'gross_profit' ? 'Gross Margin' :
+                 metric === 'operating_income' ? 'Operating Margin' : 'Net Margin'
+    yAxisLabel = `${metricName} (%)`
+  } else if (isCashFlowMargin) {
+    // Calculate cash flow margin
+    values = validData.map((d: any) => {
+      const margin = (d.value / d.revenue) * 100
+      return parseFloat(margin.toFixed(1))
+    })
+    metricName = 'Cash Flow Margin'
+    yAxisLabel = 'Cash Flow Margin (%)'
+  } else if (isROECalculation) {
+    // Calculate ROE percentages
+    values = validData.map((d: any) => {
+      const roe = (d.value / d.shareholders_equity) * 100
+      return parseFloat(roe.toFixed(1))
+    })
+    metricName = 'Return on Equity (ROE)'
+    yAxisLabel = 'ROE (%)'
+  } else if (isROACalculation) {
+    // Calculate ROA percentages
+    values = validData.map((d: any) => {
+      const roa = (d.value / d.total_assets) * 100
+      return parseFloat(roa.toFixed(1))
+    })
+    metricName = 'Return on Assets (ROA)'
+    yAxisLabel = 'ROA (%)'
+  } else if (isDebtToEquityCalculation) {
+    // Calculate debt-to-equity ratio
+    values = validData.map((d: any) => {
+      const ratio = d.total_liabilities / d.value
+      return parseFloat(ratio.toFixed(2))
+    })
+    metricName = 'Debt-to-Equity Ratio'
+    yAxisLabel = 'Ratio'
+  } else if (isDebtToAssetsCalculation) {
+    // Calculate debt-to-assets ratio
+    values = validData.map((d: any) => {
+      const ratio = d.value / d.total_assets
+      return parseFloat(ratio.toFixed(2))
+    })
+    metricName = 'Debt-to-Assets Ratio'
+    yAxisLabel = 'Ratio'
+  } else if (isAssetTurnover) {
+    // Calculate asset turnover
+    values = validData.map((d: any) => {
+      const turnover = d.revenue / d.value
+      return parseFloat(turnover.toFixed(2))
+    })
+    metricName = 'Asset Turnover'
+    yAxisLabel = 'Turnover Ratio'
+  } else {
+    // Regular financial values in billions
+    values = validData.map((d) => formatFinancialValue(d.value))
+    metricName = formatMetricName(metric)
+    yAxisLabel = `${metricName} ($B)`
+  }
 
   return {
     type: 'column',
     title: `AAPL ${metricName} (${categories[0]}-${categories[categories.length - 1]})`,
     data: values,
     categories,
-    yAxisLabel: `${metricName} ($B)`,
+    yAxisLabel,
     xAxisLabel: 'Year',
   }
 }
 
 /**
  * Converts price data to chart configuration
+ * Now returns time-series data with timestamps for Highcharts dataGrouping
  */
 export function generatePriceChart(data: PriceData[], range: string): ChartConfig | null {
   // Edge case: no data
@@ -93,22 +285,131 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
     }
   }
 
-  // Extract dates and prices
-  const categories = validData.map((d) => formatDateLabel(d.date))
-  const values = validData.map((d) => parseFloat(d.close.toFixed(2)))
+  // Limit data points to prevent JSON serialization issues
+  // For very large datasets, we'll pre-aggregate the data
+  const MAX_DATA_POINTS = 100 // Safe limit for JSON serialization (100 points × 5 OHLC values = 500 numbers)
+  let dataToUse = validData
+
+  if (validData.length > MAX_DATA_POINTS) {
+    // Determine aggregation period based on data size
+    // For very large datasets (> 500 points), use monthly aggregation
+    // Otherwise use weekly
+    const daysPerPeriod = validData.length > 500 ? 30 : 7
+
+    const aggregatedData: typeof validData = []
+    for (let i = 0; i < validData.length; i += daysPerPeriod) {
+      const periodData = validData.slice(i, Math.min(i + daysPerPeriod, validData.length))
+      if (periodData.length > 0) {
+        aggregatedData.push({
+          date: periodData[0].date,
+          open: periodData[0].open,
+          high: Math.max(...periodData.map(d => d.high)),
+          low: Math.min(...periodData.map(d => d.low)),
+          close: periodData[periodData.length - 1].close,
+          volume: periodData.reduce((sum, d) => sum + d.volume, 0)
+        })
+      }
+    }
+    dataToUse = aggregatedData
+  }
+
+  // Convert to OHLC candlestick data [timestamp, open, high, low, close] for Highcharts
+  // Add additional validation to ensure no NaN, null, or Infinity values
+  const candlestickData = dataToUse
+    .filter((d) =>
+      d.open != null && Number.isFinite(d.open) &&
+      d.high != null && Number.isFinite(d.high) &&
+      d.low != null && Number.isFinite(d.low) &&
+      d.close != null && Number.isFinite(d.close)
+    )
+    .map((d) => {
+      const timestamp = new Date(d.date).getTime()
+      if (!Number.isFinite(timestamp)) {
+        return null
+      }
+
+      const open = parseFloat(d.open.toFixed(2))
+      const high = parseFloat(d.high.toFixed(2))
+      const low = parseFloat(d.low.toFixed(2))
+      const close = parseFloat(d.close.toFixed(2))
+
+      // Double-check all values are finite after toFixed
+      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) {
+        return null
+      }
+
+      return [timestamp, open, high, low, close]
+    })
+    .filter((item): item is [number, number, number, number, number] => item !== null)
+
+  // Also prepare volume data [timestamp, volume] for volume chart
+  const volumeData = dataToUse
+    .filter((d) => d.volume != null && Number.isFinite(d.volume))
+    .map((d) => {
+      const timestamp = new Date(d.date).getTime()
+      if (!Number.isFinite(timestamp) || !Number.isFinite(d.volume)) {
+        return null
+      }
+      return [timestamp, d.volume]
+    })
+    .filter((item): item is [number, number] => item !== null)
 
   // Get first and last date for title
   const firstDate = new Date(validData[0].date)
   const lastDate = new Date(validData[validData.length - 1].date)
 
-  return {
-    type: 'line', // Line charts are better for time-series price data
+  // Determine appropriate data grouping based on data point count
+  let dataGroupingUnits: [string, number[]][]
+  const dataPointCount = dataToUse.length
+
+  if (dataPointCount <= 90) {
+    // 0-90 days: Daily grouping only
+    dataGroupingUnits = [['day', [1]]]
+  } else if (dataPointCount <= 500) {
+    // 91-500 days (~2 years): Daily and weekly
+    dataGroupingUnits = [
+      ['day', [1]],
+      ['week', [1]]
+    ]
+  } else {
+    // 500+ days (2+ years): Daily, weekly, and monthly
+    dataGroupingUnits = [
+      ['day', [1]],
+      ['week', [1]],
+      ['month', [1]]
+    ]
+  }
+
+  // Ensure we have valid candlestick data
+  if (candlestickData.length === 0) {
+    return null
+  }
+
+  // Create the config object
+  const config = {
+    type: 'candlestick' as const, // Candlestick charts show OHLC data
     title: `AAPL Stock Price (${formatDateRange(firstDate, lastDate)})`,
-    data: values,
-    categories,
+    data: candlestickData, // OHLC format: [timestamp, open, high, low, close]
+    volumeData, // Separate volume data for optional volume chart
+    categories: [] as string[], // Empty for time-series charts (uses timestamps instead)
     yAxisLabel: 'Stock Price ($)',
     xAxisLabel: 'Date',
+    dataGrouping: {
+      enabled: true,
+      units: dataGroupingUnits,
+      approximation: 'ohlc', // Use OHLC aggregation for candlesticks
+    },
   }
+
+  // Validate that the config can be serialized to JSON
+  try {
+    JSON.stringify(config)
+  } catch (error) {
+    console.error('Chart config cannot be serialized to JSON:', error)
+    return null
+  }
+
+  return config
 }
 
 /**

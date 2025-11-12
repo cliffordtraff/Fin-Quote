@@ -1,0 +1,134 @@
+{
+  "mode": "full",
+  "timestamp": "2025-11-07T13:46:01.507Z",
+  "total_questions": 5,
+  "correct_tool": 2,
+  "correct_args": 2,
+  "fully_correct": 2,
+  "accuracy": {
+    "tool_selection": 40,
+    "args_selection": 40,
+    "overall": 40
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2232,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 2944,
+      "answer": "No answer generated",
+      "source_data": {
+        "range": "30d",
+        "prices": "mock price data"
+      },
+      "answer_latency_ms": 4895,
+      "quality_score": {
+        "accuracy": 1,
+        "relevance": 1,
+        "completeness": 1,
+        "insight": 1,
+        "overall": 1,
+        "reasoning": "The AI's answer did not provide any information or data, despite being given mock price data for a 30-day range. It failed to address the user's request for stock prices, resulting in a complete lack of accuracy, relevance, completeness, and insight. The absence of any generated response makes it impossible to evaluate any aspect positively."
+      }
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2646,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 4,
+      "question": "What are AAPL's risk factors?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 2968,
+      "answer": "No answer generated",
+      "source_data": {
+        "query": "risk factors",
+        "results": "mock filing search results"
+      },
+      "answer_latency_ms": 3777,
+      "quality_score": {
+        "accuracy": 1,
+        "relevance": 1,
+        "completeness": 1,
+        "insight": 1,
+        "overall": 1,
+        "reasoning": "The AI's answer did not provide any information, failing to address the user's question about AAPL's risk factors. There was no use of the provided data, no context or insight offered, and no attempt to interpret or present relevant information. This results in the lowest possible scores across all criteria."
+      }
+    },
+    {
+      "question_id": 5,
+      "question": "Show me recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2126,
+      "error": "JSON parse error: "
+    }
+  ],
+  "llm_judge_enabled": true,
+  "quality_stats": {
+    "avg_accuracy": 1,
+    "avg_relevance": 1,
+    "avg_completeness": 1,
+    "avg_insight": 1,
+    "avg_overall": 1,
+    "excellent_count": 0,
+    "good_count": 0,
+    "poor_count": 2
+  }
+}

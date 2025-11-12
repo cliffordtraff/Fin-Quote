@@ -1,0 +1,94 @@
+{
+  "mode": "fast",
+  "timestamp": "2025-11-07T13:49:45.116Z",
+  "total_questions": 5,
+  "correct_tool": 1,
+  "correct_args": 1,
+  "fully_correct": 1,
+  "accuracy": {
+    "tool_selection": 20,
+    "args_selection": 20,
+    "overall": 20
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 3461,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2146,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 1993,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 4,
+      "question": "What are AAPL's risk factors?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "actual_tool": null,
+      "actual_args": null,
+      "tool_match": false,
+      "args_match": false,
+      "overall_correct": false,
+      "routing_latency_ms": 2109,
+      "error": "JSON parse error: "
+    },
+    {
+      "question_id": 5,
+      "question": "Show me recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 4024
+    }
+  ],
+  "llm_judge_enabled": false
+}

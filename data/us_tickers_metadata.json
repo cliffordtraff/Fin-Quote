@@ -1,0 +1,2702 @@
+[
+  {
+    "symbol": "NVDA",
+    "name": "NVIDIA Corporation",
+    "price": 192.18,
+    "exchange": "NASDAQ",
+    "volume": 116246125,
+    "avgVolume": 116246125,
+    "marketCap": 4679006460000
+  },
+  {
+    "symbol": "AAPL",
+    "name": "Apple Inc.",
+    "price": 274.64,
+    "exchange": "NASDAQ",
+    "volume": 27648066,
+    "avgVolume": 27648066,
+    "marketCap": 4058177587920
+  },
+  {
+    "symbol": "MSFT",
+    "name": "Microsoft Corporation",
+    "price": 511.23,
+    "exchange": "NASDAQ",
+    "volume": 15092195,
+    "avgVolume": 15092195,
+    "marketCap": 3799977594942
+  },
+  {
+    "symbol": "GOOG",
+    "name": "Alphabet Inc.",
+    "price": 287.0047,
+    "exchange": "NASDAQ",
+    "volume": 11780239,
+    "avgVolume": 11780239,
+    "marketCap": 3463466810274
+  },
+  {
+    "symbol": "GOOGL",
+    "name": "Alphabet Inc.",
+    "price": 286.41,
+    "exchange": "NASDAQ",
+    "volume": 17407939,
+    "avgVolume": 17407939,
+    "marketCap": 3458395341434
+  },
+  {
+    "symbol": "AMZN",
+    "name": "Amazon.com, Inc.",
+    "price": 245.045,
+    "exchange": "NASDAQ",
+    "volume": 19183253,
+    "avgVolume": 19183253,
+    "marketCap": 2619439787646
+  },
+  {
+    "symbol": "AVGO",
+    "name": "Broadcom Inc.",
+    "price": 352.88,
+    "exchange": "NASDAQ",
+    "volume": 6409888,
+    "avgVolume": 6409888,
+    "marketCap": 1657913503800
+  },
+  {
+    "symbol": "META",
+    "name": "Meta Platforms, Inc.",
+    "price": 613.2,
+    "exchange": "NASDAQ",
+    "volume": 17666283,
+    "avgVolume": 17666283,
+    "marketCap": 1545587568470
+  },
+  {
+    "symbol": "TSM",
+    "name": "Taiwan Semiconductor Manufacturing Company Limited",
+    "price": 290.44,
+    "exchange": "NYSE",
+    "volume": 7163563,
+    "avgVolume": 7163563,
+    "marketCap": 1506373770326
+  },
+  {
+    "symbol": "TSLA",
+    "name": "Tesla, Inc.",
+    "price": 429.605,
+    "exchange": "NASDAQ",
+    "volume": 45681412,
+    "avgVolume": 45681412,
+    "marketCap": 1383453354775
+  },
+  {
+    "symbol": "LLY",
+    "name": "Eli Lilly and Company",
+    "price": 1009.375,
+    "exchange": "NYSE",
+    "volume": 3616396,
+    "avgVolume": 3616396,
+    "marketCap": 906707083016
+  },
+  {
+    "symbol": "JPM",
+    "name": "JPMorgan Chase & Co.",
+    "price": 319.54,
+    "exchange": "NYSE",
+    "volume": 4878184,
+    "avgVolume": 4878184,
+    "marketCap": 869871693744
+  },
+  {
+    "symbol": "WMT",
+    "name": "Walmart Inc.",
+    "price": 103.2851,
+    "exchange": "NYSE",
+    "volume": 6938571,
+    "avgVolume": 6938571,
+    "marketCap": 823476725421
+  },
+  {
+    "symbol": "V",
+    "name": "Visa Inc.",
+    "price": 341.15,
+    "exchange": "NYSE",
+    "volume": 3375669,
+    "avgVolume": 3375669,
+    "marketCap": 658384404535
+  },
+  {
+    "symbol": "ORCL",
+    "name": "Oracle Corporation",
+    "price": 227.46,
+    "exchange": "NYSE",
+    "volume": 16852027,
+    "avgVolume": 16852027,
+    "marketCap": 638094585908
+  },
+  {
+    "symbol": "VXUS",
+    "name": "Vanguard Total Intl Stock Idx Fund",
+    "price": 75.79,
+    "exchange": "NASDAQ",
+    "volume": 3272888,
+    "avgVolume": 3272888,
+    "marketCap": 553272088692
+  },
+  {
+    "symbol": "XOM",
+    "name": "Exxon Mobil Corporation",
+    "price": 118.07,
+    "exchange": "NYSE",
+    "volume": 8695020,
+    "avgVolume": 8695020,
+    "marketCap": 497901190000
+  },
+  {
+    "symbol": "JNJ",
+    "name": "Johnson & Johnson",
+    "price": 194.485,
+    "exchange": "NYSE",
+    "volume": 4825670,
+    "avgVolume": 4825670,
+    "marketCap": 468571757912
+  },
+  {
+    "symbol": "PLTR",
+    "name": "Palantir Technologies Inc.",
+    "price": 182.33,
+    "exchange": "NASDAQ",
+    "volume": 42963262,
+    "avgVolume": 42963262,
+    "marketCap": 416502620408
+  },
+  {
+    "symbol": "AMD",
+    "name": "Advanced Micro Devices, Inc.",
+    "price": 254.34,
+    "exchange": "NASDAQ",
+    "volume": 90942187,
+    "avgVolume": 90942187,
+    "marketCap": 412798225677
+  },
+  {
+    "symbol": "ABBV",
+    "name": "AbbVie Inc.",
+    "price": 232.8825,
+    "exchange": "NYSE",
+    "volume": 4645560,
+    "avgVolume": 4645560,
+    "marketCap": 411553964470
+  },
+  {
+    "symbol": "BAC",
+    "name": "Bank of America Corporation",
+    "price": 54.03,
+    "exchange": "NYSE",
+    "volume": 25123911,
+    "avgVolume": 25123911,
+    "marketCap": 394554305546
+  },
+  {
+    "symbol": "BND",
+    "name": "Vanguard Total Bond Market Index Fund",
+    "price": 74.505,
+    "exchange": "NASDAQ",
+    "volume": 5559400,
+    "avgVolume": 5559400,
+    "marketCap": 372063453669
+  },
+  {
+    "symbol": "HD",
+    "name": "The Home Depot, Inc.",
+    "price": 371.2,
+    "exchange": "NYSE",
+    "volume": 1781110,
+    "avgVolume": 1781110,
+    "marketCap": 369487523366
+  },
+  {
+    "symbol": "BABA",
+    "name": "Alibaba Group Holding Limited",
+    "price": 157.35,
+    "exchange": "NYSE",
+    "volume": 11542935,
+    "avgVolume": 11542935,
+    "marketCap": 365249836784
+  },
+  {
+    "symbol": "PG",
+    "name": "The Procter & Gamble Company",
+    "price": 148.07,
+    "exchange": "NYSE",
+    "volume": 3725154,
+    "avgVolume": 3725154,
+    "marketCap": 346000136600
+  },
+  {
+    "symbol": "GE",
+    "name": "GE Aerospace",
+    "price": 308.34,
+    "exchange": "NYSE",
+    "volume": 2244131,
+    "avgVolume": 2244131,
+    "marketCap": 325241321318
+  },
+  {
+    "symbol": "KO",
+    "name": "The Coca-Cola Company",
+    "price": 71.7,
+    "exchange": "NYSE",
+    "volume": 7778361,
+    "avgVolume": 7778361,
+    "marketCap": 308572208979
+  },
+  {
+    "symbol": "UNH",
+    "name": "UnitedHealth Group Incorporated",
+    "price": 339.9,
+    "exchange": "NYSE",
+    "volume": 7399760,
+    "avgVolume": 7399760,
+    "marketCap": 307894546938
+  },
+  {
+    "symbol": "CVX",
+    "name": "Chevron Corporation",
+    "price": 152.86,
+    "exchange": "NYSE",
+    "volume": 7413752,
+    "avgVolume": 7413752,
+    "marketCap": 305621190837
+  },
+  {
+    "symbol": "IBM",
+    "name": "International Business Machines Corporation",
+    "price": 315.684,
+    "exchange": "NYSE",
+    "volume": 4303509,
+    "avgVolume": 4303509,
+    "marketCap": 295080948771
+  },
+  {
+    "symbol": "CSCO",
+    "name": "Cisco Systems, Inc.",
+    "price": 73.71,
+    "exchange": "NASDAQ",
+    "volume": 25687122,
+    "avgVolume": 25687122,
+    "marketCap": 291362461561
+  },
+  {
+    "symbol": "WFC",
+    "name": "Wells Fargo & Company",
+    "price": 86.1,
+    "exchange": "NYSE",
+    "volume": 11553598,
+    "avgVolume": 11553598,
+    "marketCap": 279961319805
+  },
+  {
+    "symbol": "MU",
+    "name": "Micron Technology, Inc.",
+    "price": 243.69,
+    "exchange": "NASDAQ",
+    "volume": 12778270,
+    "avgVolume": 12778270,
+    "marketCap": 271956663639
+  },
+  {
+    "symbol": "AZN",
+    "name": "AstraZeneca PLC",
+    "price": 87.415,
+    "exchange": "NASDAQ",
+    "volume": 3688604,
+    "avgVolume": 3688604,
+    "marketCap": 271033788718
+  },
+  {
+    "symbol": "CAT",
+    "name": "Caterpillar Inc.",
+    "price": 576.025,
+    "exchange": "NYSE",
+    "volume": 1308739,
+    "avgVolume": 1308739,
+    "marketCap": 269855571621
+  },
+  {
+    "symbol": "MS",
+    "name": "Morgan Stanley",
+    "price": 169.55,
+    "exchange": "NYSE",
+    "volume": 3904739,
+    "avgVolume": 3904739,
+    "marketCap": 269467587476
+  },
+  {
+    "symbol": "GS",
+    "name": "The Goldman Sachs Group, Inc.",
+    "price": 834.67,
+    "exchange": "NYSE",
+    "volume": 1834413,
+    "avgVolume": 1834413,
+    "marketCap": 261852690763
+  },
+  {
+    "symbol": "AXP",
+    "name": "American Express Company",
+    "price": 374.465,
+    "exchange": "NYSE",
+    "volume": 1628316,
+    "avgVolume": 1628316,
+    "marketCap": 261282756032
+  },
+  {
+    "symbol": "HSBC",
+    "name": "HSBC Holdings plc",
+    "price": 73.44,
+    "exchange": "NYSE",
+    "volume": 1283495,
+    "avgVolume": 1283495,
+    "marketCap": 252384017759
+  },
+  {
+    "symbol": "PM",
+    "name": "Philip Morris International Inc.",
+    "price": 156.695,
+    "exchange": "NYSE",
+    "volume": 1849057,
+    "avgVolume": 1849057,
+    "marketCap": 243908614296
+  },
+  {
+    "symbol": "TMUS",
+    "name": "T-Mobile US, Inc.",
+    "price": 214.3632,
+    "exchange": "NASDAQ",
+    "volume": 1732826,
+    "avgVolume": 1732826,
+    "marketCap": 239791219805
+  },
+  {
+    "symbol": "RTX",
+    "name": "RTX Corporation",
+    "price": 178.59,
+    "exchange": "NYSE",
+    "volume": 1071175,
+    "avgVolume": 1071175,
+    "marketCap": 239080160501
+  },
+  {
+    "symbol": "CRM",
+    "name": "Salesforce, Inc.",
+    "price": 246.135,
+    "exchange": "NYSE",
+    "volume": 2422293,
+    "avgVolume": 2422293,
+    "marketCap": 235676276623
+  },
+  {
+    "symbol": "MRK",
+    "name": "Merck & Co., Inc.",
+    "price": 91.66,
+    "exchange": "NYSE",
+    "volume": 9293118,
+    "avgVolume": 9293118,
+    "marketCap": 230360345918
+  },
+  {
+    "symbol": "ABT",
+    "name": "Abbott Laboratories",
+    "price": 128.96,
+    "exchange": "NYSE",
+    "volume": 2394572,
+    "avgVolume": 2394572,
+    "marketCap": 224462783572
+  },
+  {
+    "symbol": "SHEL",
+    "name": "Shell plc",
+    "price": 76.465,
+    "exchange": "NYSE",
+    "volume": 2810381,
+    "avgVolume": 2810381,
+    "marketCap": 222169270379
+  },
+  {
+    "symbol": "NVO",
+    "name": "Novo Nordisk A/S",
+    "price": 49.805,
+    "exchange": "NYSE",
+    "volume": 19183335,
+    "avgVolume": 19183335,
+    "marketCap": 221385713905
+  },
+  {
+    "symbol": "MCD",
+    "name": "McDonald's Corporation",
+    "price": 307.41,
+    "exchange": "NYSE",
+    "volume": 1257083,
+    "avgVolume": 1257083,
+    "marketCap": 219659821341
+  },
+  {
+    "symbol": "DIS",
+    "name": "The Walt Disney Company",
+    "price": 116.66,
+    "exchange": "NYSE",
+    "volume": 9157721,
+    "avgVolume": 9157721,
+    "marketCap": 209746960958
+  },
+  {
+    "symbol": "SHOP",
+    "name": "Shopify Inc.",
+    "price": 157.215,
+    "exchange": "NASDAQ",
+    "volume": 3730413,
+    "avgVolume": 3730413,
+    "marketCap": 204666406527
+  },
+  {
+    "symbol": "LRCX",
+    "name": "Lam Research Corporation",
+    "price": 161.064,
+    "exchange": "NASDAQ",
+    "volume": 5027654,
+    "avgVolume": 5027654,
+    "marketCap": 202301215920
+  },
+  {
+    "symbol": "LIN",
+    "name": "Linde plc",
+    "price": 430.765,
+    "exchange": "NASDAQ",
+    "volume": 1420797,
+    "avgVolume": 1420797,
+    "marketCap": 201151560077
+  },
+  {
+    "symbol": "APP",
+    "name": "AppLovin Corporation",
+    "price": 591.07,
+    "exchange": "NASDAQ",
+    "volume": 3350210,
+    "avgVolume": 3350210,
+    "marketCap": 199755051802
+  },
+  {
+    "symbol": "PEP",
+    "name": "PepsiCo, Inc.",
+    "price": 144.746,
+    "exchange": "NASDAQ",
+    "volume": 2045739,
+    "avgVolume": 2045739,
+    "marketCap": 197923134463
+  },
+  {
+    "symbol": "UBER",
+    "name": "Uber Technologies, Inc.",
+    "price": 93.95,
+    "exchange": "NYSE",
+    "volume": 11031095,
+    "avgVolume": 11031095,
+    "marketCap": 195212164295
+  },
+  {
+    "symbol": "C",
+    "name": "Citigroup Inc.",
+    "price": 102.89,
+    "exchange": "NYSE",
+    "volume": 8827664,
+    "avgVolume": 8827664,
+    "marketCap": 191446398524
+  },
+  {
+    "symbol": "PDD",
+    "name": "PDD Holdings Inc.",
+    "price": 135.8882,
+    "exchange": "NASDAQ",
+    "volume": 3617908,
+    "avgVolume": 3617908,
+    "marketCap": 189827609247
+  },
+  {
+    "symbol": "QCOM",
+    "name": "QUALCOMM Incorporated",
+    "price": 175.835,
+    "exchange": "NASDAQ",
+    "volume": 6071244,
+    "avgVolume": 6071244,
+    "marketCap": 188319285000
+  },
+  {
+    "symbol": "AMAT",
+    "name": "Applied Materials, Inc.",
+    "price": 230.2375,
+    "exchange": "NASDAQ",
+    "volume": 2726648,
+    "avgVolume": 2726648,
+    "marketCap": 183426380493
+  },
+  {
+    "symbol": "SONY",
+    "name": "Sony Group Corporation",
+    "price": 30.285,
+    "exchange": "NYSE",
+    "volume": 4086627,
+    "avgVolume": 4086627,
+    "marketCap": 182565155728
+  },
+  {
+    "symbol": "T",
+    "name": "AT&T Inc.",
+    "price": 25.63,
+    "exchange": "NYSE",
+    "volume": 27174113,
+    "avgVolume": 27174113,
+    "marketCap": 181702590557
+  },
+  {
+    "symbol": "AMGN",
+    "name": "Amgen Inc.",
+    "price": 337.045,
+    "exchange": "NASDAQ",
+    "volume": 1519189,
+    "avgVolume": 1519189,
+    "marketCap": 181492217757
+  },
+  {
+    "symbol": "SCHW",
+    "name": "The Charles Schwab Corporation",
+    "price": 97.43,
+    "exchange": "NYSE",
+    "volume": 6621049,
+    "avgVolume": 6621049,
+    "marketCap": 177225617788
+  },
+  {
+    "symbol": "MUFG",
+    "name": "Mitsubishi UFJ Financial Group, Inc.",
+    "price": 15.51,
+    "exchange": "NYSE",
+    "volume": 2736429,
+    "avgVolume": 2736429,
+    "marketCap": 177125690402
+  },
+  {
+    "symbol": "NEE",
+    "name": "NextEra Energy, Inc.",
+    "price": 85.725,
+    "exchange": "NYSE",
+    "volume": 3345276,
+    "avgVolume": 3345276,
+    "marketCap": 176476056750
+  },
+  {
+    "symbol": "BX",
+    "name": "Blackstone Inc.",
+    "price": 144.54,
+    "exchange": "NYSE",
+    "volume": 2117430,
+    "avgVolume": 2117430,
+    "marketCap": 173460599696
+  },
+  {
+    "symbol": "APH",
+    "name": "Amphenol Corporation",
+    "price": 141.035,
+    "exchange": "NYSE",
+    "volume": 4035007,
+    "avgVolume": 4035007,
+    "marketCap": 172634668571
+  },
+  {
+    "symbol": "VZ",
+    "name": "Verizon Communications Inc.",
+    "price": 40.795,
+    "exchange": "NYSE",
+    "volume": 10347966,
+    "avgVolume": 10347966,
+    "marketCap": 172009077824
+  },
+  {
+    "symbol": "ANET",
+    "name": "Arista Networks, Inc.",
+    "price": 134.585,
+    "exchange": "NYSE",
+    "volume": 3818236,
+    "avgVolume": 3818236,
+    "marketCap": 169401171161
+  },
+  {
+    "symbol": "INTC",
+    "name": "Intel Corporation",
+    "price": 37.93,
+    "exchange": "NASDAQ",
+    "volume": 39663167,
+    "avgVolume": 39663167,
+    "marketCap": 166812714314
+  },
+  {
+    "symbol": "TJX",
+    "name": "The TJX Companies, Inc.",
+    "price": 147.865,
+    "exchange": "NYSE",
+    "volume": 2490626,
+    "avgVolume": 2490626,
+    "marketCap": 164574314872
+  },
+  {
+    "symbol": "SAN",
+    "name": "Banco Santander, S.A.",
+    "price": 11.04,
+    "exchange": "NYSE",
+    "volume": 2540516,
+    "avgVolume": 2540516,
+    "marketCap": 163559845459
+  },
+  {
+    "symbol": "GEV",
+    "name": "GE Vernova Inc.",
+    "price": 578.9155,
+    "exchange": "NYSE",
+    "volume": 1305016,
+    "avgVolume": 1305016,
+    "marketCap": 157071623814
+  },
+  {
+    "symbol": "DHR",
+    "name": "Danaher Corporation",
+    "price": 219.21,
+    "exchange": "NYSE",
+    "volume": 2296013,
+    "avgVolume": 2296013,
+    "marketCap": 157069535784
+  },
+  {
+    "symbol": "ARM",
+    "name": "Arm Holdings plc American Depositary Shares",
+    "price": 148.365,
+    "exchange": "NASDAQ",
+    "volume": 1857624,
+    "avgVolume": 1857624,
+    "marketCap": 156674585378
+  },
+  {
+    "symbol": "BSX",
+    "name": "Boston Scientific Corporation",
+    "price": 104.325,
+    "exchange": "NYSE",
+    "volume": 4355345,
+    "avgVolume": 4355345,
+    "marketCap": 154655765719
+  },
+  {
+    "symbol": "ACN",
+    "name": "Accenture plc",
+    "price": 245.255,
+    "exchange": "NYSE",
+    "volume": 1723002,
+    "avgVolume": 1723002,
+    "marketCap": 153257926946
+  },
+  {
+    "symbol": "GILD",
+    "name": "Gilead Sciences, Inc.",
+    "price": 123.15,
+    "exchange": "NASDAQ",
+    "volume": 3213980,
+    "avgVolume": 3213980,
+    "marketCap": 152789695572
+  },
+  {
+    "symbol": "UL",
+    "name": "Unilever PLC",
+    "price": 61.075,
+    "exchange": "NYSE",
+    "volume": 1621560,
+    "avgVolume": 1621560,
+    "marketCap": 151084916369
+  },
+  {
+    "symbol": "TXN",
+    "name": "Texas Instruments Incorporated",
+    "price": 162.855,
+    "exchange": "NASDAQ",
+    "volume": 3611256,
+    "avgVolume": 3611256,
+    "marketCap": 147973801922
+  },
+  {
+    "symbol": "BA",
+    "name": "The Boeing Company",
+    "price": 194.97,
+    "exchange": "NYSE",
+    "volume": 4194185,
+    "avgVolume": 4194185,
+    "marketCap": 146728966349
+  },
+  {
+    "symbol": "PFE",
+    "name": "Pfizer Inc.",
+    "price": 25.775,
+    "exchange": "NYSE",
+    "volume": 64867076,
+    "avgVolume": 64867076,
+    "marketCap": 146549112153
+  },
+  {
+    "symbol": "ETN",
+    "name": "Eaton Corporation plc",
+    "price": 367.65,
+    "exchange": "NYSE",
+    "volume": 1007084,
+    "avgVolume": 1007084,
+    "marketCap": 142795260000
+  },
+  {
+    "symbol": "COF",
+    "name": "Capital One Financial Corporation",
+    "price": 223.075,
+    "exchange": "NYSE",
+    "volume": 2098981,
+    "avgVolume": 2098981,
+    "marketCap": 141816273935
+  },
+  {
+    "symbol": "PANW",
+    "name": "Palo Alto Networks, Inc.",
+    "price": 211.91,
+    "exchange": "NASDAQ",
+    "volume": 2301130,
+    "avgVolume": 2301130,
+    "marketCap": 141755094896
+  },
+  {
+    "symbol": "ADBE",
+    "name": "Adobe Inc.",
+    "price": 337.83,
+    "exchange": "NASDAQ",
+    "volume": 1761262,
+    "avgVolume": 1761262,
+    "marketCap": 141416654530
+  },
+  {
+    "symbol": "CRWD",
+    "name": "CrowdStrike Holdings, Inc.",
+    "price": 548.29,
+    "exchange": "NASDAQ",
+    "volume": 1012720,
+    "avgVolume": 1012720,
+    "marketCap": 135824175808
+  },
+  {
+    "symbol": "WELL",
+    "name": "Welltower Inc.",
+    "price": 192.26,
+    "exchange": "NYSE",
+    "volume": 1919396,
+    "avgVolume": 1919396,
+    "marketCap": 131953429547
+  },
+  {
+    "symbol": "LOW",
+    "name": "Lowe's Companies, Inc.",
+    "price": 235.26,
+    "exchange": "NYSE",
+    "volume": 1364807,
+    "avgVolume": 1364807,
+    "marketCap": 131938386630
+  },
+  {
+    "symbol": "PGR",
+    "name": "The Progressive Corporation",
+    "price": 221.155,
+    "exchange": "NYSE",
+    "volume": 1748975,
+    "avgVolume": 1748975,
+    "marketCap": 129666425709
+  },
+  {
+    "symbol": "HON",
+    "name": "Honeywell International Inc.",
+    "price": 201.83,
+    "exchange": "NASDAQ",
+    "volume": 1455930,
+    "avgVolume": 1455930,
+    "marketCap": 128139285191
+  },
+  {
+    "symbol": "IBKR",
+    "name": "Interactive Brokers Group, Inc.",
+    "price": 72.46,
+    "exchange": "NASDAQ",
+    "volume": 2748892,
+    "avgVolume": 2748892,
+    "marketCap": 125179422071
+  },
+  {
+    "symbol": "MDT",
+    "name": "Medtronic plc",
+    "price": 96.055,
+    "exchange": "NYSE",
+    "volume": 3114959,
+    "avgVolume": 3114959,
+    "marketCap": 123207480353
+  },
+  {
+    "symbol": "BTI",
+    "name": "British American Tobacco p.l.c.",
+    "price": 55.765,
+    "exchange": "NYSE",
+    "volume": 1635132,
+    "avgVolume": 1635132,
+    "marketCap": 122357917319
+  },
+  {
+    "symbol": "ADI",
+    "name": "Analog Devices, Inc.",
+    "price": 240.505,
+    "exchange": "NASDAQ",
+    "volume": 2444691,
+    "avgVolume": 2444691,
+    "marketCap": 119239904925
+  },
+  {
+    "symbol": "HOOD",
+    "name": "Robinhood Markets, Inc.",
+    "price": 132.45,
+    "exchange": "NASDAQ",
+    "volume": 17311941,
+    "avgVolume": 17311941,
+    "marketCap": 117225220976
+  },
+  {
+    "symbol": "PLD",
+    "name": "Prologis, Inc.",
+    "price": 125.405,
+    "exchange": "NYSE",
+    "volume": 1128265,
+    "avgVolume": 1128265,
+    "marketCap": 116347611335
+  },
+  {
+    "symbol": "RIO",
+    "name": "Rio Tinto Group",
+    "price": 71.2,
+    "exchange": "NYSE",
+    "volume": 1363923,
+    "avgVolume": 1363923,
+    "marketCap": 115605599836
+  },
+  {
+    "symbol": "ANTM",
+    "name": "Elevance Health Inc.",
+    "price": 482.58,
+    "exchange": "NYSE",
+    "volume": 1274535,
+    "avgVolume": 1274535,
+    "marketCap": 114592481640
+  },
+  {
+    "symbol": "STRC",
+    "name": "MicroStrategy Incorporated Variable Rate Series A Perpetual Stretch Preferred Stock",
+    "price": 99.995,
+    "exchange": "NASDAQ",
+    "volume": 1443290,
+    "avgVolume": 1443290,
+    "marketCap": 114223450142
+  },
+  {
+    "symbol": "COP",
+    "name": "ConocoPhillips",
+    "price": 89.375,
+    "exchange": "NYSE",
+    "volume": 3353546,
+    "avgVolume": 3353546,
+    "marketCap": 111348530686
+  },
+  {
+    "symbol": "CEG",
+    "name": "Constellation Energy Corporation",
+    "price": 353.0965,
+    "exchange": "NASDAQ",
+    "volume": 1177057,
+    "avgVolume": 1177057,
+    "marketCap": 110271283795
+  },
+  {
+    "symbol": "BNDX",
+    "name": "Vanguard Total International Bond Index Fund",
+    "price": 49.715,
+    "exchange": "NASDAQ",
+    "volume": 2611541,
+    "avgVolume": 2611541,
+    "marketCap": 109497040267
+  },
+  {
+    "symbol": "IBN",
+    "name": "ICICI Bank Limited",
+    "price": 30.535,
+    "exchange": "NYSE",
+    "volume": 1755695,
+    "avgVolume": 1755695,
+    "marketCap": 109082260025
+  },
+  {
+    "symbol": "KKR",
+    "name": "KKR & Co. Inc.",
+    "price": 122.375,
+    "exchange": "NYSE",
+    "volume": 1815277,
+    "avgVolume": 1815277,
+    "marketCap": 109079323987
+  },
+  {
+    "symbol": "ENB",
+    "name": "Enbridge Inc.",
+    "price": 48.6,
+    "exchange": "NYSE",
+    "volume": 3285766,
+    "avgVolume": 3285766,
+    "marketCap": 105942073133
+  },
+  {
+    "symbol": "BN",
+    "name": "Brookfield Corporation",
+    "price": 46.78,
+    "exchange": "NYSE",
+    "volume": 1991324,
+    "avgVolume": 1991324,
+    "marketCap": 105564829647
+  },
+  {
+    "symbol": "CVS",
+    "name": "CVS Health Corporation",
+    "price": 81.565,
+    "exchange": "NYSE",
+    "volume": 3970146,
+    "avgVolume": 3970146,
+    "marketCap": 103541057950
+  },
+  {
+    "symbol": "NEM",
+    "name": "Newmont Corporation",
+    "price": 93.315,
+    "exchange": "NYSE",
+    "volume": 6669205,
+    "avgVolume": 6669205,
+    "marketCap": 101831205072
+  },
+  {
+    "symbol": "CMCSA",
+    "name": "Comcast Corporation",
+    "price": 27.655,
+    "exchange": "NASDAQ",
+    "volume": 19013157,
+    "avgVolume": 19013157,
+    "marketCap": 100774859768
+  },
+  {
+    "symbol": "SBUX",
+    "name": "Starbucks Corporation",
+    "price": 88.49,
+    "exchange": "NASDAQ",
+    "volume": 7512450,
+    "avgVolume": 7512450,
+    "marketCap": 100588470669
+  },
+  {
+    "symbol": "SO",
+    "name": "The Southern Company",
+    "price": 91.445,
+    "exchange": "NYSE",
+    "volume": 1915607,
+    "avgVolume": 1915607,
+    "marketCap": 100564806375
+  },
+  {
+    "symbol": "BMY",
+    "name": "Bristol-Myers Squibb Company",
+    "price": 49.225,
+    "exchange": "NYSE",
+    "volume": 7547788,
+    "avgVolume": 7547788,
+    "marketCap": 100209942754
+  },
+  {
+    "symbol": "MO",
+    "name": "Altria Group, Inc.",
+    "price": 58.35,
+    "exchange": "NYSE",
+    "volume": 5190245,
+    "avgVolume": 5190245,
+    "marketCap": 97964796855
+  },
+  {
+    "symbol": "GSK",
+    "name": "GSK plc",
+    "price": 48.105,
+    "exchange": "NYSE",
+    "volume": 2511566,
+    "avgVolume": 2511566,
+    "marketCap": 97809447571
+  },
+  {
+    "symbol": "DUK",
+    "name": "Duke Energy Corporation",
+    "price": 123.615,
+    "exchange": "NYSE",
+    "volume": 1634878,
+    "avgVolume": 1634878,
+    "marketCap": 96130592205
+  },
+  {
+    "symbol": "DELL",
+    "name": "Dell Technologies Inc.",
+    "price": 141.69,
+    "exchange": "NYSE",
+    "volume": 4137024,
+    "avgVolume": 4137024,
+    "marketCap": 95267049710
+  },
+  {
+    "symbol": "NKE",
+    "name": "NIKE, Inc.",
+    "price": 64.445,
+    "exchange": "NYSE",
+    "volume": 10309491,
+    "avgVolume": 10309491,
+    "marketCap": 95262175274
+  },
+  {
+    "symbol": "BP",
+    "name": "BP p.l.c.",
+    "price": 36.8041,
+    "exchange": "NYSE",
+    "volume": 5825276,
+    "avgVolume": 5825276,
+    "marketCap": 94339842062
+  },
+  {
+    "symbol": "MMM",
+    "name": "3M Company",
+    "price": 170.2275,
+    "exchange": "NYSE",
+    "volume": 1369088,
+    "avgVolume": 1369088,
+    "marketCap": 90430086581
+  },
+  {
+    "symbol": "MMC",
+    "name": "Marsh & McLennan Companies, Inc.",
+    "price": 182.36,
+    "exchange": "NYSE",
+    "volume": 1052685,
+    "avgVolume": 1052685,
+    "marketCap": 89721554746
+  },
+  {
+    "symbol": "SNOW",
+    "name": "Snowflake Inc.",
+    "price": 268.28,
+    "exchange": "NYSE",
+    "volume": 1850238,
+    "avgVolume": 1850238,
+    "marketCap": 89272823021
+  },
+  {
+    "symbol": "ICE",
+    "name": "Intercontinental Exchange, Inc.",
+    "price": 153.43,
+    "exchange": "NYSE",
+    "volume": 1226836,
+    "avgVolume": 1226836,
+    "marketCap": 87913871657
+  },
+  {
+    "symbol": "BAM",
+    "name": "Brookfield Asset Management Ltd.",
+    "price": 54.46,
+    "exchange": "NYSE",
+    "volume": 1874931,
+    "avgVolume": 1874931,
+    "marketCap": 87817241883
+  },
+  {
+    "symbol": "AEM",
+    "name": "Agnico Eagle Mines Limited",
+    "price": 173.53,
+    "exchange": "NYSE",
+    "volume": 1744969,
+    "avgVolume": 1744969,
+    "marketCap": 87144976385
+  },
+  {
+    "symbol": "AMT",
+    "name": "American Tower Corporation",
+    "price": 184.12,
+    "exchange": "NYSE",
+    "volume": 1422799,
+    "avgVolume": 1422799,
+    "marketCap": 86195225640
+  },
+  {
+    "symbol": "MFG",
+    "name": "Mizuho Financial Group, Inc.",
+    "price": 6.815,
+    "exchange": "NYSE",
+    "volume": 2224158,
+    "avgVolume": 2224158,
+    "marketCap": 85912558147
+  },
+  {
+    "symbol": "SE",
+    "name": "Sea Limited",
+    "price": 143.54,
+    "exchange": "NYSE",
+    "volume": 5152277,
+    "avgVolume": 5152277,
+    "marketCap": 84978533001
+  },
+  {
+    "symbol": "DASH",
+    "name": "DoorDash, Inc.",
+    "price": 196.665,
+    "exchange": "NASDAQ",
+    "volume": 2551380,
+    "avgVolume": 2551380,
+    "marketCap": 84758720836
+  },
+  {
+    "symbol": "ORLY",
+    "name": "O'Reilly Automotive, Inc.",
+    "price": 98.4941,
+    "exchange": "NASDAQ",
+    "volume": 1491126,
+    "avgVolume": 1491126,
+    "marketCap": 83236872227
+  },
+  {
+    "symbol": "PBR",
+    "name": "Petróleo Brasileiro S.A. - Petrobras",
+    "price": 12.885,
+    "exchange": "NYSE",
+    "volume": 19304212,
+    "avgVolume": 19304212,
+    "marketCap": 83035429276
+  },
+  {
+    "symbol": "ITUB",
+    "name": "Itaú Unibanco Holding S.A.",
+    "price": 7.605,
+    "exchange": "NYSE",
+    "volume": 22375230,
+    "avgVolume": 22375230,
+    "marketCap": 81647118896
+  },
+  {
+    "symbol": "UPS",
+    "name": "United Parcel Service, Inc.",
+    "price": 96.205,
+    "exchange": "NYSE",
+    "volume": 3747197,
+    "avgVolume": 3747197,
+    "marketCap": 81618348354
+  },
+  {
+    "symbol": "JCI",
+    "name": "Johnson Controls International plc",
+    "price": 122.785,
+    "exchange": "NYSE",
+    "volume": 2006678,
+    "avgVolume": 2006678,
+    "marketCap": 80348716250
+  },
+  {
+    "symbol": "BCS",
+    "name": "Barclays PLC",
+    "price": 22.465,
+    "exchange": "NYSE",
+    "volume": 4182445,
+    "avgVolume": 4182445,
+    "marketCap": 80017721791
+  },
+  {
+    "symbol": "NET",
+    "name": "Cloudflare, Inc.",
+    "price": 224.87,
+    "exchange": "NYSE",
+    "volume": 1749736,
+    "avgVolume": 1749736,
+    "marketCap": 78765041075
+  },
+  {
+    "symbol": "BK",
+    "name": "The Bank of New York Mellon Corporation",
+    "price": 112.725,
+    "exchange": "NYSE",
+    "volume": 1475351,
+    "avgVolume": 1475351,
+    "marketCap": 78608790135
+  },
+  {
+    "symbol": "NU",
+    "name": "Nu Holdings Ltd.",
+    "price": 16.165,
+    "exchange": "NYSE",
+    "volume": 18268409,
+    "avgVolume": 18268409,
+    "marketCap": 78104238508
+  },
+  {
+    "symbol": "APO",
+    "name": "Apollo Global Management, Inc.",
+    "price": 133.8499,
+    "exchange": "NYSE",
+    "volume": 1906680,
+    "avgVolume": 1906680,
+    "marketCap": 77689265101
+  },
+  {
+    "symbol": "COIN",
+    "name": "Coinbase Global, Inc.",
+    "price": 302.7733,
+    "exchange": "NASDAQ",
+    "volume": 5224272,
+    "avgVolume": 5224272,
+    "marketCap": 77474277214
+  },
+  {
+    "symbol": "MRVL",
+    "name": "Marvell Technology, Inc.",
+    "price": 89.35,
+    "exchange": "NASDAQ",
+    "volume": 7346384,
+    "avgVolume": 7346384,
+    "marketCap": 77042352101
+  },
+  {
+    "symbol": "CRH",
+    "name": "CRH plc",
+    "price": 113.84,
+    "exchange": "NYSE",
+    "volume": 1947091,
+    "avgVolume": 1947091,
+    "marketCap": 76575534712
+  },
+  {
+    "symbol": "GLW",
+    "name": "Corning Incorporated",
+    "price": 88.835,
+    "exchange": "NYSE",
+    "volume": 4361440,
+    "avgVolume": 4361440,
+    "marketCap": 76163575600
+  },
+  {
+    "symbol": "RELX",
+    "name": "RELX Plc",
+    "price": 41.3951,
+    "exchange": "NYSE",
+    "volume": 1437601,
+    "avgVolume": 1437601,
+    "marketCap": 75951009536
+  },
+  {
+    "symbol": "LYG",
+    "name": "Lloyds Banking Group plc",
+    "price": 5.025,
+    "exchange": "NYSE",
+    "volume": 7351668,
+    "avgVolume": 7351668,
+    "marketCap": 75598429977
+  },
+  {
+    "symbol": "ABNB",
+    "name": "Airbnb, Inc.",
+    "price": 121.46,
+    "exchange": "NASDAQ",
+    "volume": 2315081,
+    "avgVolume": 2315081,
+    "marketCap": 75121532196
+  },
+  {
+    "symbol": "CTAS",
+    "name": "Cintas Corporation",
+    "price": 185.305,
+    "exchange": "NASDAQ",
+    "volume": 1026129,
+    "avgVolume": 1026129,
+    "marketCap": 74773039654
+  },
+  {
+    "symbol": "SNPS",
+    "name": "Synopsys, Inc.",
+    "price": 400.72,
+    "exchange": "NASDAQ",
+    "volume": 1105679,
+    "avgVolume": 1105679,
+    "marketCap": 74430786293
+  },
+  {
+    "symbol": "EMR",
+    "name": "Emerson Electric Co.",
+    "price": 132.345,
+    "exchange": "NYSE",
+    "volume": 1561327,
+    "avgVolume": 1561327,
+    "marketCap": 74359781631
+  },
+  {
+    "symbol": "USB",
+    "name": "U.S. Bancorp",
+    "price": 47.795,
+    "exchange": "NYSE",
+    "volume": 2605861,
+    "avgVolume": 2605861,
+    "marketCap": 74294176232
+  },
+  {
+    "symbol": "ATVI",
+    "name": "Activision Blizzard, Inc.",
+    "price": 94.42,
+    "exchange": "NASDAQ",
+    "volume": 7127746,
+    "avgVolume": 7127746,
+    "marketCap": 74289468671
+  },
+  {
+    "symbol": "DB",
+    "name": "Deutsche Bank AG",
+    "price": 38.555,
+    "exchange": "NYSE",
+    "volume": 2061068,
+    "avgVolume": 2061068,
+    "marketCap": 74262824481
+  },
+  {
+    "symbol": "MDLZ",
+    "name": "Mondelez International, Inc.",
+    "price": 57.215,
+    "exchange": "NASDAQ",
+    "volume": 3822030,
+    "avgVolume": 3822030,
+    "marketCap": 73855437777
+  },
+  {
+    "symbol": "WMB",
+    "name": "The Williams Companies, Inc.",
+    "price": 60.31,
+    "exchange": "NYSE",
+    "volume": 3294585,
+    "avgVolume": 3294585,
+    "marketCap": 73651709869
+  },
+  {
+    "symbol": "CI",
+    "name": "Cigna Corporation",
+    "price": 275.29,
+    "exchange": "NYSE",
+    "volume": 1360997,
+    "avgVolume": 1360997,
+    "marketCap": 73537065887
+  },
+  {
+    "symbol": "ELV",
+    "name": "Elevance Health Inc.",
+    "price": 329.98,
+    "exchange": "NYSE",
+    "volume": 1263073,
+    "avgVolume": 1263073,
+    "marketCap": 73334347015
+  },
+  {
+    "symbol": "BHP",
+    "name": "BHP Group Limited",
+    "price": 56.41,
+    "exchange": "NYSE",
+    "volume": 1545073,
+    "avgVolume": 1545073,
+    "marketCap": 71541056022
+  },
+  {
+    "symbol": "INFY",
+    "name": "Infosys Limited",
+    "price": 17.095,
+    "exchange": "NYSE",
+    "volume": 7608420,
+    "avgVolume": 7608420,
+    "marketCap": 70864073527
+  },
+  {
+    "symbol": "RBLX",
+    "name": "Roblox Corporation",
+    "price": 104.22,
+    "exchange": "NYSE",
+    "volume": 2237426,
+    "avgVolume": 2237426,
+    "marketCap": 70743330904
+  },
+  {
+    "symbol": "CVNA",
+    "name": "Carvana Co.",
+    "price": 328.38,
+    "exchange": "NYSE",
+    "volume": 1803936,
+    "avgVolume": 1803936,
+    "marketCap": 70668503000
+  },
+  {
+    "symbol": "AMX",
+    "name": "América Móvil, S.A.B. de C.V.",
+    "price": 23.365,
+    "exchange": "NYSE",
+    "volume": 1357708,
+    "avgVolume": 1357708,
+    "marketCap": 70260312375
+  },
+  {
+    "symbol": "MNST",
+    "name": "Monster Beverage Corporation",
+    "price": 71.005,
+    "exchange": "NASDAQ",
+    "volume": 3277096,
+    "avgVolume": 3277096,
+    "marketCap": 69373231042
+  },
+  {
+    "symbol": "ABB",
+    "name": "ABB Ltd",
+    "price": 37.13,
+    "exchange": "NYSE",
+    "volume": 6388230,
+    "avgVolume": 6388230,
+    "marketCap": 69020585106
+  },
+  {
+    "symbol": "EPD",
+    "name": "Enterprise Products Partners L.P.",
+    "price": 31.495,
+    "exchange": "NYSE",
+    "volume": 2264463,
+    "avgVolume": 2264463,
+    "marketCap": 68217932244
+  },
+  {
+    "symbol": "CNQ",
+    "name": "Canadian Natural Resources Limited",
+    "price": 32.425,
+    "exchange": "NYSE",
+    "volume": 2360407,
+    "avgVolume": 2360407,
+    "marketCap": 67544739773
+  },
+  {
+    "symbol": "GM",
+    "name": "General Motors Company",
+    "price": 72.25,
+    "exchange": "NYSE",
+    "volume": 5141868,
+    "avgVolume": 5141868,
+    "marketCap": 67400098309
+  },
+  {
+    "symbol": "VRT",
+    "name": "Vertiv Holdings Co",
+    "price": 174.59,
+    "exchange": "NYSE",
+    "volume": 3867117,
+    "avgVolume": 3867117,
+    "marketCap": 66750208521
+  },
+  {
+    "symbol": "DDOG",
+    "name": "Datadog, Inc.",
+    "price": 189.39,
+    "exchange": "NASDAQ",
+    "volume": 2897258,
+    "avgVolume": 2897258,
+    "marketCap": 66413042444
+  },
+  {
+    "symbol": "CSX",
+    "name": "CSX Corporation",
+    "price": 35.415,
+    "exchange": "NASDAQ",
+    "volume": 6347608,
+    "avgVolume": 6347608,
+    "marketCap": 65947580297
+  },
+  {
+    "symbol": "AEP",
+    "name": "American Electric Power Company, Inc.",
+    "price": 122.54,
+    "exchange": "NASDAQ",
+    "volume": 1030436,
+    "avgVolume": 1030436,
+    "marketCap": 65586290508
+  },
+  {
+    "symbol": "BDXA",
+    "name": "Becton, Dickinson and Company",
+    "price": 59.24,
+    "exchange": "NYSE",
+    "volume": 6151137,
+    "avgVolume": 6151137,
+    "marketCap": 64578707437
+  },
+  {
+    "symbol": "SMFG",
+    "name": "Sumitomo Mitsui Financial Group, Inc.",
+    "price": 16.715,
+    "exchange": "NYSE",
+    "volume": 1687481,
+    "avgVolume": 1687481,
+    "marketCap": 64456586121
+  },
+  {
+    "symbol": "B",
+    "name": "Barrick Mining Corporation",
+    "price": 37.185,
+    "exchange": "NYSE",
+    "volume": 16410543,
+    "avgVolume": 16410543,
+    "marketCap": 64023785602
+  },
+  {
+    "symbol": "CL",
+    "name": "Colgate-Palmolive Company",
+    "price": 78.86,
+    "exchange": "NYSE",
+    "volume": 3627014,
+    "avgVolume": 3627014,
+    "marketCap": 63571697668
+  },
+  {
+    "symbol": "MSTR",
+    "name": "MicroStrategy Incorporated",
+    "price": 220.97,
+    "exchange": "NASDAQ",
+    "volume": 6652059,
+    "avgVolume": 6652059,
+    "marketCap": 63467494395
+  },
+  {
+    "symbol": "PXD",
+    "name": "Pioneer Natural Resources Company",
+    "price": 269.62,
+    "exchange": "NYSE",
+    "volume": 4426409,
+    "avgVolume": 4426409,
+    "marketCap": 63003455657
+  },
+  {
+    "symbol": "PYPL",
+    "name": "PayPal Holdings, Inc.",
+    "price": 67.0462,
+    "exchange": "NASDAQ",
+    "volume": 7122681,
+    "avgVolume": 7122681,
+    "marketCap": 62731910921
+  },
+  {
+    "symbol": "FTNT",
+    "name": "Fortinet, Inc.",
+    "price": 82.1,
+    "exchange": "NASDAQ",
+    "volume": 2699427,
+    "avgVolume": 2699427,
+    "marketCap": 62720378906
+  },
+  {
+    "symbol": "HDB",
+    "name": "HDFC Bank Limited",
+    "price": 36.435,
+    "exchange": "NYSE",
+    "volume": 2257114,
+    "avgVolume": 2257114,
+    "marketCap": 62249826696
+  },
+  {
+    "symbol": "VMW",
+    "name": "VMware, Inc.",
+    "price": 142.48,
+    "exchange": "NYSE",
+    "volume": 1787198,
+    "avgVolume": 1787198,
+    "marketCap": 61521441480
+  },
+  {
+    "symbol": "EQNR",
+    "name": "Equinor ASA",
+    "price": 24.205,
+    "exchange": "NYSE",
+    "volume": 1609575,
+    "avgVolume": 1609575,
+    "marketCap": 61168164846
+  },
+  {
+    "symbol": "VST",
+    "name": "Vistra Corp.",
+    "price": 179.06,
+    "exchange": "NYSE",
+    "volume": 2730637,
+    "avgVolume": 2730637,
+    "marketCap": 60670092239
+  },
+  {
+    "symbol": "SRE",
+    "name": "Sempra",
+    "price": 92.49,
+    "exchange": "NYSE",
+    "volume": 1393721,
+    "avgVolume": 1393721,
+    "marketCap": 60366513877
+  },
+  {
+    "symbol": "KMI",
+    "name": "Kinder Morgan, Inc.",
+    "price": 27.035,
+    "exchange": "NYSE",
+    "volume": 6282899,
+    "avgVolume": 6282899,
+    "marketCap": 60079404333
+  },
+  {
+    "symbol": "FCX",
+    "name": "Freeport-McMoRan Inc.",
+    "price": 41.835,
+    "exchange": "NYSE",
+    "volume": 7083901,
+    "avgVolume": 7083901,
+    "marketCap": 60072131550
+  },
+  {
+    "symbol": "EOG",
+    "name": "EOG Resources, Inc.",
+    "price": 108.87,
+    "exchange": "NYSE",
+    "volume": 1662317,
+    "avgVolume": 1662317,
+    "marketCap": 59661358023
+  },
+  {
+    "symbol": "STX",
+    "name": "Seagate Technology Holdings plc",
+    "price": 279.7637,
+    "exchange": "NASDAQ",
+    "volume": 2767201,
+    "avgVolume": 2767201,
+    "marketCap": 59449550409
+  },
+  {
+    "symbol": "MPC",
+    "name": "Marathon Petroleum Corporation",
+    "price": 197.71,
+    "exchange": "NYSE",
+    "volume": 1437062,
+    "avgVolume": 1437062,
+    "marketCap": 59432116123
+  },
+  {
+    "symbol": "TFC",
+    "name": "Truist Financial Corporation",
+    "price": 45.625,
+    "exchange": "NYSE",
+    "volume": 5666546,
+    "avgVolume": 5666546,
+    "marketCap": 59276828459
+  },
+  {
+    "symbol": "VCIT",
+    "name": "Vanguard Intermediate-Term Corporate Bond Index Fund",
+    "price": 83.945,
+    "exchange": "NASDAQ",
+    "volume": 5829197,
+    "avgVolume": 5829197,
+    "marketCap": 57937003123
+  },
+  {
+    "symbol": "WDC",
+    "name": "Western Digital Corporation",
+    "price": 165.52,
+    "exchange": "NASDAQ",
+    "volume": 6639788,
+    "avgVolume": 6639788,
+    "marketCap": 57475928013
+  },
+  {
+    "symbol": "ET",
+    "name": "Energy Transfer LP",
+    "price": 16.54,
+    "exchange": "NYSE",
+    "volume": 7641713,
+    "avgVolume": 7641713,
+    "marketCap": 56785746497
+  },
+  {
+    "symbol": "PSX",
+    "name": "Phillips 66",
+    "price": 138.83,
+    "exchange": "NYSE",
+    "volume": 1034196,
+    "avgVolume": 1034196,
+    "marketCap": 55937541172
+  },
+  {
+    "symbol": "WBD",
+    "name": "Warner Bros. Discovery, Inc.",
+    "price": 22.435,
+    "exchange": "NASDAQ",
+    "volume": 11452343,
+    "avgVolume": 11452343,
+    "marketCap": 55586376203
+  },
+  {
+    "symbol": "BDX",
+    "name": "Becton, Dickinson and Company",
+    "price": 191.55,
+    "exchange": "NYSE",
+    "volume": 1759748,
+    "avgVolume": 1759748,
+    "marketCap": 54903491687
+  },
+  {
+    "symbol": "SLB",
+    "name": "SLB N.V.",
+    "price": 36.195,
+    "exchange": "NYSE",
+    "volume": 6292136,
+    "avgVolume": 6292136,
+    "marketCap": 54072565969
+  },
+  {
+    "symbol": "DEO",
+    "name": "Diageo plc",
+    "price": 97.191,
+    "exchange": "NYSE",
+    "volume": 1113638,
+    "avgVolume": 1113638,
+    "marketCap": 54001801664
+  },
+  {
+    "symbol": "ZTS",
+    "name": "Zoetis Inc.",
+    "price": 122.21,
+    "exchange": "NYSE",
+    "volume": 3207667,
+    "avgVolume": 3207667,
+    "marketCap": 53857117683
+  },
+  {
+    "symbol": "SU",
+    "name": "Suncor Energy Inc.",
+    "price": 44.255,
+    "exchange": "NYSE",
+    "volume": 2705430,
+    "avgVolume": 2705430,
+    "marketCap": 53162060375
+  },
+  {
+    "symbol": "VALE",
+    "name": "Vale S.A.",
+    "price": 12.445,
+    "exchange": "NYSE",
+    "volume": 17399042,
+    "avgVolume": 17399042,
+    "marketCap": 53124968855
+  },
+  {
+    "symbol": "ROST",
+    "name": "Ross Stores, Inc.",
+    "price": 163.045,
+    "exchange": "NASDAQ",
+    "volume": 1101973,
+    "avgVolume": 1101973,
+    "marketCap": 53054544954
+  },
+  {
+    "symbol": "MET",
+    "name": "MetLife, Inc.",
+    "price": 80.25,
+    "exchange": "NYSE",
+    "volume": 2272215,
+    "avgVolume": 2272215,
+    "marketCap": 52876643145
+  },
+  {
+    "symbol": "CPNG",
+    "name": "Coupang, Inc.",
+    "price": 28.825,
+    "exchange": "NYSE",
+    "volume": 3104116,
+    "avgVolume": 3104116,
+    "marketCap": 52646773754
+  },
+  {
+    "symbol": "F",
+    "name": "Ford Motor Company",
+    "price": 13.42,
+    "exchange": "NYSE",
+    "volume": 43831506,
+    "avgVolume": 43831506,
+    "marketCap": 52521135896
+  },
+  {
+    "symbol": "O",
+    "name": "Realty Income Corporation",
+    "price": 56.94,
+    "exchange": "NYSE",
+    "volume": 2944303,
+    "avgVolume": 2944303,
+    "marketCap": 52379434259
+  },
+  {
+    "symbol": "D",
+    "name": "Dominion Energy, Inc.",
+    "price": 61.045,
+    "exchange": "NYSE",
+    "volume": 1283231,
+    "avgVolume": 1283231,
+    "marketCap": 52127135262
+  },
+  {
+    "symbol": "SQ",
+    "name": "Block, Inc.",
+    "price": 83.46,
+    "exchange": "NYSE",
+    "volume": 1142032,
+    "avgVolume": 1142032,
+    "marketCap": 51729675689
+  },
+  {
+    "symbol": "NXPI",
+    "name": "NXP Semiconductors N.V.",
+    "price": 203.815,
+    "exchange": "NASDAQ",
+    "volume": 1120333,
+    "avgVolume": 1120333,
+    "marketCap": 51295032307
+  },
+  {
+    "symbol": "EA",
+    "name": "Electronic Arts Inc.",
+    "price": 201.91,
+    "exchange": "NASDAQ",
+    "volume": 1127081,
+    "avgVolume": 1127081,
+    "marketCap": 50357600794
+  },
+  {
+    "symbol": "DFS",
+    "name": "Discover Financial Services",
+    "price": 200.05,
+    "exchange": "NYSE",
+    "volume": 31267850,
+    "avgVolume": 31267850,
+    "marketCap": 50343181050
+  },
+  {
+    "symbol": "EW",
+    "name": "Edwards Lifesciences Corporation",
+    "price": 85.645,
+    "exchange": "NYSE",
+    "volume": 1668298,
+    "avgVolume": 1668298,
+    "marketCap": 50286204558
+  },
+  {
+    "symbol": "FERG",
+    "name": "Ferguson plc",
+    "price": 256.05,
+    "exchange": "NYSE",
+    "volume": 1218412,
+    "avgVolume": 1218412,
+    "marketCap": 50226338604
+  },
+  {
+    "symbol": "RKT",
+    "name": "Rocket Companies, Inc.",
+    "price": 17.69,
+    "exchange": "NYSE",
+    "volume": 19363864,
+    "avgVolume": 19363864,
+    "marketCap": 49956810915
+  },
+  {
+    "symbol": "WPM",
+    "name": "Wheaton Precious Metals Corp.",
+    "price": 108.08,
+    "exchange": "NYSE",
+    "volume": 1281631,
+    "avgVolume": 1281631,
+    "marketCap": 49068573556
+  },
+  {
+    "symbol": "XEL",
+    "name": "Xcel Energy Inc.",
+    "price": 80.42,
+    "exchange": "NASDAQ",
+    "volume": 1512251,
+    "avgVolume": 1512251,
+    "marketCap": 47561661049
+  },
+  {
+    "symbol": "LNG",
+    "name": "Cheniere Energy, Inc.",
+    "price": 213.305,
+    "exchange": "NYSE",
+    "volume": 1265274,
+    "avgVolume": 1265274,
+    "marketCap": 47423092571
+  },
+  {
+    "symbol": "BKR",
+    "name": "Baker Hughes Company",
+    "price": 47.67,
+    "exchange": "NASDAQ",
+    "volume": 3090913,
+    "avgVolume": 3090913,
+    "marketCap": 47039510955
+  },
+  {
+    "symbol": "FAST",
+    "name": "Fastenal Company",
+    "price": 40.825,
+    "exchange": "NASDAQ",
+    "volume": 4012785,
+    "avgVolume": 4012785,
+    "marketCap": 46859292790
+  },
+  {
+    "symbol": "CARR",
+    "name": "Carrier Global Corporation",
+    "price": 55.33,
+    "exchange": "NYSE",
+    "volume": 4095436,
+    "avgVolume": 4095436,
+    "marketCap": 46599467183
+  },
+  {
+    "symbol": "EXC",
+    "name": "Exelon Corporation",
+    "price": 45.8296,
+    "exchange": "NASDAQ",
+    "volume": 4327607,
+    "avgVolume": 4327607,
+    "marketCap": 46312968916
+  },
+  {
+    "symbol": "HES",
+    "name": "Hess Corporation",
+    "price": 148.97,
+    "exchange": "NYSE",
+    "volume": 2871117,
+    "avgVolume": 2871117,
+    "marketCap": 46072102062
+  },
+  {
+    "symbol": "VCSH",
+    "name": "Vanguard Short-Term Corporate Bond Index Fund",
+    "price": 79.745,
+    "exchange": "NASDAQ",
+    "volume": 3938255,
+    "avgVolume": 3938255,
+    "marketCap": 45990725794
+  },
+  {
+    "symbol": "LVS",
+    "name": "Las Vegas Sands Corp.",
+    "price": 66.97,
+    "exchange": "NYSE",
+    "volume": 1977232,
+    "avgVolume": 1977232,
+    "marketCap": 45281388526
+  },
+  {
+    "symbol": "CTVA",
+    "name": "Corteva, Inc.",
+    "price": 66.78,
+    "exchange": "NYSE",
+    "volume": 1633598,
+    "avgVolume": 1633598,
+    "marketCap": 45125382960
+  },
+  {
+    "symbol": "HLN",
+    "name": "Haleon plc",
+    "price": 9.905,
+    "exchange": "NYSE",
+    "volume": 5032814,
+    "avgVolume": 5032814,
+    "marketCap": 44877957680
+  },
+  {
+    "symbol": "TAK",
+    "name": "Takeda Pharmaceutical Company Limited",
+    "price": 14.095,
+    "exchange": "NYSE",
+    "volume": 1579375,
+    "avgVolume": 1579375,
+    "marketCap": 44441008002
+  },
+  {
+    "symbol": "CCIV",
+    "name": "Lucid Group, Inc.",
+    "price": 24.25,
+    "exchange": "NYSE",
+    "volume": 17905570,
+    "avgVolume": 17905570,
+    "marketCap": 44388413664
+  },
+  {
+    "symbol": "JD",
+    "name": "JD.com, Inc.",
+    "price": 31.1999,
+    "exchange": "NASDAQ",
+    "volume": 10227783,
+    "avgVolume": 10227783,
+    "marketCap": 44241617132
+  },
+  {
+    "symbol": "BIDU",
+    "name": "Baidu, Inc.",
+    "price": 128.525,
+    "exchange": "NASDAQ",
+    "volume": 2068071,
+    "avgVolume": 2068071,
+    "marketCap": 43698470825
+  },
+  {
+    "symbol": "KR",
+    "name": "The Kroger Co.",
+    "price": 65.525,
+    "exchange": "NYSE",
+    "volume": 3173875,
+    "avgVolume": 3173875,
+    "marketCap": 43421987613
+  },
+  {
+    "symbol": "OKE",
+    "name": "ONEOK, Inc.",
+    "price": 68.8,
+    "exchange": "NYSE",
+    "volume": 2477591,
+    "avgVolume": 2477591,
+    "marketCap": 43302469499
+  },
+  {
+    "symbol": "SGEN",
+    "name": "Seagen Inc.",
+    "price": 228.74,
+    "exchange": "NASDAQ",
+    "volume": 19392808,
+    "avgVolume": 19392808,
+    "marketCap": 43154776450
+  },
+  {
+    "symbol": "DHI",
+    "name": "D.R. Horton, Inc.",
+    "price": 146.445,
+    "exchange": "NYSE",
+    "volume": 1247935,
+    "avgVolume": 1247935,
+    "marketCap": 43124413781
+  },
+  {
+    "symbol": "ETR",
+    "name": "Entergy Corporation",
+    "price": 96.5,
+    "exchange": "NYSE",
+    "volume": 1018896,
+    "avgVolume": 1018896,
+    "marketCap": 43093171723
+  },
+  {
+    "symbol": "A",
+    "name": "Agilent Technologies, Inc.",
+    "price": 151.985,
+    "exchange": "NYSE",
+    "volume": 1088696,
+    "avgVolume": 1088696,
+    "marketCap": 43091426753
+  },
+  {
+    "symbol": "AU",
+    "name": "AngloGold Ashanti Plc",
+    "price": 85.02,
+    "exchange": "NYSE",
+    "volume": 2854875,
+    "avgVolume": 2854875,
+    "marketCap": 42913371439
+  },
+  {
+    "symbol": "CRWV",
+    "name": "CoreWeave, Inc. Class A Common Stock",
+    "price": 86.02,
+    "exchange": "NASDAQ",
+    "volume": 32076356,
+    "avgVolume": 32076356,
+    "marketCap": 42830197555
+  },
+  {
+    "symbol": "CMG",
+    "name": "Chipotle Mexican Grill, Inc.",
+    "price": 31.145,
+    "exchange": "NYSE",
+    "volume": 20260244,
+    "avgVolume": 20260244,
+    "marketCap": 42014028257
+  },
+  {
+    "symbol": "AIG",
+    "name": "American International Group, Inc.",
+    "price": 77.85,
+    "exchange": "NYSE",
+    "volume": 2204065,
+    "avgVolume": 2204065,
+    "marketCap": 42005995804
+  },
+  {
+    "symbol": "TGT",
+    "name": "Target Corporation",
+    "price": 91.9789,
+    "exchange": "NYSE",
+    "volume": 3455618,
+    "avgVolume": 3455618,
+    "marketCap": 41795133794
+  },
+  {
+    "symbol": "PEG",
+    "name": "Public Service Enterprise Group Incorporated",
+    "price": 83.375,
+    "exchange": "NYSE",
+    "volume": 1225500,
+    "avgVolume": 1225500,
+    "marketCap": 41616961665
+  },
+  {
+    "symbol": "VGIT",
+    "name": "Vanguard Intermediate-Term Treasury Index Fund",
+    "price": 60.175,
+    "exchange": "NASDAQ",
+    "volume": 1554830,
+    "avgVolume": 1554830,
+    "marketCap": 41482041348
+  },
+  {
+    "symbol": "FLUT",
+    "name": "Flutter Entertainment plc",
+    "price": 235,
+    "exchange": "NYSE",
+    "volume": 1490296,
+    "avgVolume": 1490296,
+    "marketCap": 41383426445
+  },
+  {
+    "symbol": "OXY",
+    "name": "Occidental Petroleum Corporation",
+    "price": 41.945,
+    "exchange": "NYSE",
+    "volume": 7289863,
+    "avgVolume": 7289863,
+    "marketCap": 41324651654
+  },
+  {
+    "symbol": "TWTR",
+    "name": "Twitter, Inc. (delisted)",
+    "price": 53.7,
+    "exchange": "NYSE",
+    "volume": 75139089,
+    "avgVolume": 75139089,
+    "marketCap": 41093709770
+  },
+  {
+    "symbol": "CCI",
+    "name": "Crown Castle Inc.",
+    "price": 93.64,
+    "exchange": "NYSE",
+    "volume": 1249987,
+    "avgVolume": 1249987,
+    "marketCap": 40778254496
+  },
+  {
+    "symbol": "TEAM",
+    "name": "Atlassian Corporation",
+    "price": 154.9,
+    "exchange": "NASDAQ",
+    "volume": 1283210,
+    "avgVolume": 1283210,
+    "marketCap": 40648136476
+  },
+  {
+    "symbol": "SNDK",
+    "name": "Sandisk Corporation",
+    "price": 278.99,
+    "exchange": "NASDAQ",
+    "volume": 11306209,
+    "avgVolume": 11306209,
+    "marketCap": 40523161911
+  },
+  {
+    "symbol": "CCJ",
+    "name": "Cameco Corporation",
+    "price": 92.535,
+    "exchange": "NYSE",
+    "volume": 1853580,
+    "avgVolume": 1853580,
+    "marketCap": 40290400255
+  },
+  {
+    "symbol": "CPRT",
+    "name": "Copart, Inc.",
+    "price": 41.615,
+    "exchange": "NASDAQ",
+    "volume": 7117959,
+    "avgVolume": 7117959,
+    "marketCap": 40276427183
+  },
+  {
+    "symbol": "EBAY",
+    "name": "eBay Inc.",
+    "price": 88.32,
+    "exchange": "NASDAQ",
+    "volume": 2988518,
+    "avgVolume": 2988518,
+    "marketCap": 39923049458
+  },
+  {
+    "symbol": "XYZ",
+    "name": "Block, Inc.",
+    "price": 65.465,
+    "exchange": "NYSE",
+    "volume": 3133474,
+    "avgVolume": 3133474,
+    "marketCap": 39780793087
+  },
+  {
+    "symbol": "ALC",
+    "name": "Alcon Inc.",
+    "price": 80.245,
+    "exchange": "NYSE",
+    "volume": 3706382,
+    "avgVolume": 3706382,
+    "marketCap": 39673128000
+  },
+  {
+    "symbol": "DAL",
+    "name": "Delta Air Lines, Inc.",
+    "price": 60.29,
+    "exchange": "NYSE",
+    "volume": 6851035,
+    "avgVolume": 6851035,
+    "marketCap": 39367125283
+  },
+  {
+    "symbol": "GFI",
+    "name": "Gold Fields Limited",
+    "price": 43.035,
+    "exchange": "NYSE",
+    "volume": 4727793,
+    "avgVolume": 4727793,
+    "marketCap": 38517368470
+  },
+  {
+    "symbol": "SOFI",
+    "name": "SoFi Technologies, Inc.",
+    "price": 31.66,
+    "exchange": "NASDAQ",
+    "volume": 76773784,
+    "avgVolume": 76773784,
+    "marketCap": 38178794000
+  },
+  {
+    "symbol": "RDDT",
+    "name": "Reddit, Inc.",
+    "price": 201.38,
+    "exchange": "NYSE",
+    "volume": 2229708,
+    "avgVolume": 2229708,
+    "marketCap": 38160656350
+  },
+  {
+    "symbol": "CLS",
+    "name": "Celestica Inc.",
+    "price": 330.515,
+    "exchange": "NYSE",
+    "volume": 1249682,
+    "avgVolume": 1249682,
+    "marketCap": 38021328790
+  },
+  {
+    "symbol": "EQT",
+    "name": "EQT Corporation",
+    "price": 60.695,
+    "exchange": "NYSE",
+    "volume": 6061463,
+    "avgVolume": 6061463,
+    "marketCap": 37877746565
+  },
+  {
+    "symbol": "NOK",
+    "name": "Nokia Oyj",
+    "price": 6.985,
+    "exchange": "NYSE",
+    "volume": 38640219,
+    "avgVolume": 38640219,
+    "marketCap": 37572978638
+  },
+  {
+    "symbol": "PCG",
+    "name": "Pacific Gas & Electric Co.",
+    "price": 16.795,
+    "exchange": "NYSE",
+    "volume": 10184265,
+    "avgVolume": 10184265,
+    "marketCap": 36913898450
+  },
+  {
+    "symbol": "SYY",
+    "name": "Sysco Corporation",
+    "price": 75.75,
+    "exchange": "NYSE",
+    "volume": 1364034,
+    "avgVolume": 1364034,
+    "marketCap": 36725780312
+  },
+  {
+    "symbol": "KDP",
+    "name": "Keurig Dr Pepper Inc.",
+    "price": 27.015,
+    "exchange": "NASDAQ",
+    "volume": 7491145,
+    "avgVolume": 7491145,
+    "marketCap": 36702123122
+  },
+  {
+    "symbol": "GOLD",
+    "name": "Barrick Gold Corporation",
+    "price": 21.155,
+    "exchange": "NYSE",
+    "volume": 4525764,
+    "avgVolume": 4525764,
+    "marketCap": 36375176300
+  },
+  {
+    "symbol": "HSY",
+    "name": "The Hershey Company",
+    "price": 179.285,
+    "exchange": "NYSE",
+    "volume": 1475780,
+    "avgVolume": 1475780,
+    "marketCap": 36356007705
+  },
+  {
+    "symbol": "CTSH",
+    "name": "Cognizant Technology Solutions Corporation",
+    "price": 73.81,
+    "exchange": "NASDAQ",
+    "volume": 1885645,
+    "avgVolume": 1885645,
+    "marketCap": 36277958364
+  },
+  {
+    "symbol": "OTIS",
+    "name": "Otis Worldwide Corporation",
+    "price": 90.72,
+    "exchange": "NYSE",
+    "volume": 1526062,
+    "avgVolume": 1526062,
+    "marketCap": 35830292652
+  },
+  {
+    "symbol": "CCL",
+    "name": "Carnival Corporation & plc",
+    "price": 27.285,
+    "exchange": "NYSE",
+    "volume": 11732950,
+    "avgVolume": 11732950,
+    "marketCap": 35682581612
+  },
+  {
+    "symbol": "KMB",
+    "name": "Kimberly-Clark Corporation",
+    "price": 104.325,
+    "exchange": "NYSE",
+    "volume": 3928532,
+    "avgVolume": 3928532,
+    "marketCap": 34621129771
+  },
+  {
+    "symbol": "FISV",
+    "name": "Fiserv, Inc.",
+    "price": 64.33,
+    "exchange": "NASDAQ",
+    "volume": 3731855,
+    "avgVolume": 3731855,
+    "marketCap": 34600012148
+  },
+  {
+    "symbol": "FI",
+    "name": "Fiserv, Inc.",
+    "price": 63.8,
+    "exchange": "NYSE",
+    "volume": 8049285,
+    "avgVolume": 8049285,
+    "marketCap": 34314950646
+  },
+  {
+    "symbol": "FIS",
+    "name": "Fidelity National Information Services, Inc.",
+    "price": 66.22,
+    "exchange": "NYSE",
+    "volume": 1885836,
+    "avgVolume": 1885836,
+    "marketCap": 34292077592
+  },
+  {
+    "symbol": "GEHC",
+    "name": "GE HealthCare Technologies Inc.",
+    "price": 74.415,
+    "exchange": "NASDAQ",
+    "volume": 1698891,
+    "avgVolume": 1698891,
+    "marketCap": 33989217642
+  },
+  {
+    "symbol": "EL",
+    "name": "The Estée Lauder Companies Inc.",
+    "price": 92.34,
+    "exchange": "NYSE",
+    "volume": 1846949,
+    "avgVolume": 1846949,
+    "marketCap": 33288671666
+  },
+  {
+    "symbol": "ERIC",
+    "name": "Telefonaktiebolaget LM Ericsson (publ)",
+    "price": 9.96,
+    "exchange": "NASDAQ",
+    "volume": 8850185,
+    "avgVolume": 8850185,
+    "marketCap": 33194335765
+  },
+  {
+    "symbol": "NWG",
+    "name": "NatWest Group plc",
+    "price": 16.405,
+    "exchange": "NYSE",
+    "volume": 1776186,
+    "avgVolume": 1776186,
+    "marketCap": 33179347748
+  },
+  {
+    "symbol": "ANSS",
+    "name": "ANSYS, Inc.",
+    "price": 374.3,
+    "exchange": "NASDAQ",
+    "volume": 18893246,
+    "avgVolume": 18893246,
+    "marketCap": 32906994733
+  },
+  {
+    "symbol": "CVE",
+    "name": "Cenovus Energy Inc.",
+    "price": 18.145,
+    "exchange": "NYSE",
+    "volume": 6508269,
+    "avgVolume": 6508269,
+    "marketCap": 32870860298
+  },
+  {
+    "symbol": "LYV",
+    "name": "Live Nation Entertainment, Inc.",
+    "price": 141.23,
+    "exchange": "NYSE",
+    "volume": 1610019,
+    "avgVolume": 1610019,
+    "marketCap": 32794877635
+  },
+  {
+    "symbol": "VICI",
+    "name": "VICI Properties Inc.",
+    "price": 30.585,
+    "exchange": "NYSE",
+    "volume": 4871039,
+    "avgVolume": 4871039,
+    "marketCap": 32689595782
+  },
+  {
+    "symbol": "CUK",
+    "name": "Carnival Corporation & plc",
+    "price": 24.775,
+    "exchange": "NYSE",
+    "volume": 1034998,
+    "avgVolume": 1034998,
+    "marketCap": 32522953510
+  },
+  {
+    "symbol": "ASX",
+    "name": "ASE Technology Holding Co., Ltd.",
+    "price": 14.955,
+    "exchange": "NYSE",
+    "volume": 3187093,
+    "avgVolume": 3187093,
+    "marketCap": 32388813234
+  },
+  {
+    "symbol": "NRG",
+    "name": "NRG Energy, Inc.",
+    "price": 168.87,
+    "exchange": "NYSE",
+    "volume": 1090424,
+    "avgVolume": 1090424,
+    "marketCap": 32362146829
+  },
+  {
+    "symbol": "EXPE",
+    "name": "Expedia Group, Inc.",
+    "price": 276.3741,
+    "exchange": "NASDAQ",
+    "volume": 1583811,
+    "avgVolume": 1583811,
+    "marketCap": 32338274478
+  },
+  {
+    "symbol": "KVUE",
+    "name": "Kenvue Inc.",
+    "price": 16.855,
+    "exchange": "NYSE",
+    "volume": 20499240,
+    "avgVolume": 20499240,
+    "marketCap": 32302188013
+  },
+  {
+    "symbol": "UAL",
+    "name": "United Airlines Holdings, Inc.",
+    "price": 99.66,
+    "exchange": "NASDAQ",
+    "volume": 4353951,
+    "avgVolume": 4353951,
+    "marketCap": 32263727984
+  },
+  {
+    "symbol": "KGC",
+    "name": "Kinross Gold Corporation",
+    "price": 26.0799,
+    "exchange": "NYSE",
+    "volume": 6352133,
+    "avgVolume": 6352133,
+    "marketCap": 31949860277
+  },
+  {
+    "symbol": "LEN",
+    "name": "Lennar Corporation",
+    "price": 124.81,
+    "exchange": "NYSE",
+    "volume": 2746529,
+    "avgVolume": 2746529,
+    "marketCap": 31829075780
+  },
+  {
+    "symbol": "IR",
+    "name": "Ingersoll Rand Inc.",
+    "price": 78.365,
+    "exchange": "NYSE",
+    "volume": 1479068,
+    "avgVolume": 1479068,
+    "marketCap": 30962826104
+  },
+  {
+    "symbol": "HPE",
+    "name": "Hewlett Packard Enterprise Company",
+    "price": 23.4659,
+    "exchange": "NYSE",
+    "volume": 16854054,
+    "avgVolume": 16854054,
+    "marketCap": 30945122832
+  },
+  {
+    "symbol": "STLA",
+    "name": "Stellantis N.V.",
+    "price": 10.695,
+    "exchange": "NYSE",
+    "volume": 9144538,
+    "avgVolume": 9144538,
+    "marketCap": 30894903308
+  },
+  {
+    "symbol": "VOD",
+    "name": "Vodafone Group Public Limited Company",
+    "price": 12.405,
+    "exchange": "NASDAQ",
+    "volume": 5431557,
+    "avgVolume": 5431557,
+    "marketCap": 30401240276
+  },
+  {
+    "symbol": "MCHP",
+    "name": "Microchip Technology Incorporated",
+    "price": 55.84,
+    "exchange": "NASDAQ",
+    "volume": 3568807,
+    "avgVolume": 3568807,
+    "marketCap": 30083184922
+  },
+  {
+    "symbol": "FOXA",
+    "name": "Fox Corporation",
+    "price": 66.56,
+    "exchange": "NASDAQ",
+    "volume": 1612815,
+    "avgVolume": 1612815,
+    "marketCap": 30052058650
+  },
+  {
+    "symbol": "ORAN",
+    "name": "Orange S.A.",
+    "price": 11.15,
+    "exchange": "NYSE",
+    "volume": 1034345,
+    "avgVolume": 1034345,
+    "marketCap": 29641382643
+  },
+  {
+    "symbol": "CIEN",
+    "name": "Ciena Corporation",
+    "price": 209.17,
+    "exchange": "NYSE",
+    "volume": 1276924,
+    "avgVolume": 1276924,
+    "marketCap": 29564616373
+  },
+  {
+    "symbol": "TSCO",
+    "name": "Tractor Supply Company",
+    "price": 55.82,
+    "exchange": "NASDAQ",
+    "volume": 2585423,
+    "avgVolume": 2585423,
+    "marketCap": 29531660200
+  },
+  {
+    "symbol": "TEVA",
+    "name": "Teva Pharmaceutical Industries Limited",
+    "price": 25.715,
+    "exchange": "NYSE",
+    "volume": 10214878,
+    "avgVolume": 10214878,
+    "marketCap": 29502369719
+  },
+  {
+    "symbol": "JBS",
+    "name": "JBS N.V.",
+    "price": 13.24,
+    "exchange": "NYSE",
+    "volume": 2721357,
+    "avgVolume": 2721357,
+    "marketCap": 29367896447
+  }
+]

@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
 
 export type ToolDefinition = {
   name: ToolName
@@ -15,17 +15,18 @@ export const TOOL_MENU: ToolDefinition[] = [
     description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
     args: {
       metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
-      limit: 'integer 1–10 (defaults to 4)',
+      limit: 'integer 1–20 (defaults to 4)',
     },
     notes: 'Ticker is fixed to AAPL for MVP.',
   },
   {
     name: 'getPrices',
-    description: 'Get AAPL stock price history for recent periods.',
+    description: 'Get AAPL stock price history using custom date ranges.',
     args: {
-      range: '7d | 30d | 90d',
+      from: 'YYYY-MM-DD (required)',
+      to: 'YYYY-MM-DD (optional, defaults to today)',
     },
-    notes: 'Returns daily closing prices. Ticker is fixed to AAPL for MVP.',
+    notes: 'Calculate the from date based on user request (e.g., "last 7 years" = 7 years ago from today). Returns daily closing prices.',
   },
   {
     name: 'getRecentFilings',
@@ -44,63 +45,396 @@ export const TOOL_MENU: ToolDefinition[] = [
     },
     notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
   },
+  {
+    name: 'listMetrics',
+    description: 'Get catalog of all available financial metrics to discover what data is available.',
+    args: {
+      category: 'optional: Valuation | Profitability & Returns | Growth | Leverage & Solvency | Efficiency & Working Capital | Capital Returns & Share Data | Per-Share Metrics | Market Data | Other',
+    },
+    notes: 'Use this when uncertain which metrics are available or to browse metrics by category. Returns metric names, descriptions, units, and common aliases.',
+  },
+  {
+    name: 'getFinancialMetric',
+    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 50+ other metrics.',
+    args: {
+      metricNames: 'array of metric names (canonical or common aliases like "P/E", "ROE", "debt to equity")',
+      limit: 'integer 1–20 (defaults to 5) - number of years to fetch',
+    },
+    notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call.',
+  },
 ]
 
-export const buildToolSelectionPrompt = (userQuestion: string) => `You are a router. Choose exactly one tool from the provided menu and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
+// Static instructions that will be cached by OpenAI
+const TOOL_SELECTION_STATIC_PROMPT = `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
 Available Tools:
-1. getAaplFinancialsByMetric - Use for questions about financial NUMBERS from statements
-   - Income Statement: revenue, gross_profit, net_income, operating_income
-   - Balance Sheet: total_assets, total_liabilities, shareholders_equity
-   - Cash Flow: operating_cash_flow
-   - Per Share: eps
-   - args: {"metric": <one of above>, "limit": 1-10}
 
-2. getPrices - Use for questions about stock price, share price, or market price trends
-   - args: {"range": "7d" | "30d" | "90d"}
+1. getAaplFinancialsByMetric - Financial metrics as NUMBERS over time
 
-3. getRecentFilings - Use to LIST recent filings (metadata: dates, types, links)
-   - args: {"limit": 1-10}
+   SUPPORTED METRICS:
 
-4. searchFilings - Use to answer questions ABOUT filing content (risks, strategy, commentary, business description)
-   - Keywords: "what risks", "what did", "describe", "explain", "strategy", "management said", "business model"
-   - args: {"query": "<user question>", "limit": 5}
+   Raw Metrics:
+   - revenue, gross_profit, net_income, operating_income
+   - total_assets, total_liabilities, shareholders_equity
+   - operating_cash_flow, eps
 
-Rules:
-- Ticker is fixed to AAPL (MVP)
-- Choose the tool that best matches the question
-- Use searchFilings for qualitative content questions, getRecentFilings for listing filings
-- IMPORTANT: Look at conversation history to resolve references like "that", "it", "same period", etc.
-- If user says "What about X?" and previously asked about metric Y over N years, use same N years for metric X
-- If user asks for different timeframe without mentioning metric, use metric from previous question
-- Return ONLY valid JSON, no explanation
+   Calculated Metrics (✨ Native Support):
+   - debt_to_equity_ratio  (total_liabilities / shareholders_equity)
+   - gross_margin          (gross_profit / revenue × 100)
+   - roe                   (net_income / shareholders_equity × 100)
 
-Conversation Context Examples:
-Previous: "AAPL revenue over 5 years"
-Current: "What about net income?" → {"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","limit":5}}
+   METRIC MAPPING (with context clues):
 
-Previous: "Stock price for 30 days"
-Current: "What about 90 days?" → {"tool":"getPrices","args":{"range":"90d"}}
+   Income/Profitability:
+   - "sales", "revenue", "top line" → revenue
+   - "profit", "earnings", "bottom line", "profitability" → net_income
+   - "EPS", "earnings per share" → eps
+   - "operating profit", "EBIT" → operating_income
 
-User question: "${userQuestion}"
+   Valuation Ratios (use getFinancialMetric tool):
+   - "P/E ratio", "PE ratio", "price to earnings" → Use getFinancialMetric tool with metricNames: ["P/E"]
+   - "P/B ratio", "price to book" → Use getFinancialMetric tool with metricNames: ["P/B"]
+   - "PEG ratio" → Use getFinancialMetric tool with metricNames: ["PEG"]
 
-Return ONLY JSON. Examples:
-Financial metrics:
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":4}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps"}}
+   Calculated Ratios (✨ NOW NATIVE - use directly):
+   - "gross margin", "gross profit margin" → gross_margin
+   - "ROE", "return on equity" → roe
+   - "debt to equity", "debt-to-equity", "D/E ratio", "leverage ratio" → debt_to_equity_ratio
 
-Stock prices:
+   Balance Sheet (Raw):
+   - "assets", "total assets" → total_assets
+   - "liabilities", "total debt", "debt" → total_liabilities
+   - "equity", "book value", "shareholders equity" → shareholders_equity
+
+   Cash Flow:
+   - "operating cash flow", "cash from operations", "OCF" → operating_cash_flow
+   - "free cash flow", "FCF", "unlevered free cash flow" → Use getFinancialMetric tool
+   - "capex", "capital expenditures", "buybacks", "dividends paid", "stock-based compensation" → Use getFinancialMetric tool
+
+   Research & Development:
+   - "R&D", "research and development", "R&D spending", "R&D expense" → Use getFinancialMetric tool with metricNames: ["R&D to revenue"] or ["research and development"]
+
+   Other (use closest available):
+   - "margins", "ratios" (when not specific) → operating_income
+
+   LIMIT RULES - CRITICAL:
+
+   1. If question asks for a SPECIFIC YEAR (2020, 2019, 2015, 2006, etc.) → limit: 20
+      Why: We have 20 years (2006-2025). To find any specific year, fetch all.
+      Examples:
+      - "net income in 2020" → limit: 20
+      - "revenue for 2018" → limit: 20
+      - "What was EPS in 2006?" → limit: 20
+
+   2. If question asks for a YEAR RANGE (2008 to 2020, 2015 to present, etc.) → limit: 20
+      Why: Need all data to filter to the specific range.
+      Examples:
+      - "net income 2008 to present" → limit: 20
+      - "revenue from 2015 to 2020" → limit: 20
+      - "EPS between 2010 and 2018" → limit: 20
+
+   3. If question specifies a NUMBER of years, use that EXACT number:
+      "last 3 years" → limit: 3
+      "past 5 years" → limit: 5
+      "last year" or "most recent year" → limit: 1
+      "10 years" → limit: 10
+      "20 years" → limit: 20
+      "2 years" → limit: 2
+
+   4. If question says "trend", "history", "over time" WITHOUT a number → limit: 4
+
+   5. If question says "all", "complete", "full history" → limit: 20
+
+   6. If question is just asking for the metric (no time context) → limit: 4
+
+   Examples:
+   - "net income in 2006" → limit: 20 (specific year)
+   - "revenue over 5 years" → limit: 5 (number specified)
+   - "show me net income trend" → limit: 4 (no number)
+   - "EPS history" → limit: 4 (no number)
+   - "gross profit" → limit: 4 (no number)
+   - "all historical data" → limit: 20 (all data)
+
+   args: {"metric": <exact name>, "limit": <number 1-20>}
+
+2. getPrices - Stock PRICE history
+
+   ALWAYS use custom date ranges. Calculate the "from" date based on the user's request.
+   Today's date is {{TODAY_DATE}} (use this for calculations).
+
+   Date format: YYYY-MM-DD
+   "to" is optional (defaults to today)
+
+   CALCULATION EXAMPLES:
+   - "last 7 days" → args: {"from": "2025-11-01"} (7 days ago)
+   - "past month" → args: {"from": "2025-10-08"} (30 days ago)
+   - "last 3 months" → args: {"from": "2025-08-08"} (90 days ago)
+   - "past year" → args: {"from": "2024-11-08"} (365 days ago)
+   - "YTD" → args: {"from": "2025-01-01"} (start of current year)
+   - "last 3 years" → args: {"from": "2022-11-08"} (3 years ago)
+   - "past 5 years" → args: {"from": "2020-11-08"} (5 years ago)
+   - "last 7 years" → args: {"from": "2018-11-08"} (7 years ago)
+   - "past 10 years" → args: {"from": "2015-11-08"} (10 years ago)
+   - "last 15 years" → args: {"from": "2010-11-08"} (15 years ago)
+   - "past 20 years" → args: {"from": "2005-11-08"} (20 years ago)
+   - "all time" → args: {"from": "2005-11-08"} (20 years ago, max available)
+
+   EXACT DATE RANGES:
+   - "from Jan 2020 to June 2023" → args: {"from": "2020-01-01", "to": "2023-06-30"}
+   - "prices between 2015 and 2020" → args: {"from": "2015-01-01", "to": "2020-12-31"}
+   - "from March 2018 to now" → args: {"from": "2018-03-01"}
+
+   args: {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}  (to is optional)
+
+3. getRecentFilings - LIST SEC filings metadata
+
+   LIMIT RULES:
+
+   1. If question specifies NUMBER of filings → use that number
+      "last 3 filings" → limit: 3
+      "most recent filing" → limit: 1
+      "2 years of filings" → limit: 10 (2 years ≈ 8-10 filings)
+
+   2. If question says "recent", "latest" (no number) → limit: 5
+
+   3. If question says "all", "available", "history" → limit: 10
+
+   Examples:
+   - "recent filings" → limit: 5
+   - "last 3 10-Ks" → limit: 3
+   - "most recent filing" → limit: 1
+   - "all available reports" → limit: 10
+   - "filing history" → limit: 10
+
+   args: {"limit": <number 1-10>}
+
+4. searchFilings - SEARCH filing content
+
+   Use for qualitative questions about:
+   - Risks, strategy, operations, business model
+   - Management commentary, outlook
+   - Products, markets, competition
+   - Governance, compensation
+
+   QUERY RULES:
+   - Extract key terms from user's question
+   - Keep it simple (1-3 words usually best)
+   - Don't need full sentences
+
+   Examples:
+   - "What are the risk factors?" → query: "risk factors"
+   - "Tell me about competition" → query: "competition"
+   - "Search for AI mentions" → query: "AI"
+
+   args: {"query": "<keywords>", "limit": 5}
+
+5. listMetrics - DISCOVER available financial metrics
+
+   Use when:
+   - User asks "what metrics do you have?"
+   - User wants to browse metrics by category
+   - Uncertain which metric name to use for getFinancialMetric
+
+   CATEGORY FILTER (optional):
+   - Valuation: P/E, P/B, EV/EBITDA, market cap, etc.
+   - Profitability & Returns: ROE, ROA, ROIC, margins
+   - Growth: revenue growth, EPS growth, asset growth
+   - Leverage & Solvency: debt ratios, liquidity ratios
+   - Efficiency & Working Capital: turnover ratios, cycle days
+   - Capital Returns & Share Data: dividend yield, payout ratio
+   - Per-Share Metrics: EPS, book value per share, cash per share
+   - Market Data: stock metrics, valuation metrics
+   - Other: miscellaneous metrics
+
+   Examples:
+   - "What valuation metrics do you have?" → {"category": "Valuation"}
+   - "Show me all metrics" → {} (no category)
+   - "What debt metrics are available?" → {"category": "Leverage & Solvency"}
+
+   args: {"category": "<optional category name>"}
+
+6. getFinancialMetric - GET advanced financial metrics (139 metrics available)
+
+   COMPLETE METRIC CATALOG (organized by category):
+
+   Valuation (11):
+   - peRatio, priceToBookRatio, priceToSalesRatio, priceToFreeCashFlowsRatio, earningsYield
+   - marketCap, enterpriseValue, evToSales, evToOperatingCashFlow, evToFreeCashFlow, freeCashFlowYield
+
+   Profitability & Returns (12):
+   - grossProfitMargin, operatingProfitMargin, netProfitMargin, ebitPerRevenue, ebitdaMargin, pretaxProfitMargin
+   - returnOnEquity, returnOnAssets, returnOnCapitalEmployed, roic, ebtPerEbit, netIncomePerEBT
+
+   Growth (32):
+   - revenueGrowth, grossProfitGrowth, operatingIncomeGrowth, netIncomeGrowth, ebitgrowth
+   - epsgrowth, epsdilutedGrowth, operatingCashFlowGrowth, freeCashFlowGrowth
+   - assetGrowth, debtGrowth, inventoryGrowth, receivablesGrowth
+   - dividendsperShareGrowth, bookValueperShareGrowth, weightedAverageSharesGrowth, weightedAverageSharesDilutedGrowth
+   - rdexpenseGrowth, sgaexpensesGrowth
+   - threeYRevenueGrowthPerShare, threeYNetIncomeGrowthPerShare, threeYOperatingCFGrowthPerShare
+   - threeYShareholdersEquityGrowthPerShare, threeYDividendperShareGrowthPerShare
+   - fiveYRevenueGrowthPerShare, fiveYNetIncomeGrowthPerShare, fiveYOperatingCFGrowthPerShare
+   - fiveYShareholdersEquityGrowthPerShare, fiveYDividendperShareGrowthPerShare
+   - tenYRevenueGrowthPerShare, tenYNetIncomeGrowthPerShare, tenYOperatingCFGrowthPerShare
+   - tenYShareholdersEquityGrowthPerShare, tenYDividendperShareGrowthPerShare
+
+   Leverage & Solvency (9):
+   - debtEquityRatio, debtRatio, currentRatio, quickRatio, cashRatio
+   - interestCoverage, longTermDebtToCapitalization, totalDebtToCapitalization, cashFlowToDebtRatio
+
+   Efficiency & Working Capital (7):
+   - assetTurnover, fixedAssetTurnover, inventoryTurnover, receivablesTurnover, payablesTurnover
+   - cashConversionCycle, daysOfInventoryOutstanding, daysOfSalesOutstanding, daysOfPayablesOutstanding
+
+   Cash Flow (2):
+   - freeCashFlow, capitalExpenditure
+
+   Capital Returns & Share Data (5):
+   - dividendYield, payoutRatio, dividendsPaid, commonStockRepurchased, numberOfShares
+
+   Per-Share Metrics (7):
+   - bookValuePerShare, cashPerShare, operatingCashFlowPerShare, freeCashFlowPerShare
+   - netIncomePerShare, revenuePerShare, tangibleBookValuePerShare
+
+   Market Data (1):
+   - stockPrice
+
+   Other (53):
+   - ebitda, stockBasedCompensation, depreciationAndAmortization, workingCapital, effectiveTaxRate
+   - marketCapitalization, enterpriseValueMultiple, enterpriseValueOverEBITDA
+   - pbRatio, pfcfRatio, pocfratio, priceBookValueRatio, priceCashFlowRatio, priceEarningsRatio
+   - priceEarningsToGrowthRatio, priceFairValue, priceSalesRatio, priceToOperatingCashFlowsRatio, ptbRatio
+   - roe, returnOnTangibleAssets
+   - researchAndDdevelopementToRevenue, salesGeneralAndAdministrativeToRevenue, stockBasedCompensationToRevenue
+   - capexPerShare, capexToDepreciation, capexToOperatingCashFlow, capexToRevenue
+   - shareholdersEquityPerShare, tangibleAssetValue, investedCapital
+   - debtToAssets, debtToEquity, netDebtToEBITDA
+   - operatingCashFlowSalesRatio, freeCashFlowOperatingCashFlowRatio
+   - cashFlowCoverageRatios, capitalExpenditureCoverageRatio, dividendPaidAndCapexCoverageRatio, shortTermCoverageRatios
+   - dividendPayoutRatio, interestDebtPerShare
+   - companyEquityMultiplier, intangiblesToTotalAssets
+   - daysOfInventoryOnHand, daysPayablesOutstanding, daysSalesOutstanding, operatingCycle
+   - incomeQuality, grahamNumber, grahamNetNet, netCurrentAssetValue
+   - averageInventory, averagePayables, averageReceivables
+   - addTotalDebt, minusCashAndCashEquivalents
+
+   METRIC NAME FLEXIBILITY:
+   - Accepts canonical names: "peRatio", "returnOnEquity", "debtEquityRatio"
+   - Accepts common aliases: "P/E", "ROE", "debt to equity"
+   - Can handle multiple metrics in one call
+
+   LIMIT RULES (same as getAaplFinancialsByMetric):
+   - Specific year → limit: 20
+   - Number specified → use that number
+   - "trend", "history" → limit: 4
+   - Default → limit: 5
+
+   Examples:
+   - "What's Apple's P/E ratio?" → {"metricNames": ["P/E"], "limit": 5}
+   - "What's the price to book ratio?" → {"metricNames": ["price to book"], "limit": 5}
+   - "Show me ROE trend" → {"metricNames": ["ROE"], "limit": 4}
+   - "What's Apple's free cash flow?" → {"metricNames": ["free cash flow"], "limit": 5}
+   - "How much did Apple spend on buybacks?" → {"metricNames": ["buybacks"], "limit": 5}
+   - "Show me capex trend" → {"metricNames": ["capex"], "limit": 4}
+   - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 5}
+   - "Dividend yield for 2023" → {"metricNames": ["dividend yield"], "limit": 20}
+
+   args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>}
+
+TOOL SELECTION LOGIC:
+
+1. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
+2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
+3. User asks "what metrics available"? → listMetrics
+4. Stock price? → getPrices
+5. List filings? → getRecentFilings
+6. Qualitative content search? → searchFilings
+
+Return ONLY JSON - examples:
+
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
 {"tool":"getPrices","args":{"range":"30d"}}
-{"tool":"getPrices","args":{"range":"90d"}}
-
-List filings (when asking for documents/metadata):
-{"tool":"getRecentFilings","args":{"limit":5}}
-{"tool":"getRecentFilings","args":{"limit":10}}
-
-Search content (when asking WHAT/HOW/WHY about topics):
+{"tool":"getPrices","args":{"range":"ytd"}}
+{"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
-{"tool":"searchFilings","args":{"query":"supply chain risks","limit":5}}
-{"tool":"searchFilings","args":{"query":"competitive position","limit":5}}`
+{"tool":"listMetrics","args":{"category":"Valuation"}}
+{"tool":"listMetrics","args":{}}
+{"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":5}}
+{"tool":"getFinancialMetric","args":{"metricNames":["ROE","debt to equity"],"limit":10}}
+
+CRITICAL EXAMPLES - Advanced Metrics:
+Q: "What is AAPL's debt to equity ratio?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["debt to equity"],"limit":5}}
+
+Q: "Show me P/E ratio trend"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":4}}
+
+Q: "What's the ROE in 2023?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"limit":20}}
+
+Q: "Compare P/E and PEG ratio"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":5}}`
+
+// New function that returns structured messages for caching
+export const buildToolSelectionMessages = (userQuestion: string) => {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0]
+
+  // Replace the placeholder with the actual date
+  const promptWithDate = TOOL_SELECTION_STATIC_PROMPT.replace('{{TODAY_DATE}}', today)
+
+  return [
+    {
+      role: 'system' as const,
+      content: promptWithDate
+    },
+    {
+      role: 'user' as const,
+      content: `User question: "${userQuestion}"`
+    }
+  ]
+}
+
+// Legacy function - kept for backwards compatibility
+export const buildToolSelectionPrompt = (userQuestion: string) => {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0]
+
+  // Replace the placeholder with the actual date
+  const promptWithDate = TOOL_SELECTION_STATIC_PROMPT.replace('{{TODAY_DATE}}', today)
+
+  return `${promptWithDate}
+
+User question: "${userQuestion}"`
+}
+
+export const buildFollowUpQuestionsPrompt = (
+  userQuestion: string,
+  toolUsed: string,
+  answer: string
+) => `Generate 3 relevant follow-up questions based on the user's question and answer.
+
+User's question: "${userQuestion}"
+Tool used: ${toolUsed}
+Answer provided: "${answer}"
+
+Generate 3 concise, natural follow-up questions that would be interesting and relevant for the user to ask next. Each question should:
+- Be directly related to the topic or data discussed
+- Explore different aspects (comparisons, trends, related metrics, time periods)
+- Be specific and actionable
+- Use natural language (not overly formal)
+
+Return ONLY valid JSON with this exact format:
+{"suggestions": ["question 1", "question 2", "question 3"]}
+
+Examples:
+- If they asked about revenue, suggest questions about profit margins, growth rates, or specific years
+- If they asked about a specific year, suggest comparisons to other years or trends
+- If they asked about one metric, suggest related metrics or ratios
+
+No explanations, just the JSON.`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,
@@ -112,12 +446,109 @@ User question: "${userQuestion}"
 Facts (JSON rows):
 ${factsJson}
 
-Instructions:
+CRITICAL VALIDATION RULES - Follow These Exactly:
+
+1. NUMBERS - Use EXACT numbers from the data with proper formatting:
+   - Copy numbers precisely from the facts JSON
+   - Format large dollar amounts with B (billions) or M (millions)
+   - Example: 383285000000 → "$383.3B" (NOT "$383B" or "around $380B")
+   - Format ratios and percentages with 2 decimal places maximum
+   - Example: 34.092882867601105 → "34.09" (NOT "34.092882867601105")
+   - NEVER round significantly or estimate, but do round to 2 decimal places for readability
+   - If a number is 383.285B, say "$383.3B" not "$383B"
+   - For stock prices, ALWAYS add '$' before the price: "$243.85" not "243.85"
+
+2. YEARS - ONLY mention years that appear in the facts:
+   - Before mentioning any year, verify it exists in the facts JSON
+   - If asked about a year NOT in the facts, say: "I don't have data for [year]."
+   - DO NOT extrapolate, estimate, or guess for missing years
+   - Example: If facts have [2024, 2023, 2022, 2021] and user asks for 2020, say "I don't have 2020 data"
+
+3. DATES - Use EXACT dates from the data:
+   - For filings, use the exact filing_date from the facts
+   - For periods, use the exact period_end_date from the facts
+   - NEVER invent or approximate dates
+   - Example: If filing_date is "2024-11-01", say "November 1, 2024" not "November 2024"
+
+4. CITATIONS - Use EXACT filing information:
+   - If mentioning a filing, verify its filing_type and filing_date are in the facts
+   - Example: "According to the 10-K filed November 1, 2024..." (use exact date from data)
+   - NEVER reference filings not present in the facts
+
+5. UNCERTAINTY - Admit when unsure:
+   - If you cannot find specific data in the facts, say so clearly
+   - Better to say "I don't have that information" than to guess
+   - If data seems incomplete, acknowledge it
+
+6. CALCULATIONS - You MUST calculate ratios/percentages from the data when requested:
+
+   IMPORTANT: The facts JSON often includes multiple fields per row to enable ratio calculations.
+   For example, if the metric is "total_liabilities", the JSON will also include "shareholders_equity" and "total_assets".
+   These additional fields are provided specifically so you can calculate ratios. USE THEM.
+
+   STOCK PRICE PERFORMANCE:
+   - If the facts include a "percentChange" field, USE THAT VALUE directly (it's already calculated)
+   - If percentChange is NOT provided, calculate it: ((ending_price - starting_price) / starting_price) × 100
+   - Format: "up X%" or "down X%" with 2 decimal places
+   - Example: percentChange: 790.58 → "up 790.58%"
+   - Example: Start: $243.85, End: $267.93 → ((267.93 - 243.85) / 243.85) × 100 = 9.88% → "up 9.88%"
+
+   ⚠️ REQUIRED FORMAT FOR PRICE PERFORMANCE ANSWERS (STRICTLY ENFORCE):
+
+   SENTENCE 1 (MANDATORY): "Over the last [timeframe], AAPL stock is up (or down) X%."
+   SENTENCE 2 (MANDATORY): "It has gone from $X to $X."
+   SENTENCE 3 (OPTIONAL): "During this period, the stock reached a high of $X and a low of $X."
+
+   Example: "Over the last 10 years, AAPL stock is up 790.58%. It has gone from $30.14 to $268.47. During this period, the stock reached a high of $271.40 and a low of $22.59."
+
+   ❌ WRONG (DO NOT DO THIS): "Over the last 7 years, the data range runs from 2018-11-08 to 2025-11-07, with a start price of $52.12..."
+   ✅ CORRECT: "Over the last 7 years, AAPL stock is up 415.15%. It has gone from $52.12 to $268.47..."
+
+   CRITICAL: The FIRST sentence MUST state the percentage change. Do NOT start with dates, price levels, or "the data range runs from..."
+
+   PROFITABILITY RATIOS:
+   - Gross Margin = (gross_profit / revenue) × 100
+   - Operating Margin = (operating_income / revenue) × 100
+   - Net Margin = (net_income / revenue) × 100
+   - ROE (Return on Equity) = (net_income / shareholders_equity) × 100
+   - ROA (Return on Assets) = (net_income / total_assets) × 100
+
+   LEVERAGE RATIOS:
+   - Debt-to-Equity = total_liabilities / shareholders_equity
+     * When asked for debt-to-equity, look for "value" (total_liabilities) and "shareholders_equity" in each row
+     * Calculate the ratio for each year: value / shareholders_equity
+     * Format as a ratio with 2 decimal places: "3.87" not "3.87234..."
+     * Show dollar amounts in B or M format, and the calculated ratio
+     * Example: "The debt-to-equity ratio in 2025 is 3.87 (total liabilities of $285.5B divided by shareholders' equity of $73.7B)."
+   - Debt-to-Assets = total_liabilities / total_assets
+
+   EFFICIENCY RATIOS:
+   - Asset Turnover = revenue / total_assets
+   - Cash Flow Margin = (operating_cash_flow / revenue) × 100
+
+   - If user asks for a "margin" or "ratio", calculate it from the available data
+   - Show the calculation concisely with formatted numbers
+   - For margins (profitability), show as percentage: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
+   - For ratios (leverage, efficiency), show as decimal: "Debt-to-equity ratio is 3.87 ($285.5B liabilities / $73.7B equity)"
+
+General Instructions:
 - Be concise and clear.
-- FIRST, check if you have all the data requested. If not, START your answer by explaining what data you DO have (e.g., "I have data for the last 10 years (2015-2024), not 15 years as requested.").
-- THEN provide your analysis using the available data.
-- If trend is relevant, describe it (e.g., increasing/decreasing/flat).
+- If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), check if that year exists in the facts:
+  * If the year IS in the facts → provide the data directly and clearly
+  * If the year is NOT in the facts → say "I don't have data for [year]." and stop
+- If the user asks for multiple years or a trend, show all relevant years.
+- If trend is relevant (and the user asked for it), describe it (e.g., increasing/decreasing/flat).
 - Do not invent numbers or sources.
-- Only say "I don't know" if you have ZERO relevant data.`
+- Respond in plain text sentences. Do NOT use Markdown formatting (no bullet lists, bold, italics, tables, or code blocks).
+- When there is only ONE data point, provide a concise single-sentence answer with the year and value. Do NOT mention any chart or table.
+- When there are 2-4 data points AND the user did NOT explicitly ask for a chart/graph, list them briefly in your answer.
+- When there are 2-4 data points AND the user explicitly asked for a chart/graph/visualization, briefly mention the key values and direct them to check the chart below.
+- When more than four data points are relevant, do not list each one. Write at most two sentences: the first calls out the earliest year/value, latest year/value, and any notable high/low WITH the percentage change; the second describes the overall trend and tells the user to check the chart and data table below for the full yearly breakdown.
 
-
+Examples:
+- Question: "What was net income in 2020?" → Answer: "AAPL's net income in 2020 was $57.4 billion." (Only 2020, exact number)
+- Question: "What's the revenue trend?" → Answer: "Revenue increased from $274.5B in 2020 to $383.3B in 2024." (Show trend, exact numbers)
+- Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)
+- Question: "What's the gross margin?" → Answer: "AAPL's gross margin in 2024 is 46.2% (gross profit of $180.7B divided by revenue of $391.0B)." (Calculate ratio from data)
+- Question: "Chart of debt to equity ratio last 5 years" → Answer: "The debt-to-equity ratio decreased from 2.61 in 2022 to 0.11 in 2025; check the chart below for the full trend." (User asked for chart, direct them to it)
+- Question: "Show year to date performance" → Answer: "AAPL is up 9.88% year-to-date, from $243.85 to $267.93 as of the latest date in the data. Check the data table below for the full yearly breakdown." (Calculate percentage, format prices with $, mention trend)`

@@ -18,7 +18,7 @@ export async function addFinancialColumns() {
   `
 
   try {
-    const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql })
+    const { data, error } = await (supabase as any).rpc('exec_sql', { sql_query: sql })
 
     if (error) {
       return {

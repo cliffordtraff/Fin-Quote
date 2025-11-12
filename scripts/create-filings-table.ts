@@ -6,7 +6,7 @@ async function createFilingsTable() {
   console.log('Creating filings table...')
 
   // Drop table if exists (for development)
-  const { error: dropError } = await supabase.rpc('exec_sql', {
+  const { error: dropError } = await (supabase as any).rpc('exec_sql', {
     sql: 'DROP TABLE IF EXISTS filings CASCADE;'
   })
 
@@ -15,7 +15,7 @@ async function createFilingsTable() {
   }
 
   // Create the table using raw SQL
-  const { error: createError } = await supabase.rpc('exec_sql', {
+  const { error: createError } = await (supabase as any).rpc('exec_sql', {
     sql: `
       CREATE TABLE filings (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

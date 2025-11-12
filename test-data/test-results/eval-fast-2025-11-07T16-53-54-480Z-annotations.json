@@ -1,0 +1,12 @@
+{
+  "evaluation_file": "eval-fast-2025-11-07T16-53-54-480Z.json",
+  "timestamp": "2025-11-07T19:22:42.326Z",
+  "annotations": [
+    {
+      "question_id": 13,
+      "action": "update_golden_test",
+      "comment": "AI is better answer I think. But also - do we have \"R&D\" in supabase?",
+      "updated_at": "2025-11-07T19:22:41.819Z"
+    }
+  ]
+}

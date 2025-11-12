@@ -7,9 +7,9 @@ const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
 
 async function fetchFinancials() {
   const endpoints = {
-    incomeStatement: `https://financialmodelingprep.com/api/v3/income-statement/AAPL?limit=10&apikey=${FMP_API_KEY}`,
-    balanceSheet: `https://financialmodelingprep.com/api/v3/balance-sheet-statement/AAPL?limit=10&apikey=${FMP_API_KEY}`,
-    cashFlow: `https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?limit=10&apikey=${FMP_API_KEY}`,
+    incomeStatement: `https://financialmodelingprep.com/api/v3/income-statement/AAPL?limit=20&apikey=${FMP_API_KEY}`,
+    balanceSheet: `https://financialmodelingprep.com/api/v3/balance-sheet-statement/AAPL?limit=20&apikey=${FMP_API_KEY}`,
+    cashFlow: `https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?limit=20&apikey=${FMP_API_KEY}`,
   }
 
   console.log('Fetching AAPL financial data from FMP API...\n')

@@ -1,0 +1,1004 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluation Report - 11/1/2025</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: #2d3748;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .header .subtitle {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      padding: 40px;
+      background: #f7fafc;
+    }
+
+    .metric-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      transition: transform 0.2s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .metric-label {
+      font-size: 14px;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-detail {
+      font-size: 14px;
+      color: #a0aec0;
+      margin-top: 8px;
+    }
+
+    .section {
+      padding: 40px;
+    }
+
+    .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 28px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    th {
+      background: #f7fafc;
+      padding: 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #4a5568;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    td {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:hover {
+      background: #f7fafc;
+    }
+
+    .category-name {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .category-stats {
+      width: 300px;
+    }
+
+    .progress-bar {
+      background: #e2e8f0;
+      height: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+    }
+
+    .category-score {
+      font-weight: 700;
+      font-size: 18px;
+      color: #667eea;
+    }
+
+    .category-count {
+      color: #718096;
+      font-size: 14px;
+    }
+
+    .question-id {
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .question-text {
+      max-width: 400px;
+      color: #2d3748;
+    }
+
+    .issue-type {
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .error-tool {
+      background: #fed7d7;
+      color: #c53030;
+    }
+
+    .error-args {
+      background: #feebc8;
+      color: #c05621;
+    }
+
+    .btn-details {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .btn-details:hover {
+      background: #764ba2;
+    }
+
+    .details-row {
+      background: #f7fafc;
+    }
+
+    .details-content {
+      padding: 24px;
+      background: white;
+      border-radius: 8px;
+      margin: 8px;
+    }
+
+    .detail-section {
+      margin-bottom: 16px;
+    }
+
+    .detail-section strong {
+      color: #4a5568;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
+    code {
+      background: #edf2f7;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      color: #2d3748;
+    }
+
+    pre {
+      background: #edf2f7;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin-top: 8px;
+      color: #2d3748;
+    }
+
+    .error-message {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 4px solid #c53030;
+      margin-top: 16px;
+    }
+
+    .footer {
+      padding: 24px 40px;
+      background: #f7fafc;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      color: #718096;
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .category-stats {
+        width: 100%;
+      }
+
+      .section {
+        padding: 24px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Evaluation Report</h1>
+      <p class="subtitle">Generated: 11/1/2025, 3:10:10 PM</p>
+    </div>
+
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-label">Tool Accuracy</div>
+        <div class="metric-value">95%</div>
+        <div class="metric-detail">95/100 correct</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Args Accuracy</div>
+        <div class="metric-value">83%</div>
+        <div class="metric-detail">83/100 correct</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Overall Score</div>
+        <div class="metric-value">83%</div>
+        <div class="metric-detail">83/100 fully correct</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency</div>
+        <div class="metric-value">837<span style="font-size: 24px;">ms</span></div>
+        <div class="metric-detail">Routing time</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Accuracy by Category</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Progress</th>
+            <th>Score</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+        <tr>
+          <td class="category-name">Financials</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 85.71428571428571%"></div>
+            </div>
+          </td>
+          <td class="category-score">86%</td>
+          <td class="category-count">(12/14)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Prices</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 86.95652173913044%"></div>
+            </div>
+          </td>
+          <td class="category-score">87%</td>
+          <td class="category-count">(20/23)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Search Filings</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 88.88888888888889%"></div>
+            </div>
+          </td>
+          <td class="category-score">89%</td>
+          <td class="category-count">(8/9)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">List Filings</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 88.23529411764706%"></div>
+            </div>
+          </td>
+          <td class="category-score">88%</td>
+          <td class="category-count">(15/17)</td>
+        </tr>
+      
+        <tr>
+          <td class="category-name">Other</td>
+          <td class="category-stats">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 75.67567567567568%"></div>
+            </div>
+          </td>
+          <td class="category-score">76%</td>
+          <td class="category-count">(28/37)</td>
+        </tr>
+      
+        </tbody>
+      </table>
+    </div>
+
+    
+    <div class="section">
+      <h2 class="section-title">Failed Questions (17)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Question</th>
+            <th>Issue</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+        <tr>
+          <td class="question-id">Q7</td>
+          <td class="question-text">"How's the stock doing?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(7)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-7" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getPrices</code><br>
+                <strong>Actual Tool:</strong> <code>getPrices</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "range": "30d"
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "range": "7d"
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q34</td>
+          <td class="question-text">"What does Apple say about iPhone sales?"</td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(34)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-34" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>searchFilings</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "query": "iPhone sales",
+  "limit": 5
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q43</td>
+          <td class="question-text">"What's the price to book ratio?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(43)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-43" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "shareholders_equity",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q44</td>
+          <td class="question-text">"Show dividend payments"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(44)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-44" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "operating_cash_flow",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "operating_income",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q45</td>
+          <td class="question-text">"What's AAPL's market cap?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(45)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-45" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 1
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "shareholders_equity",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q48</td>
+          <td class="question-text">"Compare this quarter to last"</td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(48)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-48" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getPrices</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "range": "90d"
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 2
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q49</td>
+          <td class="question-text">"Show year to date performance"</td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(49)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-49" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getPrices</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "range": "90d"
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q50</td>
+          <td class="question-text">"Historical stock performance"</td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(50)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-50" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getPrices</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "range": "90d"
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q61</td>
+          <td class="question-text">"Cost of revenue history"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(61)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-61" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "gross_profit",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q64</td>
+          <td class="question-text">"What's the quick ratio?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(64)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-64" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "operating_cash_flow",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q68</td>
+          <td class="question-text">"What's inventory turnover?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(68)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-68" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "total_assets",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q79</td>
+          <td class="question-text">"What about services revenue?"</td>
+          <td class="issue-type error-tool">WRONG TOOL</td>
+          <td class="details">
+            <button onclick="toggleDetails(79)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-79" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>searchFilings</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "query": "services revenue",
+  "limit": 5
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "revenue",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q82</td>
+          <td class="question-text">"What filings are available?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(82)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-82" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getRecentFilings</code><br>
+                <strong>Actual Tool:</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "limit": 5
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q87</td>
+          <td class="question-text">"Compare margins over time"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(87)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-87" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getAaplFinancialsByMetric</code><br>
+                <strong>Actual Tool:</strong> <code>getAaplFinancialsByMetric</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "metric": "operating_income",
+  "limit": 4
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "metric": "gross_profit",
+  "limit": 4
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q94</td>
+          <td class="question-text">"Search sustainability report"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(94)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-94" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>searchFilings</code><br>
+                <strong>Actual Tool:</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "query": "sustainability",
+  "limit": 5
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "query": "sustainability report",
+  "limit": 5
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q95</td>
+          <td class="question-text">"Find acquisition mentions"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(95)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-95" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>searchFilings</code><br>
+                <strong>Actual Tool:</strong> <code>searchFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "query": "acquisitions",
+  "limit": 5
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "query": "acquisition",
+  "limit": 5
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        <tr>
+          <td class="question-id">Q100</td>
+          <td class="question-text">"Available reports?"</td>
+          <td class="issue-type error-args">WRONG ARGS</td>
+          <td class="details">
+            <button onclick="toggleDetails(100)" class="btn-details">
+              View Details
+            </button>
+          </td>
+        </tr>
+        <tr id="details-100" class="details-row" style="display: none;">
+          <td colspan="4">
+            <div class="details-content">
+              <div class="detail-section">
+                <strong>Expected Tool:</strong> <code>getRecentFilings</code><br>
+                <strong>Actual Tool:</strong> <code>getRecentFilings</code>
+              </div>
+              <div class="detail-section">
+                <strong>Expected Args:</strong>
+                <pre>{
+  "limit": 10
+}</pre>
+                <strong>Actual Args:</strong>
+                <pre>{
+  "limit": 20
+}</pre>
+              </div>
+              
+            </div>
+          </td>
+        </tr>
+      
+        </tbody>
+      </table>
+    </div>
+    
+
+    <div class="footer">
+      Fin Quote Evaluation Report | Mode: fast | Questions: 100
+    </div>
+  </div>
+
+  <script>
+    function toggleDetails(questionId) {
+      const row = document.getElementById('details-' + questionId);
+      if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+      } else {
+        row.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
+  

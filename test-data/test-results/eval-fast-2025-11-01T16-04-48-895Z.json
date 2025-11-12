@@ -1,0 +1,99 @@
+{
+  "mode": "fast",
+  "timestamp": "2025-11-01T16:04:48.894Z",
+  "total_questions": 5,
+  "correct_tool": 5,
+  "correct_args": 5,
+  "fully_correct": 5,
+  "accuracy": {
+    "tool_selection": 100,
+    "args_selection": 100,
+    "overall": 100
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "expected_tool": "getAaplFinancialsByMetric",
+      "expected_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "actual_tool": "getAaplFinancialsByMetric",
+      "actual_args": {
+        "metric": "revenue",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1135
+    },
+    {
+      "question_id": 2,
+      "question": "Show me the stock price for 30 days",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1156
+    },
+    {
+      "question_id": 3,
+      "question": "What's the price?",
+      "expected_tool": "getPrices",
+      "expected_args": {
+        "range": "30d"
+      },
+      "actual_tool": "getPrices",
+      "actual_args": {
+        "range": "30d"
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1142
+    },
+    {
+      "question_id": 4,
+      "question": "What are AAPL's risk factors?",
+      "expected_tool": "searchFilings",
+      "expected_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "actual_tool": "searchFilings",
+      "actual_args": {
+        "query": "risk factors",
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1257
+    },
+    {
+      "question_id": 5,
+      "question": "Show me recent filings",
+      "expected_tool": "getRecentFilings",
+      "expected_args": {
+        "limit": 5
+      },
+      "actual_tool": "getRecentFilings",
+      "actual_args": {
+        "limit": 5
+      },
+      "tool_match": true,
+      "args_match": true,
+      "overall_correct": true,
+      "routing_latency_ms": 1534
+    }
+  ]
+}

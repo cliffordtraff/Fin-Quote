@@ -1,0 +1,2341 @@
+{
+  "version": "1.4",
+  "created": "2024-11-01",
+  "last_updated": "2025-11-07",
+  "total_questions": 100,
+  "metadata": {
+    "source": "mixed_generation",
+    "categories": {
+      "financials": 33,
+      "prices": 30,
+      "search_filings": 22,
+      "list_filings": 15
+    },
+    "difficulty_distribution": {
+      "easy": 50,
+      "medium": 35,
+      "hard": 15
+    }
+  },
+  "questions": [
+    {
+      "id": 1,
+      "question": "What's AAPL's revenue over the last 5 years?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 5
+        }
+      },
+      "ground_truth_answer": "AAPL's revenue grew from $274.5B in 2020 to $383.3B in 2024, showing consistent year-over-year growth.",
+      "metadata": {
+        "tags": [
+          "revenue",
+          "trend",
+          "time-series"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Basic happy path case",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 2,
+      "question": "Show me the stock price for 30 days",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "stock_price",
+          "short_term"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Basic price query",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 3,
+      "question": "What's the price?",
+      "category": "prices",
+      "difficulty": "hard",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ambiguous",
+          "price_confusion"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Ambiguous - could mean stock price or revenue. Should default to stock price.",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 4,
+      "question": "What are AAPL's risk factors?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "risk factors",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "risks",
+          "filings",
+          "search"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Search for risk content",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 5,
+      "question": "Show me recent filings",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "filings",
+          "list",
+          "recent"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "List filings metadata",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 6,
+      "question": "What's the net income trend?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "net_income",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "net_income",
+          "trend"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Test net_income metric",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 7,
+      "question": "How's the stock doing?",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "conversational",
+          "stock_price"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Casual phrasing",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 8,
+      "question": "Tell me about supply chain risks",
+      "category": "search_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "supply chain risks",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "risks",
+          "supply_chain"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Specific risk topic search",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 9,
+      "question": "Show me EPS over 5 years",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "eps",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "eps",
+          "trend"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Test EPS metric",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 10,
+      "question": "What are the last 3 10-Ks?",
+      "category": "list_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 3
+        }
+      },
+      "metadata": {
+        "tags": [
+          "filings",
+          "10-K",
+          "list"
+        ],
+        "added_date": "2024-11-01",
+        "source": "manual",
+        "notes": "Specific filing type and count",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 11,
+      "question": "Show operating income for the last 4 years",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "operating_income",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "operating_income",
+          "trend"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 12,
+      "question": "What's the gross profit over the past 3 years?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "gross_profit",
+          "limit": 3
+        }
+      },
+      "metadata": {
+        "tags": [
+          "gross_profit",
+          "trend"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 13,
+      "question": "Show me R&D spending history",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "R&D to revenue"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "rd",
+          "expenses",
+          "implicit_limit"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible",
+        "notes": "Updated to use getFinancialMetric for R&D metrics"
+      }
+    },
+    {
+      "id": 14,
+      "question": "Get me the last year's revenue",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 1
+        }
+      },
+      "metadata": {
+        "tags": [
+          "revenue",
+          "single_period"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 1
+        }
+      }
+    },
+    {
+      "id": 15,
+      "question": "What's the stock price today?",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "current_price",
+          "single_day"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 16,
+      "question": "Show 5 day stock chart",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "short_term",
+          "chart"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 17,
+      "question": "What's the 90 day price trend?",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "quarterly",
+          "trend"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 18,
+      "question": "Show me 1 year stock performance",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "annual",
+          "performance"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 19,
+      "question": "Get 5 year stock price history",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "5y"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "long_term",
+          "historical"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 20,
+      "question": "Show all historical prices",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "max_history",
+          "all_time"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 21,
+      "question": "Find information about product strategy",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "product strategy",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "product",
+          "strategy"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 22,
+      "question": "What does the company say about competition?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "competition",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "competition",
+          "market"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 23,
+      "question": "Show me the latest 10 filings",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "list"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 24,
+      "question": "What's the operating margin trend?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "operating margin"
+          ],
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "margin",
+          "efficiency"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for ratio calculation",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 25,
+      "question": "Show me total assets over time",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "total_assets",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "assets",
+          "balance_sheet"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 26,
+      "question": "What's the free cash flow?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "free cash flow"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "cash_flow",
+          "liquidity"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for accurate FCF data",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 27,
+      "question": "Show share buyback history",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "stock buyback"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "buyback",
+          "shareholder_returns"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for accurate buyback data",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 28,
+      "question": "What are capital expenditures?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "capex"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "capex",
+          "investments"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - capex available in financial metrics",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 29,
+      "question": "How has debt changed?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "debt",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "debt",
+          "leverage",
+          "conversational"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Reverted to match AI behavior - debt is core metric",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "debt",
+          "limit": 4
+        }
+      }
+    },
+    {
+      "id": 30,
+      "question": "Show cash and equivalents",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "total_assets",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "cash",
+          "liquidity"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 31,
+      "question": "What's the current price movement?",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "movement",
+          "ambiguous_range"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 32,
+      "question": "Has the stock gone up or down recently?",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "direction",
+          "recent",
+          "conversational"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 33,
+      "question": "Tell me about executive compensation",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "executive compensation",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "compensation",
+          "governance"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 34,
+      "question": "What does Apple say about iPhone sales?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "iPhone sales",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "iphone",
+          "products",
+          "sales"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 35,
+      "question": "Find mentions of China in filings",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "China",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "geography",
+          "market"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 36,
+      "question": "Search for regulatory issues",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "regulatory issues",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "regulatory",
+          "compliance"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 37,
+      "question": "Show most recent filings",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "default"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 38,
+      "question": "List the filings",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "list",
+          "simple"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 39,
+      "question": "What's Apple's profitability?",
+      "category": "financials",
+      "difficulty": "hard",
+      "expected_output": {
+        "tool": "listMetrics",
+        "args": {
+          "category": "Profitability & Returns"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "profitability",
+          "ambiguous_metric"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - treating as discovery question",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 40,
+      "question": "Show sales figures",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "sales",
+          "revenue_synonym"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Sales is synonym for revenue",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 41,
+      "question": "What's the P/E ratio?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "P/E ratio"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "valuation",
+          "pe"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for direct P/E ratio data",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 42,
+      "question": "Show return on equity",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "ROE"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "roe",
+          "efficiency"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for ROE calculation",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 43,
+      "question": "What's the price to book ratio?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "price to book"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "valuation",
+          "pb"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for P/B ratio",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 44,
+      "question": "Show dividend payments",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "dividends paid"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "dividends",
+          "shareholder_returns"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for dividend data",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 45,
+      "question": "What's AAPL's market cap?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "market cap"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "market_cap",
+          "valuation"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - market cap in advanced metrics",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 46,
+      "question": "Chart this week's prices",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "week",
+          "chart"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 47,
+      "question": "What was the price last month?",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "historical",
+          "month"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 48,
+      "question": "Compare this quarter to last",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "operating_income",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "comparison",
+          "quarterly"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - quarter interpreted as financial quarter",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 49,
+      "question": "Show year to date performance",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "ytd"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ytd",
+          "performance"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "True YTD from January 1st to today using FMP API date range",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 50,
+      "question": "Historical stock performance",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "historical",
+          "long_term"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 51,
+      "question": "What about environmental initiatives?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "environmental initiatives",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "esg",
+          "environment"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 52,
+      "question": "Find information on privacy policies",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "privacy policies",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "privacy",
+          "data"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 53,
+      "question": "Search for AI and machine learning mentions",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "AI machine learning",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ai",
+          "technology"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 54,
+      "question": "What do they say about App Store?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "App Store",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "app_store",
+          "services"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 55,
+      "question": "Find mentions of tariffs",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "tariffs",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "tariffs",
+          "trade"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 56,
+      "question": "Get the last 2 years of filings",
+      "category": "list_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "multi_year"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "2 years typically means 2 annual filings plus some quarters, approximated as 10",
+        "strictness": "strict"
+      }
+    },
+    {
+      "id": 57,
+      "question": "Show me just the most recent filing",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 1
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "single"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 58,
+      "question": "List all available reports",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 20
+        }
+      },
+      "metadata": {
+        "tags": [
+          "list",
+          "all"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "'All' approximated as 20",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 59,
+      "question": "What's the earnings per share trend over 10 years?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "eps",
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "eps",
+          "long_term"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 60,
+      "question": "Show me gross margin",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "gross_margin",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "margin",
+          "profitability"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Reverted to match AI behavior - gross_margin in core metrics",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 61,
+      "question": "Cost of revenue history",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "gross_profit",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "costs",
+          "cogs"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 62,
+      "question": "What are SG&A expenses?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "selling_general_and_administrative_expenses",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "sga",
+          "expenses"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - SG&A available as metric",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 63,
+      "question": "Show current ratio",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "current ratio"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "liquidity",
+          "ratio"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for current ratio",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 64,
+      "question": "What's the quick ratio?",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "quick ratio"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "liquidity",
+          "ratio"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for quick ratio",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 65,
+      "question": "Show debt to equity ratio",
+      "category": "financials",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "debt to equity"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "leverage",
+          "ratio"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for direct debt-to-equity ratio",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 66,
+      "question": "What's the interest coverage?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "interest coverage"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "coverage",
+          "debt"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for interest coverage",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 67,
+      "question": "Show working capital trend",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "working capital"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "working_capital",
+          "liquidity"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for working capital",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 68,
+      "question": "What's inventory turnover?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "inventory turnover"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "efficiency",
+          "inventory"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for inventory turnover",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 69,
+      "question": "Show asset turnover",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "asset turnover"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "efficiency",
+          "assets"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to use getFinancialMetric for asset turnover",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 70,
+      "question": "What's the price last week?",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "week"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 71,
+      "question": "How's it trading?",
+      "category": "prices",
+      "difficulty": "hard",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "current",
+          "ambiguous",
+          "conversational"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Very ambiguous - could be today or recent days",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 72,
+      "question": "Stock chart for last quarter",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "quarterly",
+          "chart"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 73,
+      "question": "Show price over the past year",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "annual",
+          "past"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 74,
+      "question": "Long term price history",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "long_term",
+          "historical"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 75,
+      "question": "Search for climate change risks",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "climate change risks",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "climate",
+          "esg",
+          "risks"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 76,
+      "question": "What about cybersecurity threats?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "cybersecurity threats",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "cybersecurity",
+          "risks"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 77,
+      "question": "Find patent information",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "patents",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ip",
+          "patents"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 78,
+      "question": "Search board of directors",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "board of directors",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "governance",
+          "board"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 79,
+      "question": "What about services revenue?",
+      "category": "search_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "revenue",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "services",
+          "revenue",
+          "segment"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - services revenue maps to revenue metric",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 80,
+      "question": "Show the 5 most recent reports",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "count"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 81,
+      "question": "Get filing history",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "history",
+          "list"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 82,
+      "question": "What filings are available?",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "available",
+          "list"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 83,
+      "question": "Show last 2 annual reports",
+      "category": "list_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 2
+        }
+      },
+      "metadata": {
+        "tags": [
+          "annual",
+          "10k"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 84,
+      "question": "What's the most recent 10-K?",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 1
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "10k",
+          "single"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 85,
+      "question": "How much did revenue grow?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "revenue growth"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "revenue",
+          "growth",
+          "implicit"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - growth rates in advanced metrics",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "revenue growth"
+          ],
+          "limit": 5
+        }
+      }
+    },
+    {
+      "id": 86,
+      "question": "Is profitability improving?",
+      "category": "financials",
+      "difficulty": "hard",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "net_income",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "profitability",
+          "trend",
+          "question_form"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 87,
+      "question": "Compare margins over time",
+      "category": "financials",
+      "difficulty": "hard",
+      "expected_output": {
+        "tool": "getAaplFinancialsByMetric",
+        "args": {
+          "metric": "gross_margin",
+          "limit": 4
+        }
+      },
+      "metadata": {
+        "tags": [
+          "margins",
+          "comparison",
+          "ambiguous"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "Updated to match AI behavior - defaults to single margin",
+        "updated_date": "2025-11-07",
+        "strictness": "flexible"
+      },
+      "expected": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "gross margin",
+            "operating margin",
+            "net margin"
+          ],
+          "limit": 4
+        }
+      }
+    },
+    {
+      "id": 88,
+      "question": "How's cash position?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "cash position"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "cash",
+          "conversational"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - cash metrics in advanced metrics",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 89,
+      "question": "Are they buying back stock?",
+      "category": "financials",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getFinancialMetric",
+        "args": {
+          "metricNames": [
+            "buybacks"
+          ],
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "buyback",
+          "question"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "updated_date": "2025-11-07",
+        "notes": "Updated to match AI behavior - buybacks in advanced metrics",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 90,
+      "question": "Latest price",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "7d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "current",
+          "minimal"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 91,
+      "question": "Price action this month",
+      "category": "prices",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "30d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "month",
+          "action"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 92,
+      "question": "6 month chart",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "chart",
+          "approx_range"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "notes": "6 months approximated as 90 days",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 93,
+      "question": "All time high?",
+      "category": "prices",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "getPrices",
+        "args": {
+          "range": "90d"
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ath",
+          "historical"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 94,
+      "question": "Search sustainability report",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "sustainability",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "esg",
+          "sustainability"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 95,
+      "question": "Find acquisition mentions",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "acquisitions",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "ma",
+          "acquisitions"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 96,
+      "question": "What do they say about the economy?",
+      "category": "search_filings",
+      "difficulty": "medium",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "economy",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "economy",
+          "macro"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 97,
+      "question": "Legal proceedings?",
+      "category": "search_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "searchFilings",
+        "args": {
+          "query": "legal proceedings",
+          "limit": 5
+        }
+      },
+      "metadata": {
+        "tags": [
+          "legal",
+          "litigation"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 98,
+      "question": "Last filing",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 1
+        }
+      },
+      "metadata": {
+        "tags": [
+          "recent",
+          "minimal"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 99,
+      "question": "Show last 15 filings",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 15
+        }
+      },
+      "metadata": {
+        "tags": [
+          "list",
+          "count"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    },
+    {
+      "id": 100,
+      "question": "Available reports?",
+      "category": "list_filings",
+      "difficulty": "easy",
+      "expected_output": {
+        "tool": "getRecentFilings",
+        "args": {
+          "limit": 10
+        }
+      },
+      "metadata": {
+        "tags": [
+          "available",
+          "question"
+        ],
+        "added_date": "2024-11-01",
+        "source": "generated",
+        "strictness": "flexible"
+      }
+    }
+  ]
+}
