@@ -160,7 +160,7 @@ Available Tools:
 2. getPrices - Stock PRICE history
 
    ALWAYS use custom date ranges. Calculate the "from" date based on the user's request.
-   Today's date is 2025-11-08 (use this for calculations).
+   Today's date is {{TODAY_DATE}} (use this for calculations).
 
    Date format: YYYY-MM-DD
    "to" is optional (defaults to today)
@@ -378,21 +378,37 @@ Q: "Compare P/E and PEG ratio"
 A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":5}}`
 
 // New function that returns structured messages for caching
-export const buildToolSelectionMessages = (userQuestion: string) => [
-  {
-    role: 'system' as const,
-    content: TOOL_SELECTION_STATIC_PROMPT
-  },
-  {
-    role: 'user' as const,
-    content: `User question: "${userQuestion}"`
-  }
-]
+export const buildToolSelectionMessages = (userQuestion: string) => {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0]
+
+  // Replace the placeholder with the actual date
+  const promptWithDate = TOOL_SELECTION_STATIC_PROMPT.replace('{{TODAY_DATE}}', today)
+
+  return [
+    {
+      role: 'system' as const,
+      content: promptWithDate
+    },
+    {
+      role: 'user' as const,
+      content: `User question: "${userQuestion}"`
+    }
+  ]
+}
 
 // Legacy function - kept for backwards compatibility
-export const buildToolSelectionPrompt = (userQuestion: string) => `${TOOL_SELECTION_STATIC_PROMPT}
+export const buildToolSelectionPrompt = (userQuestion: string) => {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0]
+
+  // Replace the placeholder with the actual date
+  const promptWithDate = TOOL_SELECTION_STATIC_PROMPT.replace('{{TODAY_DATE}}', today)
+
+  return `${promptWithDate}
 
 User question: "${userQuestion}"`
+}
 
 export const buildFollowUpQuestionsPrompt = (
   userQuestion: string,

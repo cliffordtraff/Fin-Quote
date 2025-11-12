@@ -5,11 +5,32 @@ import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
 import SimpleCanvasChart from '@/components/SimpleCanvasChart'
 import FuturesTable from '@/components/FuturesTable'
+import GainersTable from '@/components/GainersTable'
+import LosersTable from '@/components/LosersTable'
+import StocksTable from '@/components/StocksTable'
+import MarketBreadth from '@/components/MarketBreadth'
+import SectorHeatmap from '@/components/SectorHeatmap'
+import VIXCard from '@/components/VIXCard'
+import EconomicCalendar from '@/components/EconomicCalendar'
 import FinancialChart from '@/components/FinancialChart'
 import FollowUpQuestions from '@/components/FollowUpQuestions'
 import ThemeToggle from '@/components/ThemeToggle'
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
 import { getFuturesData } from '@/app/actions/futures'
+import { getGainersData } from '@/app/actions/gainers'
+import { getLosersData } from '@/app/actions/losers'
+import { getStocksData } from '@/app/actions/stocks'
+import { getMarketBreadthData } from '@/app/actions/market-breadth'
+import { getSectorPerformance } from '@/app/actions/sectors'
+import { getVIXData } from '@/app/actions/vix'
+import { getEconomicEvents } from '@/app/actions/economic-calendar'
+import type { GainerData } from '@/app/actions/gainers'
+import type { LoserData } from '@/app/actions/losers'
+import type { StockData } from '@/app/actions/stocks'
+import type { MarketBreadthData } from '@/app/actions/market-breadth'
+import type { SectorData } from '@/app/actions/sectors'
+import type { VIXData } from '@/app/actions/vix'
+import type { EconomicEvent } from '@/app/actions/economic-calendar'
 import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
@@ -45,6 +66,13 @@ export default function Home() {
   const [dowData, setDowData] = useState<MarketData | null>(null)
   const [russellData, setRussellData] = useState<MarketData | null>(null)
   const [futuresData, setFuturesData] = useState<FutureData[]>([])
+  const [gainersData, setGainersData] = useState<GainerData[]>([])
+  const [losersData, setLosersData] = useState<LoserData[]>([])
+  const [stocksData, setStocksData] = useState<StockData[]>([])
+  const [breadthData, setBreadthData] = useState<MarketBreadthData | null>(null)
+  const [sectorsData, setSectorsData] = useState<SectorData[]>([])
+  const [vixData, setVixData] = useState<VIXData | null>(null)
+  const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -100,13 +128,20 @@ export default function Home() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch SPX, Nasdaq, Dow, Russell, and Futures data in parallel
-        const [spxResult, nasdaqResult, dowResult, russellResult, futuresResult] = await Promise.all([
+        // Fetch all market data in parallel
+        const [spxResult, nasdaqResult, dowResult, russellResult, futuresResult, gainersResult, losersResult, stocksResult, breadthResult, sectorsResult, vixResult, economicResult] = await Promise.all([
           getAaplMarketData(),
           getNasdaqMarketData(),
           getDowMarketData(),
           getRussellMarketData(),
-          getFuturesData()
+          getFuturesData(),
+          getGainersData(),
+          getLosersData(),
+          getStocksData(),
+          getMarketBreadthData(),
+          getSectorPerformance(),
+          getVIXData(),
+          getEconomicEvents()
         ])
 
         if ('error' in spxResult) {
@@ -154,6 +189,48 @@ export default function Home() {
         } else {
           setFuturesData(futuresResult.futures)
         }
+
+        if ('error' in gainersResult) {
+          console.error('Gainers data error:', gainersResult.error)
+        } else {
+          setGainersData(gainersResult.gainers)
+        }
+
+        if ('error' in losersResult) {
+          console.error('Losers data error:', losersResult.error)
+        } else {
+          setLosersData(losersResult.losers)
+        }
+
+        if ('error' in stocksResult) {
+          console.error('Stocks data error:', stocksResult.error)
+        } else {
+          setStocksData(stocksResult.stocks)
+        }
+
+        if ('error' in breadthResult) {
+          console.error('Market breadth data error:', breadthResult.error)
+        } else if ('breadth' in breadthResult) {
+          setBreadthData(breadthResult.breadth)
+        }
+
+        if ('error' in sectorsResult) {
+          console.error('Sector performance data error:', sectorsResult.error)
+        } else if ('sectors' in sectorsResult) {
+          setSectorsData(sectorsResult.sectors)
+        }
+
+        if ('error' in vixResult) {
+          console.error('VIX data error:', vixResult.error)
+        } else if ('vix' in vixResult) {
+          setVixData(vixResult.vix)
+        }
+
+        if ('error' in economicResult) {
+          console.error('Economic calendar error:', economicResult.error)
+        } else if ('events' in economicResult) {
+          setEconomicEvents(economicResult.events)
+        }
       } catch (err) {
         setError('Failed to load market data')
         console.error(err)
@@ -163,6 +240,10 @@ export default function Home() {
     }
 
     fetchData()
+
+    // Refresh data every 10 seconds
+    const interval = setInterval(fetchData, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   const formatCurrency = (value: number, decimals: number = 2): string => {
@@ -220,8 +301,9 @@ export default function Home() {
       }
     }
 
-    // Show chatbot
+    // Show chatbot and open sidebar
     setShowChatbot(true)
+    setSidebarOpen(true)
 
     // Focus textarea
     setTimeout(() => {
@@ -391,7 +473,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
-      {!showChatbot && <Navigation />}
+      {!showChatbot && <Navigation onFinchatClick={handleNewChat} />}
 
       {/* Sidebar - fixed position overlay */}
       <div
@@ -439,8 +521,8 @@ export default function Home() {
               <div className="text-red-600 dark:text-red-400">{error}</div>
             </div>
           ) : (
-            <div className="flex flex-col items-center">
-              <div className="flex gap-6">
+            <div className="flex flex-col items-center relative">
+              <div className="flex gap-6 items-start">
             {/* SPX Chart */}
             {spxData && (
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
@@ -608,12 +690,58 @@ export default function Home() {
             )}
             </div>
 
-              {/* Futures Table */}
-              {futuresData.length > 0 && (
-                <div className="mt-[500px] self-start ml-[-50px]">
-                  <FuturesTable futures={futuresData} />
+              {/* Gainers, Losers, VIX, and Sector Performance */}
+              <div className="mt-12 flex gap-8 self-start ml-[-50px]">
+                {/* Gainers Table */}
+                {gainersData.length > 0 && (
+                  <div>
+                    <GainersTable gainers={gainersData} />
+                  </div>
+                )}
+
+                {/* Losers Table */}
+                {losersData.length > 0 && (
+                  <div>
+                    <LosersTable losers={losersData} />
+                  </div>
+                )}
+
+                {/* VIX Card and Stocks Table Column */}
+                <div className="flex flex-col gap-4">
+                  <VIXCard vix={vixData} />
+
+                  {/* Stocks Table */}
+                  {stocksData.length > 0 && (
+                    <div>
+                      <StocksTable stocks={stocksData} />
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Sector Performance Heatmap */}
+                {sectorsData.length > 0 && (
+                  <div style={{ width: '250px' }}>
+                    <SectorHeatmap sectors={sectorsData} />
+                  </div>
+                )}
+              </div>
+
+              {/* Futures Table and Economic Calendar */}
+              <div className="mt-8 flex gap-8 self-start ml-[-50px]">
+                {/* Futures Table */}
+                {futuresData.length > 0 && (
+                  <div>
+                    <FuturesTable futures={futuresData} />
+                  </div>
+                )}
+
+                {/* Economic Calendar */}
+                {economicEvents.length > 0 && (
+                  <div style={{ width: '400px' }}>
+                    <EconomicCalendar events={economicEvents} />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </main>
@@ -625,7 +753,10 @@ export default function Home() {
             <div className="flex justify-end items-center">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setShowChatbot(false)}
+                  onClick={() => {
+                    setShowChatbot(false)
+                    setSidebarOpen(false)
+                  }}
                   className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                 >
                   Back to Charts
