@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
         let answerGenerationStarted = false
         let validationInProgress = false
         let followUpInProgress = false
+        let embeddingTokens = 0
 
         try {
           flow.startStep({
@@ -91,8 +92,6 @@ export async function POST(req: NextRequest) {
           })
 
           // Step 1: Tool selection (non-streaming)
-          sendEvent('status', { step: 'selecting', message: 'Analyzing your question...' })
-
           const toolSelectionStart = Date.now()
 
           // Build messages with caching-friendly structure:
@@ -171,8 +170,6 @@ export async function POST(req: NextRequest) {
           })
 
           // Step 2: Tool execution
-          sendEvent('status', { step: 'fetching', message: `Fetching data using ${toolSelection.tool}...` })
-
           const toolExecutionStart = Date.now()
           let factsJson: string
           let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
@@ -434,6 +431,9 @@ export async function POST(req: NextRequest) {
               return
             }
 
+            // Track embedding tokens for cost analysis
+            embeddingTokens = toolResult.embeddingTokens || 0
+
             factsJson = JSON.stringify(toolResult.data, null, 2)
             dataUsed = { type: 'passages', data: toolResult.data }
           } else if (toolSelection.tool === 'listMetrics') {
@@ -601,7 +601,6 @@ export async function POST(req: NextRequest) {
           sendEvent('data', { dataUsed, chartConfig })
 
           // Step 3: Stream answer generation
-          sendEvent('status', { step: 'generating', message: 'Generating answer...' })
           answerGenerationStarted = true
           flow.startStep({
             step: 'answer_generation',
@@ -744,7 +743,6 @@ export async function POST(req: NextRequest) {
           sendEvent('validation', { results: validationResults })
 
           // Step 5: Generate follow-up questions
-          sendEvent('status', { step: 'suggestions', message: 'Generating suggestions...' })
           flow.startStep({
             step: 'followup_generation',
             group: 'answering',
@@ -853,6 +851,7 @@ export async function POST(req: NextRequest) {
               answerGenerated: normalizedAnswer,
               answerLatencyMs,
               validationResults,
+              embeddingTokens,
             })
           } catch (logError) {
             console.error('Failed to log query:', logError)

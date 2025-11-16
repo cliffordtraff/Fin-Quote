@@ -23,6 +23,7 @@ export async function searchFilings(params: {
 }): Promise<{
   data: FilingPassage[] | null
   error: string | null
+  embeddingTokens?: number
 }> {
   const { query } = params
   const requestedLimit = params.limit ?? 5
@@ -43,6 +44,7 @@ export async function searchFilings(params: {
     })
 
     const queryEmbedding = embeddingResponse.data[0].embedding
+    const embeddingTokens = embeddingResponse.usage?.total_tokens || 0
 
     // Step 2: Detect if user is asking for a specific filing type
     const filingTypeMatch = query.match(/10-[KQ]/i)
@@ -96,7 +98,7 @@ export async function searchFilings(params: {
         fiscal_quarter: chunk.filings.fiscal_quarter,
       }))
 
-      return { data: passages, error: null }
+      return { data: passages, error: null, embeddingTokens }
     }
 
     // Format response from RPC function
@@ -109,7 +111,7 @@ export async function searchFilings(params: {
       fiscal_quarter: chunk.fiscal_quarter,
     }))
 
-    return { data: passages, error: null }
+    return { data: passages, error: null, embeddingTokens }
   } catch (err) {
     console.error('Unexpected error (searchFilings):', err)
     return {

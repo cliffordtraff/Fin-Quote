@@ -93,6 +93,8 @@ export default function Home() {
   const [chatbotLoading, setChatbotLoading] = useState(false)
   const [chatbotError, setChatbotError] = useState('')
   const [dataReceived, setDataReceived] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState<string>('')
+  const [selectedTool, setSelectedTool] = useState<string | null>(null)
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -286,6 +288,8 @@ export default function Home() {
     setChartConfig(null)
     setChatbotError('')
     setQuestion('')
+    setLoadingMessage('')
+    setSelectedTool(null)
 
     // Generate new session ID for fresh conversation
     const newSessionId = crypto.randomUUID()
@@ -325,6 +329,8 @@ export default function Home() {
     setChartConfig(null)
     setFollowUpQuestions([])
     setDataReceived(false)
+    setLoadingMessage('')
+    setSelectedTool(null)
 
     // Create user message
     const userMessage: Message = {
@@ -383,6 +389,50 @@ export default function Home() {
           const data = JSON.parse(dataStr)
 
           switch (eventType) {
+            case 'flow':
+              // Update loading message with detailed flow information
+              const flowEvent = data
+              if (flowEvent.status === 'active') {
+                let message = ''
+                if (flowEvent.step === 'tool_selection') {
+                  message = '🔍 Analyzing question and selecting tool...'
+                } else if (flowEvent.step === 'tool_execution') {
+                  message = `📊 ${flowEvent.summary || 'Fetching data'}...`
+                } else if (flowEvent.step === 'chart_generation') {
+                  message = `📈 ${flowEvent.summary || 'Preparing chart'}...`
+                } else if (flowEvent.step === 'answer_generation') {
+                  // Customize message based on selected tool
+                  if (selectedTool === 'getAaplFinancialsByMetric') {
+                    message = '✍️ Generating answer from financial data...'
+                  } else if (selectedTool === 'getFinancialMetric') {
+                    message = '✍️ Generating answer from financial metrics...'
+                  } else if (selectedTool === 'getPrices') {
+                    message = '✍️ Generating answer from price data...'
+                  } else if (selectedTool === 'searchFilings') {
+                    message = '✍️ Generating answer from SEC filings...'
+                  } else if (selectedTool === 'getRecentFilings') {
+                    message = '✍️ Generating answer from filing metadata...'
+                  } else if (selectedTool === 'listMetrics') {
+                    message = '✍️ Generating answer from metrics catalog...'
+                  } else {
+                    message = '✍️ Generating answer from fetched data...'
+                  }
+                } else if (flowEvent.step === 'validation') {
+                  message = '🔎 Validating answer accuracy...'
+                } else if (flowEvent.step === 'followup_generation') {
+                  message = '💡 Generating follow-up suggestions...'
+                }
+                if (message) {
+                  setLoadingMessage(message)
+                }
+              } else if (flowEvent.status === 'success' && flowEvent.step === 'tool_selection') {
+                // Capture the selected tool and show it prominently
+                const toolName = flowEvent.summary?.replace('Selected ', '') || 'tool'
+                setSelectedTool(toolName)
+                setLoadingMessage(`✓ ${flowEvent.summary}`)
+              }
+              break
+
             case 'data':
               receivedData = data.dataUsed
               receivedChart = data.chartConfig
@@ -807,14 +857,40 @@ export default function Home() {
 
               {/* Loading indicator */}
               {chatbotLoading && !answer && (
-                <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                  <p className="text-gray-600 dark:text-gray-400 text-xl">Analyzing...</p>
+                <div className="space-y-4">
+                  {/* Show selected tool indicator if tool has been chosen */}
+                  {selectedTool && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Using {selectedTool}
+                      </span>
+                    </div>
+                  )}
+                  <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
+                    <p className="text-gray-600 dark:text-gray-400 text-xl">
+                      {loadingMessage || 'Analyzing...'}
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Streaming answer */}
               {chatbotLoading && answer && (
                 <div className="space-y-4">
+                  {/* Show selected tool indicator */}
+                  {selectedTool && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Using {selectedTool}
+                      </span>
+                    </div>
+                  )}
                   <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                     <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
                   </div>
@@ -827,7 +903,17 @@ export default function Home() {
                           <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                           <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Generating chart...</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
+                            ? '📊 Preparing financial chart and data table...'
+                            : selectedTool === 'getPrices'
+                            ? '📈 Preparing price chart...'
+                            : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
+                            ? '📄 Preparing filing data table...'
+                            : selectedTool === 'listMetrics'
+                            ? '📋 Preparing metrics catalog table...'
+                            : '📊 Generating chart and data table...'}
+                        </p>
                       </div>
                     </div>
                   )}

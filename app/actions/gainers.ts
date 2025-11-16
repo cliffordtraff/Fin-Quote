@@ -89,11 +89,21 @@ export async function getGainersData() {
       // Use pre-market scanner (reads from shared cache)
       console.log('[Gainers] Using pre-market scanner')
       const gainers = await deriveGainers('premarket')
+      // Fallback to regular hours if no premarket data
+      if (gainers.length === 0) {
+        console.log('[Gainers] No premarket data, falling back to regular hours')
+        return await fetchRegularHoursGainers()
+      }
       return { gainers }
     } else if (session === 'afterhours') {
       // Use after-hours scanner (reads from shared cache)
       console.log('[Gainers] Using after-hours scanner')
       const gainers = await deriveGainers('afterhours')
+      // Fallback to regular hours if no afterhours data
+      if (gainers.length === 0) {
+        console.log('[Gainers] No afterhours data, falling back to regular hours')
+        return await fetchRegularHoursGainers()
+      }
       return { gainers }
     } else {
       // Regular hours or closed: use dedicated FMP endpoint

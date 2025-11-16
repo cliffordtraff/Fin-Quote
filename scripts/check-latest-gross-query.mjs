@@ -7,13 +7,13 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-console.log('Checking most recent gross margin query...\n')
+console.log('Checking most recent iPhone query...\n')
 
-// Get the most recent query about gross margin
+// Get the most recent query about iPhone
 const { data, error } = await supabase
   .from('query_logs')
   .select('*')
-  .ilike('user_question', '%gross%')
+  .ilike('user_question', '%iphone%')
   .order('created_at', { ascending: false })
   .limit(1)
 
@@ -35,17 +35,33 @@ if (error) {
   console.log('='.repeat(80))
   console.log(query.answer_generated)
 
-  if (query.data_returned && query.data_returned.length > 0) {
+  if (query.data_returned) {
     console.log('\n' + '='.repeat(80))
-    console.log('DATA RETURNED (First 3 rows)')
+    console.log('DATA RETURNED')
     console.log('='.repeat(80))
-    query.data_returned.slice(0, 3).forEach((row, i) => {
-      console.log(`Row ${i + 1}:`)
-      console.log(`  Year: ${row.year}`)
-      console.log(`  Revenue: $${(row.revenue / 1e9).toFixed(1)}B`)
-      console.log(`  Gross Profit: $${(row.gross_profit / 1e9).toFixed(1)}B`)
-      console.log(`  Gross Margin: ${((row.gross_profit / row.revenue) * 100).toFixed(1)}%`)
-    })
+
+    const data = query.data_returned
+    let passages = []
+
+    if (data.type === 'passages' && data.data) {
+      passages = data.data
+    } else if (Array.isArray(data)) {
+      passages = data
+    }
+
+    if (passages.length > 0) {
+      console.log(`Total passages: ${passages.length}\n`)
+      passages.forEach((passage, i) => {
+        console.log(`--- Passage ${i + 1} ---`)
+        console.log(`Filing: ${passage.filing_type} (${passage.filing_date})`)
+        console.log(`Fiscal Year: ${passage.fiscal_year}${passage.fiscal_quarter ? ' Q' + passage.fiscal_quarter : ''}`)
+        console.log(`Section: ${passage.section_name}`)
+        console.log(`Text: ${passage.chunk_text}`)
+        console.log('')
+      })
+    } else {
+      console.log('No passages found')
+    }
   }
 
   if (query.validation_results) {
@@ -83,5 +99,5 @@ if (error) {
     console.log('\nNo validation results found.')
   }
 } else {
-  console.log('No queries found containing "gross"')
+  console.log('No queries found containing "iphone"')
 }

@@ -344,7 +344,25 @@ export async function askQuestion(
     let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
     let chartConfig: ChartConfig | null = null
 
-    if (toolSelection.tool === 'getAaplFinancialsByMetric') {
+    if (toolSelection.tool === 'answerFromContext') {
+      // No tool execution needed - answer using only previous context
+      // Set empty facts since we're relying on previousToolResults passed to answer generation
+      factsJson = JSON.stringify({
+        note: 'No new data fetched. Answer based on previous conversation context only.'
+      })
+
+      // Create a minimal dataUsed from previous context (for logging purposes)
+      // Use the most recent previous tool data if available
+      if (previousToolResults && previousToolResults.length > 0) {
+        const mostRecent = previousToolResults[previousToolResults.length - 1]
+        dataUsed = mostRecent.toolData as any
+      } else {
+        // Fallback if no previous results available (shouldn't happen if tool selection worked correctly)
+        dataUsed = { type: 'financials', data: [] }
+      }
+
+      console.log('💭 Answering from context only - no new data fetched')
+    } else if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
       const metric = toolSelection.args.metric as FinancialMetric
       const validMetrics: FinancialMetric[] = [

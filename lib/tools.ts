@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric' | 'answerFromContext'
 
 export type ToolDefinition = {
   name: ToolName
@@ -61,6 +61,12 @@ export const TOOL_MENU: ToolDefinition[] = [
       limit: 'integer 1–20 (defaults to 5) - number of years to fetch',
     },
     notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call.',
+  },
+  {
+    name: 'answerFromContext',
+    description: 'Answer using ONLY previous conversation context without fetching new data.',
+    args: {},
+    notes: 'Use this when the question is ABOUT a previous answer (e.g., "where did you get that?", "what was the source?", "you got this from the 10-K?"). Do NOT use if question requires NEW data.',
   },
 ]
 
@@ -365,14 +371,28 @@ Available Tools:
 
 TOOL SELECTION LOGIC:
 
-1. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
-2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
-3. User asks "what metrics available"? → listMetrics
-4. Stock price? → getPrices
-5. Filing metadata ONLY (when/which filings)? → getRecentFilings
-6. Filing CONTENT (what they say, quotes, topics)? → searchFilings
+1. Question ABOUT previous answer (not requesting new data)? → answerFromContext
+2. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
+3. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
+4. User asks "what metrics available"? → listMetrics
+5. Stock price? → getPrices
+6. Filing metadata ONLY (when/which filings)? → getRecentFilings
+7. Filing CONTENT (what they say, quotes, topics)? → searchFilings
 
-⚠️ KEY DISTINCTION for #5 vs #6:
+⚠️ CRITICAL: Use answerFromContext (#1) for:
+- "Where did you get that?" / "What was the source?"
+- "You got this from the 10-K?" / "Is this from their filing?"
+- "Can you clarify what you just said?"
+- "What did you mean by [something from previous answer]?"
+→ These ask ABOUT the previous answer, not for NEW data
+
+DO NOT use answerFromContext for:
+- "What about last year?" (needs NEW data for different year)
+- "How does that compare to competitors?" (needs NEW data)
+- "What about Mac sales?" (needs NEW data for different product)
+→ These need actual data fetching
+
+⚠️ KEY DISTINCTION for #6 vs #7:
 - "When was the latest 10-K filed?" → getRecentFilings (metadata)
 - "What does the latest 10-K say about risks?" → searchFilings (content)
 - "Show me recent filings" → getRecentFilings (metadata)
@@ -381,13 +401,13 @@ TOOL SELECTION LOGIC:
 
 Return ONLY JSON - examples:
 
+{"tool":"answerFromContext","args":{}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
-{"tool":"getPrices","args":{"range":"30d"}}
-{"tool":"getPrices","args":{"range":"ytd"}}
+{"tool":"getPrices","args":{"from":"2018-11-15"}}
+{"tool":"getPrices","args":{"from":"2025-01-01","to":"2025-11-15"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
-{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
 {"tool":"searchFilings","args":{"query":"AI strategy","limit":5}}
 {"tool":"listMetrics","args":{"category":"Valuation"}}

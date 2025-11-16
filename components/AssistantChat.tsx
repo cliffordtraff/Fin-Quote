@@ -48,6 +48,35 @@ export default function AssistantChat({
 
         let streamedAnswer = ''
         let accumulatedChunk = ''
+        let currentStatus = ''
+        const completedSteps: string[] = []
+        let isAnswering = false
+
+        const updateDisplay = () => {
+          let message = ''
+
+          // Show completed steps
+          if (completedSteps.length > 0) {
+            message = completedSteps.join('\n') + '\n\n'
+          }
+
+          // Show current status if we haven't started answering
+          if (!isAnswering && currentStatus) {
+            message += `*${currentStatus}*`
+          }
+
+          // Show answer if we've started
+          if (isAnswering && streamedAnswer) {
+            message += '---\n\n' + streamedAnswer
+          }
+
+          if (message) {
+            runtime.append({
+              role: 'assistant',
+              content: [{ type: 'text', text: message }],
+            })
+          }
+        }
 
         const processChunk = (eventText: string) => {
           if (!eventText.trim()) return
@@ -60,13 +89,44 @@ export default function AssistantChat({
           try {
             const data = JSON.parse(dataStr)
 
-            if (eventType === 'answer') {
+            if (eventType === 'flow') {
+              const step = data.step
+              const status = data.status
+              const summary = data.summary || ''
+
+              if (status === 'active') {
+                // Update current status for active steps
+                if (step === 'tool_selection') {
+                  currentStatus = '🔍 Analyzing question and selecting tool...'
+                } else if (step === 'tool_execution') {
+                  currentStatus = `📊 ${summary}...`
+                } else if (step === 'chart_generation') {
+                  currentStatus = `📈 ${summary}...`
+                } else if (step === 'answer_generation') {
+                  currentStatus = '✍️ Generating answer from fetched data...'
+                } else if (step === 'validation') {
+                  currentStatus = '🔎 Validating answer accuracy...'
+                } else if (step === 'followup_generation') {
+                  currentStatus = '💡 Generating follow-up suggestions...'
+                }
+                updateDisplay()
+              } else if (status === 'success') {
+                // Add to completed steps
+                const icon = '✓'
+                completedSteps.push(`${icon} ${summary}`)
+                currentStatus = ''
+                updateDisplay()
+              } else if (status === 'warning') {
+                // Add warning to completed steps
+                completedSteps.push(`⚠️ ${summary}`)
+                currentStatus = ''
+                updateDisplay()
+              }
+            } else if (eventType === 'answer') {
+              isAnswering = true
               streamedAnswer += data.content ?? ''
-              // Append to the assistant's message in the thread
-              runtime.append({
-                role: 'assistant',
-                content: [{ type: 'text', text: streamedAnswer }],
-              })
+              currentStatus = ''
+              updateDisplay()
             }
           } catch (e) {
             console.error('Failed to parse event data:', e)

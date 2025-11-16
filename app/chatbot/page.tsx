@@ -235,6 +235,7 @@ export default function AskPage() {
   const [loading, setLoading] = useState(false)
   const [loadingStep, setLoadingStep] = useState<'analyzing' | 'selecting' | 'calling' | 'fetching' | 'calculating' | 'generating' | null>(null)
   const [loadingMessage, setLoadingMessage] = useState<string>('')
+  const [selectedTool, setSelectedTool] = useState<string | null>(null)
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string>('')
@@ -492,6 +493,8 @@ export default function AskPage() {
     setLoading(true)
     setError('')
     setAnswer('')
+    setSelectedTool(null) // Reset selected tool for new question
+    setLoadingMessage('') // Reset loading message
     setDataUsed(null)
     setChartConfig(null)
     setFollowUpQuestions([])
@@ -578,13 +581,53 @@ export default function AskPage() {
           const data = JSON.parse(dataStr)
 
           switch (eventType) {
-            case 'status':
-              setLoadingStep(data.step)
-              setLoadingMessage(data.message)
-              break
-
             case 'flow':
               updateFlowEvent(data as FlowEvent)
+              // Update loading message with detailed flow information
+              const flowEvent = data as FlowEvent
+              if (flowEvent.status === 'active') {
+                let message = ''
+                if (flowEvent.step === 'tool_selection') {
+                  message = '🔍 Analyzing question and selecting tool...'
+                  setLoadingStep('analyzing')
+                } else if (flowEvent.step === 'tool_execution') {
+                  message = `📊 ${flowEvent.summary || 'Fetching data'}...`
+                  setLoadingStep('fetching')
+                } else if (flowEvent.step === 'chart_generation') {
+                  message = `📈 ${flowEvent.summary || 'Preparing chart'}...`
+                  setLoadingStep('calculating')
+                } else if (flowEvent.step === 'answer_generation') {
+                  // Customize message based on selected tool
+                  if (selectedTool === 'getAaplFinancialsByMetric') {
+                    message = '✍️ Generating answer from financial data...'
+                  } else if (selectedTool === 'getFinancialMetric') {
+                    message = '✍️ Generating answer from financial metrics...'
+                  } else if (selectedTool === 'getPrices') {
+                    message = '✍️ Generating answer from price data...'
+                  } else if (selectedTool === 'searchFilings') {
+                    message = '✍️ Generating answer from SEC filings...'
+                  } else if (selectedTool === 'getRecentFilings') {
+                    message = '✍️ Generating answer from filing metadata...'
+                  } else if (selectedTool === 'listMetrics') {
+                    message = '✍️ Generating answer from metrics catalog...'
+                  } else {
+                    message = '✍️ Generating answer from fetched data...'
+                  }
+                  setLoadingStep('generating')
+                } else if (flowEvent.step === 'validation') {
+                  message = '🔎 Validating answer accuracy...'
+                } else if (flowEvent.step === 'followup_generation') {
+                  message = '💡 Generating follow-up suggestions...'
+                }
+                if (message) {
+                  setLoadingMessage(message)
+                }
+              } else if (flowEvent.status === 'success' && flowEvent.step === 'tool_selection') {
+                // Capture the selected tool and show it prominently
+                const toolName = flowEvent.summary?.replace('Selected ', '') || 'tool'
+                setSelectedTool(toolName)
+                setLoadingMessage(`✓ ${flowEvent.summary}`)
+              }
               break
 
             case 'data':
@@ -657,7 +700,7 @@ export default function AskPage() {
               convId = conversation.id
               setCurrentConversationId(convId)
               // Update URL with conversation ID
-              router.push(`/ask?id=${convId}`)
+              router.push(`/chatbot?id=${convId}`)
 
               // Refresh sidebar immediately after creating conversation
               console.log('[ask/page] New conversation created, refreshing sidebar')
@@ -912,7 +955,7 @@ export default function AskPage() {
       const { conversation, error: createError } = await createConversation()
       if (!createError && conversation) {
         setCurrentConversationId(conversation.id)
-        router.push(`/ask?id=${conversation.id}`)
+        router.push(`/chatbot?id=${conversation.id}`)
 
         // Refresh sidebar to show the new conversation
         console.log('[ask/page] New conversation created, refreshing sidebar')
@@ -920,7 +963,7 @@ export default function AskPage() {
       }
     } else {
       // Clear conversation ID from URL if not authenticated
-      router.push('/ask')
+      router.push('/chatbot')
     }
 
     // Focus the textarea after clearing
@@ -1262,15 +1305,30 @@ export default function AskPage() {
 
             {/* Loading status indicator - positioned like answer */}
             {loading && !answer && (
-              <div className="space-y-1 mt-6">
+              <div className="space-y-4 mt-6">
+                {/* Show selected tool indicator if tool has been chosen */}
+                {selectedTool && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Using {selectedTool}
+                    </span>
+                  </div>
+                )}
                 <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                   <p className="text-gray-600 dark:text-gray-400 text-xl">
-                    {loadingStep === 'analyzing' && 'Analyzing...'}
-                    {loadingStep === 'selecting' && 'Selecting Tool...'}
-                    {loadingStep === 'calling' && 'Calling API...'}
-                    {loadingStep === 'fetching' && 'Fetching Data...'}
-                    {loadingStep === 'calculating' && 'Calculating...'}
-                    {loadingStep === 'generating' && 'Generating Answer...'}
+                    {loadingMessage || (
+                      <>
+                        {loadingStep === 'analyzing' && 'Analyzing...'}
+                        {loadingStep === 'selecting' && 'Selecting Tool...'}
+                        {loadingStep === 'calling' && 'Calling API...'}
+                        {loadingStep === 'fetching' && 'Fetching Data...'}
+                        {loadingStep === 'calculating' && 'Calculating...'}
+                        {loadingStep === 'generating' && 'Generating Answer...'}
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -1279,6 +1337,17 @@ export default function AskPage() {
             {/* Show current streaming answer (text only - chart appears when complete) */}
             {loading && answer && (
               <div className="space-y-4">
+                {/* Show selected tool indicator */}
+                {selectedTool && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Using {selectedTool}
+                    </span>
+                  </div>
+                )}
                 <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                   <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
                 </div>
@@ -1292,7 +1361,17 @@ export default function AskPage() {
                         <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                         <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Generating chart and data table...</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
+                          ? '📊 Preparing financial chart and data table...'
+                          : selectedTool === 'getPrices'
+                          ? '📈 Preparing price chart...'
+                          : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
+                          ? '📄 Preparing filing data table...'
+                          : selectedTool === 'listMetrics'
+                          ? '📋 Preparing metrics catalog table...'
+                          : '📊 Generating chart and data table...'}
+                      </p>
                     </div>
                   </div>
                 )}

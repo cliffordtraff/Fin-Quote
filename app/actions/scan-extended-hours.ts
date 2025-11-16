@@ -209,7 +209,7 @@ export async function deriveLosers(
 /**
  * Clear the cache (useful for testing)
  */
-export function clearExtendedHoursCache(): void {
+export async function clearExtendedHoursCache(): Promise<void> {
   cachedSnapshot = null
   console.log('Extended hours cache cleared')
 }
