@@ -3,34 +3,9 @@
 import { useEffect, useState, useRef } from 'react'
 import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
-import SimpleCanvasChart from '@/components/SimpleCanvasChart'
-import FuturesTable from '@/components/FuturesTable'
-import GainersTable from '@/components/GainersTable'
-import LosersTable from '@/components/LosersTable'
-import StocksTable from '@/components/StocksTable'
-import MarketBreadth from '@/components/MarketBreadth'
-import SectorHeatmap from '@/components/SectorHeatmap'
-import VIXCard from '@/components/VIXCard'
-import EconomicCalendar from '@/components/EconomicCalendar'
 import FinancialChart from '@/components/FinancialChart'
 import FollowUpQuestions from '@/components/FollowUpQuestions'
 import ThemeToggle from '@/components/ThemeToggle'
-import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
-import { getFuturesData } from '@/app/actions/futures'
-import { getGainersData } from '@/app/actions/gainers'
-import { getLosersData } from '@/app/actions/losers'
-import { getStocksData } from '@/app/actions/stocks'
-import { getMarketBreadthData } from '@/app/actions/market-breadth'
-import { getSectorPerformance } from '@/app/actions/sectors'
-import { getVIXData } from '@/app/actions/vix'
-import { getEconomicEvents } from '@/app/actions/economic-calendar'
-import type { GainerData } from '@/app/actions/gainers'
-import type { LoserData } from '@/app/actions/losers'
-import type { StockData } from '@/app/actions/stocks'
-import type { MarketBreadthData } from '@/app/actions/market-breadth'
-import type { SectorData } from '@/app/actions/sectors'
-import type { VIXData } from '@/app/actions/vix'
-import type { EconomicEvent } from '@/app/actions/economic-calendar'
 import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
@@ -39,48 +14,15 @@ import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-interface MarketData {
-  currentPrice: number
-  priceChange: number
-  priceChangePercent: number
-  date: string
-  priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }>
-}
-
-interface FutureData {
-  symbol: string
-  name: string
-  price: number
-  change: number
-  changesPercentage: number
-}
-
 export default function Home() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClientComponentClient<Database>()
 
-  // Market data state
-  const [spxData, setSpxData] = useState<MarketData | null>(null)
-  const [nasdaqData, setNasdaqData] = useState<MarketData | null>(null)
-  const [dowData, setDowData] = useState<MarketData | null>(null)
-  const [russellData, setRussellData] = useState<MarketData | null>(null)
-  const [futuresData, setFuturesData] = useState<FutureData[]>([])
-  const [gainersData, setGainersData] = useState<GainerData[]>([])
-  const [losersData, setLosersData] = useState<LoserData[]>([])
-  const [stocksData, setStocksData] = useState<StockData[]>([])
-  const [breadthData, setBreadthData] = useState<MarketBreadthData | null>(null)
-  const [sectorsData, setSectorsData] = useState<SectorData[]>([])
-  const [vixData, setVixData] = useState<VIXData | null>(null)
-  const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
   // Auth and UI state
   const [user, setUser] = useState<User | null>(null)
   const [sessionId, setSessionId] = useState<string>('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showChatbot, setShowChatbot] = useState(false)
   const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
 
   // Chatbot state
@@ -127,142 +69,8 @@ export default function Home() {
     return () => subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Fetch all market data in parallel
-        const [spxResult, nasdaqResult, dowResult, russellResult, futuresResult, gainersResult, losersResult, stocksResult, breadthResult, sectorsResult, vixResult, economicResult] = await Promise.all([
-          getAaplMarketData(),
-          getNasdaqMarketData(),
-          getDowMarketData(),
-          getRussellMarketData(),
-          getFuturesData(),
-          getGainersData(),
-          getLosersData(),
-          getStocksData(),
-          getMarketBreadthData(),
-          getSectorPerformance(),
-          getVIXData(),
-          getEconomicEvents()
-        ])
-
-        if ('error' in spxResult) {
-          setError(spxResult.error)
-        } else {
-          console.log('SPX data received:', {
-            hasPriceHistory: !!spxResult.priceHistory,
-            priceHistoryLength: spxResult.priceHistory?.length,
-          })
-          setSpxData(spxResult as MarketData)
-        }
-
-        if ('error' in nasdaqResult) {
-          setError(nasdaqResult.error)
-        } else {
-          console.log('Nasdaq data received:', {
-            hasPriceHistory: !!nasdaqResult.priceHistory,
-            priceHistoryLength: nasdaqResult.priceHistory?.length,
-          })
-          setNasdaqData(nasdaqResult as MarketData)
-        }
-
-        if ('error' in dowResult) {
-          setError(dowResult.error)
-        } else {
-          console.log('Dow data received:', {
-            hasPriceHistory: !!dowResult.priceHistory,
-            priceHistoryLength: dowResult.priceHistory?.length,
-          })
-          setDowData(dowResult as MarketData)
-        }
-
-        if ('error' in russellResult) {
-          setError(russellResult.error)
-        } else {
-          console.log('Russell data received:', {
-            hasPriceHistory: !!russellResult.priceHistory,
-            priceHistoryLength: russellResult.priceHistory?.length,
-          })
-          setRussellData(russellResult as MarketData)
-        }
-
-        if ('error' in futuresResult) {
-          console.error('Futures data error:', futuresResult.error)
-        } else {
-          setFuturesData(futuresResult.futures)
-        }
-
-        if ('error' in gainersResult) {
-          console.error('Gainers data error:', gainersResult.error)
-        } else {
-          setGainersData(gainersResult.gainers)
-        }
-
-        if ('error' in losersResult) {
-          console.error('Losers data error:', losersResult.error)
-        } else {
-          setLosersData(losersResult.losers)
-        }
-
-        if ('error' in stocksResult) {
-          console.error('Stocks data error:', stocksResult.error)
-        } else {
-          setStocksData(stocksResult.stocks)
-        }
-
-        if ('error' in breadthResult) {
-          console.error('Market breadth data error:', breadthResult.error)
-        } else if ('breadth' in breadthResult) {
-          setBreadthData(breadthResult.breadth)
-        }
-
-        if ('error' in sectorsResult) {
-          console.error('Sector performance data error:', sectorsResult.error)
-        } else if ('sectors' in sectorsResult) {
-          setSectorsData(sectorsResult.sectors)
-        }
-
-        if ('error' in vixResult) {
-          console.error('VIX data error:', vixResult.error)
-        } else if ('vix' in vixResult) {
-          setVixData(vixResult.vix)
-        }
-
-        if ('error' in economicResult) {
-          console.error('Economic calendar error:', economicResult.error)
-        } else if ('events' in economicResult) {
-          setEconomicEvents(economicResult.events)
-        }
-      } catch (err) {
-        setError('Failed to load market data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-
-    // Refresh data every 10 seconds
-    const interval = setInterval(fetchData, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const formatCurrency = (value: number, decimals: number = 2): string => {
-    if (value >= 1_000_000_000_000) {
-      return `$${(value / 1_000_000_000_000).toFixed(decimals)}T`
-    }
-    if (value >= 1_000_000_000) {
-      return `$${(value / 1_000_000_000).toFixed(decimals)}B`
-    }
-    if (value >= 1_000_000) {
-      return `$${(value / 1_000_000).toFixed(decimals)}M`
-    }
-    return `$${value.toFixed(decimals)}`
-  }
-
   const handleQueryClick = async (conversationId: string) => {
-    // Load the conversation and show chatbot
+    // Load the conversation
     const { conversation, error } = await getConversation(conversationId)
     if (!error && conversation) {
       setCurrentConversationId(conversation.id)
@@ -276,7 +84,6 @@ export default function Home() {
         dataUsed: msg.data_used as any,
       }))
       setConversationHistory(history)
-      setShowChatbot(true)
     }
   }
 
@@ -304,10 +111,6 @@ export default function Home() {
         setRefreshQueriesTrigger(prev => prev + 1)
       }
     }
-
-    // Show chatbot and open sidebar
-    setShowChatbot(true)
-    setSidebarOpen(true)
 
     // Focus textarea
     setTimeout(() => {
@@ -523,8 +326,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
-      {!showChatbot && <Navigation onFinchatClick={handleNewChat} />}
-
       {/* Sidebar - fixed position overlay */}
       <div
         className={`hidden lg:block fixed left-0 top-0 h-screen w-64 xl:w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-[60] transition-transform duration-300 ${
@@ -560,418 +361,167 @@ export default function Home() {
         )}
       </button>
 
-      {!showChatbot ? (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-gray-600 dark:text-gray-400">Loading market data...</div>
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-red-600 dark:text-red-400">{error}</div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center relative">
-              <div className="flex gap-6 items-start">
-            {/* SPX Chart */}
-            {spxData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
-                <div className="mb-0">
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {new Date(spxData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <span
-                      className={`text-xs font-medium mr-12 ${
-                        spxData.priceChange >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {spxData.priceChange >= 0 ? '+' : ''}
-                      {spxData.priceChange.toFixed(2)} (
-                      {spxData.priceChangePercent >= 0 ? '+' : ''}
-                      {spxData.priceChangePercent.toFixed(2)}%)
-                    </span>
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 z-40 border-b border-gray-50 dark:border-[rgb(33,33,33)] bg-gray-50 dark:bg-[rgb(33,33,33)] px-6 py-4">
+        <div className="flex justify-between items-center">
+          <Navigation />
+        </div>
+      </div>
+
+      {/* Chatbot content area */}
+      <div
+        ref={scrollContainerRef}
+        className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
+      >
+        <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
+          {conversationHistory.map((message, index) => (
+            <div key={index} className={`mb-6 ${index > 0 ? 'mt-6' : ''}`}>
+              {message.role === 'user' ? (
+                <div className="flex justify-end">
+                  <div className="bg-gray-100 dark:bg-[rgb(55,55,55)] text-gray-900 dark:text-white rounded-2xl px-6 py-4 max-w-3xl">
+                    <p className="text-xl">{message.content}</p>
                   </div>
                 </div>
-
-                {/* Simple Canvas Chart */}
-                {spxData.priceHistory && spxData.priceHistory.length > 0 ? (
-                  <SimpleCanvasChart
-                    data={spxData.priceHistory}
-                    previousClose={spxData.currentPrice - spxData.priceChange}
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {spxData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
-                    </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
+                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* Nasdaq Chart */}
-            {nasdaqData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
-                <div className="mb-0">
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {new Date(nasdaqData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <span
-                      className={`text-xs font-medium mr-12 ${
-                        nasdaqData.priceChange >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {nasdaqData.priceChange >= 0 ? '+' : ''}
-                      {nasdaqData.priceChange.toFixed(2)} (
-                      {nasdaqData.priceChangePercent >= 0 ? '+' : ''}
-                      {nasdaqData.priceChangePercent.toFixed(2)}%)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Simple Canvas Chart */}
-                {nasdaqData.priceHistory && nasdaqData.priceHistory.length > 0 ? (
-                  <SimpleCanvasChart
-                    data={nasdaqData.priceHistory}
-                    yAxisInterval={100}
-                    labelIntervalMultiplier={1}
-                    previousClose={nasdaqData.currentPrice - nasdaqData.priceChange}
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {nasdaqData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Dow Chart */}
-            {dowData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
-                <div className="mb-0">
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {new Date(dowData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <span
-                      className={`text-xs font-medium mr-12 ${
-                        dowData.priceChange >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {dowData.priceChange >= 0 ? '+' : ''}
-                      {dowData.priceChange.toFixed(2)} (
-                      {dowData.priceChangePercent >= 0 ? '+' : ''}
-                      {dowData.priceChangePercent.toFixed(2)}%)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Simple Canvas Chart */}
-                {dowData.priceHistory && dowData.priceHistory.length > 0 ? (
-                  <SimpleCanvasChart
-                    data={dowData.priceHistory}
-                    yAxisInterval={100}
-                    labelIntervalMultiplier={1}
-                    previousClose={dowData.currentPrice - dowData.priceChange}
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {dowData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Russell 2000 Chart */}
-            {russellData && (
-              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
-                <div className="mb-0">
-                  <div className="flex items-baseline justify-between">
-                    <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {new Date(russellData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <span
-                      className={`text-xs font-medium mr-12 ${
-                        russellData.priceChange >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {russellData.priceChange >= 0 ? '+' : ''}
-                      {russellData.priceChange.toFixed(2)} (
-                      {russellData.priceChangePercent >= 0 ? '+' : ''}
-                      {russellData.priceChangePercent.toFixed(2)}%)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Simple Canvas Chart */}
-                {russellData.priceHistory && russellData.priceHistory.length > 0 ? (
-                  <SimpleCanvasChart
-                    data={russellData.priceHistory}
-                    yAxisInterval={10}
-                    labelIntervalMultiplier={1}
-                    previousClose={russellData.currentPrice - russellData.priceChange}
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {russellData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            </div>
-
-              {/* Gainers, Losers, VIX, and Sector Performance */}
-              <div className="mt-12 flex gap-8 self-start ml-[-50px]">
-                {/* Gainers Table */}
-                {gainersData.length > 0 && (
-                  <div>
-                    <GainersTable gainers={gainersData} />
-                  </div>
-                )}
-
-                {/* Losers Table */}
-                {losersData.length > 0 && (
-                  <div>
-                    <LosersTable losers={losersData} />
-                  </div>
-                )}
-
-                {/* VIX Card and Stocks Table Column */}
-                <div className="flex flex-col gap-4">
-                  <VIXCard vix={vixData} />
-
-                  {/* Stocks Table */}
-                  {stocksData.length > 0 && (
-                    <div>
-                      <StocksTable stocks={stocksData} />
+                  {/* Chart */}
+                  {message.chartConfig && (
+                    <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] p-6">
+                      <FinancialChart config={message.chartConfig} />
                     </div>
                   )}
+
+                  {/* Follow-up questions (only for last message) */}
+                  {index === conversationHistory.length - 1 && message.followUpQuestions && message.followUpQuestions.length > 0 && (
+                    <FollowUpQuestions
+                      questions={message.followUpQuestions}
+                      onQuestionClick={handleFollowUpQuestionClick}
+                    />
+                  )}
                 </div>
+              )}
+            </div>
+          ))}
 
-                {/* Sector Performance Heatmap */}
-                {sectorsData.length > 0 && (
-                  <div style={{ width: '250px' }}>
-                    <SectorHeatmap sectors={sectorsData} />
-                  </div>
-                )}
-              </div>
-
-              {/* Futures Table and Economic Calendar */}
-              <div className="mt-8 flex gap-8 self-start ml-[-50px]">
-                {/* Futures Table */}
-                {futuresData.length > 0 && (
-                  <div>
-                    <FuturesTable futures={futuresData} />
-                  </div>
-                )}
-
-                {/* Economic Calendar */}
-                {economicEvents.length > 0 && (
-                  <div style={{ width: '400px' }}>
-                    <EconomicCalendar events={economicEvents} />
-                  </div>
-                )}
+          {/* Loading indicator */}
+          {chatbotLoading && !answer && (
+            <div className="space-y-4">
+              {/* Show selected tool indicator if tool has been chosen */}
+              {selectedTool && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Using {selectedTool}
+                  </span>
+                </div>
+              )}
+              <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
+                <p className="text-gray-600 dark:text-gray-400 text-xl">
+                  {loadingMessage || 'Analyzing...'}
+                </p>
               </div>
             </div>
           )}
-        </main>
-      ) : (
-        // Chatbot Interface
-        <>
-          {/* Fixed Header */}
-          <div className="fixed top-0 left-0 right-0 z-40 border-b border-gray-50 dark:border-[rgb(33,33,33)] bg-gray-50 dark:bg-[rgb(33,33,33)] px-6 py-4">
-            <div className="flex justify-end items-center">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    setShowChatbot(false)
-                    setSidebarOpen(false)
-                  }}
-                  className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Back to Charts
-                </button>
-                <ThemeToggle />
-              </div>
-            </div>
-          </div>
 
-          {/* Chatbot content area */}
-          <div
-            ref={scrollContainerRef}
-            className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
-          >
-            <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
-              {conversationHistory.map((message, index) => (
-                <div key={index} className={`mb-6 ${index > 0 ? 'mt-6' : ''}`}>
-                  {message.role === 'user' ? (
-                    <div className="flex justify-end">
-                      <div className="bg-gray-100 dark:bg-[rgb(55,55,55)] text-gray-900 dark:text-white rounded-2xl px-6 py-4 max-w-3xl">
-                        <p className="text-xl">{message.content}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                        <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
-                      </div>
-
-                      {/* Chart */}
-                      {message.chartConfig && (
-                        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] p-6">
-                          <FinancialChart config={message.chartConfig} />
-                        </div>
-                      )}
-
-                      {/* Follow-up questions (only for last message) */}
-                      {index === conversationHistory.length - 1 && message.followUpQuestions && message.followUpQuestions.length > 0 && (
-                        <FollowUpQuestions
-                          questions={message.followUpQuestions}
-                          onQuestionClick={handleFollowUpQuestionClick}
-                        />
-                      )}
-                    </div>
-                  )}
+          {/* Streaming answer */}
+          {chatbotLoading && answer && (
+            <div className="space-y-4">
+              {/* Show selected tool indicator */}
+              {selectedTool && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Using {selectedTool}
+                  </span>
                 </div>
-              ))}
+              )}
+              <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
+                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+              </div>
 
-              {/* Loading indicator */}
-              {chatbotLoading && !answer && (
-                <div className="space-y-4">
-                  {/* Show selected tool indicator if tool has been chosen */}
-                  {selectedTool && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Using {selectedTool}
-                      </span>
+              {!dataReceived && (
+                <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="flex gap-2">
+                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                     </div>
-                  )}
-                  <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                    <p className="text-gray-600 dark:text-gray-400 text-xl">
-                      {loadingMessage || 'Analyzing...'}
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
+                        ? '📊 Preparing financial chart and data table...'
+                        : selectedTool === 'getPrices'
+                        ? '📈 Preparing price chart...'
+                        : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
+                        ? '📄 Preparing filing data table...'
+                        : selectedTool === 'listMetrics'
+                        ? '📋 Preparing metrics catalog table...'
+                        : '📊 Generating chart and data table...'}
                     </p>
                   </div>
                 </div>
               )}
-
-              {/* Streaming answer */}
-              {chatbotLoading && answer && (
-                <div className="space-y-4">
-                  {/* Show selected tool indicator */}
-                  {selectedTool && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Using {selectedTool}
-                      </span>
-                    </div>
-                  )}
-                  <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
-                  </div>
-
-                  {!dataReceived && (
-                    <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
-                      <div className="flex flex-col items-center justify-center gap-3">
-                        <div className="flex gap-2">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
-                            ? '📊 Preparing financial chart and data table...'
-                            : selectedTool === 'getPrices'
-                            ? '📈 Preparing price chart...'
-                            : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
-                            ? '📄 Preparing filing data table...'
-                            : selectedTool === 'listMetrics'
-                            ? '📋 Preparing metrics catalog table...'
-                            : '📊 Generating chart and data table...'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Error */}
-              {chatbotError && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg">
-                  <p className="font-medium text-lg">Error</p>
-                  <p className="text-base">{chatbotError}</p>
-                </div>
-              )}
             </div>
-          </div>
+          )}
 
-          {/* Input bar */}
-          <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
-            <div className="max-w-4xl mx-auto px-6">
-              <form onSubmit={handleSubmitStreaming}>
-                <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
-                  <textarea
-                    ref={textareaRef}
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        if (question.trim()) {
-                          handleSubmitStreaming(e as any)
-                        }
-                      }
-                    }}
-                    placeholder="Ask Anything"
-                    rows={1}
-                    className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
-                    style={{ height: 'auto' }}
-                    disabled={chatbotLoading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={chatbotLoading || !question.trim()}
-                    className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                  >
-                    {chatbotLoading ? (
-                      <div className="w-4 h-4 bg-white rounded-sm"></div>
-                    ) : (
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </form>
+          {/* Error */}
+          {chatbotError && (
+            <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg">
+              <p className="font-medium text-lg">Error</p>
+              <p className="text-base">{chatbotError}</p>
             </div>
-          </div>
-        </>
-      )}
+          )}
+        </div>
+      </div>
+
+      {/* Input bar */}
+      <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
+        <div className="max-w-4xl mx-auto px-6">
+          <form onSubmit={handleSubmitStreaming}>
+            <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
+              <textarea
+                ref={textareaRef}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (question.trim()) {
+                      handleSubmitStreaming(e as any)
+                    }
+                  }
+                }}
+                placeholder="Ask Anything"
+                rows={1}
+                className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
+                style={{ height: 'auto' }}
+                disabled={chatbotLoading}
+              />
+              <button
+                type="submit"
+                disabled={chatbotLoading || !question.trim()}
+                className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {chatbotLoading ? (
+                  <div className="w-4 h-4 bg-white rounded-sm"></div>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }
