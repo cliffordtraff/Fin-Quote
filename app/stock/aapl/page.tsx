@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Navigation from '@/components/Navigation';
 import { getStockOverview } from '@/app/actions/stock-overview';
 import { getStockKeyStats } from '@/app/actions/stock-key-stats';
 import { getAllFinancials } from '@/app/actions/get-all-financials';
@@ -26,6 +27,9 @@ export default async function StockPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
+      {/* Navigation Header */}
+      <Navigation />
+
       {/* Stock Header Section */}
       <section className="border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-900 dark:to-blue-950 text-white">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
