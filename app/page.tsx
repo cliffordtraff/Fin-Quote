@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
 import FinancialChart from '@/components/FinancialChart'
-import FollowUpQuestions from '@/components/FollowUpQuestions'
 import ThemeToggle from '@/components/ThemeToggle'
 import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -31,7 +30,6 @@ export default function Home() {
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
-  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [chatbotLoading, setChatbotLoading] = useState(false)
   const [chatbotError, setChatbotError] = useState('')
   const [dataReceived, setDataReceived] = useState(false)
@@ -200,7 +198,6 @@ export default function Home() {
     setChatbotError('')
     setAnswer('')
     setChartConfig(null)
-    setFollowUpQuestions([])
     setDataReceived(false)
     setLoadingMessage('')
     setSelectedTool(null)
@@ -243,7 +240,6 @@ export default function Home() {
       let streamedAnswer = ''
       let receivedData: any = null
       let receivedChart: any = null
-      let receivedFollowUpQuestions: string[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -318,13 +314,6 @@ export default function Home() {
               setAnswer(streamedAnswer)
               break
 
-            case 'followup':
-              if (data.questions && Array.isArray(data.questions)) {
-                receivedFollowUpQuestions = data.questions
-                setFollowUpQuestions(data.questions)
-              }
-              break
-
             case 'error':
               setChatbotError(data.message)
               break
@@ -339,7 +328,6 @@ export default function Home() {
           content: streamedAnswer,
           timestamp: new Date().toISOString(),
           chartConfig: receivedChart,
-          followUpQuestions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
           dataUsed: receivedData,
         }
 
@@ -363,7 +351,6 @@ export default function Home() {
           if (convId) {
             await saveMessage(convId, 'assistant', streamedAnswer, {
               chart_config: receivedChart,
-              follow_up_questions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
               data_used: receivedData,
             })
 
@@ -471,13 +458,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Follow-up questions (only for last message) */}
-                  {index === conversationHistory.length - 1 && message.followUpQuestions && message.followUpQuestions.length > 0 && (
-                    <FollowUpQuestions
-                      questions={message.followUpQuestions}
-                      onQuestionClick={handleFollowUpQuestionClick}
-                    />
-                  )}
                 </div>
               )}
               </div>
