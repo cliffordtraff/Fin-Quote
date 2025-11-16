@@ -26,7 +26,7 @@ export default async function StockPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)]">
       {/* Navigation Header */}
       <Navigation />
 
