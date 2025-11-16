@@ -81,7 +81,7 @@ export default async function StockPage() {
       </section>
 
       {/* Quick Stats Grid Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             Key Statistics
