@@ -1,6 +1,6 @@
 'use server';
 
-import { getCurrentMarketStatus } from '@/lib/market-utils';
+import { getCurrentMarketSession } from '@/lib/market-utils';
 
 interface StockOverview {
   company: {
@@ -46,8 +46,13 @@ export async function getStockOverview(): Promise<StockOverview> {
 
     const quote = quoteData[0];
 
-    // Get market status
-    const marketStatus = getCurrentMarketStatus();
+    // Get market session status
+    const marketSession = getCurrentMarketSession();
+
+    // Map session to status format expected by the page
+    const marketStatus = marketSession === 'regular' ? 'open' :
+                        marketSession === 'premarket' ? 'premarket' :
+                        marketSession === 'afterhours' ? 'afterhours' : 'closed';
 
     return {
       company: {
@@ -75,7 +80,9 @@ export async function getStockOverview(): Promise<StockOverview> {
       currentPrice: 0,
       priceChange: 0,
       priceChangePercent: 0,
-      marketStatus: getCurrentMarketStatus(),
+      marketStatus: getCurrentMarketSession() === 'regular' ? 'open' :
+                   getCurrentMarketSession() === 'premarket' ? 'premarket' :
+                   getCurrentMarketSession() === 'afterhours' ? 'afterhours' : 'closed',
     };
   }
 }
