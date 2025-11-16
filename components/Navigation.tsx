@@ -9,9 +9,9 @@ export default function Navigation() {
   const pathname = usePathname()
 
   return (
-    <nav className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)]">
-      <div className="w-full px-52">
-        <div className="flex justify-between items-center h-16">
+    <nav className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[rgb(33,33,33)]">
+      <div className="w-full">
+        <div className="flex justify-between items-center h-16 px-6">
           {/* Logo and Navigation Tabs */}
           <div className="flex items-center space-x-8">
             <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
 import FinancialChart from '@/components/FinancialChart'
@@ -41,6 +41,16 @@ export default function Home() {
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const lastUserMessageRef = useRef<HTMLDivElement | null>(null)
+
+  const lastUserMessageIndex = useMemo(() => {
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+      if (conversationHistory[i].role === 'user') {
+        return i
+      }
+    }
+    return -1
+  }, [conversationHistory])
 
   // Generate or retrieve session ID on mount
   useEffect(() => {
@@ -68,6 +78,66 @@ export default function Home() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Auto-focus textarea when user starts typing
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only auto-focus if:
+      // 1. User is not already focused in an input/textarea
+      // 2. It's a printable character or space
+      // 3. Not a modifier key combination (except Shift for uppercase)
+      const target = e.target as HTMLElement
+      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+
+      if (!isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Check if it's a printable character
+        if (e.key.length === 1) {
+          // Focus the textarea and manually insert the character
+          textareaRef.current?.focus()
+
+          // Set the question state with the new character
+          setQuestion(prev => prev + e.key)
+
+          // Prevent default to avoid duplicate character
+          e.preventDefault()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Auto-scroll to keep the latest USER message at the top when conversation updates
+  useEffect(() => {
+    if (conversationHistory.length === 0) return
+    if (lastUserMessageIndex === -1) return
+
+    const userMessageDiv = lastUserMessageRef.current
+    if (!userMessageDiv) return
+
+    const performScroll = () => {
+      // Get the absolute position of the message relative to the viewport
+      const rect = userMessageDiv.getBoundingClientRect()
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+
+      // Calculate target position (message position + current scroll - desired offset from top)
+      // Offset of 20px puts the question near the top of the viewport
+      const targetPosition = rect.top + scrollTop - 20
+
+      // Scroll the WINDOW, not the container
+      window.scrollTo({
+        top: targetPosition,
+        behavior: 'smooth'
+      })
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        performScroll()
+      })
+    })
+  }, [conversationHistory.length, lastUserMessageIndex])
 
   const handleQueryClick = async (conversationId: string) => {
     // Load the conversation
@@ -362,10 +432,8 @@ export default function Home() {
       </button>
 
       {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-40 border-b border-gray-50 dark:border-[rgb(33,33,33)] bg-gray-50 dark:bg-[rgb(33,33,33)] px-6 py-4">
-        <div className="flex justify-between items-center">
-          <Navigation />
-        </div>
+      <div className="fixed top-0 left-0 right-0 z-40">
+        <Navigation />
       </div>
 
       {/* Chatbot content area */}
@@ -374,8 +442,16 @@ export default function Home() {
         className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
       >
         <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
-          {conversationHistory.map((message, index) => (
-            <div key={index} className={`mb-6 ${index > 0 ? 'mt-6' : ''}`}>
+          {conversationHistory.map((message, index) => {
+            const isLastUserMessage = message.role === 'user' && index === lastUserMessageIndex
+
+            return (
+              <div
+                key={index}
+                ref={isLastUserMessage ? lastUserMessageRef : null}
+                data-message-index={index}
+                className={`mb-6 ${index > 0 ? 'mt-6' : ''}`}
+              >
               {message.role === 'user' ? (
                 <div className="flex justify-end">
                   <div className="bg-gray-100 dark:bg-[rgb(55,55,55)] text-gray-900 dark:text-white rounded-2xl px-6 py-4 max-w-3xl">
@@ -404,12 +480,16 @@ export default function Home() {
                   )}
                 </div>
               )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
 
           {/* Loading indicator */}
           {chatbotLoading && !answer && (
-            <div className="space-y-4">
+            <div
+              className="space-y-4"
+              style={{ minHeight: 'calc(100vh - 200px)' }}
+            >
               {/* Show selected tool indicator if tool has been chosen */}
               {selectedTool && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
@@ -431,7 +511,10 @@ export default function Home() {
 
           {/* Streaming answer */}
           {chatbotLoading && answer && (
-            <div className="space-y-4">
+            <div
+              className="space-y-4"
+              style={{ minHeight: 'calc(100vh - 200px)' }}
+            >
               {/* Show selected tool indicator */}
               {selectedTool && (
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">

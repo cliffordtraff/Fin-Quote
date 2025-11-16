@@ -2,7 +2,7 @@
 
 <!-- cursor Session 965225d1-a232-4fee-884d-73687a08d3e2 (2025-11-12 19:20Z) -->
 
-# Addressing issues in split chunk filings (2025-11-12 19:20Z)
+# Are we using chain of thought prompting? (2025-11-12 19:20Z)
 
 _**User (2025-11-10 20:43Z)**_
 
@@ -1558,6 +1558,405 @@ It’s called Chain‑of‑Thought (CoT) prompting. You’ll also hear “reason
 
 ### Practical tip
 - If you’ll display results to users, prefer short rationales. Keep detailed CoT hidden (scratchpad) and log it only if needed for debugging.
+
+---
+
+_**User (2025-11-16 13:59Z)**_
+
+are we using chain of thought? chain of thought prompting?
+
+---
+
+_**Agent (model gpt-5, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+**Clarifying chain of thought use**
+
+I need to respond to the user's question about whether they're using chain of thought (CoT) prompting. They want a concise, beginner-friendly answer in plain English, with 3 to 5 points. There’s no need for code, and I should focus on clarity. 
+
+From what I've seen, there are indicators like "No Tool Needed" detection, and recent edits in the repository might help, but I can generally address their inquiry without checking code in detail.
+**Exploring chain of thought usage**
+
+I can check `lib/llm-judge.ts` or review the documentation for prompts related to chain of thought. It seems I should use codebase_search to look for terms like "chain," "step by step," or "think step." 
+
+The user asked a straightforward question, so I can clarify that while we don't explicitly use chain of thought, we favor concise rationales and avoid logging full chains to prevent leakage. If they want to implement CoT, we could consider adding a hidden scratchpad.
+**Enabling reasoning traces**
+
+To enable “reasoning traces,” I can suggest a few steps. First, I should implement a hidden system prompt that says, “let’s reason step-by-step,” while instructing the model not to expose those steps, or instead to use brief rationales. 
+
+It's also important to clarify that we don't save full chain of thought due to privacy reasons. By default, we engage in light reasoning, opting for structured outputs and brief rationales. I can also mention the option to activate a hidden scratchpad for brief thoughts related to tool selection, ensuring privacy.
+**Clarifying chain of thought usage**
+
+I can provide a concise answer: we’re not currently using explicit chain of thought; our reasoning is kept implicit and brief. The reasons are related to legal and compliance issues, cost, and the need to log prompts and responses without storing sensitive information.
+
+If needed, I can guide on enabling hidden chain of thought through a system prompt that instructs not to reveal the chain, just the final answer and citations. I can summarize any changes or answers in bullet points for clarity, keeping it beginner-friendly.
+**Addressing chain of thought (CoT)**
+
+First, I should clarify what CoT is. Currently, we’re not using explicit chain of thought; we prefer avoiding long CoT. Our prompts focus on providing a final answer with proper citations, using a decision tree for tool selection instead of explicit CoT, and we don’t keep thought text stored.
+
+I could suggest options like a hidden scratchpad for CoT to allow reasoning without display, short rationales for tool use, or self-consistency, but only if it improves evaluation accuracy. It's best not to display or store these thoughts, aligning with general policy.</details></think>
+
+---
+
+### Short answer
+Not explicitly. We don’t prompt the model to produce (or store) long step‑by‑step Chain‑of‑Thought. We rely on structured tool calls and concise reasoning, and we keep any internal “thinking” hidden.
+
+### What we do now
+- Use a decision tree to pick tools (e.g., searchFilings vs getRecentFilings) with brief, implicit reasoning.
+- Return final answers + citations/quotes; we don’t ask for or log detailed reasoning traces.
+
+### If you want Chain‑of‑Thought
+- Hidden scratchpad: Let the model reason privately but only return the final answer. Don’t log the scratchpad in DB.
+- ReAct‑style short rationale: Allow 1–2 sentence internal notes guiding tool choice, never shown to users.
+- Guardrail: “Do not reveal your reasoning steps; provide only the final answer and citations.”
+
+### Recommendation
+Start with hidden/brief rationales only if they improve accuracy in your evals. Avoid showing or storing full chain‑of‑thought to users or logs.
+
+---
+
+_**User (2025-11-16 13:59Z)**_
+
+I would like it to show its reasoning steps so that I can better understand what is happening behind the scenes. What is the best way to do this and explain what scratch pad is and the other options.
+
+---
+
+_**Agent (model gpt-5, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+**Explaining reasoning steps**
+
+I need to respond to the user's request about showing reasoning steps for better understanding. They want a concise, beginner-friendly explanation of how to enable logs in their app, including options like visible or hidden chain-of-thought, and alternatives like rationale or action logs. I’ll make sure to keep the response step-by-step with 3-5 points and avoid heavy code unless needed. It's essential to respect guidelines since some providers discourage exposing detailed reasoning.
+**Proposing reasoning options**
+
+From a safety perspective, storing chain-of-thought content isn't advisable to avoid data leakage, but since the user wants to view it for understanding, I can propose several options. 
+
+One option is a developer-only "scratchpad" that uses ephemeral logs, which can be toggled on an admin UI. Another is a user-visible summary with 1-3 concise bullet points. 
+
+I could also display tool traces with selected inputs, or implement self-debugging traces that include intermediate prompts and actions. Lastly, a ReAct style view could provide a timeline of thought, action, and observation.
+**Defining terms for implementation**
+
+I need to provide brief definitions for some key terms: 
+
+"Scratchpad" refers to hidden internal reasoning text that the model uses but doesn't show to users, making it ephemeral. "Train-of-thought" and "chain-of-thought" are synonyms. 
+
+It's important to note that showing "reasoning tokens" can increase costs, and we should avoid storing any information for privacy compliance. 
+
+For implementation in Next.js, I can suggest using an environment flag that captures reasoning in the result but only displays it for admins. Adding a `devReasoning` flag per request could be beneficial—this would provide a debug object with selected tool steps, but we should be careful to avoid code edits.
+**Proposing a scaffolding approach**
+
+The user didn't specify "dsc," so I can propose scaffolding options without implementing them yet. My answer needs to be concise. I can include a small snippet on how to prompt for a "Reasoning" block while avoiding uncontrolled chain-of-thought spillage. 
+
+In the system prompt, I suggest saying, "Think step by step, output a 'Reasoning (dev-only)' section with up to 5 bullets, then provide the Final Answer." I should also mention including a brief rationale instead of full reasoning and logging to Supabase's events table. We can discuss UI toggles with Tailwind classes, but I’ll keep descriptions minimal.
+**Advising on implementation risks**
+
+I can advise on the risks involved, such as chain-of-thought leakage, unpredictability, and potentially longer outputs. It's best to keep the approach to 3-5 bullet points for clarity in implementation. 
+
+First, I'll define a scratchpad simply. Then, I can present options: 1) developer-only scratchpad logs, 2) reasoning summaries for users, 3) tool traces only, 4) full chain-of-thought for admin, and 5) tree-of-thought sampling for evaluation. I recommend defaulting to a tool trace plus a short reasoning summary. 
+
+For quick implementation, I'd suggest adding a feature flag to show reasoning, updating the system prompt, parsing responses, logging tool traces, and establishing a UI panel for collapsible reasoning.</details></think>
+
+---
+
+### Plain-English first
+- Scratchpad (hidden Chain‑of‑Thought): The model writes its step‑by‑step reasoning privately. You can capture it for debugging, but don’t show it to end users or store it long‑term.
+- Reasoning summary (user‑visible): A short, sanitized explanation (2–5 bullets) of what the model did. No raw internal thoughts.
+- Tool trace: A log of which tools ran, with inputs, timings, and top results. Deterministic and safe to show.
+
+### Best way to add “reasoning” safely
+1) Default to tool trace + short reasoning summary for users.
+2) Add a dev‑only scratchpad toggle for deep debugging.
+3) Never persist full scratchpad to the DB; redact secrets; cap length.
+
+### Recommended setup (3 steps)
+- Add a flag (env or per‑request): `showReasoning` and `showScratchpadDevOnly`.
+- Prompt format:
+  - Ask the model to put internal thoughts in `<scratchpad>` (max 150–300 tokens), a concise “why/how,” and to output a short “Reasoning Summary” plus “Final Answer.”
+- Response handling:
+  - Parse out `<scratchpad>` into a transient `debug.scratchpad` (only shown to admins).
+  - Always log a deterministic tool trace: selected tool, inputs, latency, top N filing chunks + similarity, citations.
+
+### Example prompt pattern (safe and minimal)
+
+```text
+You may think step-by-step in <scratchpad> (max 200 tokens). Do not reveal it to users.
+Output sections in this order:
+
+Reasoning Summary:
+- 2–4 short bullets for the user (no secrets, no prompt text)
+
+Final Answer:
+- The answer and citations
+
+<scratchpad>
+Your private notes: why this tool, what you filtered out, edge cases considered.
+</scratchpad>
+```
+
+### What each option gives you
+- Scratchpad (hidden CoT): Maximum insight for you during debugging; higher token use; keep ephemeral.
+- Reasoning summary: Clear, user‑friendly explanation; low risk; stable length.
+- Tool trace: Fully transparent execution path (embeddings call, RPC used, chunk IDs/scores); great for audits and performance tuning.
+
+### Practical guardrails
+- Cap scratchpad tokens; strip PII/secrets; don’t save it—only show in an admin panel.
+- Make the “Show reasoning” toggle off in production by default.
+- Prefer “Reasoning Summary” for normal users; reserve scratchpad for debugging sessions.
+
+If you want, I can wire a “Show reasoning” toggle in the chatbot that displays:
+- Reasoning Summary (always)
+- Tool trace (always)
+- Scratchpad (admins only, behind a toggle)
+
+---
+
+_**User (2025-11-16 13:59Z)**_
+
+Create a prompt that I can paste into chatGBT that will teach me more about what you're talking about.
+
+---
+
+_**Agent (model gpt-5, mode Agent)**_
+
+
+
+---
+
+### Here’s a copy‑paste prompt you can use in ChatGPT
+
+```text
+You are a senior LLM engineer coaching me (a beginner) on making model “reasoning” visible in an app safely.
+
+My context
+- App: Fin Quote (Next.js + Supabase)
+- Use cases: answering questions about SEC filings, returning quotes/citations
+- Goal: Show helpful reasoning to users without leaking raw chain-of-thought; keep deeper traces for debugging
+
+Before you begin
+- Ask me 3–5 clarifying questions first; if I don’t answer, proceed with explicit assumptions.
+- Keep explanations beginner-friendly and concise; favor 3–5 bullets per section.
+
+Deliverables (in this order)
+1) Concepts (brief)
+   - Define: Chain-of-Thought (CoT), Scratchpad (hidden CoT), Reasoning Summary, Tool Trace, ReAct, Tree-of-Thoughts, Self-consistency.
+   - For each: when to use, pros/cons, risks (data leakage, cost), and an example in 1–2 lines.
+
+2) Safe exposure strategy (what to show to users vs devs)
+   - Recommend a default approach that shows: (a) Reasoning Summary (2–5 bullets) + (b) Tool Trace (which tools ran, inputs, timings, top results/citations).
+   - Keep Scratchpad hidden by default; dev-only toggle. List guardrails: token caps, redaction, don’t persist, no PII, no secrets.
+
+3) Prompt patterns (copyable)
+   - “Hidden scratchpad” skeleton using tags (e.g., <scratchpad> … </scratchpad>) with a max token budget and strict “do not reveal” rules.
+   - “Reasoning summary + final answer” output format (sections and examples).
+   - A ReAct-style example (very short) showing how to interleave thoughts/tools safely.
+
+4) Minimal implementation guidance (high level, not long code)
+   - How to add a “Show reasoning” toggle (user-visible summary + tool trace; scratchpad only in admin/dev).
+   - Parsing out scratchpad server-side; logging a deterministic tool trace (selected tool, args, latency, citations).
+   - Redaction rules and storage policy (what never gets saved).
+
+5) Evaluation and safety
+   - How to A/B test with and without reasoning summary.
+   - Common failure modes (hallucinated rationales, overexposure of prompts/keys) and mitigations.
+
+6) Quickstart (checklist)
+   - 6–8 steps to add this to a Next.js + Supabase app (no long code; short snippets allowed).
+
+7) Short quiz (5 questions)
+   - Test my understanding with multiple-choice or short answers; then provide correct answers.
+
+Formatting rules
+- Use H3 headings, short paragraphs, and bullet lists.
+- Keep code snippets short and focused (no long dumps).
+- Prefer clear examples related to SEC filings (e.g., “Item 1A risk factors,” quoting passages).
+
+If you need to make assumptions, state them first in one bullet list, then proceed.
+```
+
+---
+
+_**User (2025-11-16 13:59Z)**_
+
+tell me more: If you want, I can wire a “Show reasoning” toggle in the chatbot that displays:
+
+Reasoning Summary (always)
+
+Tool trace (always)
+
+Scratchpad (admins only, behind a toggle)
+
+---
+
+_**Agent (model gpt-5, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+**Checking status updates**
+
+I don’t need a status update because we aren’t using any tools right now. But I do remember that the developer instructions sometimes suggest including a status update near the top if there are tool calls. Since there aren’t any tool calls in this turn, I'm not worried about that. Instead, I’ll keep it simple and focus on producing the response and any needed bullet point summaries at the end.</details></think>
+
+---
+
+### What the toggle shows and why it’s useful
+- Reasoning Summary (always): 2–5 short bullets explaining how the answer was produced (safe for users).
+- Tool Trace (always): Which tools ran, with inputs, timing, and top results/citations (auditable, deterministic).
+- Scratchpad (admins only): The model’s private notes (hidden Chain‑of‑Thought) behind a toggle for debugging.
+
+### Minimal data shape to return from the server
+```json
+{
+  "answer": "final text here",
+  "reasoningSummary": ["Chose filing search", "Filtered to latest 10‑K", "Quoted Item 1A"],
+  "toolTrace": [
+    { "tool": "searchFilings", "args": {"query":"risk factors"}, "durationMs": 412, "results": 5 }
+  ],
+  "scratchpad": "<model’s private notes…>",   // do NOT persist; only for admins
+  "citations": [{ "filing": "10-K 2024-11-01", "section": "Item 1A", "anchor": "#risk-factors" }]
+}
+```
+
+### Backend changes (safe and simple)
+- Prompting: Ask the model to produce three sections: Reasoning Summary, Final Answer, and a private <scratchpad> (max ~200 tokens). Instruct: “Never reveal scratchpad to users.”
+- Execution:
+  - Build `toolTrace` yourself (tool name, args, start/end times, result counts).
+  - Parse the model response to extract `reasoningSummary`, `answer`, `scratchpad`.
+- Storage:
+  - Persist `answer`, `reasoningSummary`, `toolTrace`, `citations`.
+  - Do not store `scratchpad`. Keep it in memory only for the current response.
+- Access control:
+  - Only include `scratchpad` in the API response if `user.isAdmin === true` and a dev flag is enabled.
+
+### Frontend wiring (chat UI)
+- Add a small toggle in `components/AssistantChat.tsx`:
+  - “Show reasoning” (on by default for Reasoning Summary + Tool Trace).
+  - If `user.isAdmin`, show a nested “Show scratchpad” toggle.
+- Render:
+  - Reasoning Summary: bullet list under each assistant message.
+  - Tool Trace: collapsible section showing tool steps, timings, and top citations.
+  - Scratchpad: hidden by default; show only if admin toggle is on.
+
+Tiny example (conceptual):
+```tsx
+// Pseudocode
+const [showReasoning, setShowReasoning] = useState(true);
+const [showScratchpad, setShowScratchpad] = useState(false);
+
+{showReasoning && (
+  <>
+    <ReasoningBullets items={message.reasoningSummary} />
+    <ToolTrace items={message.toolTrace} />
+    {user.isAdmin && showScratchpad && message.scratchpad && (
+      <PreBlock text={message.scratchpad} />
+    )}
+  </>
+)}
+```
+
+### Guardrails (important)
+- Token cap: Limit scratchpad to ~200 tokens.
+- Redaction: Strip secrets/keys/PII from traces; mask URLs if needed.
+- Persistence: Never save scratchpad to DB or logs; it’s dev‑only.
+- Config flags: `REASONING_ENABLED=true` and `SCRATCHPAD_ADMIN_ONLY=true` to control exposure.
+
+### Quick rollout plan
+1) Add output fields in the answer action: `reasoningSummary`, `toolTrace`, `citations`, `scratchpad` (conditionally).
+2) Update the prompt to include sections + private <scratchpad>.
+3) Render Reasoning Summary + Tool Trace under each answer; add admin scratchpad toggle.
+4) Test with one query (risk factors) and verify citations match the trace.
+5) Keep scratchpad off in production by default; enable per‑session for debugging.
+
+—  
+- You’ll get clear, user‑friendly reasoning plus an auditable tool trace every time; deep internal notes remain admin‑only and ephemeral.
+
+---
+
+_**User (2025-11-16 13:59Z)**_
+
+@node create a markdown file that details the implementation plan.
+
+---
+
+_**Agent (model gpt-5, mode Agent)**_
+
+<think><details><summary>Thought Process</summary>
+**Planning document creation**
+
+I need to outline the steps for creating a markdown document. Firstly, I'll use functions.apply_patch to add the file. Since this is a multi-step task, I should create TODO tasks to keep track of everything. The task itself seems straightforward, but I’ll include brief status updates before and after tool calls. It's important to follow code citation rules in references, while the document can use code fences. After that, I'll summarize the process and where the file was made.
+**Creating the implementation plan document**
+
+I need to ensure that the indentation style isn't an issue for the new file. I'm preparing the content for the document, which might be titled "REASONING_VISIBILITY_IMPLEMENTATION_PLAN.md" or "SHOW_REASONING_TOGGLE_IMPLEMENTATION_PLAN.md." I prefer the first title since it aligns with previous documents that used "implementation plan." 
+
+The doc will cover an overview that explains the purpose, its non-goals, TL;DR, UX details, an API contract, prompt changes, and backend instrumentation. This will provide a comprehensive guide for the reasoning visibility implementation.
+**Outlining the implementation plan details**
+
+I need to avoid storing the scratchpad for security and compliance reasons. The document will include toggles through environment variables, feature flags distinguishing dev from prod, and various testing strategies. 
+
+Metrics will focus on reasoning token overhead and selection rates, and the rollout plan will progress from staging to admin-only, then to all users. Additionally, I’ll include a checklist of implementation steps, an appendix for data shapes, and some concise code snippets. It looks like the user prefers a detailed and beginner-friendly approach, so I'll take that into account while crafting the content.
+**Preparing the final message and patch**
+
+I need to include a status update and a summary in the final message. I'm considering whether to use the todo_write tool, but since this is just a single-step file addition, I think I can skip the TODOs. It's essential to provide a status update before any tool calls to address non-compliance. So, I'll get everything ready for the patch to ensure clear communication and proper execution of the task.</details></think>
+
+---
+
+I'll create a detailed markdown implementation plan for adding a "Show reasoning" feature (Reasoning Summary, Tool Trace, Scratchpad).
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="apply_patch">
+<details>
+<summary>Tool use: **apply_patch**</summary>
+
+
+Parameters:
+
+```json
+{
+  &quot;relativeWorkspacePath&quot;: &quot;/Users/cliffordtraff/Desktop/Fin Quote/docs/REASONING_VISIBILITY_IMPLEMENTATION_PLAN.md&quot;
+}
+```
+Additional data:
+
+```json
+{
+  &quot;codeblockId&quot;: &quot;660d6e7e-3ff0-48e7-9a4f-423b101dacb7&quot;
+}
+```
+Result:
+
+```json
+{
+  &quot;diff&quot;: {
+    &quot;chunks&quot;: [
+      {
+        &quot;diffString&quot;: &quot;- \n+ ## Reasoning Visibility Implementation Plan (Reasoning Summary, Tool Trace, Scratchpad)\n+ \n+ ### Why we’re adding this\n+ - Improve trust and debuggability: Users (and admins) can see how an answer was produced without exposing sensitive internal prompts or raw chain-of-thought.\n+ - Faster iteration: Tool traces reveal where latency comes from and which retrievals/citations drive answers.\n+ - Safer transparency: Show a short Reasoning Summary to users; keep deeper internal notes (Scratchpad) behind an admin-only toggle and never persist them.\n+ \n+ ### Goals (what success looks like)\n+ - Reasoning Summary (2–5 bullets) appears under each assistant response by default.\n+ - Tool Trace shows tools executed, inputs (redacted), durations, and top citations; collapsible by default.\n+ - Scratchpad (hidden chain-of-thought) is viewable only by admins, behind a toggle, and never saved to the database or logs.\n+ - No PII/secrets leakage; token overhead capped; negligible latency impact (&lt;150 ms CPU for parsing/instrumentation).\n+ \n+ ### Non‑Goals\n+ - Do not expose or store long chain-of-thought for non-admin users.\n+ - Do not change retrieval ranking logic or embeddings configuration as part of this feature.\n+ - Do not introduce new analytics dependencies; we will reuse existing logging where possible.\n+ \n+ ---\n+ \n+ ## UX and UI\n+ \n+ ### Surfaces\n+ - Chat message detail block (beneath each assistant message):\n+   - Reasoning Summary: bullet list, always visible when “Show reasoning” is on (default on).\n+   - Tool Trace: collapsible details (default collapsed). Shows each step with name, duration, and high-level result info.\n+   - Scratchpad: Admin-only sub-toggle “Show scratchpad (debug)”. Hidden by default; visible only if current user is admin.\n+ \n+ ### Controls\n+ - Global toggle in chat UI header or settings pane:\n+   - “Show reasoning” (on/off). On shows Reasoning Summary + Tool Trace.\n+   - If user.isAdmin: nested “Show scratchpad (debug)” toggle; default off.\n+ \n+ ### Presentation\n+ - Reasoning Summary: 2–5 short bullets, plain text. No secrets, no prompts, no identifiers.\n+ - Tool Trace (collapsible):\n+   - Step list with: tool name, args (redacted), durationMs, resultCount or top citations.\n+   - For search results: show filing type/date/section and a short snippet. Avoid long payloads.\n+ - Scratchpad (admin-only, collapsible):\n+   - Monospace preformatted block, limited to ~200 tokens.\n+   - Display a caution banner (“Debug view — not user facing. Not stored.”).\n+ \n+ ---\n+ \n+ ## API and Data Model\n+ \n+ ### Response envelope (server → client)\n+ &#96;&#96;&#96;json\n+ {\n+   \&quot;answer\&quot;: \&quot;final text\&quot;,\n+   \&quot;reasoningSummary\&quot;: [\&quot;Selected filing content search\&quot;, \&quot;Filtered to 2024 10‑K\&quot;, \&quot;Quoted Item 1A\&quot;],\n+   \&quot;toolTrace\&quot;: [\n+     {\n+       \&quot;tool\&quot;: \&quot;searchFilings\&quot;,\n+       \&quot;args\&quot;: {\&quot;query\&quot;: \&quot;risk factors\&quot;},       // redact sensitive fields\n+       \&quot;durationMs\&quot;: 412,\n+       \&quot;results\&quot;: 5,\n+       \&quot;topCitations\&quot;: [\n+         {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;}\n+       ]\n+     }\n+   ],\n+   \&quot;scratchpad\&quot;: \&quot;&lt;private notes&gt;\&quot;,             // only included if admin + flag\n+   \&quot;citations\&quot;: [\n+     {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;, \&quot;anchor\&quot;: \&quot;#risk-factors\&quot;}\n+   ]\n+ }\n+ &#96;&#96;&#96;\n+ \n+ Notes:\n+ - &#96;scratchpad&#96; must never be persisted. It’s only added to the API response for admins when an explicit dev flag is enabled.\n+ - &#96;toolTrace.args&#96; should pass through a redaction layer before returning to client (e.g., mask long strings, strip tokens/keys).\n+ \n+ ### Tool Trace step shape (TypeScript)\n+ &#96;&#96;&#96;ts\n+ type ToolTraceStep = {\n+   tool: string;\n+   args: Record&lt;string, unknown&gt;;\n+   durationMs: number;\n+   results?: number;\n+   topCitations?: Array&lt;{\n+     filing: string;\n+     date: string;\n+     section?: string;\n+     anchor?: string;\n+   }&gt;;\n+ };\n+ &#96;&#96;&#96;\n+ \n+ ---\n+ \n+ ## Prompt Design\n+ \n+ ### Pattern\n+ Ask the model for three sections: “Reasoning Summary”, “Final Answer”, and a private “&lt;scratchpad&gt;”. Instruct the model not to reveal scratchpad content to the user.\n+ \n+ Example (conceptual):\n+ &#96;&#96;&#96;\n+ You may think step-by-step in &lt;scratchpad&gt; (max 200 tokens). Do not reveal or reference it.\n+ Return the following sections exactly:\n+ \n+ Reasoning Summary:\n+ - 2–5 short bullets explaining the approach (no prompts, no secrets)\n+ \n+ Final Answer:\n+ - The answer and citations (with filing type, date, section)\n+ \n+ &lt;scratchpad&gt;\n+ (Private notes for debugging: why you chose the tool, filters, edge cases considered)\n+ &lt;/scratchpad&gt;\n+ &#96;&#96;&#96;\n+ \n+ ### Guardrails (in the prompt)\n+ - “Do not include any content from &lt;scratchpad&gt; in the Reasoning Summary or Final Answer.”\n+ - “Keep Reasoning Summary concise and user-safe; avoid prompt text, keys, or file paths.”\n+ - “Cap &lt;scratchpad&gt; at ~200 tokens.”\n+ \n+ ---\n+ \n+ ## Backend Changes\n+ \n+ ### Execution flow (high level)\n+ 1) Tool execution instrumentation\n+    - Before each tool call, record &#96;start = performance.now()&#96; and sanitized &#96;args&#96; copy.\n+    - After completion, compute &#96;durationMs&#96;; capture &#96;results&#96; count and &#96;topCitations&#96; if applicable.\n+    - Push one &#96;ToolTraceStep&#96; into a &#96;toolTrace&#96; array on the server.\n+ \n+ 2) Model response parsing\n+    - Parse the assistant output into: &#96;reasoningSummary[]&#96;, &#96;finalAnswer&#96;, and optional &#96;&lt;scratchpad&gt;&#96; section.\n+    - Enforce output length limits. If missing sections, degrade gracefully (empty summary, no scratchpad).\n+ \n+ 3) Redaction and response assembly\n+    - Run &#96;redactArgs()&#96; for &#96;toolTrace.args&#96; (e.g., truncate long strings, remove keys).\n+    - If &#96;user.isAdmin &amp;&amp; SCRATCHPAD_ADMIN_ONLY === &#39;true&#39; &amp;&amp; REASONING_SCRATCHPAD_ENABLED === &#39;true&#39;&#96;, attach &#96;scratchpad&#96;; else omit.\n+    - Return &#96;{ answer, reasoningSummary, toolTrace, citations, scratchpad? }&#96;.\n+ \n+ 4) Persistence\n+    - Store &#96;answer&#96;, &#96;reasoningSummary&#96;, &#96;toolTrace&#96;, and &#96;citations&#96; as part of the message or query log.\n+    - Do not store &#96;scratchpad&#96;. Avoid logging it to console or external logs.\n+ \n+ ### Redaction guidelines\n+ - Remove API keys, tokens, and auth headers.\n+ - Truncate large text fields (e.g., queries &gt; 256 chars) with a suffix “…(truncated)”.\n+ - Mask PII if present (e.g., emails → &#96;u***@domain.com&#96;).\n+ - For embeddings or RPC payloads, keep only query term and counts; avoid raw vectors.\n+ \n+ ### Feature flags / config\n+ - &#96;REASONING_ENABLED=true&#96; (default true; can disable globally).\n+ - &#96;REASONING_SHOW_SUMMARY_DEFAULT=true&#96; (UI default on).\n+ - &#96;REASONING_TOOL_TRACE_DEFAULT=true&#96; (UI default on).\n+ - &#96;REASONING_SCRATCHPAD_ENABLED=false&#96; (default off in prod).\n+ - &#96;SCRATCHPAD_ADMIN_ONLY=true&#96; (must be true in prod).\n+ \n+ ---\n+ \n+ ## Frontend Changes\n+ \n+ ### UI toggles (AssistantChat)\n+ - Add “Show reasoning” switch (persist per-session in local state; optionally in user settings).\n+ - If admin: show “Show scratchpad (debug)” nested switch.\n+ \n+ ### Rendering\n+ - Reasoning Summary: simple bullet list under the assistant message.\n+ - Tool Trace: collapsible section listing steps with durations and top citations; include a “Copy trace” button for debugging.\n+ - Scratchpad: admin-only collapsible preformatted block with a warning banner.\n+ \n+ ### Accessibility and performance\n+ - Ensure toggles are keyboard-accessible.\n+ - Virtualize long histories: Reasoning/Trace should not cause message reflows that are expensive.\n+ \n+ ---\n+ \n+ ## Security, Privacy, and Compliance\n+ - Never store the scratchpad; it’s transient and admin-only.\n+ - Redact secrets/PII from tool traces and args.\n+ - Ensure RLS prevents non-admins from seeing &#96;scratchpad&#96; fields even if the API is called directly.\n+ - Log size caps: protect logs and payloads against excessive growth (e.g., 100 KB cap per trace).\n+ \n+ ---\n+ \n+ ## Testing Plan\n+ \n+ ### Unit tests\n+ - Prompt parser: extracts Reasoning Summary, Final Answer, and Scratchpad correctly.\n+ - Redaction: verifies keys/PII removed; long strings truncated.\n+ - Trace builder: correct durations, counts, and top citations propagation.\n+ \n+ ### Integration/E2E\n+ - User flow: Ask filing question → Reasoning Summary + Tool Trace visible; citations match trace.\n+ - Admin flow: Enable scratchpad → visible; disable → hidden.\n+ - Flag behavior: Disabling &#96;REASONING_ENABLED&#96; hides reasoning UI entirely.\n+ \n+ ### Safety checks\n+ - Ensure no scratchpad content appears in user-visible fields.\n+ - Verify DB writes exclude scratchpad.\n+ - Confirm large inputs do not degrade performance (load/perf checks).\n+ \n+ ---\n+ \n+ ## Rollout Plan\n+ 1) Dev/staging (admins only)\n+    - Enable all features including scratchpad.\n+    - Collect feedback on clarity and usefulness.\n+ 2) Limited production (users see Reasoning Summary + Trace; scratchpad off)\n+    - &#96;REASONING_ENABLED=true&#96;, &#96;REASONING_SCRATCHPAD_ENABLED=false&#96;.\n+ 3) Full production\n+    - Keep scratchpad off by default; enable per-session for on-call debugging.\n+ \n+ ---\n+ \n+ ## Risks and Mitigations\n+ - Risk: Prompt leakage via Reasoning Summary.\n+   - Mitigation: Explicit prompt instructions; add tests to detect restricted phrases; manual reviews.\n+ - Risk: Token/cost overhead.\n+   - Mitigation: Cap scratchpad to ~200 tokens; keep reasoning bullets short; strip long fields from traces.\n+ - Risk: Privacy leakage via traces.\n+   - Mitigation: Redaction layer; admin-only scratchpad; RLS checks.\n+ - Risk: Developer accidentally logs scratchpad.\n+   - Mitigation: Lint rule / code review checklist; wrap scratchpad in a typed object only returned conditionally.\n+ \n+ ---\n+ \n+ ## Implementation Checklist\n+ \n+ Backend\n+ - [ ] Add tool instrumentation util (&#96;startTraceStep&#96;, &#96;endTraceStep&#96;).\n+ - [ ] Add redaction util for args and traces.\n+ - [ ] Update answer action to request sections + parse &#96;Reasoning Summary&#96;, &#96;Final Answer&#96;, &#96;&lt;scratchpad&gt;&#96;.\n+ - [ ] Assemble response envelope and exclude &#96;scratchpad&#96; unless admin + flag.\n+ - [ ] Persist answer, reasoningSummary, toolTrace, citations only.\n+ \n+ Frontend\n+ - [ ] Add “Show reasoning” and admin-only “Show scratchpad” toggles.\n+ - [ ] Render Reasoning Summary under assistant messages.\n+ - [ ] Render collapsible Tool Trace with durations and top citations.\n+ - [ ] Render admin-only Scratchpad with warning banner; hidden by default.\n+ \n+ Config &amp; Testing\n+ - [ ] Add feature flags (&#96;REASONING_*&#96;, &#96;SCRATCHPAD_ADMIN_ONLY&#96;).\n+ - [ ] Unit tests for parser, redaction, trace builder.\n+ - [ ] E2E tests for user/admin flows and flags.\n+ \n+ ---\n+ \n+ ## Appendix\n+ \n+ ### Example Tool Trace step\n+ &#96;&#96;&#96;json\n+ {\n+   \&quot;tool\&quot;: \&quot;searchFilings\&quot;,\n+   \&quot;args\&quot;: {\&quot;query\&quot;: \&quot;risk factors\&quot;},\n+   \&quot;durationMs\&quot;: 387,\n+   \&quot;results\&quot;: 5,\n+   \&quot;topCitations\&quot;: [\n+     {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;, \&quot;anchor\&quot;: \&quot;#risk-factors\&quot;}\n+   ]\n+ }\n+ &#96;&#96;&#96;\n+ \n+ ### Example Reasoning Summary (good)\n+ - Selected “searchFilings” because question asks about content (not metadata).\n+ - Filtered to the latest 10‑K results.\n+ - Ranked by vector similarity; top passages in Item 1A mention key risks.\n+ - Quoted directly with filing/date/section citations.\n+ \n+ ### Example Scratchpad (admin-only, truncated)\n+ &#96;&#96;&#96;\n+ Chose searchFilings → query=\&quot;risk factors\&quot;. Top results aligned with Item 1A.\n+ Discarded 10‑Q passages; user asked 10‑K. Considered \&quot;geopolitical\&quot; and \&quot;supply chain\&quot;.\n+ Ensure quotes are verbatim; cite 2024‑11‑01 10‑K.\n+ &#96;&#96;&#96;\n+ \n+ &quot;,
+        &quot;oldStart&quot;: 1,
+        &quot;newStart&quot;: 1,
+        &quot;oldLines&quot;: 1,
+        &quot;newLines&quot;: 273,
+        &quot;linesRemoved&quot;: 1,
+        &quot;linesAdded&quot;: 273
+      }
+    ],
+    &quot;editor&quot;: &quot;EDITOR_AI&quot;
+  },
+  &quot;shouldAutoFixLints&quot;: true,
+  &quot;resultForModel&quot;: &quot;Success. Updated the following files:\nM /Users/cliffordtraff/Desktop/Fin Quote/docs/REASONING_VISIBILITY_IMPLEMENTATION_PLAN.md&quot;,
+  &quot;contentsAfterEdit&quot;: &quot;## Reasoning Visibility Implementation Plan (Reasoning Summary, Tool Trace, Scratchpad)\n\n### Why we’re adding this\n- Improve trust and debuggability: Users (and admins) can see how an answer was produced without exposing sensitive internal prompts or raw chain-of-thought.\n- Faster iteration: Tool traces reveal where latency comes from and which retrievals/citations drive answers.\n- Safer transparency: Show a short Reasoning Summary to users; keep deeper internal notes (Scratchpad) behind an admin-only toggle and never persist them.\n\n### Goals (what success looks like)\n- Reasoning Summary (2–5 bullets) appears under each assistant response by default.\n- Tool Trace shows tools executed, inputs (redacted), durations, and top citations; collapsible by default.\n- Scratchpad (hidden chain-of-thought) is viewable only by admins, behind a toggle, and never saved to the database or logs.\n- No PII/secrets leakage; token overhead capped; negligible latency impact (&lt;150 ms CPU for parsing/instrumentation).\n\n### Non‑Goals\n- Do not expose or store long chain-of-thought for non-admin users.\n- Do not change retrieval ranking logic or embeddings configuration as part of this feature.\n- Do not introduce new analytics dependencies; we will reuse existing logging where possible.\n\n---\n\n## UX and UI\n\n### Surfaces\n- Chat message detail block (beneath each assistant message):\n  - Reasoning Summary: bullet list, always visible when “Show reasoning” is on (default on).\n  - Tool Trace: collapsible details (default collapsed). Shows each step with name, duration, and high-level result info.\n  - Scratchpad: Admin-only sub-toggle “Show scratchpad (debug)”. Hidden by default; visible only if current user is admin.\n\n### Controls\n- Global toggle in chat UI header or settings pane:\n  - “Show reasoning” (on/off). On shows Reasoning Summary + Tool Trace.\n  - If user.isAdmin: nested “Show scratchpad (debug)” toggle; default off.\n\n### Presentation\n- Reasoning Summary: 2–5 short bullets, plain text. No secrets, no prompts, no identifiers.\n- Tool Trace (collapsible):\n  - Step list with: tool name, args (redacted), durationMs, resultCount or top citations.\n  - For search results: show filing type/date/section and a short snippet. Avoid long payloads.\n- Scratchpad (admin-only, collapsible):\n  - Monospace preformatted block, limited to ~200 tokens.\n  - Display a caution banner (“Debug view — not user facing. Not stored.”).\n\n---\n\n## API and Data Model\n\n### Response envelope (server → client)\n&#96;&#96;&#96;json\n{\n  \&quot;answer\&quot;: \&quot;final text\&quot;,\n  \&quot;reasoningSummary\&quot;: [\&quot;Selected filing content search\&quot;, \&quot;Filtered to 2024 10‑K\&quot;, \&quot;Quoted Item 1A\&quot;],\n  \&quot;toolTrace\&quot;: [\n    {\n      \&quot;tool\&quot;: \&quot;searchFilings\&quot;,\n      \&quot;args\&quot;: {\&quot;query\&quot;: \&quot;risk factors\&quot;},       // redact sensitive fields\n      \&quot;durationMs\&quot;: 412,\n      \&quot;results\&quot;: 5,\n      \&quot;topCitations\&quot;: [\n        {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;}\n      ]\n    }\n  ],\n  \&quot;scratchpad\&quot;: \&quot;&lt;private notes&gt;\&quot;,             // only included if admin + flag\n  \&quot;citations\&quot;: [\n    {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;, \&quot;anchor\&quot;: \&quot;#risk-factors\&quot;}\n  ]\n}\n&#96;&#96;&#96;\n\nNotes:\n- &#96;scratchpad&#96; must never be persisted. It’s only added to the API response for admins when an explicit dev flag is enabled.\n- &#96;toolTrace.args&#96; should pass through a redaction layer before returning to client (e.g., mask long strings, strip tokens/keys).\n\n### Tool Trace step shape (TypeScript)\n&#96;&#96;&#96;ts\ntype ToolTraceStep = {\n  tool: string;\n  args: Record&lt;string, unknown&gt;;\n  durationMs: number;\n  results?: number;\n  topCitations?: Array&lt;{\n    filing: string;\n    date: string;\n    section?: string;\n    anchor?: string;\n  }&gt;;\n};\n&#96;&#96;&#96;\n\n---\n\n## Prompt Design\n\n### Pattern\nAsk the model for three sections: “Reasoning Summary”, “Final Answer”, and a private “&lt;scratchpad&gt;”. Instruct the model not to reveal scratchpad content to the user.\n\nExample (conceptual):\n&#96;&#96;&#96;\nYou may think step-by-step in &lt;scratchpad&gt; (max 200 tokens). Do not reveal or reference it.\nReturn the following sections exactly:\n\nReasoning Summary:\n- 2–5 short bullets explaining the approach (no prompts, no secrets)\n\nFinal Answer:\n- The answer and citations (with filing type, date, section)\n\n&lt;scratchpad&gt;\n(Private notes for debugging: why you chose the tool, filters, edge cases considered)\n&lt;/scratchpad&gt;\n&#96;&#96;&#96;\n\n### Guardrails (in the prompt)\n- “Do not include any content from &lt;scratchpad&gt; in the Reasoning Summary or Final Answer.”\n- “Keep Reasoning Summary concise and user-safe; avoid prompt text, keys, or file paths.”\n- “Cap &lt;scratchpad&gt; at ~200 tokens.”\n\n---\n\n## Backend Changes\n\n### Execution flow (high level)\n1) Tool execution instrumentation\n   - Before each tool call, record &#96;start = performance.now()&#96; and sanitized &#96;args&#96; copy.\n   - After completion, compute &#96;durationMs&#96;; capture &#96;results&#96; count and &#96;topCitations&#96; if applicable.\n   - Push one &#96;ToolTraceStep&#96; into a &#96;toolTrace&#96; array on the server.\n\n2) Model response parsing\n   - Parse the assistant output into: &#96;reasoningSummary[]&#96;, &#96;finalAnswer&#96;, and optional &#96;&lt;scratchpad&gt;&#96; section.\n   - Enforce output length limits. If missing sections, degrade gracefully (empty summary, no scratchpad).\n\n3) Redaction and response assembly\n   - Run &#96;redactArgs()&#96; for &#96;toolTrace.args&#96; (e.g., truncate long strings, remove keys).\n   - If &#96;user.isAdmin &amp;&amp; SCRATCHPAD_ADMIN_ONLY === &#39;true&#39; &amp;&amp; REASONING_SCRATCHPAD_ENABLED === &#39;true&#39;&#96;, attach &#96;scratchpad&#96;; else omit.\n   - Return &#96;{ answer, reasoningSummary, toolTrace, citations, scratchpad? }&#96;.\n\n4) Persistence\n   - Store &#96;answer&#96;, &#96;reasoningSummary&#96;, &#96;toolTrace&#96;, and &#96;citations&#96; as part of the message or query log.\n   - Do not store &#96;scratchpad&#96;. Avoid logging it to console or external logs.\n\n### Redaction guidelines\n- Remove API keys, tokens, and auth headers.\n- Truncate large text fields (e.g., queries &gt; 256 chars) with a suffix “…(truncated)”.\n- Mask PII if present (e.g., emails → &#96;u***@domain.com&#96;).\n- For embeddings or RPC payloads, keep only query term and counts; avoid raw vectors.\n\n### Feature flags / config\n- &#96;REASONING_ENABLED=true&#96; (default true; can disable globally).\n- &#96;REASONING_SHOW_SUMMARY_DEFAULT=true&#96; (UI default on).\n- &#96;REASONING_TOOL_TRACE_DEFAULT=true&#96; (UI default on).\n- &#96;REASONING_SCRATCHPAD_ENABLED=false&#96; (default off in prod).\n- &#96;SCRATCHPAD_ADMIN_ONLY=true&#96; (must be true in prod).\n\n---\n\n## Frontend Changes\n\n### UI toggles (AssistantChat)\n- Add “Show reasoning” switch (persist per-session in local state; optionally in user settings).\n- If admin: show “Show scratchpad (debug)” nested switch.\n\n### Rendering\n- Reasoning Summary: simple bullet list under the assistant message.\n- Tool Trace: collapsible section listing steps with durations and top citations; include a “Copy trace” button for debugging.\n- Scratchpad: admin-only collapsible preformatted block with a warning banner.\n\n### Accessibility and performance\n- Ensure toggles are keyboard-accessible.\n- Virtualize long histories: Reasoning/Trace should not cause message reflows that are expensive.\n\n---\n\n## Security, Privacy, and Compliance\n- Never store the scratchpad; it’s transient and admin-only.\n- Redact secrets/PII from tool traces and args.\n- Ensure RLS prevents non-admins from seeing &#96;scratchpad&#96; fields even if the API is called directly.\n- Log size caps: protect logs and payloads against excessive growth (e.g., 100 KB cap per trace).\n\n---\n\n## Testing Plan\n\n### Unit tests\n- Prompt parser: extracts Reasoning Summary, Final Answer, and Scratchpad correctly.\n- Redaction: verifies keys/PII removed; long strings truncated.\n- Trace builder: correct durations, counts, and top citations propagation.\n\n### Integration/E2E\n- User flow: Ask filing question → Reasoning Summary + Tool Trace visible; citations match trace.\n- Admin flow: Enable scratchpad → visible; disable → hidden.\n- Flag behavior: Disabling &#96;REASONING_ENABLED&#96; hides reasoning UI entirely.\n\n### Safety checks\n- Ensure no scratchpad content appears in user-visible fields.\n- Verify DB writes exclude scratchpad.\n- Confirm large inputs do not degrade performance (load/perf checks).\n\n---\n\n## Rollout Plan\n1) Dev/staging (admins only)\n   - Enable all features including scratchpad.\n   - Collect feedback on clarity and usefulness.\n2) Limited production (users see Reasoning Summary + Trace; scratchpad off)\n   - &#96;REASONING_ENABLED=true&#96;, &#96;REASONING_SCRATCHPAD_ENABLED=false&#96;.\n3) Full production\n   - Keep scratchpad off by default; enable per-session for on-call debugging.\n\n---\n\n## Risks and Mitigations\n- Risk: Prompt leakage via Reasoning Summary.\n  - Mitigation: Explicit prompt instructions; add tests to detect restricted phrases; manual reviews.\n- Risk: Token/cost overhead.\n  - Mitigation: Cap scratchpad to ~200 tokens; keep reasoning bullets short; strip long fields from traces.\n- Risk: Privacy leakage via traces.\n  - Mitigation: Redaction layer; admin-only scratchpad; RLS checks.\n- Risk: Developer accidentally logs scratchpad.\n  - Mitigation: Lint rule / code review checklist; wrap scratchpad in a typed object only returned conditionally.\n\n---\n\n## Implementation Checklist\n\nBackend\n- [ ] Add tool instrumentation util (&#96;startTraceStep&#96;, &#96;endTraceStep&#96;).\n- [ ] Add redaction util for args and traces.\n- [ ] Update answer action to request sections + parse &#96;Reasoning Summary&#96;, &#96;Final Answer&#96;, &#96;&lt;scratchpad&gt;&#96;.\n- [ ] Assemble response envelope and exclude &#96;scratchpad&#96; unless admin + flag.\n- [ ] Persist answer, reasoningSummary, toolTrace, citations only.\n\nFrontend\n- [ ] Add “Show reasoning” and admin-only “Show scratchpad” toggles.\n- [ ] Render Reasoning Summary under assistant messages.\n- [ ] Render collapsible Tool Trace with durations and top citations.\n- [ ] Render admin-only Scratchpad with warning banner; hidden by default.\n\nConfig &amp; Testing\n- [ ] Add feature flags (&#96;REASONING_*&#96;, &#96;SCRATCHPAD_ADMIN_ONLY&#96;).\n- [ ] Unit tests for parser, redaction, trace builder.\n- [ ] E2E tests for user/admin flows and flags.\n\n---\n\n## Appendix\n\n### Example Tool Trace step\n&#96;&#96;&#96;json\n{\n  \&quot;tool\&quot;: \&quot;searchFilings\&quot;,\n  \&quot;args\&quot;: {\&quot;query\&quot;: \&quot;risk factors\&quot;},\n  \&quot;durationMs\&quot;: 387,\n  \&quot;results\&quot;: 5,\n  \&quot;topCitations\&quot;: [\n    {\&quot;filing\&quot;: \&quot;10-K\&quot;, \&quot;date\&quot;: \&quot;2024-11-01\&quot;, \&quot;section\&quot;: \&quot;Item 1A\&quot;, \&quot;anchor\&quot;: \&quot;#risk-factors\&quot;}\n  ]\n}\n&#96;&#96;&#96;\n\n### Example Reasoning Summary (good)\n- Selected “searchFilings” because question asks about content (not metadata).\n- Filtered to the latest 10‑K results.\n- Ranked by vector similarity; top passages in Item 1A mention key risks.\n- Quoted directly with filing/date/section citations.\n\n### Example Scratchpad (admin-only, truncated)\n&#96;&#96;&#96;\nChose searchFilings → query=\&quot;risk factors\&quot;. Top results aligned with Item 1A.\nDiscarded 10‑Q passages; user asked 10‑K. Considered \&quot;geopolitical\&quot; and \&quot;supply chain\&quot;.\nEnsure quotes are verbatim; cite 2024‑11‑01 10‑K.\n&#96;&#96;&#96;\n\n\n&quot;
+}
+```
+User decision: **accepted**
+
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+Created a detailed implementation plan markdown for the “Show reasoning” feature.
+
+- Added: `docs/REASONING_VISIBILITY_IMPLEMENTATION_PLAN.md`
+- Includes: goals, UX/UI, API contract, prompt design, backend/FE changes, flags, security, testing, rollout, risks, and a checklist.
 
 ---
 
