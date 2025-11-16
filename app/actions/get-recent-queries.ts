@@ -15,7 +15,7 @@ export async function getRecentQueries(params?: {
   sessionId?: string
 }): Promise<RecentQuery[]> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Build query - prioritize user_id over session_id
     let query = supabase
@@ -58,7 +58,7 @@ export async function getRecentQueries(params?: {
 
 export async function deleteQuery(queryId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { error } = await supabase
       .from('query_logs')
@@ -82,7 +82,7 @@ export async function clearQueryHistory(params?: {
   sessionId?: string
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Build delete query - prioritize user_id over session_id
     let query = supabase.from('query_logs').delete()

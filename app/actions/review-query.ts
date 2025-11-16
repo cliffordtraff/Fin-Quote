@@ -39,7 +39,7 @@ export async function markQueryIncorrect(params: {
   reviewerNotes?: string
 }): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Get current user (reviewer)
     const { data: { user } } = await supabase.auth.getUser()
@@ -81,7 +81,7 @@ export async function markQueryCorrect(params: {
   reviewerNotes?: string
 }): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Get current user (reviewer)
     const { data: { user } } = await supabase.auth.getUser()
@@ -129,7 +129,7 @@ export async function getQueriesForReview(params: {
   total: number
 }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const limit = params.limit ?? 50
     const offset = params.offset ?? 0
 
@@ -178,7 +178,7 @@ export async function getErrorCategoryStats(): Promise<{
   error: string | null
 }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await (supabase as any)
       .from('query_logs')

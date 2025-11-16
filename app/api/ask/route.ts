@@ -677,7 +677,7 @@ export async function POST(req: NextRequest) {
           answerGenerationStarted = false
 
           // Step 4: Validate answer (server-side, after streaming)
-          const supabase = createServerClient()
+          const supabase = await createServerClient()
 
           const checkYearInDatabase = async (year: number): Promise<boolean> => {
             try {

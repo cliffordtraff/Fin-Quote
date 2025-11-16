@@ -3,7 +3,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 
 export async function addFinancialColumns() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   // SQL to add new columns to financials_std table
   const sql = `

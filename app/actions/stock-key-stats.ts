@@ -58,7 +58,7 @@ export async function getStockKeyStats(): Promise<StockKeyStats> {
   }
 
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Fetch latest metrics from financial_metrics table (key-value format)
     const { data: metricsData, error: metricsError } = await supabase

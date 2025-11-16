@@ -115,7 +115,7 @@ const METRIC_CATEGORIES = {
  */
 export async function getAllMetrics(): Promise<AllMetrics> {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Get current year
     const currentYear = new Date().getFullYear();

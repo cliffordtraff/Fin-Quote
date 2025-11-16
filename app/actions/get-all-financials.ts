@@ -51,7 +51,7 @@ interface AllFinancials {
  */
 export async function getAllFinancials(): Promise<AllFinancials> {
   try {
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Fetch last 5 years of financial data
     const { data: financialsData, error } = await supabase

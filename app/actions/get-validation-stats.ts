@@ -83,7 +83,7 @@ export async function getValidationStats(params?: {
   days?: number
 }): Promise<{ data: ValidationStats | null; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const days = params?.days ?? 7
 
     // Calculate date range
@@ -233,7 +233,7 @@ export async function getValidationFailures(params?: {
   severity?: 'critical' | 'high' | 'medium' | 'low' | 'all'
 }): Promise<{ data: ValidationFailure[] | null; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const limit = params?.limit ?? 50
 
     // Fetch recent validation failures
@@ -296,7 +296,7 @@ export async function getQueriesForValidationReview(params?: {
   limit?: number
 }): Promise<{ data: ValidationFailure[] | null; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const limit = params?.limit ?? 50
 
     let query = supabase

@@ -244,7 +244,7 @@ async function logMetricResolution(params: {
   userQuestion?: string
 }) {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     await supabase.from('metric_resolutions').insert({
       user_phrase: params.userPhrase,

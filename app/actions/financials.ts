@@ -8,7 +8,7 @@ export async function getCompaniesWithFinancials(): Promise<{
   error: string | null
 }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Fetch all companies
     const { data: companies, error: companiesError } = await supabase
@@ -113,7 +113,7 @@ export async function getAaplFinancialsByMetric(params: {
   const safeLimit = Math.min(Math.max(requestedLimit, 1), 20)
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // ===============================================
     // HANDLE CALCULATED METRICS

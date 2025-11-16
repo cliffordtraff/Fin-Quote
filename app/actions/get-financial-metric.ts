@@ -36,7 +36,7 @@ export async function getFinancialMetric(
   error: string | null
 }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Build query
     let query = supabase
@@ -109,7 +109,7 @@ export async function getFinancialMetrics(params: {
     }
 
     // 3. Query database with resolved canonical names
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase
       .from('financial_metrics')
@@ -161,7 +161,7 @@ export async function getMetricsByCategory(params: {
   error: string | null
 }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase
       .from('financial_metrics')

@@ -110,7 +110,7 @@ export async function logQuery(data: {
   embeddingTokens?: number
 }): Promise<string | null> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Calculate total cost (gpt-5-nano: $0.05/1M input, $0.40/1M output, embeddings: $0.02/1M)
     const inputPrice = 0.05 / 1_000_000 // gpt-5-nano input price
@@ -193,7 +193,7 @@ export async function submitFeedback(params: {
   comment?: string
 }): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Type assertion needed because query_logs table not in generated types yet
     const { error } = await (supabase as any)
@@ -678,7 +678,7 @@ export async function askQuestion(
     answerLatencyMs = Date.now() - answerGenerationStart
 
     // Step 4: Validate the answer (Phase 1)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Helper function to check if a year exists in the database
     const checkYearInDatabase = async (year: number): Promise<boolean> => {

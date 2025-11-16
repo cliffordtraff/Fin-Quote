@@ -3,7 +3,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 
 export async function checkFinancialsSchema() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   // Fetch one row to see all available columns
   const { data, error } = await supabase

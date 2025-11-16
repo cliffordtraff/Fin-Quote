@@ -31,7 +31,7 @@ export async function getRecentFilings(params: {
   const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await supabase
       .from('filings')

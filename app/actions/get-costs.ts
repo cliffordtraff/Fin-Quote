@@ -74,7 +74,7 @@ export async function getCostStats(params?: {
   endDate?: string
 }): Promise<{ data: CostStats | null; error: string | null }> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Build date filter
     let query = supabase

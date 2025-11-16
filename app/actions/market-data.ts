@@ -478,7 +478,7 @@ export async function getRussellMarketData() {
  */
 export async function getAaplFinancialHistory() {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await supabase
       .from('financials_std')

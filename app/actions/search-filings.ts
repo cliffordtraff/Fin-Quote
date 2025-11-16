@@ -51,7 +51,7 @@ export async function searchFilings(params: {
     const filingTypeFilter = filingTypeMatch ? filingTypeMatch[0].toUpperCase() : null
 
     // Step 3: Search for similar chunks using vector similarity
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // PostgreSQL vector similarity search using <-> operator (cosine distance)
     const { data: chunks, error: searchError } = await (supabase as any).rpc(
