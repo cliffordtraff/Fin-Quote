@@ -254,9 +254,19 @@ export async function askQuestion(
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty', queryLogId: null }
     }
 
+    // Extract previous tool results (last 2 assistant messages with data)
+    const previousToolResults = conversationHistory
+      .filter(msg => msg.role === 'assistant' && msg.dataUsed && msg.dataUsed.data && msg.dataUsed.data.length > 0)
+      .slice(-2) // Get last 2
+      .map(msg => ({
+        question: conversationHistory[conversationHistory.indexOf(msg) - 1]?.content || 'Unknown question',
+        answer: msg.content,
+        toolData: msg.dataUsed
+      }))
+
     // Step 1: Tool selection with conversation history
     const toolSelectionStart = Date.now()
-    const selectionPrompt = buildToolSelectionPrompt(userQuestion)
+    const selectionPrompt = buildToolSelectionPrompt(userQuestion, previousToolResults)
 
     // Build messages array with conversation history
     const selectionMessages: SimpleMessage[] = [
@@ -577,7 +587,7 @@ export async function askQuestion(
 
     // Step 3: Generate final answer using the fetched facts and conversation history
     const answerGenerationStart = Date.now()
-    const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson)
+    const answerPrompt = buildFinalAnswerPrompt(userQuestion, factsJson, previousToolResults)
 
     // Debug logging
     console.log('🔍 DEBUG - Question:', userQuestion)

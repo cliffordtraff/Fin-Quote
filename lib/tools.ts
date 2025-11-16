@@ -186,7 +186,21 @@ Available Tools:
 
    args: {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}  (to is optional)
 
-3. getRecentFilings - LIST SEC filings metadata
+3. getRecentFilings - LIST SEC filings metadata ONLY
+
+   ⚠️ IMPORTANT: This tool returns ONLY metadata (filing type, date, URL).
+   It does NOT return filing CONTENT or text.
+
+   Use ONLY when:
+   - User wants to know WHEN filings were submitted
+   - User wants to know WHICH filings exist
+   - User wants filing dates/types/URLs
+
+   DO NOT USE when:
+   - User asks WHAT the filing says
+   - User wants content, quotes, or information FROM the filing
+   - User asks about topics like risks, strategy, etc.
+   → Use searchFilings instead for content questions!
 
    LIMIT RULES:
 
@@ -199,22 +213,28 @@ Available Tools:
 
    3. If question says "all", "available", "history" → limit: 10
 
-   Examples:
-   - "recent filings" → limit: 5
-   - "last 3 10-Ks" → limit: 3
-   - "most recent filing" → limit: 1
-   - "all available reports" → limit: 10
-   - "filing history" → limit: 10
+   Examples (metadata questions):
+   - "when was the most recent filing?" → limit: 1
+   - "what filings do you have?" → limit: 5
+   - "show me filing dates" → limit: 5
 
    args: {"limit": <number 1-10>}
 
-4. searchFilings - SEARCH filing content
+4. searchFilings - SEARCH filing content (for WHAT they say)
 
-   Use for qualitative questions about:
-   - Risks, strategy, operations, business model
-   - Management commentary, outlook
+   ⚠️ IMPORTANT: Use this when user asks about CONTENT, not just dates!
+
+   Use for ANY question about WHAT the filings say:
+   - Risk factors, strategy, operations, business model
+   - Management commentary, outlook, quotes
    - Products, markets, competition
    - Governance, compensation
+   - ANY question asking "what did they say", "provide quotes", etc.
+
+   Even if they mention "latest 10-K" or specific filing:
+   - "What are risk factors in latest 10-K?" → USE searchFilings
+   - "What does the 10-K say about AI?" → USE searchFilings
+   - "Provide quotes from recent filing" → USE searchFilings
 
    QUERY RULES:
    - Extract key terms from user's question
@@ -222,9 +242,11 @@ Available Tools:
    - Don't need full sentences
 
    Examples:
-   - "What are the risk factors?" → query: "risk factors"
-   - "Tell me about competition" → query: "competition"
-   - "Search for AI mentions" → query: "AI"
+   - "What are the risk factors?" → {"query": "risk factors", "limit": 5}
+   - "What about risk factors in latest 10-K?" → {"query": "risk factors", "limit": 5}
+   - "Tell me about competition" → {"query": "competition", "limit": 5}
+   - "Provide quotes about AI strategy" → {"query": "AI strategy", "limit": 5}
+   - "What does the 10-K say about iPhone?" → {"query": "iPhone", "limit": 5}
 
    args: {"query": "<keywords>", "limit": 5}
 
@@ -347,8 +369,15 @@ TOOL SELECTION LOGIC:
 2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
 3. User asks "what metrics available"? → listMetrics
 4. Stock price? → getPrices
-5. List filings? → getRecentFilings
-6. Qualitative content search? → searchFilings
+5. Filing metadata ONLY (when/which filings)? → getRecentFilings
+6. Filing CONTENT (what they say, quotes, topics)? → searchFilings
+
+⚠️ KEY DISTINCTION for #5 vs #6:
+- "When was the latest 10-K filed?" → getRecentFilings (metadata)
+- "What does the latest 10-K say about risks?" → searchFilings (content)
+- "Show me recent filings" → getRecentFilings (metadata)
+- "What are risk factors in the latest 10-K?" → searchFilings (content)
+- "Provide quotes from the 10-K" → searchFilings (content)
 
 Return ONLY JSON - examples:
 
@@ -359,10 +388,25 @@ Return ONLY JSON - examples:
 {"tool":"getPrices","args":{"range":"ytd"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
 {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+{"tool":"searchFilings","args":{"query":"AI strategy","limit":5}}
 {"tool":"listMetrics","args":{"category":"Valuation"}}
 {"tool":"listMetrics","args":{}}
 {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":5}}
 {"tool":"getFinancialMetric","args":{"metricNames":["ROE","debt to equity"],"limit":10}}
+
+CRITICAL EXAMPLES - Filing Content vs Metadata:
+Q: "When was the latest 10-K filed?"
+A: {"tool":"getRecentFilings","args":{"limit":1}}
+
+Q: "What about risk factors in their latest 10k? provide quotes."
+A: {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+
+Q: "What does the 10-K say about iPhone sales?"
+A: {"tool":"searchFilings","args":{"query":"iPhone sales","limit":5}}
+
+Q: "Provide quotes from the latest filing about competition"
+A: {"tool":"searchFilings","args":{"query":"competition","limit":5}}
 
 CRITICAL EXAMPLES - Advanced Metrics:
 Q: "What is AAPL's debt to equity ratio?"
@@ -398,14 +442,35 @@ export const buildToolSelectionMessages = (userQuestion: string) => {
 }
 
 // Legacy function - kept for backwards compatibility
-export const buildToolSelectionPrompt = (userQuestion: string) => {
+export const buildToolSelectionPrompt = (
+  userQuestion: string,
+  previousToolResults?: Array<{
+    question: string
+    answer: string
+    toolData: { type: string; data: any[] }
+  }>
+) => {
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0]
 
   // Replace the placeholder with the actual date
   const promptWithDate = TOOL_SELECTION_STATIC_PROMPT.replace('{{TODAY_DATE}}', today)
 
-  return `${promptWithDate}
+  // Add context about previous tool results if available
+  let previousDataContext = ''
+  if (previousToolResults && previousToolResults.length > 0) {
+    previousDataContext = `\n\nPREVIOUS DATA AVAILABLE (for follow-up questions):
+${previousToolResults.map((result, idx) => `
+Previous Question ${idx + 1}: "${result.question}"
+Data Type: ${result.toolData.type}
+Data Summary: ${result.toolData.data.length} items returned
+`).join('')}
+
+⚠️ If the current question is about the previous question/answer (e.g., "where did you get that?", "what was the source?"), you may be able to answer using previous context without calling a new tool. However, for most follow-up questions, you should still select the appropriate tool.
+`
+  }
+
+  return `${promptWithDate}${previousDataContext}
 
 User question: "${userQuestion}"`
 }
@@ -438,13 +503,37 @@ No explanations, just the JSON.`
 
 export const buildFinalAnswerPrompt = (
   userQuestion: string,
-  factsJson: string
-) => `You are an analyst. Answer the user using ONLY the provided facts.
+  factsJson: string,
+  previousToolResults?: Array<{
+    question: string
+    answer: string
+    toolData: { type: string; data: any[] }
+  }>
+) => {
+  // Build previous context section if available
+  let previousContextSection = ''
+  if (previousToolResults && previousToolResults.length > 0) {
+    previousContextSection = `\n\nPREVIOUS QUESTIONS & DATA (for context and follow-up questions):
+${previousToolResults.map((result, idx) => `
+Previous Question ${idx + 1}: "${result.question}"
+Previous Answer ${idx + 1}: ${result.answer}
+Previous Data ${idx + 1} (${result.toolData.type}): ${JSON.stringify(result.toolData.data, null, 2).substring(0, 2000)}
+`).join('\n')}
+
+⚠️ IMPORTANT: The user's current question may reference previous questions/answers.
+- If the question is about WHERE you got information ("you got this from...?", "where did that come from?"), reference the previous data source
+- If the question asks for clarification about a previous answer, you can reference both current facts AND previous context
+- Otherwise, prioritize current facts over previous context
+`
+  }
+
+  return `You are an analyst. Answer the user using ONLY the provided facts${previousToolResults && previousToolResults.length > 0 ? ' and previous context' : ''}.
 
 User question: "${userQuestion}"
 
 Facts (JSON rows):
 ${factsJson}
+${previousContextSection}
 
 CRITICAL VALIDATION RULES - Follow These Exactly:
 
@@ -474,6 +563,33 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - If mentioning a filing, verify its filing_type and filing_date are in the facts
    - Example: "According to the 10-K filed November 1, 2024..." (use exact date from data)
    - NEVER reference filings not present in the facts
+
+4a. SEC FILING PASSAGES - When facts contain SEC filing content:
+   - The facts JSON contains "chunk_text" fields with actual text from SEC filings
+   - ⚠️ CRITICAL: READ ALL PASSAGES COMPLETELY before answering
+   - ⚠️ CRITICAL: Search through ALL passages for the information requested
+
+   When user asks about specific topics (e.g., "iPhone sales", "risk factors"):
+   1. Scan through ALL passages looking for mentions of that topic
+   2. If you find relevant data (numbers, quotes, facts), EXTRACT IT and provide it
+   3. DO NOT say "I can provide it if you want" - JUST PROVIDE IT
+   4. DO NOT be overly cautious - if the data is there, use it
+
+   For DATA in tables or structured format:
+   - Extract the numbers and present them clearly
+   - Example: If passage contains "iPhone $ 201,183 $ 200,583 $ 205,489" with headers "2024 2023 2022"
+   - Answer: "According to the 10-K filed November 1, 2024, iPhone net sales were $201.2 billion in 2024, $200.6 billion in 2023, and $205.5 billion in 2022."
+
+   For QUOTES and qualitative content:
+   - Provide direct quotes from chunk_text that are RELEVANT
+   - Use quotation marks around direct quotes
+   - Cite the source: filing type, date, and section
+   - Example: According to the 10-K filed November 1, 2024, "The Company is exposed to the risk of write-downs..."
+
+   Only say "I couldn't find information" if:
+   - You've read ALL passages completely
+   - NONE of them contain the requested information
+   - DO NOT say this if the data exists but you're uncertain about formatting
 
 5. UNCERTAINTY - Admit when unsure:
    - If you cannot find specific data in the facts, say so clearly
@@ -551,4 +667,7 @@ Examples:
 - Question: "Revenue in 2020 vs 2024?" → Answer: "Revenue was $274.5B in 2020 and $383.3B in 2024, a 40% increase." (Compare as requested, exact numbers)
 - Question: "What's the gross margin?" → Answer: "AAPL's gross margin in 2024 is 46.2% (gross profit of $180.7B divided by revenue of $391.0B)." (Calculate ratio from data)
 - Question: "Chart of debt to equity ratio last 5 years" → Answer: "The debt-to-equity ratio decreased from 2.61 in 2022 to 0.11 in 2025; check the chart below for the full trend." (User asked for chart, direct them to it)
-- Question: "Show year to date performance" → Answer: "AAPL is up 9.88% year-to-date, from $243.85 to $267.93 as of the latest date in the data. Check the data table below for the full yearly breakdown." (Calculate percentage, format prices with $, mention trend)`
+- Question: "Show year to date performance" → Answer: "AAPL is up 9.88% year-to-date, from $243.85 to $267.93 as of the latest date in the data. Check the data table below for the full yearly breakdown." (Calculate percentage, format prices with $, mention trend)
+- Question: "What did AAPL say about risk factors in their latest 10-K? provide quotes." → Answer: "According to the 10-K filed November 1, 2024, Apple identifies several main risks: 'The Company is exposed to the risk of write-downs on the value of its inventory and other assets, in addition to purchase commitment cancellation risk.' The filing also notes that 'rapid technological change and competitive dynamics could materially adversely affect the Company's business, results of operations and financial condition.'" (Provide direct quotes from chunk_text with proper citation)
+- Question: "What does the 10-K say about iPhone sales?" → Answer: "According to the 10-K filed November 1, 2024, iPhone net sales were $201.2 billion in 2024, $200.6 billion in 2023, and $205.5 billion in 2022." (Extract relevant data from the passage that actually mentions iPhone, not unrelated passages about inventory or IP)`
+}

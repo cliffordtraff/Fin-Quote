@@ -16,13 +16,18 @@ type QueryLogRow = {
 }
 
 // OpenAI Pricing (as of August 2025)
-// gpt-5-nano: $0.050 per 1M input tokens, $0.400 per 1M output tokens (60% cheaper than gpt-4o-mini)
+// gpt-5-nano: $0.050 per 1M input tokens, $0.400 per 1M output tokens
+// gpt-5-mini: $0.250 per 1M input tokens, $2.000 per 1M output tokens (5x more than nano, better reasoning)
 // gpt-4o-mini: $0.150 per 1M input tokens, $0.600 per 1M output tokens
 // text-embedding-3-small: $0.020 per 1M tokens
 const PRICING = {
   'gpt-5-nano': {
     input: 0.050 / 1_000_000, // $ per token
     output: 0.400 / 1_000_000,
+  },
+  'gpt-5-mini': {
+    input: 0.250 / 1_000_000, // $ per token
+    output: 2.000 / 1_000_000,
   },
   'gpt-4o-mini': {
     input: 0.150 / 1_000_000, // $ per token
@@ -37,7 +42,7 @@ const PRICING = {
 const getCurrentModelPricing = () => {
   const model = process.env.OPENAI_MODEL || 'gpt-5-nano'
   if (model in PRICING && 'input' in PRICING[model as keyof typeof PRICING]) {
-    return PRICING[model as 'gpt-5-nano' | 'gpt-4o-mini']
+    return PRICING[model as 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-4o-mini']
   }
   // Fallback to gpt-5-nano pricing if unknown model
   return PRICING['gpt-5-nano']
