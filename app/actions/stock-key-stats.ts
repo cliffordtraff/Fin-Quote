@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface StockKeyStats {
   // Valuation
@@ -58,20 +58,27 @@ export async function getStockKeyStats(): Promise<StockKeyStats> {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createServerClient();
 
-    // Fetch latest metrics from financial_metrics table
+    // Fetch latest metrics from financial_metrics table (key-value format)
     const { data: metricsData, error: metricsError } = await supabase
       .from('financial_metrics')
-      .select('*')
-      .order('date', { ascending: false })
-      .limit(1);
+      .select('metric_name, metric_value, year')
+      .eq('symbol', symbol)
+      .order('year', { ascending: false })
+      .limit(200); // Get enough rows to cover all metrics for the latest year
 
     if (metricsError) {
       console.error('Error fetching financial metrics:', metricsError);
     }
 
-    const latestMetrics = metricsData?.[0] || {};
+    // Transform key-value rows into an object with metric names as keys
+    const latestMetrics: Record<string, number> = {};
+    metricsData?.forEach((row) => {
+      if (!latestMetrics[row.metric_name]) {
+        latestMetrics[row.metric_name] = row.metric_value;
+      }
+    });
 
     // Fetch key metrics from FMP API for real-time data
     const [quoteRes, keyMetricsRes] = await Promise.all([
@@ -95,7 +102,7 @@ export async function getStockKeyStats(): Promise<StockKeyStats> {
     const { data: financialsData } = await supabase
       .from('financials_std')
       .select('*')
-      .order('fiscal_year', { ascending: false })
+      .order('year', { ascending: false })
       .limit(1);
 
     const latestFinancials = financialsData?.[0] || {};

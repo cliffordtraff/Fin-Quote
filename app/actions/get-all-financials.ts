@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface FinancialYear {
   year: number;
@@ -51,13 +51,13 @@ interface AllFinancials {
  */
 export async function getAllFinancials(): Promise<AllFinancials> {
   try {
-    const supabase = await createClient();
+    const supabase = createServerClient();
 
     // Fetch last 5 years of financial data
     const { data: financialsData, error } = await supabase
       .from('financials_std')
       .select('*')
-      .order('fiscal_year', { ascending: false })
+      .order('year', { ascending: false })
       .limit(5);
 
     if (error) {
@@ -82,7 +82,7 @@ export async function getAllFinancials(): Promise<AllFinancials> {
       const netIncome = row.net_income || 0;
 
       return {
-        year: row.fiscal_year,
+        year: row.year,
         revenue,
         costOfRevenue,
         grossProfit,
@@ -104,7 +104,7 @@ export async function getAllFinancials(): Promise<AllFinancials> {
       const shareholdersEquity = row.shareholders_equity || 0;
 
       return {
-        year: row.fiscal_year,
+        year: row.year,
         totalAssets,
         currentAssets,
         cashAndEquivalents: currentAssets * 0.2, // Approximate
@@ -122,7 +122,7 @@ export async function getAllFinancials(): Promise<AllFinancials> {
       const capex = operatingCashFlow * 0.1; // Approximate - not in financials_std
 
       return {
-        year: row.fiscal_year,
+        year: row.year,
         operatingCashFlow,
         investingCashFlow: -capex * 1.2, // Approximate (negative)
         financingCashFlow: -(operatingCashFlow * 0.9), // Approximate (negative, buybacks/dividends)

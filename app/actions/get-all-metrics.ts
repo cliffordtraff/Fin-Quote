@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface MetricDataPoint {
   metricName: string;
@@ -115,7 +115,7 @@ const METRIC_CATEGORIES = {
  */
 export async function getAllMetrics(): Promise<AllMetrics> {
   try {
-    const supabase = await createClient();
+    const supabase = createServerClient();
 
     // Get current year
     const currentYear = new Date().getFullYear();
@@ -126,12 +126,12 @@ export async function getAllMetrics(): Promise<AllMetrics> {
       `${currentYear - 5}-01-01`,  // 5Y ago
     ];
 
-    // Fetch all metrics for relevant years
+    // Fetch all metrics for relevant years (key-value format)
     const { data: metricsData, error } = await supabase
       .from('financial_metrics')
-      .select('*')
-      .order('date', { ascending: false })
-      .limit(20); // Get recent data points
+      .select('metric_name, metric_value, year')
+      .eq('symbol', 'AAPL')
+      .order('year', { ascending: false });
 
     if (error) {
       console.error('Error fetching metrics:', error);
@@ -150,16 +150,26 @@ export async function getAllMetrics(): Promise<AllMetrics> {
       };
     }
 
-    // Sort by date descending
-    const sortedData = metricsData.sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+    // Group metrics by year
+    const metricsByYear = new Map<number, Map<string, number>>();
+    metricsData.forEach((row) => {
+      if (!metricsByYear.has(row.year)) {
+        metricsByYear.set(row.year, new Map());
+      }
+      metricsByYear.get(row.year)!.set(row.metric_name, row.metric_value);
+    });
+
+    // Get sorted years
+    const sortedYears = Array.from(metricsByYear.keys()).sort((a, b) => b - a);
 
     // Helper function to get metric value by year offset
     const getMetricValue = (metricKey: string, yearOffset: number): number => {
-      const targetIndex = Math.min(yearOffset, sortedData.length - 1);
-      const row = sortedData[targetIndex];
-      return row?.[metricKey] || 0;
+      const targetYearIndex = Math.min(yearOffset, sortedYears.length - 1);
+      if (targetYearIndex < 0) return 0;
+
+      const year = sortedYears[targetYearIndex];
+      const yearMetrics = metricsByYear.get(year);
+      return yearMetrics?.get(metricKey) || 0;
     };
 
     // Helper function to transform category metrics
