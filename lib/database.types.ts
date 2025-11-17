@@ -78,9 +78,9 @@ export interface Database {
           shareholders_equity?: number | null
           operating_cash_flow?: number | null
           eps?: number | null
-        }
-        Relationships: [
-          {
+      }
+      Relationships: [
+        {
             foreignKeyName: "financials_std_symbol_fkey"
             columns: ["symbol"]
             referencedRelation: "company"
@@ -163,8 +163,67 @@ export interface Database {
           data_source?: string | null
           created_at?: string
           updated_at?: string
+      }
+      Relationships: []
+      }
+      watchlists: {
+        Row: {
+          user_id: string
+          tabs: Json
+          active_tab_index: number
+          updated_at: string
         }
-        Relationships: []
+        Insert: {
+          user_id: string
+          tabs?: Json
+          active_tab_index?: number
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          tabs?: Json
+          active_tab_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlists_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      watchlist_settings: {
+        Row: {
+          user_id: string
+          show_extended_hours: boolean
+          column_widths: Json
+          font_scale: number
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          show_extended_hours?: boolean
+          column_widths?: Json
+          font_scale?: number
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          show_extended_hours?: boolean
+          column_widths?: Json
+          font_scale?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_settings_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       conversations: {
         Row: {

@@ -1,0 +1,381 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f5f5f5;
+    --foreground: #000000;
+
+    /* Watchlist Light Mode Tokens */
+    /* Page & Layout */
+    --watchlist-bg: 243 244 246; /* gray-100 */
+    --watchlist-surface: 255 255 255; /* white */
+    --watchlist-surface-elevated: 249 250 251; /* gray-50 */
+
+    /* Tab System */
+    --watchlist-tab-bar: 13 26 54; /* #0d1a36 original blue */
+    --watchlist-tab-active: 227 238 249; /* #e3eef9 light blue */
+    --watchlist-tab-inactive: 176 182 190; /* #b0b6be gray */
+
+    /* Controls */
+    --watchlist-controls-bg: 227 238 249; /* #e3eef9 light blue */
+
+    /* Interactive Elements */
+    --watchlist-button-bg: 255 255 255;
+    --watchlist-button-border: 136 140 148; /* #888c94 */
+    --watchlist-button-hover: 243 244 246; /* gray-100 */
+
+    /* Text */
+    --watchlist-text-primary: 17 24 39; /* gray-900 */
+    --watchlist-text-secondary: 75 85 99; /* gray-600 */
+    --watchlist-text-muted: 156 163 175; /* gray-400 */
+
+    /* Borders */
+    --watchlist-border: 209 213 219; /* gray-300 */
+    --watchlist-border-table: 136 136 136; /* #888 */
+
+    /* States */
+    --watchlist-highlight: 252 230 138; /* yellow-200 */
+    --watchlist-focus-ring: 96 165 250; /* blue-400 */
+
+    /* Change Colors */
+    --watchlist-change-negative: 214 0 0; /* #d60000 - bright red for light mode */
+  }
+
+  .dark {
+    --background: rgb(34, 38, 47);
+    --foreground: #ffffff;
+
+    /* Watchlist Dark Mode Tokens */
+    /* Page & Layout */
+    --watchlist-bg: 34 38 47; /* rgb(34, 38, 47) */
+    --watchlist-surface: 34 38 47; /* base surface */
+    --watchlist-surface-elevated: 54 58 70; /* rgb(54, 58, 70) - table header */
+
+    /* Tab System */
+    --watchlist-tab-bar: 54 58 70; /* rgb(54, 58, 70) - tabs bar */
+    --watchlist-tab-active: 107 114 128; /* gray-500 - lighter for better visibility */
+    --watchlist-tab-inactive: 55 65 81; /* gray-700 - darker */
+
+    /* Controls */
+    --watchlist-controls-bg: 54 58 70; /* matches tab bar header */
+    /* Interactive Elements */
+    --watchlist-button-bg: 75 85 99; /* gray-600 - lighter for better visibility */
+    --watchlist-button-border: 107 114 128; /* gray-500 */
+    --watchlist-button-hover: 107 114 128; /* gray-500 */
+
+    /* Text */
+    --watchlist-text-primary: 156 163 175; /* gray-400 - darker for better contrast */
+    --watchlist-text-secondary: 107 114 128; /* gray-500 */
+    --watchlist-text-muted: 75 85 99; /* gray-600 */
+
+    /* Borders */
+    --watchlist-border: 75 85 99; /* gray-600 */
+    --watchlist-border-table: 75 85 99; /* gray-600 */
+
+    /* States */
+    --watchlist-highlight: 55 65 81; /* gray-700 - lighter gray for better visibility */
+    --watchlist-focus-ring: 96 165 250; /* blue-400 */
+
+    /* Change Colors */
+    --watchlist-change-negative: 153 27 27; /* #991b1b - darker red for dark mode (red-800) */
+  }
+
+  .watchlist {
+    --watchlist-font-scale: 1;
+  }
+
+  body {
+    background-color: rgb(var(--watchlist-bg));
+    color: rgb(var(--watchlist-text-primary));
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer components {
+  /* Original watchlist table styles */
+  .watchlist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+    font-weight: 500;
+    border: 1px solid rgb(var(--watchlist-border-table)) !important;
+    font-family: Arial, Helvetica, sans-serif;
+    table-layout: auto;
+    background: rgb(var(--watchlist-surface));
+    color: rgb(var(--watchlist-text-primary));
+    outline: none !important;
+    /* CSS containment to prevent paint flicker */
+    contain: layout style paint;
+    transform: translateZ(0);
+    will-change: contents;
+  }
+
+  .watchlist-table th,
+  .watchlist-table td {
+    padding: 4px 4px;
+    width: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: calc(24px * var(--watchlist-font-scale, 1));
+    line-height: calc(24px * var(--watchlist-font-scale, 1));
+    border-bottom: 1px solid rgb(var(--watchlist-border-table)) !important;
+    border-right: 1px solid rgb(var(--watchlist-border-table)) !important;
+    text-align: right;
+    letter-spacing: -0.1px;
+    background: none;
+    color: inherit;
+    box-sizing: border-box;
+    vertical-align: middle;
+  }
+  .dark .watchlist-table input[type="checkbox"] {
+    background: rgb(var(--watchlist-surface)) !important;
+    border: 1px solid rgb(var(--watchlist-border)) !important;
+    border-radius: 4px;
+  }
+
+  .watchlist-table thead {
+    border: 1px solid rgb(var(--watchlist-border-table)) !important;
+  }
+
+  .watchlist-table th {
+    background: rgb(var(--watchlist-surface-elevated));
+    font-weight: 500;
+    color: rgb(var(--watchlist-text-primary));
+    border: 1px solid rgb(var(--watchlist-border-table)) !important;
+    letter-spacing: -0.8px;
+    position: relative;
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+  }
+
+  .watchlist-table thead tr {
+    border: none !important;
+  }
+
+  .watchlist-table tbody tr:first-child td {
+    border-top: 1px solid rgb(var(--watchlist-border-table));
+  }
+
+  .watchlist-table tbody tr:last-child td {
+    border-bottom: 1px solid rgb(var(--watchlist-border-table)) !important;
+  }
+
+  .watchlist-table tr:hover {
+    background-color: transparent;
+    cursor: default;
+  }
+
+  /* Symbol column styles */
+  .symbol {
+    text-align: left !important;
+    color: #2962ff !important; /* Light mode: blue */
+    cursor: pointer;
+    font-weight: 500;
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+    padding-left: 6px !important;
+  }
+
+  .dark .symbol {
+    color: #57AEFB !important; /* Dark mode: custom blue */
+  }
+
+  /* Symbol header should be left-aligned and regular color like other headers */
+  .watchlist-table th.symbol {
+    text-align: left !important;
+    color: rgb(var(--watchlist-text-primary)) !important;
+    font-weight: 500 !important;
+    padding-left: 4px !important;
+  }
+
+  /* Remove underline on hover */
+  .symbol:hover {
+    text-decoration: none !important;
+  }
+
+  /* Name column */
+  .name {
+    color: rgb(var(--watchlist-text-primary));
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+    font-weight: 500;
+    text-align: left !important;
+  }
+
+  /* Price columns */
+  .price {
+    font-weight: 500;
+    color: rgb(var(--watchlist-text-primary));
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+  }
+
+  /* Change columns */
+  .change {
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+    text-align: right;
+    font-weight: 500;
+  }
+
+  .positive {
+    color: #008f3b;
+    background: transparent;
+  }
+
+  .negative {
+    color: #d60000;
+    background: transparent;
+  }
+
+  /* Lighter colors for dark mode */
+  .dark .positive {
+    color: #00A449; /* custom green for dark mode */
+  }
+
+  .dark .negative {
+    color: #FB5057; /* custom red for dark mode */
+  }
+
+  /* Volume columns */
+  .volume {
+    color: rgb(var(--watchlist-text-primary));
+    font-size: calc(20px * var(--watchlist-font-scale, 1));
+    font-weight: 500;
+  }
+
+  /* Row highlight */
+  .row-highlight {
+    background-color: rgb(var(--watchlist-highlight)) !important;
+    will-change: background-color;
+    transition: background-color 0.1s ease-out;
+  }
+  
+  /* Disable animations during interaction to prevent flicker */
+  .watchlist-table:active *,
+  .watchlist-table tbody tr:active * {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+
+
+  /* News column */
+  .news {
+    text-align: center !important;
+    cursor: pointer;
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
+  }
+
+  /* Keep news column borders but make them match the table background */
+  .watchlist-table td.news,
+  .watchlist-table th.news {
+    /* Borders remain visible for grid structure */
+  }
+
+  .news a {
+    text-decoration: none;
+    color: #2962ff;
+    margin: 0 2px;
+  }
+
+  /* Column resizer */
+  .col-resizer:hover > span {
+    background: #2962ff !important;
+  }
+  
+  /* Fixed table layout for resize */
+  .watchlist-table {
+    table-layout: fixed !important;
+  }
+  
+  /* Prevent text selection during resize */
+  body.resizing {
+    user-select: none !important;
+    cursor: col-resize !important;
+  }
+  
+  /* Column headers should not wrap */
+  .watchlist-table th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* Table cells should handle overflow - NO WRAPPING */
+  .watchlist-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+    height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+    max-height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+    min-height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+    line-height: calc(28px * var(--watchlist-font-scale, 1));
+  }
+  
+  /* Name column also should NOT wrap to maintain consistent row height */
+  .watchlist-table td.name {
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Remove vertical borders from header row cells */
+  .watchlist-table tbody tr.header-row td {
+    border-right: none !important;
+    border-left: none !important;
+  }
+  
+  /* Ensure consistent row height */
+  .watchlist-table tr {
+    height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+    max-height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+    min-height: calc(28px * var(--watchlist-font-scale, 1)) !important;
+  }
+  
+  /* Drag and drop indicators for table rows using data attributes */
+  .watchlist-table tr[data-drop-position="before"] {
+    border-top: 3px solid #2962ff !important;
+    box-shadow: 0 -4px 8px rgba(41, 98, 255, 0.2);
+  }
+  
+  .watchlist-table tr[data-drop-position="after"] {
+    border-bottom: 3px solid #2962ff !important;
+    box-shadow: 0 4px 8px rgba(41, 98, 255, 0.2);
+  }
+  
+  /* Drag and drop indicators for tabs using data attributes */
+  .watchlist-tab[data-drop-position="before"] {
+    border-left: 3px solid #2962ff !important;
+    box-shadow: -4px 0 8px rgba(41, 98, 255, 0.2);
+  }
+  
+  .watchlist-tab[data-drop-position="after"] {
+    border-right: 3px solid #2962ff !important;
+    box-shadow: 4px 0 8px rgba(41, 98, 255, 0.2);
+  }
+
+  /* Remove button */
+  .remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: calc(16px * var(--watchlist-font-scale, 1));
+    padding: 0;
+    transition: transform 0.2s;
+  }
+
+  .remove-btn:hover {
+    transform: scale(1.2);
+  }
+
+  /* News icon styling */
+  .watchlist-table td.news span {
+    transition: transform 0.2s;
+  }
+
+  .watchlist-table td.news span:hover {
+    transform: scale(1.15);
+  }
+}

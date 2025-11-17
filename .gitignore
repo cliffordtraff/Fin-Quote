@@ -40,3 +40,4 @@ next-env.d.ts
 # excel exports
 /exports
 Watchlist/
+!packages/watchlist/

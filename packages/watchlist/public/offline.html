@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Trading Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: #333;
+      padding: 20px;
+    }
+    
+    .offline-container {
+      text-align: center;
+      padding: 60px 40px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      width: 100%;
+    }
+    
+    .offline-icon {
+      font-size: 72px;
+      margin-bottom: 30px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+    
+    .subtitle {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 40px;
+      line-height: 1.5;
+    }
+    
+    .cached-data {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    
+    .cached-data h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #444;
+    }
+    
+    .feature-list {
+      list-style: none;
+      text-align: left;
+      max-width: 280px;
+      margin: 0 auto;
+    }
+    
+    .feature-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      color: #555;
+      font-size: 15px;
+    }
+    
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+    
+    .feature-list .icon {
+      margin-right: 12px;
+      font-size: 20px;
+    }
+    
+    .check { color: #4CAF50; }
+    .cross { color: #f44336; }
+    
+    .status-message {
+      background: #fff3cd;
+      color: #856404;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 20px;
+      display: inline-block;
+    }
+    
+    .retry-button {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      margin-top: 20px;
+    }
+    
+    .retry-button:hover {
+      background: #1976D2;
+    }
+    
+    .retry-button:active {
+      transform: scale(0.98);
+    }
+    
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #e0e0e0;
+      }
+      
+      .offline-container {
+        background: #1e1e2e;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      
+      h1 {
+        color: #f0f0f0;
+      }
+      
+      .subtitle {
+        color: #b0b0b0;
+      }
+      
+      .cached-data {
+        background: #252538;
+      }
+      
+      .cached-data h3 {
+        color: #d0d0d0;
+      }
+      
+      .feature-list li {
+        border-bottom-color: #404050;
+        color: #b0b0b0;
+      }
+      
+      .status-message {
+        background: #3a3a2e;
+        color: #ffd700;
+      }
+    }
+    
+    /* Responsive design */
+    @media (max-width: 600px) {
+      .offline-container {
+        padding: 40px 20px;
+      }
+      
+      h1 {
+        font-size: 28px;
+      }
+      
+      .subtitle {
+        font-size: 16px;
+      }
+      
+      .offline-icon {
+        font-size: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">🔌</div>
+    <h1>You're Offline</h1>
+    <p class="subtitle">
+      No internet connection detected. Some features are limited.
+    </p>
+    
+    <div class="cached-data">
+      <h3>Available Offline</h3>
+      <ul class="feature-list">
+        <li>
+          <span class="icon check">✓</span>
+          <span>Cached stock prices</span>
+        </li>
+        <li>
+          <span class="icon check">✓</span>
+          <span>Your watchlist structure</span>
+        </li>
+        <li>
+          <span class="icon check">✓</span>
+          <span>Recent market data</span>
+        </li>
+        <li>
+          <span class="icon cross">✗</span>
+          <span>Real-time updates</span>
+        </li>
+        <li>
+          <span class="icon cross">✗</span>
+          <span>Live WebSocket feed</span>
+        </li>
+      </ul>
+    </div>
+    
+    <div class="status-message">
+      📊 Data will automatically sync when connection returns
+    </div>
+    
+    <button class="retry-button" onclick="window.location.reload()">
+      Try Again
+    </button>
+  </div>
+  
+  <script>
+    // Check for connection periodically
+    setInterval(() => {
+      fetch('/api/health', { method: 'HEAD' })
+        .then(() => {
+          // Connection restored, reload the page
+          window.location.reload();
+        })
+        .catch(() => {
+          // Still offline
+        });
+    }, 5000); // Check every 5 seconds
+    
+    // Listen for online event
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

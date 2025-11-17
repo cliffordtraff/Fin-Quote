@@ -20,7 +20,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@fin/watchlist": ["packages/watchlist/src"],
+      "@fin/watchlist/*": ["packages/watchlist/src/*"],
+      "@watchlist/*": ["packages/watchlist/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
 import UserMenu from './UserMenu'
 
+const WATCHLIST_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SUNDAY_WATCHLIST !== 'false'
+
 export default function Navigation() {
   const pathname = usePathname()
 
@@ -48,6 +50,18 @@ export default function Navigation() {
               >
                 Financials
               </Link>
+              {WATCHLIST_ENABLED && (
+                <Link
+                  href="/watchlist"
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    pathname === '/watchlist'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Watchlist
+                </Link>
+              )}
             </div>
           </div>
 

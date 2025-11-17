@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="bg-gray-50 dark:bg-gray-900">
+    <html lang="en" className="bg-gray-50 dark:bg-gray-900" suppressHydrationWarning>
       <body className={`${inter.className} bg-gray-50 dark:bg-gray-900`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
