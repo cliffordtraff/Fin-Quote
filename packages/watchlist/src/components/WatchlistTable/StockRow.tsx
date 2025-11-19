@@ -1,7 +1,6 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Stock, MergedStock } from '@watchlist/types'
 import NewsModal from '@watchlist/components/NewsModal'
 import AnalystModal from '@watchlist/components/AnalystModal'
@@ -68,6 +67,8 @@ interface StockRowProps {
   fetchRSSArticles?: (symbol: string) => Promise<any[]>
   prefetchArticles?: (symbol: string) => Promise<void>
   prefetchRSSArticles?: (symbol: string) => void
+  onShowNewsModal?: (modal: { symbol: string; articles: NewsArticle[]; loading: boolean }) => void
+  onShowAnalystModal?: (modal: { symbol: string; changes: any[]; loading: boolean }) => void
   onCheckboxChange?: (checked: boolean) => void
   onRowClick: () => void
   onSymbolClick: () => void
@@ -156,6 +157,8 @@ const StockRow = memo(function StockRow({
   fetchRSSArticles,
   prefetchArticles,
   prefetchRSSArticles,
+  onShowNewsModal,
+  onShowAnalystModal,
   onCheckboxChange,
   onRowClick,
   onSymbolClick,
@@ -171,12 +174,6 @@ const StockRow = memo(function StockRow({
 }: StockRowProps) {
   const rowRef = useRef<HTMLTableRowElement>(null)
   const prevPriceRef = useRef<number | undefined>(stock?.price)
-  const [showNewsModal, setShowNewsModal] = useState(false)
-  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([])
-  const [loadingArticles, setLoadingArticles] = useState(false)
-  const [showAnalystModal, setShowAnalystModal] = useState(false)
-  const [analystChanges, setAnalystChanges] = useState<any[]>([])
-  const [loadingAnalyst, setLoadingAnalyst] = useState(false)
   const [rssArticles, setRssArticles] = useState<any[]>(rssNewsMeta?.articles || [])
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -192,57 +189,39 @@ const StockRow = memo(function StockRow({
     }
   }, [rssNewsMeta, symbol])
   
-  // Handle news icon click - use RSS articles or fetch if needed
   const handleNewsClick = async () => {
-    // If we already have articles, just return (dropdown will show)
     if (rssArticles.length > 0) {
+      onShowNewsModal?.({ symbol, articles: rssArticles, loading: false })
       return
     }
 
-    // Try to fetch if we have a fetch function
+    onShowNewsModal?.({ symbol, articles: [], loading: true })
+
     if (fetchRSSArticles) {
       try {
         const articles = await fetchRSSArticles(symbol)
         setRssArticles(articles)
+        onShowNewsModal?.({ symbol, articles, loading: false })
       } catch (error) {
         console.error('Failed to fetch RSS articles:', error)
         setRssArticles([])
+        onShowNewsModal?.({ symbol, articles: [], loading: false })
       }
+    } else {
+      onShowNewsModal?.({ symbol, articles: [], loading: false })
     }
   }
 
-  // Handle FMP news modal (keeping original functionality)
-  const handleFMPNewsClick = async () => {
-    if (!fetchArticles) return
-
-    setShowNewsModal(true)
-    setLoadingArticles(true)
-
-    try {
-      const articles = await fetchArticles(symbol)
-      setNewsArticles(articles)
-    } catch (error) {
-      console.error('Failed to fetch articles:', error)
-      setNewsArticles([])
-    } finally {
-      setLoadingArticles(false)
-    }
-  }
-
-  // Handle analyst indicator click
   const handleAnalystClick = async () => {
-    setShowAnalystModal(true)
-    setLoadingAnalyst(true)
+    onShowAnalystModal?.({ symbol, changes: [], loading: true })
     
     try {
       const response = await fetch(`/api/analyst/details?symbol=${symbol}`)
       const data = await response.json()
-      setAnalystChanges(data.changes || [])
+      onShowAnalystModal?.({ symbol, changes: data.changes || [], loading: false })
     } catch (error) {
       console.error('Failed to fetch analyst details:', error)
-      setAnalystChanges([])
-    } finally {
-      setLoadingAnalyst(false)
+      onShowAnalystModal?.({ symbol, changes: [], loading: false })
     }
   }
 
@@ -1029,38 +1008,7 @@ const StockRow = memo(function StockRow({
   )
   
   // Render modals using React Portal to avoid HTML nesting issues
-  const modals = (
-    <>
-      {showNewsModal && typeof document !== 'undefined' && createPortal(
-        <NewsModal
-          isOpen={showNewsModal}
-          onClose={() => setShowNewsModal(false)}
-          symbol={symbol}
-          articles={newsArticles}
-          loading={loadingArticles}
-        />,
-        document.body
-      )}
-      
-      {showAnalystModal && typeof document !== 'undefined' && createPortal(
-        <AnalystModal
-          isOpen={showAnalystModal}
-          onClose={() => setShowAnalystModal(false)}
-          symbol={symbol}
-          changes={analystChanges}
-          loading={loadingAnalyst}
-        />,
-        document.body
-      )}
-    </>
-  )
-  
-  return (
-    <>
-      {tableRow}
-      {modals}
-    </>
-  )
+  return tableRow
 }, (prevProps, nextProps) => {
   // Custom comparison for memo - only re-render if important data changes
   return (

@@ -223,7 +223,8 @@ const VirtualizedTable = memo(function VirtualizedTable({
                 position: 'relative',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                textTransform: col.key === 'symbol' ? 'capitalize' : undefined
               }}
               onContextMenu={(e) => {
                 if (onHeaderContextMenu) {

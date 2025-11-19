@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Navigation from '@/components/Navigation'
 import TopicFilter from '@watchlist/components/News/TopicFilter'
 import TopicBadge from '@watchlist/components/News/TopicBadge'
 import { Topic, TOPICS } from '@watchlist/config/topics'
@@ -241,8 +242,10 @@ export default function NewsPage() {
   }, [filteredBySource, selectedTopics])
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'rgb(var(--watchlist-bg))', padding: '10px 20px' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)]">
+      <Navigation />
+      <div className="page-content" style={{ minHeight: '100vh', backgroundColor: 'rgb(var(--watchlist-bg))', padding: '10px 20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div
           style={{
             backgroundColor: 'rgb(var(--watchlist-surface))',
@@ -305,44 +308,13 @@ export default function NewsPage() {
               paddingTop: '16px',
               borderTop: '1px solid rgb(var(--watchlist-border))',
               display: 'flex',
-              gap: '15px',
               alignItems: 'center',
-              justifyContent: 'space-between'
+              justifyContent: 'flex-start'
             }}
           >
             <span style={{ fontSize: '15px', color: 'rgb(var(--watchlist-text-muted))' }}>
               {filteredArticles.length} articles • Last updated {formatTimeAgo(lastUpdated.toISOString())}
             </span>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={fetchArticles}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'rgb(var(--watchlist-button-bg))',
-                  color: 'rgb(var(--watchlist-text-primary))',
-                  border: '1px solid rgb(var(--watchlist-button-border))',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '15px'
-                }}
-              >
-                Refresh
-              </button>
-              <button
-                onClick={() => router.push('/watchlist')}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#1a73e8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '15px'
-                }}
-              >
-                Back to Watchlist
-              </button>
-            </div>
           </div>
         </div>
 
@@ -488,5 +460,6 @@ export default function NewsPage() {
         )}
       </div>
     </div>
-  )
+  </div>
+)
 }

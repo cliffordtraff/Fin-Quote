@@ -1,82 +1,73 @@
 'use server';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { NewsArticle } from '@watchlist/types';
 
-const FMP_NEWS_URL = 'https://financialmodelingprep.com/api/v3/stock_news';
+const SOURCE_ENDPOINTS = [
+  { key: 'WSJ', path: '/api/news/wsj?feed=markets' },
+  { key: 'NYT', path: '/api/news/nyt?feed=business' },
+  { key: 'Bloomberg', path: '/api/news/bloomberg?feed=markets' }
+];
 
-interface FmpArticle {
-  title?: string;
-  text?: string;
-  summary?: string;
-  url?: string;
-  site?: string;
-  source?: string;
-  publishedDate?: string;
-  date?: string;
-  author?: string;
-  symbol?: string;
-  sentiment?: string;
+interface SourceResult {
+  source: string;
+  articles: NewsArticle[];
+  error?: string;
 }
 
-function mapArticle(raw: FmpArticle) {
-  const headline = raw.title || 'Untitled article';
-  const publishedAt = raw.publishedDate || raw.date || new Date().toISOString();
-  const canonicalUrl = raw.url || '';
-  const source = raw.site || raw.source || 'FMP';
-
-  return {
-    headline,
-    description: raw.text || raw.summary || '',
-    canonicalUrl,
-    source,
-    publishedAt,
-    author: raw.author || undefined,
-    isArchived: false,
-    topics: [],
-    feedTopic: raw.sentiment || undefined,
-    topicsClassified: false
-  };
-}
-
-export async function GET() {
-  const apiKey = process.env.FMP_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Missing FMP_API_KEY' }, { status: 500 });
-  }
-
+async function fetchSource(baseUrl: string, source: { key: string; path: string }): Promise<SourceResult> {
   try {
-    const url = new URL(FMP_NEWS_URL);
-    url.searchParams.set('limit', '150');
-    url.searchParams.set('apikey', apiKey);
-
-    const response = await fetch(url.toString(), { cache: 'no-store' });
+    const response = await fetch(`${baseUrl}${source.path}`, { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error(`FMP news request failed (${response.status})`);
+      throw new Error(`Failed to fetch ${source.key} feed (${response.status})`);
     }
-
-    const payload = await response.json();
-    if (!Array.isArray(payload)) {
-      throw new Error('Unexpected news response format');
-    }
-
-    const articles = payload.map(mapArticle);
-
-    return NextResponse.json(
-      {
-        success: true,
-        articles,
-        stats: {
-          total: articles.length
-        }
-      },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=180'
-        }
-      }
-    );
+    const data = await response.json();
+    return {
+      source: source.key,
+      articles: Array.isArray(data.articles) ? data.articles : []
+    };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch news feed';
-    return NextResponse.json({ error: message, articles: [] }, { status: 502 });
+    console.warn(`[news] Error fetching ${source.key}:`, error);
+    return {
+      source: source.key,
+      articles: [],
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
+}
+
+export async function GET(request: NextRequest) {
+  const baseUrl = new URL(request.url).origin;
+
+  const results = await Promise.all(SOURCE_ENDPOINTS.map((source) => fetchSource(baseUrl, source)));
+
+  const articles = results.flatMap((result) => result.articles);
+
+  // Sort newest first
+  articles.sort((a, b) => {
+    const dateA = new Date(a.publishedAt || a.date || 0).getTime();
+    const dateB = new Date(b.publishedAt || b.date || 0).getTime();
+    return dateB - dateA;
+  });
+
+  const stats = {
+    total: articles.length,
+    sources: results.reduce<Record<string, number>>((acc, result) => {
+      acc[result.source] = result.articles.length;
+      return acc;
+    }, {})
+  };
+
+  return NextResponse.json(
+    {
+      success: true,
+      articles,
+      stats
+    },
+    {
+      headers: {
+        'Cache-Control': 'public, max-age=120'
+      }
+    }
+  );
 }

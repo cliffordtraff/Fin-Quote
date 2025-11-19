@@ -5,6 +5,20 @@ import type { Stock, DividendData, UnifiedStockResponse } from '@watchlist/types
 
 const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3';
 
+function resolveBid(payload: any) {
+  if (typeof payload.bid === 'number') return payload.bid;
+  if (typeof payload.bidPrice === 'number') return payload.bidPrice;
+  if (typeof payload.price === 'number') return payload.price - 0.01;
+  return null;
+}
+
+function resolveAsk(payload: any) {
+  if (typeof payload.ask === 'number') return payload.ask;
+  if (typeof payload.askPrice === 'number') return payload.askPrice;
+  if (typeof payload.price === 'number') return payload.price + 0.01;
+  return null;
+}
+
 function mapQuotePayload(payload: any): Stock {
   return {
     symbol: payload.symbol,
@@ -13,8 +27,8 @@ function mapQuotePayload(payload: any): Stock {
     change: payload.change ?? 0,
     changePercent: payload.changesPercentage ?? 0,
     volume: payload.volume ?? 0,
-    bid: payload.bid ?? 0,
-    ask: payload.ask ?? 0,
+    bid: resolveBid(payload) ?? 0,
+    ask: resolveAsk(payload) ?? 0,
     bidSize: payload.bidSize ?? 0,
     askSize: payload.askSize ?? 0,
     dayLow: payload.dayLow ?? 0,

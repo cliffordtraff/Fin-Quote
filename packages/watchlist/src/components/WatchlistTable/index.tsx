@@ -3,7 +3,7 @@
 import { useState, useCallback, memo, useRef, useEffect, startTransition, useMemo, ReactElement } from 'react'
 import StockRow from './StockRow'
 import VirtualizedTable from './VirtualizedTable'
-import { Stock, MergedStock, WatchlistEntry } from '@watchlist/types'
+import { Stock, MergedStock, WatchlistEntry, NewsArticle } from '@watchlist/types'
 import { useColumnResize } from '@watchlist/hooks/useColumnResize'
 import { useMergedStockData } from '@watchlist/hooks/useMergedStockData'
 import { useNewsData } from '@watchlist/hooks/useNewsData'
@@ -16,6 +16,8 @@ import { isStock, isHeader } from '@watchlist/utils/watchlist-helpers'
 
 // Threshold for enabling virtual scrolling (symbols count)
 const VIRTUALIZATION_THRESHOLD = 100
+const SYMBOL_HEADER_LABEL = 'Symbol'
+const DIVIDEND_YIELD_HEADER_LABEL = 'Div Yield'
 
 interface WatchlistTableProps {
   symbols: string[]
@@ -53,6 +55,8 @@ interface WatchlistTableProps {
   showExtendedHours?: boolean
   columnWidthOverrides?: Record<string, number>
   onColumnWidthsChange?: (widths: Record<string, number>) => void
+  onShowNewsModal?: (modal: { symbol: string; articles: NewsArticle[]; loading: boolean }) => void
+  onShowAnalystModal?: (modal: { symbol: string; changes: any[]; loading: boolean }) => void
 }
 
 const WatchlistTable = memo(function WatchlistTable({
@@ -83,7 +87,9 @@ const WatchlistTable = memo(function WatchlistTable({
   onPlaceholderCancel,
   showExtendedHours = false,
   columnWidthOverrides,
-  onColumnWidthsChange
+  onColumnWidthsChange,
+  onShowNewsModal,
+  onShowAnalystModal
 }: WatchlistTableProps) {
   const [highlightedSymbol, setHighlightedSymbol] = useState<string | null>(null)
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set())
@@ -646,7 +652,7 @@ const WatchlistTable = memo(function WatchlistTable({
 
   // Column configuration (moved before early returns)
   const baseColumns = [
-    { key: 'symbol', label: 'Symbol' },
+    { key: 'symbol', label: SYMBOL_HEADER_LABEL },
     { key: 'news', label: 'News' },
     { key: 'lastTrade', label: 'Last Trade' },
     ...(showExtendedHours ? [{ key: 'extHours', label: 'Ext. Hours' }] : []),
@@ -661,7 +667,7 @@ const WatchlistTable = memo(function WatchlistTable({
     { key: 'peRatio', label: 'P/E (ttm)' },
     { key: 'exDate', label: 'Ex-Date' },
     { key: 'eps', label: 'EPS (ttm)' },
-    { key: 'divYield', label: 'Div Yield' },
+    { key: 'divYield', label: DIVIDEND_YIELD_HEADER_LABEL },
     { key: 'name', label: 'Description' }
   ]
   
@@ -881,7 +887,8 @@ const WatchlistTable = memo(function WatchlistTable({
               className={`${col.key} ${col.key === 'news' ? 'news' : ''} ${col.key === 'symbol' ? 'symbol' : ''}`}
               style={{
                 position: 'relative',
-                textAlign: col.key === 'symbol' || col.key === 'name' ? 'left' : undefined
+                textAlign: col.key === 'symbol' || col.key === 'name' ? 'left' : undefined,
+                textTransform: col.key === 'symbol' ? 'capitalize' : undefined
               }}
               onContextMenu={(e) => handleContextMenu(e, col.key)}
             >
@@ -976,6 +983,8 @@ const WatchlistTable = memo(function WatchlistTable({
                   fetchRSSArticles={fetchRSSArticles}
                   prefetchRSSArticles={prefetchRSSArticles}
                   prefetchArticles={prefetchArticles}
+                  onShowNewsModal={onShowNewsModal}
+                  onShowAnalystModal={onShowAnalystModal}
                   onCheckboxChange={(checked) => handleCheckboxChange(item.symbol, checked)}
                   onRowClick={() => handleRowClick(item.symbol)}
                   onSymbolClick={() => handleSymbolClick(item.symbol)}
@@ -1025,6 +1034,8 @@ const WatchlistTable = memo(function WatchlistTable({
                 fetchRSSArticles={fetchRSSArticles}
                 prefetchRSSArticles={prefetchRSSArticles}
                 prefetchArticles={prefetchArticles}
+                onShowNewsModal={onShowNewsModal}
+                onShowAnalystModal={onShowAnalystModal}
                 onCheckboxChange={(checked) => handleCheckboxChange(symbol, checked)}
                 onRowClick={() => handleRowClick(symbol)}
                 onSymbolClick={() => handleSymbolClick(symbol)}

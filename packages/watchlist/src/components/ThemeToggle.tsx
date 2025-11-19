@@ -1,9 +1,18 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useTheme } from './ThemeProvider'
 
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
+
+  useEffect(() => {
+    const handleExternalToggle = () => toggleTheme()
+    window.addEventListener('watchlist:theme:toggle', handleExternalToggle)
+    return () => {
+      window.removeEventListener('watchlist:theme:toggle', handleExternalToggle)
+    }
+  }, [toggleTheme])
 
   return (
     <button

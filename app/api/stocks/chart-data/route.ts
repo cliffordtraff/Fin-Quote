@@ -2,12 +2,14 @@
 
 import { NextResponse } from 'next/server';
 import { getChartData } from '@/app/actions/watchlist/get-chart-data';
-import type { Timeframe } from '@/hooks/useChartModal';
+import { normalizeTimeframe } from '@/app/lib/watchlist/timeframes';
+import type { Timeframe } from '@watchlist/types/chart';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const symbol = url.searchParams.get('symbol');
-  const timeframe = (url.searchParams.get('timeframe') as Timeframe | null) ?? '1D';
+  const timeframeParam = url.searchParams.get('timeframe');
+  const timeframe = normalizeTimeframe(timeframeParam ?? undefined);
 
   if (!symbol) {
     return NextResponse.json({ error: 'Missing symbol parameter' }, { status: 400 });

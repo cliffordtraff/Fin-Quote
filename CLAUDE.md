@@ -4,13 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Fin Quote** is a Next.js-based financial data platform with an AI-powered Q&A chatbot that answers natural language questions about Apple (AAPL) stock. The system uses a two-step LLM architecture with tool selection, data execution, answer generation, and validation.
+**Fin Quote** is a Next.js-based financial data platform with two main components:
+
+1. **AI-Powered Q&A Chatbot** - Answers natural language questions about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation.
+
+2. **Sunday Watchlist Integration** - A complete real-time stock watchlist application (from the Sunday project) integrated as a monorepo workspace package at `packages/watchlist/`. Accessible at `/watchlist` when enabled via feature flag.
 
 **Core Design Philosophy:**
 - **Safety First**: LLMs cannot execute arbitrary database queries. Instead, they select from a whitelist of pre-built "tools" (server actions) with validated inputs.
 - **Server-Side Intelligence**: All LLM calls, database queries, and validation logic run server-side. The browser only handles UI.
 - **Grounded Answers**: The LLM must use only fetched data; no external knowledge or hallucinations allowed.
 - **Validation Pipeline**: All answers are validated against source data for number accuracy, year correctness, and citation validity, with auto-regeneration on failures.
+- **Monorepo Workspace**: Uses npm workspaces to integrate Sunday's watchlist as a shared package while maintaining separation of concerns.
 
 ---
 
@@ -88,6 +93,8 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 - `query_logs` - Query logging for accuracy tracking, validation results, and cost analysis
 - `conversations` - User conversation history (with auto-generated titles)
 - `messages` - Individual messages within conversations (with chart configs and follow-up questions)
+- `watchlists` - Watchlist data for Sunday integration (tabs, symbols, headers as JSON blobs)
+- `watchlist_settings` - User settings for watchlist (column widths, font scale, theme preferences)
 
 **Storage:**
 - `filings` bucket - Original SEC filing HTML files from EDGAR
@@ -101,9 +108,11 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 
 ### Setup
 ```bash
-npm install                         # Install dependencies
+npm install                         # Install all dependencies (including workspace packages)
 cp .env.local.example .env.local    # Configure environment variables
 ```
+
+**Note**: This project uses npm workspaces. The `packages/watchlist` directory contains the Sunday watchlist package (`@fin/watchlist`), which is automatically linked during `npm install`.
 
 ### Development
 ```bash
@@ -185,6 +194,10 @@ node scripts/check-*.mjs                     # Data verification scripts
 - `vix.ts` - Volatility index
 - `economic-calendar.ts` - Upcoming economic events
 
+**Watchlist (Sunday Integration):**
+- `watchlist.ts` - Watchlist CRUD operations (fetch, create, update, delete tabs/symbols)
+- `watchlist-settings.ts` - User settings persistence (column widths, font scale, theme)
+
 ### LLM & Validation (lib/)
 - `tools.ts` - Tool definitions + prompt templates for tool selection and answer generation
 - `validators.ts` - Answer validation (number accuracy, year correctness, filing citations)
@@ -197,15 +210,17 @@ node scripts/check-*.mjs                     # Data verification scripts
 
 ### Frontend (app/ & components/)
 - `app/page.tsx` - Main homepage with market data dashboard
+- `app/watchlist/page.tsx` - Sunday watchlist integration page (renders `<SundayWatchlistApp />`)
 - `app/chatbot/page.tsx` - Deprecated chatbot page (functionality now in sidebar)
 - `app/admin/validation/page.tsx` - Validation results dashboard
 - `app/admin/costs/page.tsx` - Cost tracking dashboard
 - `app/admin/review/page.tsx` - Query review interface
+- `app/news/page.tsx` - News Center page (Sunday's news UI with source/topic filters)
 - `components/Sidebar.tsx` - Chatbot sidebar with conversation history
 - `components/AssistantChat.tsx` - Chat UI component
 - `components/FinancialChart.tsx` - Highcharts visualization for financial data
 - `components/SimpleCanvasChart.tsx` - Lightweight canvas-based mini charts
-- `components/Navigation.tsx` - Top navigation bar
+- `components/Navigation.tsx` - Top navigation bar (includes Watchlist link when enabled)
 - `components/RecentQueries.tsx` - Recent query history
 - `components/ThemeToggle.tsx` - Dark/light mode toggle
 - `components/AuthModal.tsx` - Authentication modal
@@ -221,6 +236,41 @@ node scripts/check-*.mjs                     # Data verification scripts
 - `VIXCard.tsx` - VIX volatility indicator
 - `EconomicCalendar.tsx` - Economic events calendar
 - `MiniPriceChart.tsx` - Small price chart for index cards
+
+### Watchlist Package (packages/watchlist/)
+
+The Sunday watchlist is integrated as a workspace package (`@fin/watchlist`):
+
+**Structure:**
+- `src/components/` - Complete watchlist UI components (WatchlistTable, NewsIndicator, TradingView charts, etc.)
+- `src/hooks/` - Data fetching hooks (useFMPData, useNewsData, useAnalystData, etc.)
+- `src/contexts/` - React contexts (AiSummaryContext, StatusContext)
+- `src/services/` - Backend services (FMPRestClient, FMPWebSocketManager)
+- `src/lib/` - Utilities and helpers (news matching, earnings analysis, Firebase services)
+- `src/types/` - TypeScript types (Stock, MergedStock, Chart, Earnings, etc.)
+- `src/utils/` - Shared utilities (formatters, market hours, symbol normalization)
+- `src/globals.css` - Watchlist-specific styles
+- `src/index.tsx` - Package entry point (exports `<SundayWatchlistApp />`)
+
+**Key Features:**
+- Real-time stock quotes with viewport-aware polling
+- TradingView charts with drawing tools and technical indicators
+- Multi-source news aggregation (WSJ, NYT, Bloomberg, Yahoo, Barron's) with AI summaries
+- Analyst ratings and upgrades/downgrades
+- Extended hours (pre-market/after-hours) data
+- Column resizing and table customization
+- Keyboard navigation and shortcuts
+- Export functionality
+- PWA support with offline capabilities
+
+**Integration Points:**
+- Rendered on `/watchlist` page behind feature flag
+- Uses Supabase for watchlist storage (`watchlists`, `watchlist_settings` tables)
+- Auth stubbed to "guest mode" (Firebase auth context disabled)
+- APIs bridged through Fin Quote endpoints (`/api/stocks/data`, `/api/news/*`, `/api/analyst/*`, etc.)
+- Chart data proxied through existing server actions
+
+**Current Status:** Shared package integration complete. Most components and hooks are present but still reference Firebase services. Migration to full Supabase backend is ongoing (see `SUNDAY_WATCHLIST_INTEGRATION_STATUS.md`).
 
 ### Configuration
 - `.env.local` - Environment variables (Supabase, OpenAI, FMP API keys)
@@ -241,12 +291,18 @@ Required in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
+# Supabase (server-only secret)
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key  # For admin operations
+
 # OpenAI (server-only secret)
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5-nano  # Options: gpt-4o-mini, gpt-5-nano, gpt-5-mini, gpt-4o
 
 # Financial Modeling Prep (server-only secret)
 FMP_API_KEY=your-fmp-key
+
+# Feature Flags
+NEXT_PUBLIC_ENABLE_SUNDAY_WATCHLIST=true  # Set to 'false' to disable watchlist feature
 ```
 
 ---
@@ -491,10 +547,47 @@ Process:
 5. Style with Tailwind CSS to match existing dashboard aesthetic
 6. Test with real API data
 
+### Working with the Watchlist Package
+
+**Building the package:**
+```bash
+cd packages/watchlist
+npm run build        # Compile TypeScript to dist/
+npm run watch        # Watch mode for development
+```
+
+**Adding new features to watchlist:**
+1. Make changes in `packages/watchlist/src/`
+2. Rebuild package: `npm run build` (or use watch mode)
+3. Changes automatically available to main app via workspace link
+4. No need to republish - workspace packages are linked locally
+
+**Adding new API endpoints for watchlist:**
+1. Create route in main app: `app/api/[endpoint]/route.ts`
+2. Import and use in watchlist hooks/services
+3. Example: `/api/stocks/data` proxies FMP quotes for watchlist table
+
+**Migrating Firebase code to Supabase:**
+1. Identify Firebase calls (Firestore, Firebase Auth, Storage)
+2. Replace with Supabase equivalents:
+   - `doc()`, `getDoc()` → `supabase.from().select().eq().single()`
+   - `setDoc()` → `supabase.from().upsert()`
+   - `collection()`, `getDocs()` → `supabase.from().select()`
+   - Firebase Auth → Supabase Auth
+3. Keep all business logic, polling, caching unchanged
+4. Test integration carefully
+
+**Key watchlist integration patterns:**
+- **Data flow**: Watchlist hook → Main app API route → FMP API → Response back to hook
+- **Storage**: Watchlist data saved to Supabase (`watchlists`, `watchlist_settings` tables)
+- **Auth**: Currently stubbed to guest mode; user context passed from main app
+- **Styling**: Watchlist has its own `globals.css`; Tailwind config shared with main app
+
 ---
 
 ## Important Constraints
 
+**AI Chatbot:**
 - **AAPL-only**: All tools are hardcoded to Apple stock (ticker: AAPL) for MVP
 - **Read-only**: No write operations; all queries are SELECT statements
 - **Row limits**: Financials (1-20 years), Filings (1-10 filings), Passages (1-10 passages)
@@ -503,11 +596,24 @@ Process:
 - **Metric coverage**: Extended metrics available from 2006-2025 (FMP API limits)
 - **Price history**: Supports up to 20 years of daily price data via FMP API
 
+**Watchlist:**
+- **Multi-symbol**: Supports any US stock ticker (not limited to AAPL)
+- **Feature-gated**: Enabled/disabled via `NEXT_PUBLIC_ENABLE_SUNDAY_WATCHLIST` env var
+- **Workspace package**: Lives in `packages/watchlist` and imported as `@fin/watchlist`
+- **Auth stubbed**: Currently runs in "guest mode" without Firebase authentication
+- **Migration in progress**: Backend services transitioning from Firebase to Supabase
+- **Shared dependencies**: Uses root-level React 19, Next.js 15, and TypeScript 5
+
 ---
 
 ## Documentation
 
-Comprehensive planning docs in `docs/`:
+Comprehensive planning docs in root:
+- `CLAUDE.md` - This file: architecture overview and development guide
+- `README.md` - Basic setup instructions and project structure
+- `SUNDAY_WATCHLIST_INTEGRATION_STATUS.md` - Detailed watchlist integration status and migration plan
+
+Planning docs in `docs/`:
 - `PROJECT_PLAN.md` - Complete system architecture and phased implementation
 - `TOOL_ARCHITECTURE_DECISION.md` - Two-layer architecture for metrics integration
 - `EVALUATION_SYSTEM_PLAN.md` - Prompt testing and improvement system
@@ -525,13 +631,20 @@ Comprehensive planning docs in `docs/`:
 
 ## Tech Stack Summary
 
-- **Framework**: Next.js 14 (App Router, Server Actions, RSC)
+- **Framework**: Next.js 15 (App Router, Server Actions, RSC)
+- **React**: React 19 RC (with concurrent features)
+- **Monorepo**: npm workspaces (root + `packages/watchlist`)
 - **Database**: Supabase (PostgreSQL with pgvector extension for embeddings)
-- **Authentication**: Supabase Auth (Google OAuth)
+- **Authentication**: Supabase Auth (Google OAuth) - Firebase Auth stubbed in watchlist package
 - **LLM**: OpenAI (gpt-5-nano, gpt-4o-mini, or gpt-4o via Responses API)
 - **Embeddings**: OpenAI text-embedding-3-small (1536-dim for RAG)
-- **Charts**: Highcharts (financial/price charts), HTML5 Canvas (mini charts)
+- **Charts**:
+  - Highcharts (financial/price charts in main app)
+  - TradingView Lightweight Charts v5 (watchlist package)
+  - HTML5 Canvas (mini charts)
 - **Styling**: Tailwind CSS with dark/light mode support
-- **Language**: TypeScript
+- **Language**: TypeScript 5.9
 - **Testing**: Vitest with @testing-library/react and jsdom
-- **Data APIs**: Financial Modeling Prep (FMP) for prices and extended metrics
+- **Data APIs**: Financial Modeling Prep (FMP) for prices, metrics, and real-time data
+- **Real-time**: REST polling (watchlist), WebSocket connections (future)
+- **PWA**: Service Worker support via next-pwa (watchlist package)

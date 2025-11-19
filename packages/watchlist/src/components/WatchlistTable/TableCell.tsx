@@ -4,6 +4,9 @@ import { memo, CSSProperties } from 'react'
 import { MergedStock } from '@watchlist/types'
 import NewsIndicator from '@watchlist/components/NewsIndicator'
 
+const SYMBOL_HEADER_LABEL = 'Symbol'
+const DIVIDEND_YIELD_HEADER_LABEL = 'Div Yield'
+
 interface TableCellProps {
   style: CSSProperties // Positioning from react-window
   columnKey: string
@@ -276,7 +279,7 @@ const TableCell = memo(function TableCell({
 // Helper function for column labels
 function getColumnLabel(columnKey: string): string {
   const labels: { [key: string]: string } = {
-    symbol: 'Symbol',
+    symbol: SYMBOL_HEADER_LABEL,
     news: 'News',
     lastTrade: 'Last Trade',
     change: 'Change',
@@ -290,7 +293,7 @@ function getColumnLabel(columnKey: string): string {
     peRatio: 'P/E (ttm)',
     exDate: 'Ex-Date',
     eps: 'EPS (ttm)',
-    divYield: 'Div Yield',
+    divYield: DIVIDEND_YIELD_HEADER_LABEL,
     name: 'Description'
   }
   return labels[columnKey] || columnKey

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Navigation from '@/components/Navigation'
+import Sidebar from '@/components/Sidebar'
+import { useSidebar } from '@/components/SidebarProvider'
 import SimpleCanvasChart from '@/components/SimpleCanvasChart'
 import FuturesTable from '@/components/FuturesTable'
 import GainersTable from '@/components/GainersTable'
@@ -171,11 +173,19 @@ export default function MarketPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const { sidebarOpen } = useSidebar()
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
       <Navigation />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="page-content flex flex-col flex-1">
+        <Sidebar>
+          {/* Empty sidebar for market page - just shows/hides based on route */}
+          <div />
+        </Sidebar>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-600 dark:text-gray-400">Loading market data...</div>
@@ -408,7 +418,8 @@ export default function MarketPage() {
             </div>
           </div>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

@@ -5,6 +5,8 @@ import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
 import FinancialChart from '@/components/FinancialChart'
 import ThemeToggle from '@/components/ThemeToggle'
+import Sidebar from '@/components/Sidebar'
+import { useSidebar } from '@/components/SidebarProvider'
 import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
@@ -21,7 +23,7 @@ export default function Home() {
   // Auth and UI state
   const [user, setUser] = useState<User | null>(null)
   const [sessionId, setSessionId] = useState<string>('')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { sidebarOpen } = useSidebar()
   const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
 
   // Chatbot state
@@ -59,6 +61,7 @@ export default function Home() {
     }
     setSessionId(id)
   }, [])
+
 
   // Auth state management
   useEffect(() => {
@@ -383,52 +386,30 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
-      {/* Sidebar - fixed position overlay */}
-      <div
-        className={`hidden lg:block fixed left-0 top-0 h-screen w-64 xl:w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-[60] transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <RecentQueries
-          userId={user?.id}
-          sessionId={!user ? sessionId : undefined}
-          onQueryClick={handleQueryClick}
-          onNewChat={handleNewChat}
-          refreshTrigger={refreshQueriesTrigger}
-          currentConversationId={currentConversationId}
-        />
-      </div>
-
-      {/* Sidebar Toggle Button */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[70] bg-white dark:bg-[rgb(45,45,45)] border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)] transition-all shadow-lg ${
-          sidebarOpen ? 'xl:left-80 left-64' : 'left-0'
-        }`}
-        title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-      >
-        {sidebarOpen ? (
-          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        )}
-      </button>
-
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 z-40">
         <Navigation />
       </div>
 
-      {/* Chatbot content area */}
-      <div
-        ref={scrollContainerRef}
-        className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
-      >
-        <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
+      <div className="page-content flex flex-col flex-1">
+        {/* Sidebar */}
+        <Sidebar>
+          <RecentQueries
+            userId={user?.id}
+            sessionId={!user ? sessionId : undefined}
+            onQueryClick={handleQueryClick}
+            onNewChat={handleNewChat}
+            refreshTrigger={refreshQueriesTrigger}
+            currentConversationId={currentConversationId}
+          />
+        </Sidebar>
+
+        {/* Chatbot content area */}
+        <div
+          ref={scrollContainerRef}
+          className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
+        >
+          <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
           {conversationHistory.map((message, index) => {
             const isLastUserMessage = message.role === 'user' && index === lastUserMessageIndex
 
@@ -546,8 +527,8 @@ export default function Home() {
       </div>
 
       {/* Input bar */}
-      <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
-        <div className="max-w-4xl mx-auto px-6">
+      <div className={`${conversationHistory.length === 0 ? (sidebarOpen ? 'fixed top-1/2 left-[calc(50%+4rem)] lg:left-[calc(50%+4rem)] xl:left-[calc(50%+6rem)] -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl' : 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl') : `fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 ${sidebarOpen ? 'lg:ml-64' : ''}`} z-50 transition-all duration-300`}>
+        <div className={`${conversationHistory.length === 0 ? 'px-6' : 'max-w-4xl mx-auto px-6'}`}>
           <form onSubmit={handleSubmitStreaming}>
             <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
               <textarea
@@ -586,5 +567,6 @@ export default function Home() {
         </div>
       </div>
     </div>
+  </div>
   )
 }
