@@ -56,15 +56,22 @@ async function fetchRegularHoursGainers(): Promise<{ gainers?: GainerData[]; err
         })
       }
 
-      // Map gainers with volume data
-      const gainers: GainerData[] = topGainers.map((item: any) => ({
-        symbol: item.symbol,
-        name: item.name,
-        price: item.price,
-        change: item.change,
-        changesPercentage: item.changesPercentage,
-        volume: volumeMap.get(item.symbol) || 0
-      }))
+      // Map gainers with volume data, filtering out bad data
+      const gainers: GainerData[] = topGainers
+        .filter((item: any) => {
+          // Filter out unrealistic percentage changes (likely bad data from API)
+          // Max realistic daily gain is ~1000% (even that is extreme)
+          const pctChange = Math.abs(item.changesPercentage || 0)
+          return pctChange < 1000 && item.price > 0
+        })
+        .map((item: any) => ({
+          symbol: item.symbol,
+          name: item.name,
+          price: item.price,
+          change: item.change,
+          changesPercentage: item.changesPercentage,
+          volume: volumeMap.get(item.symbol) || 0
+        }))
 
       return { gainers }
     }

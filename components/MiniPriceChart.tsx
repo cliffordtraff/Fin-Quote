@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
-import Highcharts from 'highcharts'
+import Highcharts from 'highcharts/highstock'
 import { useTheme } from '@/components/ThemeProvider'
 
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), {

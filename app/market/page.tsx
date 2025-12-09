@@ -215,6 +215,8 @@ export default function MarketPage() {
               {spxData.priceHistory && spxData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={spxData.priceHistory}
+                  yAxisInterval={5}
+                  labelIntervalMultiplier={1}
                   previousClose={spxData.currentPrice - spxData.priceChange}
                 />
               ) : (
@@ -255,7 +257,7 @@ export default function MarketPage() {
               {nasdaqData.priceHistory && nasdaqData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={nasdaqData.priceHistory}
-                  yAxisInterval={100}
+                  yAxisInterval={20}
                   labelIntervalMultiplier={1}
                   previousClose={nasdaqData.currentPrice - nasdaqData.priceChange}
                 />
@@ -297,7 +299,7 @@ export default function MarketPage() {
               {dowData.priceHistory && dowData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={dowData.priceHistory}
-                  yAxisInterval={100}
+                  yAxisInterval={50}
                   labelIntervalMultiplier={1}
                   previousClose={dowData.currentPrice - dowData.priceChange}
                 />
@@ -339,7 +341,7 @@ export default function MarketPage() {
               {russellData.priceHistory && russellData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={russellData.priceHistory}
-                  yAxisInterval={10}
+                  yAxisInterval={5}
                   labelIntervalMultiplier={1}
                   previousClose={russellData.currentPrice - russellData.priceChange}
                 />

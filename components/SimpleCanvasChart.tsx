@@ -169,15 +169,12 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     ctx.lineWidth = 1            // Set line thickness
     ctx.setLineDash([2, 3])      // Set dotted pattern: 2px line, 3px gap
 
-    // Draw gridlines at each price label position (except top and bottom)
-    priceLabels.forEach(({ y }, index) => {
-      // Skip first and last to avoid gridlines at edges
-      if (index > 0 && index < priceLabels.length - 1) {
-        ctx.beginPath()           // Start a new path
-        ctx.moveTo(chartLeft, y)  // Move to left edge
-        ctx.lineTo(chartRight, y) // Draw line to right edge
-        ctx.stroke()              // Actually draw the line
-      }
+    // Draw gridlines at each price label position
+    priceLabels.forEach(({ y }) => {
+      ctx.beginPath()           // Start a new path
+      ctx.moveTo(chartLeft, y)  // Move to left edge
+      ctx.lineTo(chartRight, y) // Draw line to right edge
+      ctx.stroke()              // Actually draw the line
     })
 
     // ====================

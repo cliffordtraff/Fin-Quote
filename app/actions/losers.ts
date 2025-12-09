@@ -56,15 +56,22 @@ async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?
         })
       }
 
-      // Map losers with volume data
-      const losers: LoserData[] = topLosers.map((item: any) => ({
-        symbol: item.symbol,
-        name: item.name,
-        price: item.price,
-        change: item.change,
-        changesPercentage: item.changesPercentage,
-        volume: volumeMap.get(item.symbol) || 0
-      }))
+      // Map losers with volume data, filtering out bad data
+      const losers: LoserData[] = topLosers
+        .filter((item: any) => {
+          // Filter out unrealistic percentage changes (likely bad data from API)
+          // Max realistic daily loss is ~99% (stock can't go below 0)
+          const pctChange = Math.abs(item.changesPercentage || 0)
+          return pctChange < 100 && item.price > 0
+        })
+        .map((item: any) => ({
+          symbol: item.symbol,
+          name: item.name,
+          price: item.price,
+          change: item.change,
+          changesPercentage: item.changesPercentage,
+          volume: volumeMap.get(item.symbol) || 0
+        }))
 
       return { losers }
     }
