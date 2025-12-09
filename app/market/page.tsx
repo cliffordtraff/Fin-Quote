@@ -194,7 +194,7 @@ export default function MarketPage() {
                 <div className="flex items-baseline justify-between">
                   <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {new Date(spxData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(spxData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                   <span
                     className={`text-xs font-medium mr-12 ${
@@ -215,8 +215,6 @@ export default function MarketPage() {
               {spxData.priceHistory && spxData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={spxData.priceHistory}
-                  yAxisInterval={5}
-                  labelIntervalMultiplier={1}
                   previousClose={spxData.currentPrice - spxData.priceChange}
                   currentPrice={spxData.currentPrice}
                 />
@@ -237,7 +235,7 @@ export default function MarketPage() {
                 <div className="flex items-baseline justify-between">
                   <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {new Date(nasdaqData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(nasdaqData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                   <span
                     className={`text-xs font-medium mr-12 ${
@@ -258,8 +256,6 @@ export default function MarketPage() {
               {nasdaqData.priceHistory && nasdaqData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={nasdaqData.priceHistory}
-                  yAxisInterval={20}
-                  labelIntervalMultiplier={1}
                   previousClose={nasdaqData.currentPrice - nasdaqData.priceChange}
                   currentPrice={nasdaqData.currentPrice}
                 />
@@ -280,7 +276,7 @@ export default function MarketPage() {
                 <div className="flex items-baseline justify-between">
                   <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {new Date(dowData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(dowData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                   <span
                     className={`text-xs font-medium mr-12 ${
@@ -301,8 +297,6 @@ export default function MarketPage() {
               {dowData.priceHistory && dowData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={dowData.priceHistory}
-                  yAxisInterval={50}
-                  labelIntervalMultiplier={1}
                   previousClose={dowData.currentPrice - dowData.priceChange}
                   currentPrice={dowData.currentPrice}
                 />
@@ -323,7 +317,7 @@ export default function MarketPage() {
                 <div className="flex items-baseline justify-between">
                   <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {new Date(russellData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(russellData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                   <span
                     className={`text-xs font-medium mr-12 ${
@@ -344,8 +338,6 @@ export default function MarketPage() {
               {russellData.priceHistory && russellData.priceHistory.length > 0 ? (
                 <SimpleCanvasChart
                   data={russellData.priceHistory}
-                  yAxisInterval={5}
-                  labelIntervalMultiplier={1}
                   previousClose={russellData.currentPrice - russellData.priceChange}
                   currentPrice={russellData.currentPrice}
                 />

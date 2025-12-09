@@ -162,15 +162,15 @@ export async function getAaplMarketData() {
       }
     }
 
-    // Get the date - prefer quote timestamp if available, otherwise use price history
-    // priceData.timestamp is Unix timestamp in seconds from FMP
+    // Get the date - prefer price history date (actual candle date), then quote timestamp
+    // When market is open, priceHistory has today's intraday candles
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[priceHistory.length - 1].date.split(' ')[0]  // Use most recent candle date
+      : null
     const quoteDate = priceData.timestamp
       ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
       : null
-    const historyDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0]
-      : null
-    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
+    const actualDate = historyDate || quoteDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
@@ -289,14 +289,15 @@ export async function getNasdaqMarketData() {
       }
     }
 
-    // Get the date - prefer quote timestamp if available, otherwise use price history
+    // Get the date - prefer price history date (actual candle date), then quote timestamp
+    // When market is open, priceHistory has today's intraday candles
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[priceHistory.length - 1].date.split(' ')[0]  // Use most recent candle date
+      : null
     const quoteDate = priceData.timestamp
       ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
       : null
-    const historyDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0]
-      : null
-    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
+    const actualDate = historyDate || quoteDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
@@ -402,14 +403,15 @@ export async function getDowMarketData() {
       }
     }
 
-    // Get the date - prefer quote timestamp if available, otherwise use price history
+    // Get the date - prefer price history date (actual candle date), then quote timestamp
+    // When market is open, priceHistory has today's intraday candles
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[priceHistory.length - 1].date.split(' ')[0]  // Use most recent candle date
+      : null
     const quoteDate = priceData.timestamp
       ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
       : null
-    const historyDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0]
-      : null
-    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
+    const actualDate = historyDate || quoteDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
@@ -515,14 +517,15 @@ export async function getRussellMarketData() {
       }
     }
 
-    // Get the date - prefer quote timestamp if available, otherwise use price history
+    // Get the date - prefer price history date (actual candle date), then quote timestamp
+    // When market is open, priceHistory has today's intraday candles
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[priceHistory.length - 1].date.split(' ')[0]  // Use most recent candle date
+      : null
     const quoteDate = priceData.timestamp
       ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
       : null
-    const historyDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0]
-      : null
-    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
+    const actualDate = historyDate || quoteDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,

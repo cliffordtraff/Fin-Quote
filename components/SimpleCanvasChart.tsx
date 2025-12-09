@@ -146,34 +146,89 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     const priceMin = minPrice - padding  // Lowest price on chart
     const priceMax = maxPrice + padding  // Highest price on chart
     const totalRange = priceMax - priceMin
-    const interval = yAxisInterval || 10  // Use custom interval or default to $10
 
-    // Find nice numbers divisible by interval that cover the range
-    // Round outward to ensure we cover the full range
-    const niceMin = Math.floor(priceMin / interval) * interval
-    const niceMax = Math.ceil(priceMax / interval) * interval
+    // Dynamic interval selection based on price range
+    // This adapts the Y-axis spacing based on intraday volatility
+    // Each interval tier has both a max and min number of labels
+    let labelInterval: number
+    let maxLabels: number
+    let minLabels: number
 
-    // Generate nice price labels in increments of multiplier x interval (e.g., 20 if interval is 10 and multiplier is 2)
-    const MAX_LABELS = 6
-    const labelInterval = interval * labelIntervalMultiplier
-
-    let priceLabels: Array<{ price: number; y: number }> = []
-    for (let price = niceMin; price <= niceMax; price += labelInterval) {
-      // Calculate y position for this price
-      const normalizedPosition = (priceMax - price) / totalRange
-      const y = chartTop + (normalizedPosition * chartHeight)
-
-      // Only show if within visible chart area
-      if (y >= chartTop && y <= chartBottom) {
-        priceLabels.push({ price, y })
+    if (yAxisInterval) {
+      // If custom interval provided, use it with the multiplier
+      labelInterval = yAxisInterval * labelIntervalMultiplier
+      maxLabels = 6
+      minLabels = 4
+    } else {
+      // Auto-select interval and max/min labels based on price range
+      // For indices like NASDAQ (~23000-24000), SPX (~6000-7000), etc.
+      if (totalRange <= 80) {
+        // Small range: $20 interval, 6 labels (min and max)
+        labelInterval = 20
+        maxLabels = 6
+        minLabels = 6
+      } else if (totalRange <= 150) {
+        // Medium range: $50 interval, min 4, max 5 labels
+        labelInterval = 50
+        maxLabels = 5
+        minLabels = 4
+      } else if (totalRange <= 300) {
+        // Larger range: $100 interval, min 4, max 5 labels
+        labelInterval = 100
+        maxLabels = 5
+        minLabels = 4
+      } else {
+        // Very large range: $200 interval, min 4, max 4 labels
+        labelInterval = 200
+        maxLabels = 4
+        minLabels = 4
       }
     }
 
-    // If more than 6 labels, trim from top and bottom alternately to keep labels centered
-    while (priceLabels.length > MAX_LABELS) {
+    // Helper function to generate labels for a given interval
+    const generateLabels = (interval: number, pMin: number, pMax: number, range: number): Array<{ price: number; y: number }> => {
+      const nMin = Math.floor(pMin / interval) * interval
+      const nMax = Math.ceil(pMax / interval) * interval
+      const labels: Array<{ price: number; y: number }> = []
+
+      for (let price = nMin; price <= nMax; price += interval) {
+        const normalizedPosition = (pMax - price) / range
+        const y = chartTop + (normalizedPosition * chartHeight)
+        if (y >= chartTop && y <= chartBottom) {
+          labels.push({ price, y })
+        }
+      }
+      return labels
+    }
+
+    // Generate initial labels
+    let priceLabels = generateLabels(labelInterval, priceMin, priceMax, totalRange)
+
+    // If we don't have enough labels, try smaller intervals
+    if (priceLabels.length < minLabels) {
+      // Try progressively smaller intervals until we get enough labels
+      const smallerIntervals = [100, 50, 20, 10, 5]
+      for (const smallerInterval of smallerIntervals) {
+        if (smallerInterval < labelInterval) {
+          const newLabels = generateLabels(smallerInterval, priceMin, priceMax, totalRange)
+          if (newLabels.length >= minLabels) {
+            priceLabels = newLabels
+            labelInterval = smallerInterval
+            // Update maxLabels for the new interval tier
+            if (smallerInterval === 20) maxLabels = 6
+            else if (smallerInterval === 50) maxLabels = 5
+            else maxLabels = 6
+            break
+          }
+        }
+      }
+    }
+
+    // If more than max labels, trim from top and bottom alternately to keep labels centered
+    while (priceLabels.length > maxLabels) {
       // Remove from bottom (highest price, which is at start of array since y increases downward)
       priceLabels.shift()
-      if (priceLabels.length > MAX_LABELS) {
+      if (priceLabels.length > maxLabels) {
         // Remove from top (lowest price, which is at end of array)
         priceLabels.pop()
       }
@@ -362,7 +417,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
         const pillY = currentPriceY - pillHeight / 2
 
         // Draw rounded rectangle background (yellow for visibility)
-        ctx.fillStyle = '#d97706'  // Yellow-amber
+        ctx.fillStyle = '#eab308'  // Yellow
         ctx.beginPath()
         const radius = 3
         ctx.moveTo(pillX + radius, pillY)
