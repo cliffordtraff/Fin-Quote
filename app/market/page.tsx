@@ -315,7 +315,7 @@ export default function MarketPage() {
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
               <div className="mb-0">
                 <div className="flex items-baseline justify-between">
-                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL</h2>
+                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL 2000</h2>
                   <span className="text-xs text-gray-600 dark:text-gray-400">
                     {new Date(russellData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
