@@ -25,9 +25,10 @@ interface SimpleCanvasChartProps {
   yAxisInterval?: number  // Optional: custom interval for y-axis labels (e.g., 10, 100, 1000)
   labelIntervalMultiplier?: number  // Optional: multiplier for label interval (default: 2)
   previousClose?: number  // Optional: previous day's closing price for reference line
+  currentPrice?: number   // Optional: current price to highlight on Y-axis
 }
 
-export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMultiplier = 2, previousClose }: SimpleCanvasChartProps) {
+export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMultiplier = 2, previousClose, currentPrice }: SimpleCanvasChartProps) {
   // React ref to access the canvas DOM element
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -90,6 +91,11 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
       prices.push(previousClose)
     }
 
+    // Include current price in price range calculation
+    if (currentPrice !== undefined) {
+      prices.push(currentPrice)
+    }
+
     // Find the highest and lowest prices in the dataset
     const maxPrice = Math.max(...prices)  // e.g., $273
     const minPrice = Math.min(...prices)  // e.g., $266
@@ -110,7 +116,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     const chartHeight = chartBottom - chartTop
 
     const chartLeft = 5                    // Leave 5px on left
-    const chartRight = rect.width - 45     // Leave 45px on right for y-axis labels
+    const chartRight = rect.width - 55     // Leave 55px on right for y-axis labels and current price pill
     const chartWidth = chartRight - chartLeft
 
     // ====================
@@ -148,8 +154,10 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     const niceMax = Math.ceil(priceMax / interval) * interval
 
     // Generate nice price labels in increments of multiplier x interval (e.g., 20 if interval is 10 and multiplier is 2)
+    const MAX_LABELS = 6
     const labelInterval = interval * labelIntervalMultiplier
-    const priceLabels = []
+
+    let priceLabels: Array<{ price: number; y: number }> = []
     for (let price = niceMin; price <= niceMax; price += labelInterval) {
       // Calculate y position for this price
       const normalizedPosition = (priceMax - price) / totalRange
@@ -158,6 +166,16 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
       // Only show if within visible chart area
       if (y >= chartTop && y <= chartBottom) {
         priceLabels.push({ price, y })
+      }
+    }
+
+    // If more than 6 labels, trim from top and bottom alternately to keep labels centered
+    while (priceLabels.length > MAX_LABELS) {
+      // Remove from bottom (highest price, which is at start of array since y increases downward)
+      priceLabels.shift()
+      if (priceLabels.length > MAX_LABELS) {
+        // Remove from top (lowest price, which is at end of array)
+        priceLabels.pop()
       }
     }
 
@@ -321,9 +339,56 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     })
 
     // ====================
+    // DRAW CURRENT PRICE LABEL (highlighted)
+    // ====================
+
+    if (currentPrice !== undefined) {
+      // Calculate y position for current price
+      const currentPriceY = chartBottom - ((currentPrice - minPrice + padding) / (priceRange + padding * 2)) * chartHeight
+
+      if (currentPriceY >= chartTop && currentPriceY <= chartBottom) {
+        // Format the price (show one decimal for precision)
+        const priceText = currentPrice.toFixed(1)
+
+        // Measure text width for background pill
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        const textWidth = ctx.measureText(priceText).width
+
+        // Draw background pill (rounded rectangle)
+        const pillPadding = 3
+        const pillHeight = 14
+        const pillWidth = textWidth + pillPadding * 2
+        const pillX = chartRight + 1
+        const pillY = currentPriceY - pillHeight / 2
+
+        // Draw rounded rectangle background (yellow for visibility)
+        ctx.fillStyle = '#d97706'  // Yellow-amber
+        ctx.beginPath()
+        const radius = 3
+        ctx.moveTo(pillX + radius, pillY)
+        ctx.lineTo(pillX + pillWidth - radius, pillY)
+        ctx.quadraticCurveTo(pillX + pillWidth, pillY, pillX + pillWidth, pillY + radius)
+        ctx.lineTo(pillX + pillWidth, pillY + pillHeight - radius)
+        ctx.quadraticCurveTo(pillX + pillWidth, pillY + pillHeight, pillX + pillWidth - radius, pillY + pillHeight)
+        ctx.lineTo(pillX + radius, pillY + pillHeight)
+        ctx.quadraticCurveTo(pillX, pillY + pillHeight, pillX, pillY + pillHeight - radius)
+        ctx.lineTo(pillX, pillY + radius)
+        ctx.quadraticCurveTo(pillX, pillY, pillX + radius, pillY)
+        ctx.closePath()
+        ctx.fill()
+
+        // Draw the price text in black
+        ctx.fillStyle = '#000000'
+        ctx.textAlign = 'left'
+        ctx.fillText(priceText, pillX + pillPadding, currentPriceY + 3)
+      }
+    }
+
+    // ====================
     // DRAW X-AXIS TIME/DATE LABELS
     // ====================
 
+    ctx.fillStyle = textColor    // Reset to axis label color
     ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'  // Set font
     ctx.textAlign = 'center'     // Center-align text
 
@@ -397,7 +462,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
       }
     }
 
-  }, [data, isDark, previousClose, yAxisInterval, labelIntervalMultiplier])  // Re-run this effect when data, theme, or previousClose changes
+  }, [data, isDark, previousClose, currentPrice, yAxisInterval, labelIntervalMultiplier])  // Re-run this effect when data, theme, previousClose, or currentPrice changes
 
   // ====================
   // RENDER

@@ -218,6 +218,7 @@ export default function MarketPage() {
                   yAxisInterval={5}
                   labelIntervalMultiplier={1}
                   previousClose={spxData.currentPrice - spxData.priceChange}
+                  currentPrice={spxData.currentPrice}
                 />
               ) : (
                 <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
@@ -260,6 +261,7 @@ export default function MarketPage() {
                   yAxisInterval={20}
                   labelIntervalMultiplier={1}
                   previousClose={nasdaqData.currentPrice - nasdaqData.priceChange}
+                  currentPrice={nasdaqData.currentPrice}
                 />
               ) : (
                 <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
@@ -302,6 +304,7 @@ export default function MarketPage() {
                   yAxisInterval={50}
                   labelIntervalMultiplier={1}
                   previousClose={dowData.currentPrice - dowData.priceChange}
+                  currentPrice={dowData.currentPrice}
                 />
               ) : (
                 <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
@@ -344,6 +347,7 @@ export default function MarketPage() {
                   yAxisInterval={5}
                   labelIntervalMultiplier={1}
                   previousClose={russellData.currentPrice - russellData.priceChange}
+                  currentPrice={russellData.currentPrice}
                 />
               ) : (
                 <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">

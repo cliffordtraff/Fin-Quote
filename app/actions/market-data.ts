@@ -162,17 +162,22 @@ export async function getAaplMarketData() {
       }
     }
 
-    // Get the actual date from the price history data
-    const actualDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0] // Extract date from first candle (e.g., "2024-11-07")
-      : new Date().toISOString().split('T')[0]
+    // Get the date - prefer quote timestamp if available, otherwise use price history
+    // priceData.timestamp is Unix timestamp in seconds from FMP
+    const quoteDate = priceData.timestamp
+      ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
+      : null
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[0].date.split(' ')[0]
+      : null
+    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
       priceChange: priceData.change,
       priceChangePercent: priceData.changesPercentage,
       date: actualDate,
-      priceHistory: priceHistory, // Already reversed above on line 79 and 98
+      priceHistory: priceHistory,
     }
   } catch (error) {
     console.error('Error in getAaplMarketData:', error)
@@ -284,17 +289,21 @@ export async function getNasdaqMarketData() {
       }
     }
 
-    // Get the actual date from the price history data
-    const actualDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0] // Extract date from first candle (e.g., "2024-11-07")
-      : new Date().toISOString().split('T')[0]
+    // Get the date - prefer quote timestamp if available, otherwise use price history
+    const quoteDate = priceData.timestamp
+      ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
+      : null
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[0].date.split(' ')[0]
+      : null
+    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
       priceChange: priceData.change,
       priceChangePercent: priceData.changesPercentage,
       date: actualDate,
-      priceHistory: priceHistory, // Already reversed above on line 79 and 98
+      priceHistory: priceHistory,
     }
   } catch (error) {
     console.error('Error in getNasdaqMarketData:', error)
@@ -393,17 +402,21 @@ export async function getDowMarketData() {
       }
     }
 
-    // Get the actual date from the price history data
-    const actualDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0] // Extract date from first candle (e.g., "2024-11-07")
-      : new Date().toISOString().split('T')[0]
+    // Get the date - prefer quote timestamp if available, otherwise use price history
+    const quoteDate = priceData.timestamp
+      ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
+      : null
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[0].date.split(' ')[0]
+      : null
+    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
       priceChange: priceData.change,
       priceChangePercent: priceData.changesPercentage,
       date: actualDate,
-      priceHistory: priceHistory, // Already reversed above on line 79 and 98
+      priceHistory: priceHistory,
     }
   } catch (error) {
     console.error('Error in getDowMarketData:', error)
@@ -502,17 +515,21 @@ export async function getRussellMarketData() {
       }
     }
 
-    // Get the actual date from the price history data
-    const actualDate = priceHistory.length > 0
-      ? priceHistory[0].date.split(' ')[0] // Extract date from first candle (e.g., "2024-11-07")
-      : new Date().toISOString().split('T')[0]
+    // Get the date - prefer quote timestamp if available, otherwise use price history
+    const quoteDate = priceData.timestamp
+      ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
+      : null
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[0].date.split(' ')[0]
+      : null
+    const actualDate = quoteDate || historyDate || new Date().toISOString().split('T')[0]
 
     return {
       currentPrice: priceData.price,
       priceChange: priceData.change,
       priceChangePercent: priceData.changesPercentage,
       date: actualDate,
-      priceHistory: priceHistory, // Already reversed above on line 79 and 98
+      priceHistory: priceHistory,
     }
   } catch (error) {
     console.error('Error in getRussellMarketData:', error)
