@@ -1,3 +1,143 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.range-slider-wrap {
+  --thumb-width: 18px;
+  --thumb-height: 26px;
+  --thumb-radius: 6px;
+  --thumb-border: 2px;
+  --thumb-shadow: 1px;
+  --thumb-overhang-start: 0px;
+  --thumb-overhang-end: 0px;
+}
+
+.range-slider {
+  position: relative;
+  height: 32px;
+  width: calc(100% + var(--thumb-overhang-start) + var(--thumb-overhang-end));
+  margin-left: calc(-1 * var(--thumb-overhang-start));
+  margin-right: calc(-1 * var(--thumb-overhang-end));
+}
+
+.range-slider-track,
+.range-slider-range {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  height: 4px;
+  border-radius: 999px;
+}
+
+.range-slider-track {
+  background: #e5e7eb;
+}
+
+html.dark .range-slider-track {
+  background: rgb(55, 55, 55);
+}
+
+.range-slider-range {
+  background: #3b82f6;
+}
+
+.range-slider-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+}
+
+.range-slider-input:focus {
+  outline: none;
+}
+
+.range-slider-input::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 4px;
+}
+
+.range-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  height: var(--thumb-height);
+  width: var(--thumb-width);
+  border-radius: var(--thumb-radius);
+  background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.35) 0%,
+      rgba(255, 255, 255, 0.35) 12%,
+      transparent 12%,
+      transparent 22%,
+      rgba(255, 255, 255, 0.35) 22%,
+      rgba(255, 255, 255, 0.35) 34%,
+      transparent 34%,
+      transparent 46%,
+      rgba(255, 255, 255, 0.35) 46%,
+      rgba(255, 255, 255, 0.35) 58%,
+      transparent 58%,
+      transparent 70%,
+      rgba(255, 255, 255, 0.35) 70%,
+      rgba(255, 255, 255, 0.35) 82%,
+      transparent 82%,
+      transparent 100%
+    ),
+    #2563eb;
+  border: var(--thumb-border) solid #ffffff;
+  box-shadow: 0 0 0 var(--thumb-shadow) rgba(0, 0, 0, 0.1);
+}
+
+html.dark .range-slider-input::-webkit-slider-thumb {
+  border-color: #1f2937;
+}
+
+.range-slider-input::-moz-range-track {
+  background: transparent;
+  height: 4px;
+}
+
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  height: var(--thumb-height);
+  width: var(--thumb-width);
+  border-radius: var(--thumb-radius);
+  background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.35) 0%,
+      rgba(255, 255, 255, 0.35) 12%,
+      transparent 12%,
+      transparent 22%,
+      rgba(255, 255, 255, 0.35) 22%,
+      rgba(255, 255, 255, 0.35) 34%,
+      transparent 34%,
+      transparent 46%,
+      rgba(255, 255, 255, 0.35) 46%,
+      rgba(255, 255, 255, 0.35) 58%,
+      transparent 58%,
+      transparent 70%,
+      rgba(255, 255, 255, 0.35) 70%,
+      rgba(255, 255, 255, 0.35) 82%,
+      transparent 82%,
+      transparent 100%
+    ),
+    #2563eb;
+  border: var(--thumb-border) solid #ffffff;
+  box-shadow: 0 0 0 var(--thumb-shadow) rgba(0, 0, 0, 0.1);
+}
+
+html.dark .range-slider-input::-moz-range-thumb {
+  border-color: #1f2937;
+}
+
+.range-slider-scale {
+  width: calc(100% + var(--thumb-overhang-start) + var(--thumb-overhang-end));
+  margin-left: calc(-1 * var(--thumb-overhang-start));
+  margin-right: calc(-1 * var(--thumb-overhang-end));
+}

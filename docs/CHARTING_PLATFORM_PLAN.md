@@ -23,7 +23,9 @@ Build a dedicated charting page (`/charts`) where users can select financial met
 
 **Key Features**:
 - Metric selector dropdown (multi-select, up to 4 metrics)
-- Year range selector (5, 10, 15, 20 years)
+- Time range controls:
+  - Quick presets (5, 10, 15, 20 years)
+  - Custom min/max year inputs (validated, clamped to data)
 - Selected metrics shown as removable pills
 - Loading and error states
 - Info section explaining the chart
@@ -34,7 +36,10 @@ const [selectedMetrics, setSelectedMetrics] = useState<MetricId[]>(['revenue'])
 const [metricsData, setMetricsData] = useState<MetricData[]>([])
 const [loading, setLoading] = useState(false)
 const [error, setError] = useState<string | null>(null)
-const [yearRange, setYearRange] = useState(10)
+const [yearRangePreset, setYearRangePreset] = useState(10)
+const [minYear, setMinYear] = useState<number | null>(null)
+const [maxYear, setMaxYear] = useState<number | null>(null)
+const [yearBounds, setYearBounds] = useState<{ min: number; max: number } | null>(null)
 ```
 
 **Available Metrics** (Core 9):
@@ -64,6 +69,7 @@ export async function getMultipleMetrics(params: {
 }): Promise<{
   data: MetricData[] | null
   error: string | null
+  yearBounds?: { min: number; max: number }
 }>
 ```
 
@@ -85,6 +91,7 @@ export type MetricData = {
 - Transform rows into per-metric arrays
 - Sort by year ascending for chart display
 - Validate metrics against whitelist
+- Return year bounds for custom range validation (min/max fiscal year)
 
 ---
 
@@ -120,6 +127,8 @@ interface MetricSelectorProps {
 interface MultiMetricChartProps {
   data: MetricData[]
   metrics: string[]
+  minYear?: number | null
+  maxYear?: number | null
 }
 ```
 
@@ -132,6 +141,7 @@ interface MultiMetricChartProps {
 - Dark/light theme support
 - Export to PNG/CSV
 - Data table toggle (collapsible)
+- Filtered by custom year range when provided
 
 **Dual Y-Axis Logic**:
 ```typescript
@@ -196,6 +206,8 @@ const CHART_COLORS = [
 - Assemble components
 - Add state management
 - Handle loading/error states
+- Add custom year range inputs and validation
+- When preset selected, derive min/max from yearBounds
 
 ### Step 5: Navigation Update
 - Add "Charts" link to nav bar
@@ -203,7 +215,8 @@ const CHART_COLORS = [
 ### Step 6: Testing
 - Test with 1, 2, 3, 4 metrics
 - Test currency vs non-currency combinations
-- Test different year ranges
+- Test quick presets and custom min/max year inputs
+- Test invalid ranges (min > max, outside bounds)
 - Verify dark/light mode
 - Test responsive design
 
