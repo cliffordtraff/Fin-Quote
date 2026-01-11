@@ -417,3 +417,88 @@ Should I start implementing, or do you want to refine any of these points first?
 
 ---
 
+_**User (2026-01-10 22:38Z)**_
+
+what charting library are we using?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Checking which charting library is in use:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: /Users/cliffordtraff/Desktop/Coding/Fin Quote/package.json</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "import.*chart|from.*chart" in "components" • 8 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `components/TradingViewChart.tsx` | `\} from 'lightweight-charts';` | L12 |
+| `components/StockPriceChart.tsx` | `import TradingViewChart, \{ PriceRange \} from './TradingViewChart';` | L4 |
+| `components/SimpleCanvasChart.tsx` | `// Canvas y-coordinates go DOWN from top, so we subtract from chartBottom` | L323 |
+| `components/FinancialChart.tsx` | `import Highcharts, \{ AxisLabelsFormatterContextObject \} from 'highcharts'` | L5 |
+| `components/FinancialChart.tsx` | `import type \{ ChartConfig \} from '@/types/chart'` | L7 |
+| `components/FinancialChart.tsx` | `const HighchartsReact = dynamic(() => import('highcharts-react-official'), \{` | L11 |
+| `components/MiniPriceChart.tsx` | `import Highcharts from 'highcharts/highstock'` | L5 |
+| `components/MiniPriceChart.tsx` | `const HighchartsReact = dynamic(() => import('highcharts-react-official'), \{` | L8 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+You're using two charting libraries:
+
+## Primary: Highcharts
+- Version: `12.4.0`
+- React wrapper: `highcharts-react-official` v3.2.3
+- Used in: `FinancialChart.tsx`, `MiniPriceChart.tsx`
+- Best for: Financial metrics, bar/column charts, multi-series, dual Y-axes
+
+## Secondary: lightweight-charts
+- Version: `5.0.9`
+- Used in: `TradingViewChart.tsx`
+- Best for: Candlestick/OHLC price charts
+
+---
+
+## For Your Charting Platform Plan
+
+Use Highcharts for the `/charts` page because:
+1. Already integrated — `FinancialChart.tsx` is set up
+2. Supports multi-series — multiple metrics on one chart
+3. Dual Y-axes — built-in support
+4. Export features — PNG/CSV export already configured
+5. Theme support — dark/light mode already handled
+
+The plan aligns with this. `MultiMetricChart.tsx` should use Highcharts (either extend `FinancialChart.tsx` or build a new component using the same library).
+
+Should I proceed with implementing the charting platform using Highcharts?
+
+---
+
