@@ -9,7 +9,8 @@ export interface LoserData {
   price: number
   change: number
   changesPercentage: number
-  volume: number
+  volume: number // For extended hours: pre-market/after-hours volume; for regular hours: daily volume
+  floatShares?: number | null // Float shares (only available for extended hours scanner)
 }
 
 /**
@@ -95,22 +96,42 @@ export async function getLosersData() {
     if (session === 'premarket') {
       // Use pre-market scanner (reads from shared cache)
       console.log('[Losers] Using pre-market scanner')
-      const losers = await deriveLosers('premarket')
+      const extendedLosers = await deriveLosers('premarket')
       // Fallback to regular hours if no premarket data
-      if (losers.length === 0) {
+      if (extendedLosers.length === 0) {
         console.log('[Losers] No premarket data, falling back to regular hours')
         return await fetchRegularHoursLosers()
       }
+      // Map to LoserData format, using extendedVolume as the volume
+      const losers: LoserData[] = extendedLosers.map(l => ({
+        symbol: l.symbol,
+        name: l.name,
+        price: l.price,
+        change: l.change,
+        changesPercentage: l.changesPercentage,
+        volume: l.extendedVolume, // Use pre-market volume
+        floatShares: l.floatShares,
+      }))
       return { losers }
     } else if (session === 'afterhours') {
       // Use after-hours scanner (reads from shared cache)
       console.log('[Losers] Using after-hours scanner')
-      const losers = await deriveLosers('afterhours')
+      const extendedLosers = await deriveLosers('afterhours')
       // Fallback to regular hours if no afterhours data
-      if (losers.length === 0) {
+      if (extendedLosers.length === 0) {
         console.log('[Losers] No afterhours data, falling back to regular hours')
         return await fetchRegularHoursLosers()
       }
+      // Map to LoserData format, using extendedVolume as the volume
+      const losers: LoserData[] = extendedLosers.map(l => ({
+        symbol: l.symbol,
+        name: l.name,
+        price: l.price,
+        change: l.change,
+        changesPercentage: l.changesPercentage,
+        volume: l.extendedVolume, // Use after-hours volume
+        floatShares: l.floatShares,
+      }))
       return { losers }
     } else {
       // Regular hours or closed: use dedicated FMP endpoint

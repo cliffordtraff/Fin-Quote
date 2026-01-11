@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric' | 'answerFromContext'
+export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
 
 export type ToolDefinition = {
   name: ToolName
@@ -61,12 +61,6 @@ export const TOOL_MENU: ToolDefinition[] = [
       limit: 'integer 1–20 (defaults to 5) - number of years to fetch',
     },
     notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call.',
-  },
-  {
-    name: 'answerFromContext',
-    description: 'Answer using ONLY previous conversation context without fetching new data.',
-    args: {},
-    notes: 'Use this when the question is ABOUT a previous answer (e.g., "where did you get that?", "what was the source?", "you got this from the 10-K?"). Do NOT use if question requires NEW data.',
   },
 ]
 
@@ -355,6 +349,7 @@ Available Tools:
    - Specific year → limit: 20
    - Number specified → use that number
    - "trend", "history" → limit: 4
+   - "compare" with multiple metrics → limit: 10 (show more history for comparisons)
    - Default → limit: 5
 
    Examples:
@@ -364,33 +359,20 @@ Available Tools:
    - "What's Apple's free cash flow?" → {"metricNames": ["free cash flow"], "limit": 5}
    - "How much did Apple spend on buybacks?" → {"metricNames": ["buybacks"], "limit": 5}
    - "Show me capex trend" → {"metricNames": ["capex"], "limit": 4}
-   - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 5}
+   - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 10}
+   - "Compare P/E and ROE" → {"metricNames": ["P/E", "ROE"], "limit": 10}
    - "Dividend yield for 2023" → {"metricNames": ["dividend yield"], "limit": 20}
 
    args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>}
 
 TOOL SELECTION LOGIC:
 
-1. Question ABOUT previous answer (not requesting new data)? → answerFromContext
-2. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
-3. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
-4. User asks "what metrics available"? → listMetrics
-5. Stock price? → getPrices
-6. Filing metadata ONLY (when/which filings)? → getRecentFilings
-7. Filing CONTENT (what they say, quotes, topics)? → searchFilings
-
-⚠️ CRITICAL: Use answerFromContext (#1) for:
-- "Where did you get that?" / "What was the source?"
-- "You got this from the 10-K?" / "Is this from their filing?"
-- "Can you clarify what you just said?"
-- "What did you mean by [something from previous answer]?"
-→ These ask ABOUT the previous answer, not for NEW data
-
-DO NOT use answerFromContext for:
-- "What about last year?" (needs NEW data for different year)
-- "How does that compare to competitors?" (needs NEW data)
-- "What about Mac sales?" (needs NEW data for different product)
-→ These need actual data fetching
+1. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
+2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
+3. User asks "what metrics available"? → listMetrics
+4. Stock price? → getPrices
+5. Filing metadata ONLY (when/which filings)? → getRecentFilings
+6. Filing CONTENT (what they say, quotes, topics)? → searchFilings
 
 ⚠️ KEY DISTINCTION for #6 vs #7:
 - "When was the latest 10-K filed?" → getRecentFilings (metadata)
@@ -401,7 +383,6 @@ DO NOT use answerFromContext for:
 
 Return ONLY JSON - examples:
 
-{"tool":"answerFromContext","args":{}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
@@ -439,7 +420,7 @@ Q: "What's the ROE in 2023?"
 A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"limit":20}}
 
 Q: "Compare P/E and PEG ratio"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":5}}`
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":10}}`
 
 // New function that returns structured messages for caching
 export const buildToolSelectionMessages = (userQuestion: string) => {
@@ -467,7 +448,7 @@ export const buildToolSelectionPrompt = (
   previousToolResults?: Array<{
     question: string
     answer: string
-    toolData: { type: string; data: any[] }
+    toolData: { type: string; data: any[] } | null | undefined
   }>
 ) => {
   // Get today's date in YYYY-MM-DD format
@@ -479,15 +460,18 @@ export const buildToolSelectionPrompt = (
   // Add context about previous tool results if available
   let previousDataContext = ''
   if (previousToolResults && previousToolResults.length > 0) {
-    previousDataContext = `\n\nPREVIOUS DATA AVAILABLE (for follow-up questions):
-${previousToolResults.map((result, idx) => `
+    const validResults = previousToolResults.filter(r => r.toolData)
+    if (validResults.length > 0) {
+      previousDataContext = `\n\nPREVIOUS DATA AVAILABLE (for follow-up questions):
+${validResults.map((result, idx) => `
 Previous Question ${idx + 1}: "${result.question}"
-Data Type: ${result.toolData.type}
-Data Summary: ${result.toolData.data.length} items returned
+Data Type: ${result.toolData!.type}
+Data Summary: ${result.toolData!.data.length} items returned
 `).join('')}
 
-⚠️ If the current question is about the previous question/answer (e.g., "where did you get that?", "what was the source?"), you may be able to answer using previous context without calling a new tool. However, for most follow-up questions, you should still select the appropriate tool.
+⚠️ If the current question refers to the previous answer, pick the tool that produced that data so the assistant can cite it correctly.
 `
+    }
   }
 
   return `${promptWithDate}${previousDataContext}
@@ -527,17 +511,19 @@ export const buildFinalAnswerPrompt = (
   previousToolResults?: Array<{
     question: string
     answer: string
-    toolData: { type: string; data: any[] }
+    toolData: { type: string; data: any[] } | null | undefined
   }>
 ) => {
   // Build previous context section if available
   let previousContextSection = ''
   if (previousToolResults && previousToolResults.length > 0) {
-    previousContextSection = `\n\nPREVIOUS QUESTIONS & DATA (for context and follow-up questions):
-${previousToolResults.map((result, idx) => `
+    const validResults = previousToolResults.filter(r => r.toolData)
+    if (validResults.length > 0) {
+      previousContextSection = `\n\nPREVIOUS QUESTIONS & DATA (for context and follow-up questions):
+${validResults.map((result, idx) => `
 Previous Question ${idx + 1}: "${result.question}"
 Previous Answer ${idx + 1}: ${result.answer}
-Previous Data ${idx + 1} (${result.toolData.type}): ${JSON.stringify(result.toolData.data, null, 2).substring(0, 2000)}
+Previous Data ${idx + 1} (${result.toolData!.type}): ${JSON.stringify(result.toolData!.data, null, 2).substring(0, 2000)}
 `).join('\n')}
 
 ⚠️ IMPORTANT: The user's current question may reference previous questions/answers.
@@ -545,6 +531,7 @@ Previous Data ${idx + 1} (${result.toolData.type}): ${JSON.stringify(result.tool
 - If the question asks for clarification about a previous answer, you can reference both current facts AND previous context
 - Otherwise, prioritize current facts over previous context
 `
+    }
   }
 
   return `You are an analyst. Answer the user using ONLY the provided facts${previousToolResults && previousToolResults.length > 0 ? ' and previous context' : ''}.
@@ -666,6 +653,36 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
    - Show the calculation concisely with formatted numbers
    - For margins (profitability), show as percentage: "Gross margin is 46.2% ($180.7B gross profit / $391.0B revenue)"
    - For ratios (leverage, efficiency), show as decimal: "Debt-to-equity ratio is 3.87 ($285.5B liabilities / $73.7B equity)"
+
+7. ⚠️ CRITICAL: EXTENDED METRICS FORMATTING (from financial_metrics table):
+   When the facts JSON contains "metric_name" and "metric_value" fields, you MUST apply these formatting rules:
+
+   PERCENTAGE METRICS - MULTIPLY BY 100 AND ADD %:
+   ❌ WRONG: "ROE is 1.52" or "ROE is 1.50"
+   ✅ CORRECT: "ROE is 152%" or "ROE is 150%"
+
+   - returnOnEquity (ROE): If data shows 1.52, write "152%"
+   - returnOnAssets (ROA): If data shows 0.28, write "28%"
+   - returnOnCapitalEmployed (ROCE): If data shows 0.35, write "35%"
+   - grossProfitMargin: If data shows 0.46, write "46%"
+   - operatingProfitMargin, netProfitMargin: Same rule
+   - All metrics ending in "Margin", "Growth", "Yield": multiply by 100, add %
+
+   RATIO METRICS (show as decimal, 2 places, NO multiplication):
+   - peRatio, pbRatio, priceToSalesRatio → "P/E ratio is 28.50"
+   - currentRatio, quickRatio, cashRatio → "Current ratio is 1.23"
+   - debtEquityRatio, debtToAssets → "Debt-to-equity is 1.87"
+
+   CURRENCY METRICS (format with $ and B/M):
+   - marketCap, enterpriseValue → "$3.5T" or "$350B"
+   - freeCashFlow, operatingCashFlow → "$100.5B"
+   - bookValuePerShare, cashPerShare → "$4.25"
+
+   DAYS METRICS (show as whole number with "days"):
+   - daysOfInventoryOnHand, daysPayablesOutstanding → "45 days"
+   - cashConversionCycle → "-35 days" (can be negative)
+
+   ALWAYS round to 2 decimal places maximum. NEVER show raw decimal values.
 
 General Instructions:
 - Be concise and clear.

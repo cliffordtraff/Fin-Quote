@@ -9,7 +9,7 @@ export default function Navigation() {
   const pathname = usePathname()
 
   return (
-    <nav className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[rgb(33,33,33)]">
+    <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
       <div className="w-full">
         <div className="flex justify-between items-center h-16 px-6">
           {/* Logo and Navigation Tabs */}

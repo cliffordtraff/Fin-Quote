@@ -9,7 +9,8 @@ export interface GainerData {
   price: number
   change: number
   changesPercentage: number
-  volume: number
+  volume: number // For extended hours: pre-market/after-hours volume; for regular hours: daily volume
+  floatShares?: number | null // Float shares (only available for extended hours scanner)
 }
 
 /**
@@ -95,22 +96,42 @@ export async function getGainersData() {
     if (session === 'premarket') {
       // Use pre-market scanner (reads from shared cache)
       console.log('[Gainers] Using pre-market scanner')
-      const gainers = await deriveGainers('premarket')
+      const extendedGainers = await deriveGainers('premarket')
       // Fallback to regular hours if no premarket data
-      if (gainers.length === 0) {
+      if (extendedGainers.length === 0) {
         console.log('[Gainers] No premarket data, falling back to regular hours')
         return await fetchRegularHoursGainers()
       }
+      // Map to GainerData format, using extendedVolume as the volume
+      const gainers: GainerData[] = extendedGainers.map(g => ({
+        symbol: g.symbol,
+        name: g.name,
+        price: g.price,
+        change: g.change,
+        changesPercentage: g.changesPercentage,
+        volume: g.extendedVolume, // Use pre-market volume
+        floatShares: g.floatShares,
+      }))
       return { gainers }
     } else if (session === 'afterhours') {
       // Use after-hours scanner (reads from shared cache)
       console.log('[Gainers] Using after-hours scanner')
-      const gainers = await deriveGainers('afterhours')
+      const extendedGainers = await deriveGainers('afterhours')
       // Fallback to regular hours if no afterhours data
-      if (gainers.length === 0) {
+      if (extendedGainers.length === 0) {
         console.log('[Gainers] No afterhours data, falling back to regular hours')
         return await fetchRegularHoursGainers()
       }
+      // Map to GainerData format, using extendedVolume as the volume
+      const gainers: GainerData[] = extendedGainers.map(g => ({
+        symbol: g.symbol,
+        name: g.name,
+        price: g.price,
+        change: g.change,
+        changesPercentage: g.changesPercentage,
+        volume: g.extendedVolume, // Use after-hours volume
+        floatShares: g.floatShares,
+      }))
       return { gainers }
     } else {
       // Regular hours or closed: use dedicated FMP endpoint

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
+import Typed from 'typed.js'
 import Navigation from '@/components/Navigation'
 import RecentQueries from '@/components/RecentQueries'
 import FinancialChart from '@/components/FinancialChart'
@@ -35,11 +36,19 @@ export default function Home() {
   const [dataReceived, setDataReceived] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState<string>('')
   const [selectedTool, setSelectedTool] = useState<string | null>(null)
+  const [typedReady, setTypedReady] = useState(false)
+  const [showTypedHints, setShowTypedHints] = useState(true)
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const lastUserMessageRef = useRef<HTMLDivElement | null>(null)
+  const typedRef = useRef<HTMLSpanElement | null>(null)
+  const typedInstanceRef = useRef<Typed | null>(null)
+  const lastTypedSuggestionRef = useRef<string>('')
+  const lastSuggestionReadyRef = useRef<boolean>(false)
+
+  const showCenteredInput = conversationHistory.length === 0
 
   const lastUserMessageIndex = useMemo(() => {
     for (let i = conversationHistory.length - 1; i >= 0; i--) {
@@ -59,6 +68,60 @@ export default function Home() {
     }
     setSessionId(id)
   }, [])
+
+  // Disable typed hints once there is any conversation content
+  useEffect(() => {
+    if (conversationHistory.length > 0) {
+      setShowTypedHints(false)
+    }
+  }, [conversationHistory.length])
+
+  // Typed.js hint for sample questions (shows when input is empty)
+  useEffect(() => {
+    setTypedReady(false)
+    if (!typedRef.current || !showTypedHints) {
+      if (typedInstanceRef.current) {
+        typedInstanceRef.current.destroy()
+        typedInstanceRef.current = null
+      }
+      return
+    }
+
+    const typed = new Typed(typedRef.current, {
+      strings: [
+        "What's AAPL's revenue trend over 5 years?",
+        'Show me EPS for 2023 vs 2024',
+        'Compare P/E and ROE for Apple',
+        'What did the latest 10-K say about risks?',
+        'How much has Apple spent on buybacks?',
+      ],
+      typeSpeed: 28,
+      backSpeed: 16,
+      backDelay: 1800,
+      smartBackspace: true,
+      loop: true,
+      showCursor: false,
+      preStringTyped: () => {
+        setTypedReady(false)
+        lastSuggestionReadyRef.current = false
+      },
+      onStringTyped: (_pos, self) => {
+        const currentText = typedRef.current?.textContent?.trim() || ''
+        lastTypedSuggestionRef.current = currentText
+        lastSuggestionReadyRef.current = true
+        setTypedReady(true) // stays true while deleting so Tab can still accept the completed line
+      },
+      onDestroy: () => {
+        setTypedReady(false)
+      },
+    })
+    typedInstanceRef.current = typed
+
+    return () => {
+      typed.destroy()
+      typedInstanceRef.current = null
+    }
+  }, [showTypedHints])
 
   // Auth state management
   useEffect(() => {
@@ -165,6 +228,7 @@ export default function Home() {
     setQuestion('')
     setLoadingMessage('')
     setSelectedTool(null)
+    setShowTypedHints(true)
 
     // Generate new session ID for fresh conversation
     const newSessionId = crypto.randomUUID()
@@ -211,6 +275,7 @@ export default function Home() {
 
     // Add user message to conversation history immediately
     setConversationHistory(prev => [...prev, userMessage])
+    setShowTypedHints(false)
 
     // Clear the input box immediately
     setQuestion('')
@@ -546,45 +611,144 @@ export default function Home() {
       </div>
 
       {/* Input bar */}
-      <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
-        <div className="max-w-4xl mx-auto px-6">
-          <form onSubmit={handleSubmitStreaming}>
-            <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
-              <textarea
-                ref={textareaRef}
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    if (question.trim()) {
-                      handleSubmitStreaming(e as any)
+      {showCenteredInput ? (
+        <div className="fixed inset-x-0 top-[42vh] flex justify-center px-6 z-40 pointer-events-none">
+          <div className="w-full max-w-3xl pointer-events-auto">
+            <form onSubmit={handleSubmitStreaming}>
+              <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
+                {/* Typed sample prompts overlayed as a "dynamic placeholder" when the input is empty */}
+                <div
+                  className={`pointer-events-none absolute left-6 right-16 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xl leading-normal ${
+                    question || !showTypedHints ? 'hidden' : 'block'
+                  }`}
+                >
+                  <span ref={typedRef}></span>
+                  {typedReady && (
+                    <span className="ml-2 text-lg text-gray-400 dark:text-gray-500">(tab)</span>
+                  )}
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab' && !e.shiftKey && question.trim().length === 0 && showTypedHints) {
+                      const suggestion = typedRef.current?.textContent?.trim()
+                      if (suggestion && typedReady) {
+                        e.preventDefault()
+                        setQuestion(suggestion)
+                        // Move caret to end after state update
+                        requestAnimationFrame(() => {
+                          if (textareaRef.current) {
+                            const len = suggestion.length
+                            textareaRef.current.selectionStart = len
+                            textareaRef.current.selectionEnd = len
+                          }
+                        })
+                        return
+                      }
                     }
-                  }
-                }}
-                placeholder="Ask Anything"
-                rows={1}
-                className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
-                style={{ height: 'auto' }}
-                disabled={chatbotLoading}
-              />
-              <button
-                type="submit"
-                disabled={chatbotLoading || !question.trim()}
-                className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {chatbotLoading ? (
-                  <div className="w-4 h-4 bg-white rounded-sm"></div>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </form>
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (question.trim()) {
+                        handleSubmitStreaming(e as any)
+                      }
+                    }
+                  }}
+                  rows={1}
+                  className="relative z-10 flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
+                  style={{ height: 'auto' }}
+                  disabled={chatbotLoading}
+                  aria-label="Ask a question"
+                />
+                <button
+                  type="submit"
+                  disabled={chatbotLoading || !question.trim()}
+                  className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {chatbotLoading ? (
+                    <div className="w-4 h-4 bg-white rounded-sm"></div>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
+          <div className="max-w-4xl mx-auto px-6">
+            <form onSubmit={handleSubmitStreaming}>
+              <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
+                {/* Typed sample prompts overlayed as a "dynamic placeholder" when the input is empty */}
+                <div
+                  className={`pointer-events-none absolute left-6 right-16 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xl leading-normal ${
+                    question || !showTypedHints ? 'hidden' : 'block'
+                  }`}
+                >
+                  <span ref={typedRef}></span>
+                  {typedReady && (
+                    <span className="ml-2 text-lg text-gray-400 dark:text-gray-500">(tab)</span>
+                  )}
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab' && !e.shiftKey && question.trim().length === 0 && showTypedHints) {
+                    const suggestionReady = lastSuggestionReadyRef.current
+                    const suggestion = suggestionReady
+                      ? (lastTypedSuggestionRef.current || '').trim()
+                      : (typedRef.current?.textContent?.trim() || '').trim()
+                    if (suggestion && suggestionReady) {
+                      e.preventDefault()
+                      setQuestion(suggestion)
+                      // Move caret to end after state update
+                      requestAnimationFrame(() => {
+                          if (textareaRef.current) {
+                            const len = suggestion.length
+                            textareaRef.current.selectionStart = len
+                            textareaRef.current.selectionEnd = len
+                          }
+                        })
+                        return
+                      }
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (question.trim()) {
+                        handleSubmitStreaming(e as any)
+                      }
+                    }
+                  }}
+                  rows={1}
+                  className="relative z-10 flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
+                  style={{ height: 'auto' }}
+                  disabled={chatbotLoading}
+                  aria-label="Ask a question"
+                />
+                <button
+                  type="submit"
+                  disabled={chatbotLoading || !question.trim()}
+                  className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {chatbotLoading ? (
+                    <div className="w-4 h-4 bg-white rounded-sm"></div>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

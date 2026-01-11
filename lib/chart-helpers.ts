@@ -2,12 +2,14 @@
 
 import type { ChartConfig } from '@/types/chart'
 import type { FinancialData, PriceData } from '@/app/actions/ask-question'
+import type { FinancialMetricResult } from '@/app/actions/get-financial-metric'
+import { METRIC_METADATA } from '@/lib/metric-metadata'
 
 /**
  * Determines if the data type should generate a chart
  */
 export function shouldGenerateChart(dataType: string): boolean {
-  return dataType === 'financials' || dataType === 'prices'
+  return dataType === 'financials' || dataType === 'prices' || dataType === 'financial_metrics'
 }
 
 /**
@@ -520,5 +522,114 @@ export function formatDateRange(startDate: Date, endDate: Date, locale: string =
     return `${start} - ${end}`
   } catch (error) {
     return 'Invalid Date Range'
+  }
+}
+
+/**
+ * Formats extended metric names for display
+ * "peRatio" → "P/E Ratio"
+ * "returnOnEquity" → "Return on Equity"
+ */
+export function formatExtendedMetricName(metricName: string): string {
+  // Check if we have a custom display name in metadata
+  const metadata = METRIC_METADATA[metricName]
+  if (metadata?.description) {
+    // Extract the first part before the dash (e.g., "P/E Ratio" from "P/E Ratio - Price to earnings")
+    const dashIndex = metadata.description.indexOf(' - ')
+    if (dashIndex > 0) {
+      return metadata.description.substring(0, dashIndex)
+    }
+  }
+
+  // Fallback: convert camelCase to Title Case
+  return metricName
+    .replace(/([A-Z])/g, ' $1') // Add space before capitals
+    .replace(/^./, (str) => str.toUpperCase()) // Capitalize first letter
+    .trim()
+}
+
+/**
+ * Generates chart configuration for extended financial metrics (139 metrics)
+ * Handles different unit types: ratio, percentage, currency, days, number
+ */
+export function generateExtendedMetricChart(
+  data: FinancialMetricResult[],
+  metricName: string,
+  userQuestion?: string
+): ChartConfig | null {
+  // Edge case: no data
+  if (!data || data.length === 0) return null
+
+  // Filter to just this metric (in case of multi-metric queries)
+  const metricData = data.filter(d => d.metric_name === metricName)
+  if (metricData.length === 0) return null
+
+  // Sort by year ascending
+  const sortedData = [...metricData].sort((a, b) => a.year - b.year)
+  const validData = sortedData.filter(d => d.metric_value != null && !isNaN(d.metric_value))
+
+  // Don't generate chart for single data point or no data
+  if (validData.length < 2) return null
+
+  const categories = validData.map(d => d.year.toString())
+
+  // Get metadata for this metric to determine formatting
+  const metadata = METRIC_METADATA[metricName]
+  const unit = metadata?.unit || 'number'
+
+  let values: number[]
+  let yAxisLabel: string
+  let chartType: 'line' | 'column' = 'line' // Default to line for trends
+  const displayName = formatExtendedMetricName(metricName)
+
+  switch (unit) {
+    case 'percentage':
+      // FMP stores percentage metrics as decimals (e.g., ROE of 1.52 = 152%, margin of 0.46 = 46%)
+      // Always multiply by 100 to convert to percentage display
+      values = validData.map(d => {
+        const val = d.metric_value!
+        return parseFloat((val * 100).toFixed(2))
+      })
+      yAxisLabel = `${displayName} (%)`
+      break
+
+    case 'ratio':
+      values = validData.map(d => parseFloat(d.metric_value!.toFixed(2)))
+      yAxisLabel = displayName
+      break
+
+    case 'currency':
+      // Determine scale based on magnitude
+      const maxVal = Math.max(...validData.map(d => Math.abs(d.metric_value!)))
+      if (maxVal >= 1_000_000_000) {
+        values = validData.map(d => parseFloat((d.metric_value! / 1e9).toFixed(2)))
+        yAxisLabel = `${displayName} ($B)`
+      } else if (maxVal >= 1_000_000) {
+        values = validData.map(d => parseFloat((d.metric_value! / 1e6).toFixed(2)))
+        yAxisLabel = `${displayName} ($M)`
+      } else {
+        values = validData.map(d => parseFloat(d.metric_value!.toFixed(2)))
+        yAxisLabel = `${displayName} ($)`
+      }
+      chartType = 'column' // Bar charts for currency values
+      break
+
+    case 'days':
+      values = validData.map(d => parseFloat(d.metric_value!.toFixed(1)))
+      yAxisLabel = `${displayName} (days)`
+      break
+
+    default: // 'number' or unknown
+      values = validData.map(d => parseFloat(d.metric_value!.toFixed(2)))
+      yAxisLabel = displayName
+  }
+
+  return {
+    type: chartType,
+    title: `AAPL ${displayName} (${categories[0]}-${categories[categories.length - 1]})`,
+    data: values,
+    categories,
+    yAxisLabel,
+    xAxisLabel: 'Year',
   }
 }

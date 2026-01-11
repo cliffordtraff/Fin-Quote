@@ -162,7 +162,17 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     } else {
       // Auto-select interval and max/min labels based on price range
       // For indices like NASDAQ (~23000-24000), SPX (~6000-7000), etc.
-      if (totalRange <= 80) {
+      if (totalRange <= 8) {
+        // Very tight range (e.g., SPX intraday ~$5-8): $2 interval
+        labelInterval = 2
+        maxLabels = 5
+        minLabels = 3
+      } else if (totalRange <= 30) {
+        // Tight range (e.g., SPX intraday ~$10-30): $5 interval
+        labelInterval = 5
+        maxLabels = 6
+        minLabels = 3
+      } else if (totalRange <= 80) {
         // Small range: $20 interval, 6 labels (min and max)
         labelInterval = 20
         maxLabels = 6
@@ -207,7 +217,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
     // If we don't have enough labels, try smaller intervals
     if (priceLabels.length < minLabels) {
       // Try progressively smaller intervals until we get enough labels
-      const smallerIntervals = [100, 50, 20, 10, 5]
+      const smallerIntervals = [100, 50, 20, 10, 5, 2, 1]
       for (const smallerInterval of smallerIntervals) {
         if (smallerInterval < labelInterval) {
           const newLabels = generateLabels(smallerInterval, priceMin, priceMax, totalRange)

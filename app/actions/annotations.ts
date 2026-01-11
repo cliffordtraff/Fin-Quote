@@ -19,11 +19,17 @@ export type AnnotationInput = {
   comment?: string
 }
 
+// Helper to get supabase client with any type to bypass missing table types
+async function getSupabase() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return await createServerClient() as any
+}
+
 /**
  * Get all annotations for a specific evaluation file
  */
 export async function getAnnotations(evaluationFile: string): Promise<Annotation[]> {
-  const supabase = await createClient()
+  const supabase = await getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -46,7 +52,7 @@ export async function getAnnotation(
   evaluationFile: string,
   questionId: number
 ): Promise<Annotation | null> {
-  const supabase = await createClient()
+  const supabase = await getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -68,7 +74,7 @@ export async function getAnnotation(
  * Upsert (create or update) an annotation
  */
 export async function upsertAnnotation(input: AnnotationInput): Promise<Annotation> {
-  const supabase = await createClient()
+  const supabase = await getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -101,7 +107,7 @@ export async function deleteAnnotation(
   evaluationFile: string,
   questionId: number
 ): Promise<void> {
-  const supabase = await createClient()
+  const supabase = await getSupabase()
 
   const { error } = await supabase
     .from('evaluation_annotations')

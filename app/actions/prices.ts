@@ -1,23 +1,91 @@
 'use server'
 
+export type PriceRange = '7d' | '30d' | '90d' | '365d' | 'ytd' | '3y' | '5y' | '10y' | '20y' | 'max'
+
 export type PriceParams = {
-  from: string
+  from?: string
   to?: string
+  range?: PriceRange
+}
+
+// Helper to convert range to from date
+function rangeToFromDate(range: PriceRange): string {
+  const today = new Date()
+  let fromDate: Date
+
+  switch (range) {
+    case '7d':
+      fromDate = new Date(today)
+      fromDate.setDate(today.getDate() - 7)
+      break
+    case '30d':
+      fromDate = new Date(today)
+      fromDate.setDate(today.getDate() - 30)
+      break
+    case '90d':
+      fromDate = new Date(today)
+      fromDate.setDate(today.getDate() - 90)
+      break
+    case '365d':
+      fromDate = new Date(today)
+      fromDate.setFullYear(today.getFullYear() - 1)
+      break
+    case 'ytd':
+      fromDate = new Date(today.getFullYear(), 0, 1) // Jan 1 of current year
+      break
+    case '3y':
+      fromDate = new Date(today)
+      fromDate.setFullYear(today.getFullYear() - 3)
+      break
+    case '5y':
+      fromDate = new Date(today)
+      fromDate.setFullYear(today.getFullYear() - 5)
+      break
+    case '10y':
+      fromDate = new Date(today)
+      fromDate.setFullYear(today.getFullYear() - 10)
+      break
+    case '20y':
+      fromDate = new Date(today)
+      fromDate.setFullYear(today.getFullYear() - 20)
+      break
+    case 'max':
+      fromDate = new Date('1980-01-01') // AAPL IPO was 1980
+      break
+    default:
+      fromDate = new Date(today)
+      fromDate.setDate(today.getDate() - 30) // Default to 30 days
+  }
+
+  return fromDate.toISOString().split('T')[0]
 }
 
 export async function getAaplPrices(params: PriceParams): Promise<{
   data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
   error: string | null
 }> {
-  const { from, to } = params
+  let { from, to } = params
+  const { range } = params
+
+  // Convert range to from date if provided
+  if (range && !from) {
+    from = rangeToFromDate(range)
+  }
 
   // Validate date format (basic check)
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-  if (!dateRegex.test(from)) {
+  if (from && !dateRegex.test(from)) {
     return { data: null, error: 'Invalid from date. Must be in YYYY-MM-DD format.' }
   }
   if (to && !dateRegex.test(to)) {
     return { data: null, error: 'Invalid to date. Must be in YYYY-MM-DD format.' }
+  }
+
+  // Default from date if neither from nor range provided
+  if (!from) {
+    const defaultFrom = new Date()
+    defaultFrom.setDate(defaultFrom.getDate() - 30)
+    from = defaultFrom.toISOString().split('T')[0]
   }
 
   try {
@@ -31,14 +99,14 @@ export async function getAaplPrices(params: PriceParams): Promise<{
     const fromDate = from
     const toDate = to || new Date().toISOString().split('T')[0]
 
-    // Check if we're asking for today's data
+    // Check if we're asking for ONLY today's data (both from and to are today)
     const today = new Date().toISOString().split('T')[0]
-    const isAskingForToday = fromDate === today || toDate === today
+    const isAskingForTodayOnly = fromDate === today && toDate === today
 
     let url = `https://financialmodelingprep.com/api/v3/historical-price-full/AAPL?apikey=${apiKey}&from=${fromDate}&to=${toDate}`
 
-    // If asking for today and it's before market close or data not available, fall back to a wider range
-    if (isAskingForToday) {
+    // Only use fallback if asking for today's data specifically (not for ranges that include today)
+    if (isAskingForTodayOnly) {
       // Get last 5 trading days to ensure we have data
       const fiveDaysAgo = new Date()
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)
@@ -102,9 +170,9 @@ export async function getAaplPrices(params: PriceParams): Promise<{
       }))
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Most recent first
 
-    // If we asked for today specifically but got a wider range, return just the most recent trading day
-    if (isAskingForToday && filteredData.length > 0) {
-      console.log(`Asked for today (${today}), returning most recent available: ${filteredData[0].date}`)
+    // Only filter to single day if explicitly asking for today's data only
+    if (isAskingForTodayOnly && filteredData.length > 0) {
+      console.log(`Asked for today only (${today}), returning most recent available: ${filteredData[0].date}`)
       filteredData = [filteredData[0]]
     }
 

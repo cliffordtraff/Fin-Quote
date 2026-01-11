@@ -166,7 +166,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[800px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[400px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
@@ -175,13 +175,65 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   // Detect if this is a time-series chart (timestamp data) or category chart
   const isTimeSeries = config.categories.length === 0 && Array.isArray(config.data) && config.data.length > 0 && Array.isArray(config.data[0])
 
+  // Calculate smart Y-axis range for column charts
+  // Instead of always starting at 0, start slightly below the minimum value
+  // This makes the visual differences between bars more meaningful
+  const getYAxisRange = () => {
+    // Only apply to column charts with simple number arrays (not candlestick/OHLC data)
+    if (config.type !== 'column' || isTimeSeries) {
+      return { min: undefined, max: undefined }
+    }
+
+    const numericData = config.data.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+    if (numericData.length === 0) {
+      return { min: undefined, max: undefined }
+    }
+
+    const minVal = Math.min(...numericData)
+    const maxVal = Math.max(...numericData)
+    const range = maxVal - minVal
+
+    // If all values are positive and the range is small relative to the minimum,
+    // start the axis close to the minimum to make bars shorter and differences more visible
+    // Example: values 365-416 → range=51, minVal=365 → range/minVal = 0.14 (14%)
+    // If range is less than 50% of minVal, apply smart minimum
+    if (minVal > 0 && range > 0 && range / minVal < 0.5) {
+      // Start at 20% of the range below the minimum
+      // This makes bars shorter and emphasizes the differences between values
+      const padding = range * 0.2
+      const smartMin = minVal - padding
+
+      // Round down to nearest nice increment (10 for values 100-999, 5 for smaller)
+      // This gives finer control than rounding to magnitude
+      let increment: number
+      if (smartMin >= 100) {
+        increment = 10
+      } else if (smartMin >= 10) {
+        increment = 5
+      } else {
+        increment = 1
+      }
+      const niceMin = Math.floor(smartMin / increment) * increment
+
+      // Ensure we don't go below 0 for values that should be positive
+      const finalMin = Math.max(0, niceMin)
+
+      return { min: finalMin, max: undefined }
+    }
+
+    // For other cases (large range, negative values, etc.), let Highcharts decide
+    return { min: undefined, max: undefined }
+  }
+
+  const yAxisRange = getYAxisRange()
+
   // Highcharts configuration with polish and animations
   const options: Highcharts.Options = {
     chart: {
       type: config.type,
       height: isFullscreen
         ? fullscreenSize?.height ?? '100%'
-        : 800, // Extra large: 800px for maximum visibility, 100%/viewport in fullscreen
+        : 400, // Reasonable height that fits on screen without scrolling
       width: isFullscreen ? fullscreenSize?.width ?? undefined : undefined, // Full width in fullscreen mode
       backgroundColor: isDark ? 'rgb(33, 33, 33)' : 'transparent', // Dark: custom dark gray, Light: transparent
       // Minimize whitespace in fullscreen while keeping axes readable
@@ -256,6 +308,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           color: isDark ? '#9ca3af' : '#6b7280', // Dark: gray-400, Light: gray-500
         },
       },
+      min: yAxisRange.min, // Smart minimum for column charts
+      max: yAxisRange.max,
       minPadding: 0,
       maxPadding: 0.08, // Leave headroom so column labels rendered above bars are visible
       labels: {
@@ -437,7 +491,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           },
           chartOptions: {
             chart: {
-              height: 400, // Larger on small screens too
+              height: 300, // Smaller on mobile screens
             },
             xAxis: {
               labels: {

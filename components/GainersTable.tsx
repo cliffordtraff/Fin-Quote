@@ -7,6 +7,7 @@ interface GainerData {
   change: number
   changesPercentage: number
   volume: number
+  floatShares?: number | null
 }
 
 interface GainersTableProps {
@@ -47,6 +48,22 @@ export default function GainersTable({ gainers }: GainersTableProps) {
     return volume.toLocaleString()
   }
 
+  const formatFloat = (floatShares: number | null | undefined) => {
+    if (!floatShares || floatShares === 0) {
+      return '—'
+    }
+    if (floatShares >= 1_000_000_000) {
+      return `${(floatShares / 1_000_000_000).toFixed(1)}B`
+    }
+    if (floatShares >= 1_000_000) {
+      return `${(floatShares / 1_000_000).toFixed(1)}M`
+    }
+    if (floatShares >= 1_000) {
+      return `${(floatShares / 1_000).toFixed(0)}K`
+    }
+    return floatShares.toLocaleString()
+  }
+
   if (gainers.length === 0) {
     return (
       <div className="w-full max-w-3xl">
@@ -63,12 +80,13 @@ export default function GainersTable({ gainers }: GainersTableProps) {
     <div className="w-full max-w-3xl">
       <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-5 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
+        <div className="grid grid-cols-6 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
           <div>Symbol</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
           <div className="text-right">Change %</div>
           <div className="text-right">Volume</div>
+          <div className="text-right">Float</div>
         </div>
 
         {/* Rows */}
@@ -82,7 +100,7 @@ export default function GainersTable({ gainers }: GainersTableProps) {
             return (
               <div
                 key={gainer.symbol}
-                className="grid grid-cols-5 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
+                className="grid grid-cols-6 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
               >
                 <div className="text-blue-400 font-medium text-xs">{gainer.symbol}</div>
                 <div className={`text-right ${colorClass} text-xs`}>
@@ -96,6 +114,9 @@ export default function GainersTable({ gainers }: GainersTableProps) {
                 </div>
                 <div className="text-right text-gray-600 dark:text-gray-400 text-xs">
                   {formatVolume(gainer.volume)}
+                </div>
+                <div className="text-right text-gray-600 dark:text-gray-400 text-xs">
+                  {formatFloat(gainer.floatShares)}
                 </div>
               </div>
             )

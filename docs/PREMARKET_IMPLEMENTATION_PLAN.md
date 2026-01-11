@@ -1,3 +1,4 @@
+
 # Pre-Market & After-Hours Scanner Implementation Plan
 
 ## Overview

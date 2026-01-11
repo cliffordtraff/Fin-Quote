@@ -109,43 +109,43 @@ export async function getStockKeyStats(): Promise<StockKeyStats> {
 
     return {
       // Valuation
-      marketCap: quote.marketCap || latestMetrics.marketCap || 0,
+      marketCap: quote.marketCap || latestMetrics.marketCap || latestMetrics.marketCapitalization || 0,
       enterpriseValue: keyMetrics.enterpriseValue || latestMetrics.enterpriseValue || 0,
       peRatio: quote.pe || latestMetrics.peRatio || 0,
-      forwardPE: keyMetrics.forwardPE || 0,
+      forwardPE: keyMetrics.forwardPE || latestMetrics.forwardPE || 0,
       pegRatio: keyMetrics.pegRatio || latestMetrics.pegRatio || 0,
-      priceToSales: keyMetrics.priceToSalesRatio || latestMetrics.priceToSalesRatio || 0,
-      priceToBook: keyMetrics.pbRatio || latestMetrics.priceToBookRatio || 0,
-      priceToCashFlow: keyMetrics.pfcfRatio || latestMetrics.priceCashFlowRatio || 0,
+      priceToSales: keyMetrics.priceToSalesRatio || latestMetrics.priceToSalesRatio || latestMetrics.priceSalesRatio || 0,
+      priceToBook: keyMetrics.pbRatio || latestMetrics.priceToBookRatio || latestMetrics.pbRatio || 0,
+      priceToCashFlow: keyMetrics.pfcfRatio || latestMetrics.priceCashFlowRatio || latestMetrics.pfcfRatio || 0,
 
       // Performance
       fiftyTwoWeekHigh: quote.yearHigh || 0,
       fiftyTwoWeekLow: quote.yearLow || 0,
       ytdReturn: quote.ytdChange || 0,
       oneYearReturn: 0, // Would need to calculate from historical prices
-      threeYearCAGR: latestMetrics.revenuePerShareThreeYearGrowth || 0,
-      fiveYearCAGR: latestMetrics.revenuePerShareFiveYearGrowth || 0,
-      beta: keyMetrics.beta || 0,
+      threeYearCAGR: (latestMetrics.threeYRevenueGrowthPerShare || latestMetrics.threeYNetIncomeGrowthPerShare || 0) * 100,
+      fiveYearCAGR: (latestMetrics.fiveYRevenueGrowthPerShare || latestMetrics.fiveYNetIncomeGrowthPerShare || 0) * 100,
+      beta: keyMetrics.beta || latestMetrics.beta || 0,
       avgVolume: quote.avgVolume || 0,
 
       // Profitability
       grossMargin: (latestMetrics.grossProfitMargin || 0) * 100,
-      operatingMargin: (latestMetrics.operatingIncomeMargin || 0) * 100,
-      netMargin: (latestMetrics.netIncomeMargin || 0) * 100,
-      roe: (latestMetrics.returnOnEquity || 0) * 100,
-      roa: (latestMetrics.returnOnAssets || 0) * 100,
-      roic: (latestMetrics.returnOnCapitalEmployed || 0) * 100,
+      operatingMargin: (latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || 0) * 100,
+      netMargin: (latestMetrics.netProfitMargin || 0) * 100,
+      roe: (latestMetrics.returnOnEquity || latestMetrics.roe || 0) * 100,
+      roa: (latestMetrics.returnOnAssets || latestMetrics.roa || 0) * 100,
+      roic: (latestMetrics.returnOnCapitalEmployed || latestMetrics.roic || 0) * 100,
       revenue: latestFinancials.revenue || 0,
       netIncome: latestFinancials.net_income || 0,
 
       // Financial Health
-      debtToEquity: latestMetrics.debtToEquity || 0,
+      debtToEquity: latestMetrics.debtToEquity || latestMetrics.debtEquityRatio || 0,
       currentRatio: latestMetrics.currentRatio || 0,
       quickRatio: latestMetrics.quickRatio || 0,
       operatingCashFlow: latestFinancials.operating_cash_flow || 0,
-      freeCashFlow: keyMetrics.freeCashFlowPerShare ? keyMetrics.freeCashFlowPerShare * (quote.sharesOutstanding || 1) : 0,
-      dividendYield: (quote.dividendYield || 0) * 100,
-      payoutRatio: (latestMetrics.payoutRatio || 0) * 100,
+      freeCashFlow: keyMetrics.freeCashFlowPerShare ? keyMetrics.freeCashFlowPerShare * (quote.sharesOutstanding || 1) : (latestMetrics.freeCashFlowPerShare ? latestMetrics.freeCashFlowPerShare * (quote.sharesOutstanding || 1) : 0),
+      dividendYield: (quote.dividendYield || latestMetrics.dividendYield || 0) * 100,
+      payoutRatio: (latestMetrics.payoutRatio || latestMetrics.dividendPayoutRatio || 0) * 100,
       eps: quote.eps || latestFinancials.eps || 0,
     };
   } catch (error) {

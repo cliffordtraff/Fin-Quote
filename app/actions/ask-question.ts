@@ -56,6 +56,41 @@ const extractResponseText = (response: any): string | undefined => {
   return undefined
 }
 
+/**
+ * Recursively round all numbers in an object/array to 2 decimal places
+ * This prevents the LLM from seeing values like 1.5191298333175105
+ */
+function roundNumbersForLLM(data: any): any {
+  if (data === null || data === undefined) return data
+
+  if (typeof data === 'number') {
+    // Round to 2 decimal places, but keep integers as integers
+    if (Number.isInteger(data)) return data
+    return Math.round(data * 100) / 100
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(item => roundNumbersForLLM(item))
+  }
+
+  if (typeof data === 'object') {
+    const rounded: Record<string, any> = {}
+    for (const key of Object.keys(data)) {
+      rounded[key] = roundNumbersForLLM(data[key])
+    }
+    return rounded
+  }
+
+  return data
+}
+
+/**
+ * Create facts JSON for LLM with rounded numbers
+ */
+function createFactsJson(data: any): string {
+  return JSON.stringify(roundNumbersForLLM(data), null, 2)
+}
+
 export type FinancialData = { year: number; value: number; metric: string }
 export type PriceData = { date: string; open: number; high: number; low: number; close: number; volume: number }
 export type FilingData = {
@@ -344,25 +379,7 @@ export async function askQuestion(
     let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
     let chartConfig: ChartConfig | null = null
 
-    if (toolSelection.tool === 'answerFromContext') {
-      // No tool execution needed - answer using only previous context
-      // Set empty facts since we're relying on previousToolResults passed to answer generation
-      factsJson = JSON.stringify({
-        note: 'No new data fetched. Answer based on previous conversation context only.'
-      })
-
-      // Create a minimal dataUsed from previous context (for logging purposes)
-      // Use the most recent previous tool data if available
-      if (previousToolResults && previousToolResults.length > 0) {
-        const mostRecent = previousToolResults[previousToolResults.length - 1]
-        dataUsed = mostRecent.toolData as any
-      } else {
-        // Fallback if no previous results available (shouldn't happen if tool selection worked correctly)
-        dataUsed = { type: 'financials', data: [] }
-      }
-
-      console.log('💭 Answering from context only - no new data fetched')
-    } else if (toolSelection.tool === 'getAaplFinancialsByMetric') {
+    if (toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
       const metric = toolSelection.args.metric as FinancialMetric
       const validMetrics: FinancialMetric[] = [
@@ -396,7 +413,7 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
+      factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'financials', data: toolResult.data }
 
       // Generate chart for financial data (pass user question to detect margin vs raw value requests)
@@ -470,11 +487,11 @@ export async function askQuestion(
         console.log('📊 Using FULL data for LLM:', toolResult.data.length, 'records')
       }
 
-      factsJson = JSON.stringify(dataForLLM)
+      factsJson = createFactsJson(dataForLLM)
       dataUsed = { type: 'prices', data: dataForLLM }
 
       // Generate chart for price data (use range if available, otherwise use from-to)
-      const chartLabel = 'range' in priceParams ? priceParams.range : `${priceParams.from} to ${priceParams.to || 'today'}`
+      const chartLabel = priceParams.range || (priceParams.from ? `${priceParams.from} to ${priceParams.to || 'today'}` : 'Price History')
       chartConfig = generatePriceChart(toolResult.data, chartLabel)
     } else if (toolSelection.tool === 'getRecentFilings') {
       // Validate limit
@@ -496,7 +513,7 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
+      factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'filings', data: toolResult.data }
     } else if (toolSelection.tool === 'searchFilings') {
       // Validate query
@@ -523,7 +540,7 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
+      factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'passages', data: toolResult.data }
     } else if (toolSelection.tool === 'listMetrics') {
       // Import at the top if not already imported
@@ -545,7 +562,7 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
+      factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'metrics_catalog', data: toolResult.data }
     } else if (toolSelection.tool === 'getFinancialMetric') {
       // Import at the top if not already imported
@@ -592,11 +609,16 @@ export async function askQuestion(
         }
       }
 
-      factsJson = JSON.stringify(toolResult.data, null, 2)
+      factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'financial_metrics', data: toolResult.data }
 
-      // TODO: Generate chart for single metrics (similar to financial chart logic)
-      // For now, skip charts for advanced metrics
+      // Generate chart for extended metrics (single metric queries only)
+      if (toolResult.data && toolResult.data.length >= 2 && metricNames.length === 1) {
+        const { generateExtendedMetricChart } = await import('@/lib/chart-helpers')
+        // Use the resolved canonical metric name from the data
+        const canonicalMetricName = toolResult.data[0].metric_name
+        chartConfig = generateExtendedMetricChart(toolResult.data, canonicalMetricName, userQuestion)
+      }
     } else {
       return { answer: '', dataUsed: null, chartConfig: null, error: 'Unsupported tool selected', queryLogId: null }
     }
