@@ -42,6 +42,11 @@ const METRIC_CONFIG = {
   roe: { label: 'Return on Equity (ROE)', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Net income divided by shareholders\' equity. Shows return on shareholder investment.', source: 'financials_std' as MetricSource },
   roa: { label: 'Return on Assets (ROA)', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Net income divided by total assets. Measures how efficiently assets generate profit.', source: 'financials_std' as MetricSource },
   pe_ratio: { label: 'P/E Ratio', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Stock price divided by earnings per share. Shows how much investors pay per dollar of earnings.', source: 'financial_metrics' as MetricSource, dbMetricName: 'peRatio' },
+  // Valuation ratios (from financial_metrics)
+  pb_ratio: { label: 'P/B Ratio', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Stock price divided by book value per share. Shows if stock is cheap or expensive relative to net assets.', source: 'financial_metrics' as MetricSource, dbMetricName: 'pbRatio' },
+  ps_ratio: { label: 'P/S Ratio', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Market cap divided by revenue. Useful for valuing companies with no earnings.', source: 'financial_metrics' as MetricSource, dbMetricName: 'priceSalesRatio' },
+  ev_ebitda: { label: 'EV/EBITDA', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Enterprise value divided by EBITDA. A capital structure-neutral valuation metric preferred by analysts.', source: 'financial_metrics' as MetricSource, dbMetricName: 'enterpriseValueMultiple' },
+  fcf_yield: { label: 'FCF Yield', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Free cash flow per share divided by stock price. Shows cash return on investment.', source: 'financial_metrics' as MetricSource, dbMetricName: 'freeCashFlowYield', valueTransform: 100 },
 } as const
 
 // Ratio metrics that need to be calculated
@@ -91,6 +96,12 @@ function isExtendedMetric(metricId: string): boolean {
 function getDbMetricName(metricId: string): string | undefined {
   const config = METRIC_CONFIG[metricId as MetricId] as { dbMetricName?: string }
   return config?.dbMetricName
+}
+
+// Get value transform multiplier (e.g., 100 to convert decimal to percent)
+function getValueTransform(metricId: string): number {
+  const config = METRIC_CONFIG[metricId as MetricId] as { valueTransform?: number }
+  return config?.valueTransform ?? 1
 }
 
 export async function getMultipleMetrics(params: {
@@ -203,6 +214,7 @@ export async function getMultipleMetrics(params: {
         // Get data from financial_metrics
         const dbName = getDbMetricName(metricId)
         const metricYearData = dbName ? extendedMetricData[dbName] ?? {} : {}
+        const transform = getValueTransform(metricId)
 
         return {
           metric: metricId as MetricId,
@@ -210,7 +222,7 @@ export async function getMultipleMetrics(params: {
           unit: config.unit,
           data: sortedStdData.map((row) => ({
             year: row.year,
-            value: metricYearData[row.year] ?? 0,
+            value: (metricYearData[row.year] ?? 0) * transform,
           })),
         }
       } else {

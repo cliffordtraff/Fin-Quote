@@ -232,8 +232,9 @@ export default function ChartsPage() {
       <Navigation />
 
       <main className="max-w-[1600px] mx-auto px-6 py-8">
-        {/* Controls */}
-        <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 px-4 py-2 mb-3">
+        <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          {/* Controls */}
+          <div className="px-4 py-2">
           {/* Metric Selectors - 2x2 grid */}
           <div>
             <MetricSelector
@@ -247,9 +248,9 @@ export default function ChartsPage() {
 
           {/* Enabled metrics and Time Range Slider - same row */}
           <div className="flex items-start gap-6 mt-2">
-            {/* Metric checkboxes - left half, max 3 */}
+            {/* Metric checkboxes - left half, max 4 */}
             <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-3 gap-2 h-[32px]">
+              <div className="grid grid-cols-4 gap-2 h-[32px]">
                 {addedMetrics.map((metricId) => {
                   const metric = availableMetrics.find((m) => m.id === metricId)
                   const isVisible = visibleMetrics.includes(metricId)
@@ -377,11 +378,14 @@ export default function ChartsPage() {
               )}
             </div>
           </div>
-        </div>
+          </div>
 
-        {/* Chart */}
-        <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 pb-2">
-          <div className="relative min-h-[650px]">
+          {/* Divider */}
+          <div className="border-t border-gray-200 dark:border-gray-700" />
+
+          {/* Chart */}
+          <div className="p-4 pb-2">
+            <div className="relative min-h-[650px]">
             {/* Chart content */}
             {error ? (
               <div className="h-[650px] flex items-center justify-center">
@@ -403,6 +407,7 @@ export default function ChartsPage() {
                 <p className="text-gray-600 dark:text-gray-400">Select at least one metric to display</p>
               </div>
             )}
+            </div>
           </div>
         </div>
       </main>

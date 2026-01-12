@@ -50,6 +50,9 @@ interface MultiMetricChartProps {
 }
 
 export default function MultiMetricChart({ data, metrics, customColors = {} }: MultiMetricChartProps) {
+  const [showDataLabels, setShowDataLabels] = useState(true)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
@@ -65,6 +68,17 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
       }
     }
     setIsMounted(true)
+  }, [])
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   if (!isMounted) {
@@ -207,12 +221,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
   const yAxis: Highcharts.YAxisOptions[] = [
     {
       title: {
-        text: getAxisTitle(primaryUnit),
-        style: {
-          fontSize: '14px',
-          fontWeight: '500',
-          color: isDark ? '#9ca3af' : '#6b7280',
-        },
+        text: undefined,
       },
       labels: {
         style: {
@@ -239,12 +248,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
 
     yAxis.push({
       title: {
-        text: getAxisTitle(secondaryUnit),
-        style: {
-          fontSize: '14px',
-          fontWeight: '500',
-          color: isDark ? '#9ca3af' : '#6b7280',
-        },
+        text: undefined,
       },
       labels: {
         style: {
@@ -277,12 +281,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
     xAxis: {
       categories: years,
       title: {
-        text: 'Fiscal Year',
-        style: {
-          fontSize: '14px',
-          fontWeight: '500',
-          color: isDark ? '#9ca3af' : '#6b7280',
-        },
+        text: undefined,
       },
       labels: {
         style: {
@@ -319,6 +318,27 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
         borderWidth: 0,
         groupPadding: 0.15,
         pointPadding: 0.05,
+        dataLabels: {
+          enabled: showDataLabels,
+          verticalAlign: 'bottom',
+          y: -5,
+          style: {
+            fontSize: '11px',
+            fontWeight: '500',
+            color: isDark ? '#e5e7eb' : '#374151',
+            textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
+          },
+          formatter: function (this: Highcharts.PointLabelObject) {
+            const point = this.point
+            const seriesName = this.series.name
+            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const unit = metricInfo?.unit
+            const val = point.y ?? 0
+            if (unit === 'currency') return val.toFixed(1)
+            if (unit === 'percent') return `${val.toFixed(1)}%`
+            return val.toFixed(2)
+          },
+        },
       },
       series: {
         animation: false,
@@ -335,22 +355,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
       enabled: true,
       buttons: {
         contextButton: {
-          x: 0,
-          y: 10,
-          menuItems: [
-            'downloadPNG',
-            'downloadJPEG',
-            'downloadPDF',
-            'downloadSVG',
-            'separator',
-            'downloadCSV',
-            'downloadXLS',
-          ],
-          theme: {
-            fill: isDark ? '#374151' : '#f3f4f6',
-            stroke: isDark ? '#4b5563' : '#e5e7eb',
-          },
-          symbolStroke: isDark ? '#9ca3af' : '#6b7280',
+          enabled: false,
         },
       },
       filename: 'apple_financials',
@@ -443,8 +448,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
     })
   }
 
-  // Create a stable key based on the metrics being displayed
-  const chartKey = [...metrics].sort().join('-')
+  // Create a stable key based on the metrics being displayed and options
+  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}`
 
   return (
     <div className="w-full">
@@ -460,7 +465,58 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
 
       {/* Data Table Section - years as columns */}
       <div className="mt-4">
-        <div className="flex justify-end mb-2">
+        <div className="flex justify-end items-center gap-4 mb-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showDataLabels}
+              onChange={(e) => setShowDataLabels(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Show Labels</span>
+          </label>
+          <div ref={exportMenuRef} className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
+              <svg className={`w-3 h-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showExportMenu && (
+              <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+                <button
+                  onClick={() => { chartRef.current?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                >
+                  Download PNG
+                </button>
+                <button
+                  onClick={() => { chartRef.current?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                >
+                  Download JPEG
+                </button>
+                <button
+                  onClick={() => { chartRef.current?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => { chartRef.current?.exportChart({ type: 'image/svg+xml' }, {}); setShowExportMenu(false) }}
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                >
+                  Download SVG
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={copyToClipboard}
             className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
@@ -478,57 +534,55 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
         </div>
 
         <div className="bg-gray-50 dark:bg-[rgb(40,40,40)] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky left-0 bg-gray-100 dark:bg-[rgb(35,35,35)]">
-                    Metric
+          <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
+              <tr>
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[140px]">
+                  Metric
+                </th>
+                {years.map((year) => (
+                  <th
+                    key={year}
+                    className="px-1 py-2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+                  >
+                    {year}
                   </th>
-                  {years.map((year) => (
-                    <th
-                      key={year}
-                      className="px-3 py-2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
-                    >
-                      {year}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredData.map((metricData) => (
-                  <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
-                    <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium sticky left-0 bg-white dark:bg-[rgb(45,45,45)] whitespace-nowrap">
-                      {metricData.label}
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
-                        {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'percent' ? '(%)' : ''}
-                      </span>
-                    </td>
-                    {years.map((year, yearIndex) => {
-                      const value = metricData.data[yearIndex]?.value || 0
-                      let displayValue: string
-                      if (metricData.unit === 'currency') {
-                        displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
-                      } else if (metricData.unit === 'percent') {
-                        displayValue = `${value.toFixed(1)}%`
-                      } else {
-                        displayValue = value.toFixed(2)
-                      }
-
-                      return (
-                        <td
-                          key={`${metricData.metric}-${year}`}
-                          className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100 text-right whitespace-nowrap"
-                        >
-                          {displayValue}
-                        </td>
-                      )
-                    })}
-                  </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredData.map((metricData) => (
+                <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
+                  <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium truncate">
+                    {metricData.label}
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
+                      {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'percent' ? '(%)' : ''}
+                    </span>
+                  </td>
+                  {years.map((year, yearIndex) => {
+                    const value = metricData.data[yearIndex]?.value || 0
+                    let displayValue: string
+                    if (metricData.unit === 'currency') {
+                      displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
+                    } else if (metricData.unit === 'percent') {
+                      displayValue = `${value.toFixed(1)}%`
+                    } else {
+                      displayValue = value.toFixed(2)
+                    }
+
+                    return (
+                      <td
+                        key={`${metricData.metric}-${year}`}
+                        className="px-1 py-2 text-sm text-gray-900 dark:text-gray-100 text-right"
+                      >
+                        {displayValue}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
