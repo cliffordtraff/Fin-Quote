@@ -38,6 +38,18 @@ export const DEFAULT_METRIC_COLORS: Record<string, string> = {
   roe: '#f43f5e',               // rose-500
   roa: '#8b5cf6',               // violet-500
   pe_ratio: '#e879f9',          // fuchsia-400
+  // Stock Specific - Product Segments
+  segment_iphone: '#3b82f6',    // blue-500
+  segment_services: '#10b981',  // emerald-500
+  segment_wearables: '#f59e0b', // amber-500
+  segment_mac: '#8b5cf6',       // violet-500
+  segment_ipad: '#ec4899',      // pink-500
+  // Stock Specific - Geographic Segments
+  segment_americas: '#06b6d4',  // cyan-500
+  segment_europe: '#22c55e',    // green-500
+  segment_china: '#f97316',     // orange-500
+  segment_japan: '#a855f7',     // purple-500
+  segment_asia_pacific: '#f43f5e', // rose-500
 }
 
 // Fallback colors if metric not in map

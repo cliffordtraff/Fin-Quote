@@ -158,7 +158,7 @@ export default function ChartsPage() {
       } else {
         // Add to added and visible (max 4 visible)
         setVisibleMetrics((v) => {
-          if (v.length >= 4) return v
+          if (v.length >= 6) return v
           return [...v, id]
         })
         return [...prev, id]
@@ -235,20 +235,20 @@ export default function ChartsPage() {
         <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2">
-          {/* Metric Selectors - 2x2 grid */}
+          {/* Metric Selectors */}
           <div>
             <MetricSelector
               metrics={availableMetrics}
               selectedMetrics={addedMetrics}
               onToggle={handleMetricToggle}
               onClear={handleClearAll}
-              maxSelections={4}
+              maxSelections={6}
             />
           </div>
 
           {/* Enabled metrics and Time Range Slider - same row */}
           <div className="flex items-start gap-6 mt-2">
-            {/* Metric checkboxes - left half, max 4 */}
+            {/* Metric checkboxes - left half */}
             <div className="flex-1 min-w-0">
               <div className="grid grid-cols-4 gap-2 h-[32px]">
                 {addedMetrics.map((metricId) => {
@@ -379,9 +379,6 @@ export default function ChartsPage() {
             </div>
           </div>
           </div>
-
-          {/* Divider */}
-          <div className="border-t border-gray-200 dark:border-gray-700" />
 
           {/* Chart */}
           <div className="p-4 pb-2">

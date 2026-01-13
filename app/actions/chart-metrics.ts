@@ -4,10 +4,10 @@ import { createServerClient } from '@/lib/supabase/server'
 import { Financial } from '@/lib/database.types'
 
 // Statement types for categorization
-export type StatementType = 'income' | 'balance' | 'cashflow' | 'ratios'
+export type StatementType = 'income' | 'balance' | 'cashflow' | 'ratios' | 'stock'
 
 // Source table for each metric
-type MetricSource = 'financials_std' | 'financial_metrics'
+type MetricSource = 'financials_std' | 'financial_metrics' | 'company_metrics'
 
 // Metric configuration with labels, units, statement type, definitions, and source
 const METRIC_CONFIG = {
@@ -47,6 +47,20 @@ const METRIC_CONFIG = {
   ps_ratio: { label: 'P/S Ratio', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Market cap divided by revenue. Useful for valuing companies with no earnings.', source: 'financial_metrics' as MetricSource, dbMetricName: 'priceSalesRatio' },
   ev_ebitda: { label: 'EV/EBITDA', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Enterprise value divided by EBITDA. A capital structure-neutral valuation metric preferred by analysts.', source: 'financial_metrics' as MetricSource, dbMetricName: 'enterpriseValueMultiple' },
   fcf_yield: { label: 'FCF Yield', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Free cash flow per share divided by stock price. Shows cash return on investment.', source: 'financial_metrics' as MetricSource, dbMetricName: 'freeCashFlowYield', valueTransform: 100 },
+
+  // === STOCK SPECIFIC - Product Segments (from company_metrics) ===
+  segment_iphone: { label: 'iPhone Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPhone sales including all iPhone models.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'iPhone' },
+  segment_services: { label: 'Services Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from services including App Store, Apple Music, iCloud, Apple TV+, and AppleCare.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Services' },
+  segment_wearables: { label: 'Wearables Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Wearables, Home and Accessories including Apple Watch, AirPods, and HomePod.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Wearables, Home and Accessories' },
+  segment_mac: { label: 'Mac Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Mac computers including MacBook, iMac, Mac Pro, and Mac mini.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Mac' },
+  segment_ipad: { label: 'iPad Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPad tablets including all iPad models.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'iPad' },
+
+  // === STOCK SPECIFIC - Geographic Segments (from company_metrics) ===
+  segment_americas: { label: 'Americas Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from North and South America including the United States.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Americas' },
+  segment_europe: { label: 'Europe Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Europe' },
+  segment_china: { label: 'Greater China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Greater China' },
+  segment_japan: { label: 'Japan Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Japan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Japan' },
+  segment_asia_pacific: { label: 'Rest of Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
 } as const
 
 // Ratio metrics that need to be calculated
@@ -92,6 +106,21 @@ function isExtendedMetric(metricId: string): boolean {
   return config?.source === 'financial_metrics'
 }
 
+// Helper to check if a metric comes from company_metrics table (segments)
+function isSegmentMetric(metricId: string): boolean {
+  const config = METRIC_CONFIG[metricId as MetricId]
+  return config?.source === 'company_metrics'
+}
+
+// Get segment dimension info for company_metrics
+function getSegmentDimension(metricId: string): { dimensionType: string; dimensionValue: string } | undefined {
+  const config = METRIC_CONFIG[metricId as MetricId] as { dimensionType?: string; dimensionValue?: string }
+  if (config?.dimensionType && config?.dimensionValue) {
+    return { dimensionType: config.dimensionType, dimensionValue: config.dimensionValue }
+  }
+  return undefined
+}
+
 // Get the database metric name for extended metrics
 function getDbMetricName(metricId: string): string | undefined {
   const config = METRIC_CONFIG[metricId as MetricId] as { dbMetricName?: string }
@@ -133,16 +162,19 @@ export async function getMultipleMetrics(params: {
   }
 
   // Separate metrics by source
-  const stdMetrics = metrics.filter((m) => !isExtendedMetric(m))
+  const stdMetrics = metrics.filter((m) => !isExtendedMetric(m) && !isSegmentMetric(m))
   const extendedMetrics = metrics.filter((m) => isExtendedMetric(m))
+  const segmentMetrics = metrics.filter((m) => isSegmentMetric(m))
 
   try {
     const supabase = await createServerClient()
 
-    // Fetch from financials_std if needed
+    // Fetch from financials_std if needed (for std metrics, extended metrics, or as year reference)
     let stdRows: ChartFinancialRow[] = []
+    let years: number[] = []
+
     if (stdMetrics.length > 0 || extendedMetrics.length > 0) {
-      // Always fetch std data for year reference
+      // Fetch std data for year reference and standard metrics
       let query = supabase
         .from('financials_std')
         .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps')
@@ -167,15 +199,38 @@ export async function getMultipleMetrics(params: {
       }
 
       stdRows = (data ?? []) as ChartFinancialRow[]
+      // Sort by year ascending for chart display
+      stdRows = [...stdRows].sort((a, b) => a.year - b.year)
+      years = stdRows.map((row) => row.year)
     }
 
-    if (stdRows.length === 0) {
+    // For segment-only queries, get years from company_metrics
+    if (segmentMetrics.length > 0 && years.length === 0) {
+      let yearQuery = supabase
+        .from('company_metrics')
+        .select('year')
+        .eq('symbol', 'AAPL')
+        .eq('metric_name', 'segment_revenue')
+        .order('year', { ascending: true })
+
+      if (typeof params.minYear === 'number') {
+        yearQuery = yearQuery.gte('year', params.minYear)
+      }
+      if (typeof params.maxYear === 'number') {
+        yearQuery = yearQuery.lte('year', params.maxYear)
+      }
+
+      const { data: yearData } = await yearQuery
+      if (yearData) {
+        years = [...new Set(yearData.map((r) => r.year))].sort((a, b) => a - b)
+      }
+    }
+
+    if (years.length === 0 && stdRows.length === 0) {
       return { data: null, error: 'No data found' }
     }
 
-    // Sort by year ascending for chart display
-    const sortedStdData = [...stdRows].sort((a, b) => a.year - b.year)
-    const years = sortedStdData.map((row) => row.year)
+    const sortedStdData = stdRows
 
     // Fetch extended metrics from financial_metrics if needed
     const extendedMetricData: Record<string, Record<number, number>> = {}
@@ -183,7 +238,7 @@ export async function getMultipleMetrics(params: {
       const dbMetricNames = extendedMetrics.map((m) => getDbMetricName(m)).filter(Boolean) as string[]
 
       if (dbMetricNames.length > 0) {
-        let extQuery = supabase
+        const extQuery = supabase
           .from('financial_metrics')
           .select('year, metric_name, metric_value')
           .eq('symbol', 'AAPL')
@@ -206,11 +261,60 @@ export async function getMultipleMetrics(params: {
       }
     }
 
+    // Fetch segment metrics from company_metrics if needed
+    const segmentMetricData: Record<string, Record<number, number>> = {}
+    if (segmentMetrics.length > 0) {
+      // Build list of dimension queries needed
+      const dimensionQueries = segmentMetrics
+        .map((m) => getSegmentDimension(m))
+        .filter(Boolean) as { dimensionType: string; dimensionValue: string }[]
+
+      if (dimensionQueries.length > 0) {
+        // Fetch all segment data for the years we need
+        const segQuery = supabase
+          .from('company_metrics')
+          .select('year, dimension_type, dimension_value, metric_value')
+          .eq('symbol', 'AAPL')
+          .eq('metric_name', 'segment_revenue')
+          .in('year', years)
+
+        const { data: segData, error: segError } = await segQuery
+
+        if (segError) {
+          console.error('Error fetching segment metrics:', segError)
+        } else if (segData) {
+          // Organize segment metric data by dimension key and year
+          for (const row of segData) {
+            const key = `${row.dimension_type}:${row.dimension_value}`
+            if (!segmentMetricData[key]) {
+              segmentMetricData[key] = {}
+            }
+            segmentMetricData[key][row.year] = row.metric_value ?? 0
+          }
+        }
+      }
+    }
+
     // Build result for all metrics
     const result: MetricData[] = metrics.map((metricId) => {
       const config = METRIC_CONFIG[metricId as MetricId]
 
-      if (isExtendedMetric(metricId)) {
+      if (isSegmentMetric(metricId)) {
+        // Get data from company_metrics
+        const dimension = getSegmentDimension(metricId)
+        const key = dimension ? `${dimension.dimensionType}:${dimension.dimensionValue}` : ''
+        const metricYearData = segmentMetricData[key] ?? {}
+
+        return {
+          metric: metricId as MetricId,
+          label: config.label,
+          unit: config.unit,
+          data: years.map((year) => ({
+            year,
+            value: metricYearData[year] ?? 0,
+          })),
+        }
+      } else if (isExtendedMetric(metricId)) {
         // Get data from financial_metrics
         const dbName = getDbMetricName(metricId)
         const metricYearData = dbName ? extendedMetricData[dbName] ?? {} : {}
@@ -241,22 +345,43 @@ export async function getMultipleMetrics(params: {
       }
     })
 
-    const { data: boundsData, error: boundsError } = await supabase
-      .from('financials_std')
-      .select('year')
-      .eq('symbol', 'AAPL')
-      .order('year', { ascending: true })
-
+    // Get year bounds - use segment data bounds if only segment metrics requested
     let yearBounds: { min: number; max: number } | undefined
-    if (!boundsError && boundsData && boundsData.length > 0) {
-      yearBounds = {
-        min: boundsData[0].year,
-        max: boundsData[boundsData.length - 1].year,
-      }
-    }
 
-    if (boundsError) {
-      console.error('Error fetching year bounds:', boundsError)
+    if (segmentMetrics.length > 0 && stdMetrics.length === 0 && extendedMetrics.length === 0) {
+      // Only segment metrics - get bounds from company_metrics
+      const { data: boundsData, error: boundsError } = await supabase
+        .from('company_metrics')
+        .select('year')
+        .eq('symbol', 'AAPL')
+        .eq('metric_name', 'segment_revenue')
+        .order('year', { ascending: true })
+
+      if (!boundsError && boundsData && boundsData.length > 0) {
+        const uniqueYears = [...new Set(boundsData.map((r) => r.year))].sort((a, b) => a - b)
+        yearBounds = {
+          min: uniqueYears[0],
+          max: uniqueYears[uniqueYears.length - 1],
+        }
+      }
+    } else {
+      // Standard/extended metrics - get bounds from financials_std
+      const { data: boundsData, error: boundsError } = await supabase
+        .from('financials_std')
+        .select('year')
+        .eq('symbol', 'AAPL')
+        .order('year', { ascending: true })
+
+      if (!boundsError && boundsData && boundsData.length > 0) {
+        yearBounds = {
+          min: boundsData[0].year,
+          max: boundsData[boundsData.length - 1].year,
+        }
+      }
+
+      if (boundsError) {
+        console.error('Error fetching year bounds:', boundsError)
+      }
     }
 
     return { data: result, error: null, yearBounds }
@@ -275,11 +400,15 @@ export async function getMetricConfig() {
 }
 
 export async function getAvailableMetrics() {
-  return Object.entries(METRIC_CONFIG).map(([id, config]) => ({
-    id: id as MetricId,
-    label: config.label,
-    unit: config.unit,
-    statement: config.statement,
-    definition: config.definition,
-  }))
+  return Object.entries(METRIC_CONFIG).map(([id, config]) => {
+    const extendedConfig = config as { dimensionType?: string }
+    return {
+      id: id as MetricId,
+      label: config.label,
+      unit: config.unit,
+      statement: config.statement,
+      definition: config.definition,
+      segmentCategory: extendedConfig.dimensionType as 'product' | 'geographic' | undefined,
+    }
+  })
 }
