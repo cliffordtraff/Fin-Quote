@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
 import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
@@ -220,7 +220,7 @@ const SCROLL_BUFFER_PX = 8  // Minimal gap between question and header
 const HEADER_HEIGHT_PX = 80
 const EXTRA_SCROLL_UP = 50  // Extra pixels to scroll up to hide previous content completely
 
-export default function AskPage() {
+function AskPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -1545,5 +1545,13 @@ export default function AskPage() {
       />
       </div>
     </>
+  )
+}
+
+export default function AskPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <AskPageContent />
+    </Suspense>
   )
 }
