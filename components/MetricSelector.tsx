@@ -3,13 +3,15 @@
 import { useState, useRef, useEffect } from 'react'
 import type { StatementType } from '@/app/actions/chart-metrics'
 
+type SegmentCategory = 'product' | 'geographic' | 'operating_income' | 'cost_of_sales' | 'revenue_by_country' | 'long_lived_assets'
+
 interface Metric {
   id: string
   label: string
   unit: string
   statement: StatementType
   definition?: string
-  segmentCategory?: 'product' | 'geographic'
+  segmentCategory?: SegmentCategory
 }
 
 interface MetricSelectorProps {
@@ -176,7 +178,17 @@ function CollapsibleSection({
   )
 }
 
-// Stock Specific dropdown with collapsible sections for Product and Geographic segments
+// Section configuration for Stock Specific dropdown
+const SEGMENT_SECTIONS: { key: SegmentCategory; title: string }[] = [
+  { key: 'product', title: 'Revenue by Product' },
+  { key: 'geographic', title: 'Revenue by Region' },
+  { key: 'operating_income', title: 'Operating Income by Region' },
+  { key: 'cost_of_sales', title: 'Cost of Sales' },
+  { key: 'revenue_by_country', title: 'Revenue by Country' },
+  { key: 'long_lived_assets', title: 'Long-Lived Assets by Country' },
+]
+
+// Stock Specific dropdown with collapsible sections for all segment types
 function StockSpecificDropdown({
   label,
   metrics,
@@ -189,6 +201,10 @@ function StockSpecificDropdown({
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     product: true,
     geographic: false,
+    operating_income: false,
+    cost_of_sales: false,
+    revenue_by_country: false,
+    long_lived_assets: false,
   })
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -216,8 +232,6 @@ function StockSpecificDropdown({
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
 
-  const productMetrics = metrics.filter((m) => m.segmentCategory === 'product')
-  const geographicMetrics = metrics.filter((m) => m.segmentCategory === 'geographic')
   const selectedInThisGroup = metrics.filter((m) => selectedMetrics.includes(m.id)).length
 
   const toggleSection = (section: string) => {
@@ -241,6 +255,13 @@ function StockSpecificDropdown({
       })
     }
   }
+
+  // Group metrics by segment category
+  const metricsByCategory = SEGMENT_SECTIONS.map(({ key, title }) => ({
+    key,
+    title,
+    metrics: metrics.filter((m) => m.segmentCategory === key),
+  })).filter((section) => section.metrics.length > 0)
 
   return (
     <div ref={dropdownRef} className="relative flex-1 min-w-0">
@@ -266,34 +287,22 @@ function StockSpecificDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[220px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-          <div className="max-h-80 overflow-y-auto">
-            {productMetrics.length > 0 && (
+        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+          <div className="max-h-96 overflow-y-auto">
+            {metricsByCategory.map(({ key, title, metrics: sectionMetrics }) => (
               <CollapsibleSection
-                title="Revenue by Product"
-                metrics={productMetrics}
+                key={key}
+                title={title}
+                metrics={sectionMetrics}
                 selectedMetrics={selectedMetrics}
                 onToggle={onToggle}
                 onToggleAll={handleToggleAll}
                 maxSelections={maxSelections}
                 totalSelected={totalSelected}
-                isExpanded={expandedSections.product}
-                onToggleExpand={() => toggleSection('product')}
+                isExpanded={expandedSections[key]}
+                onToggleExpand={() => toggleSection(key)}
               />
-            )}
-            {geographicMetrics.length > 0 && (
-              <CollapsibleSection
-                title="Revenue by Region"
-                metrics={geographicMetrics}
-                selectedMetrics={selectedMetrics}
-                onToggleAll={handleToggleAll}
-                onToggle={onToggle}
-                maxSelections={maxSelections}
-                totalSelected={totalSelected}
-                isExpanded={expandedSections.geographic}
-                onToggleExpand={() => toggleSection('geographic')}
-              />
-            )}
+            ))}
           </div>
         </div>
       )}

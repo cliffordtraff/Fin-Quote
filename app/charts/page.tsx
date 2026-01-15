@@ -147,20 +147,48 @@ export default function ChartsPage() {
     return Math.min(Math.max(value, yearBounds.min), yearBounds.max)
   }
 
+  // Get the next available color that's not already in use
+  const getNextAvailableColor = (currentColors: Record<string, string>, metricsInUse: MetricId[]): string => {
+    const usedColors = new Set(metricsInUse.map(m => currentColors[m] || DEFAULT_METRIC_COLORS[m]))
+    for (const color of COLOR_PALETTE) {
+      if (!usedColors.has(color)) {
+        return color
+      }
+    }
+    // If all colors are used, cycle through palette
+    return COLOR_PALETTE[metricsInUse.length % COLOR_PALETTE.length]
+  }
+
   // Toggle metric from dropdown (add/remove from page)
   const handleMetricToggle = (metricId: string) => {
     const id = metricId as MetricId
     setAddedMetrics((prev) => {
       if (prev.includes(id)) {
-        // Remove from added - also remove from visible
+        // Remove from added - also remove from visible and clear custom color
         setVisibleMetrics((v) => v.filter((m) => m !== id))
+        setCustomColors((colors) => {
+          const { [id]: _, ...rest } = colors
+          return rest
+        })
         return prev.filter((m) => m !== id)
       } else {
-        // Add to added and visible (max 4 visible)
-        setVisibleMetrics((v) => {
-          if (v.length >= 6) return v
-          return [...v, id]
+        // If this is the first user selection and only 'revenue' is shown (default state),
+        // replace revenue with the new selection
+        const isDefaultState = prev.length === 1 && prev[0] === 'revenue'
+        if (isDefaultState) {
+          // Assign first color from palette to the new metric
+          setCustomColors((colors) => ({
+            [id]: COLOR_PALETTE[0]
+          }))
+          setVisibleMetrics([id])
+          return [id]
+        }
+        // Otherwise, add to existing metrics with next available color
+        setCustomColors((colors) => {
+          const nextColor = getNextAvailableColor(colors, prev)
+          return { ...colors, [id]: nextColor }
         })
+        setVisibleMetrics((v) => [...v, id])
         return [...prev, id]
       }
     })
@@ -173,8 +201,7 @@ export default function ChartsPage() {
         // Uncheck - remove from chart
         return prev.filter((m) => m !== metricId)
       } else {
-        // Check - add to chart (max 4)
-        if (prev.length >= 4) return prev
+        // Check - add to chart
         return [...prev, metricId]
       }
     })
@@ -189,6 +216,18 @@ export default function ChartsPage() {
   const handleClearAll = () => {
     setAddedMetrics(['revenue'])
     setVisibleMetrics(['revenue'])
+  }
+
+  // Reset everything to default state
+  const handleReset = () => {
+    setAddedMetrics(['revenue'])
+    setVisibleMetrics(['revenue'])
+    setCustomColors({})
+    // Reset year range to full bounds
+    if (yearBounds) {
+      setMinYear(yearBounds.min)
+      setMaxYear(yearBounds.max)
+    }
   }
 
   const handleSliderMinChange = (value: number) => {
@@ -242,7 +281,7 @@ export default function ChartsPage() {
               selectedMetrics={addedMetrics}
               onToggle={handleMetricToggle}
               onClear={handleClearAll}
-              maxSelections={6}
+              maxSelections={10}
             />
           </div>
 
@@ -398,7 +437,7 @@ export default function ChartsPage() {
                 </div>
               </div>
             ) : metricsData.length > 0 ? (
-              <MultiMetricChart data={metricsData} metrics={visibleMetrics} customColors={customColors} />
+              <MultiMetricChart data={metricsData} metrics={visibleMetrics} customColors={customColors} onReset={handleReset} />
             ) : (
               <div className="h-[650px] flex items-center justify-center">
                 <p className="text-gray-600 dark:text-gray-400">Select at least one metric to display</p>

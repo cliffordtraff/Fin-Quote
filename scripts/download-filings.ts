@@ -20,13 +20,14 @@ async function downloadFilings() {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-  // Get filings from database (most recent 5 for testing)
+  // Get filings from database (10 years of 10-K filings)
   const { data: filings, error: fetchError } = await supabase
     .from('filings')
     .select('*')
     .eq('ticker', 'AAPL')
+    .eq('filing_type', '10-K')
     .order('filing_date', { ascending: false })
-    .limit(5)
+    .limit(10)
 
   if (fetchError || !filings) {
     console.error('Error fetching filings:', fetchError)

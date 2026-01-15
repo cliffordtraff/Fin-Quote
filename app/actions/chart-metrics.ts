@@ -21,6 +21,7 @@ const METRIC_CONFIG = {
   ebitda: { label: 'EBITDA', unit: 'currency' as const, statement: 'income' as StatementType, definition: 'Earnings before interest, taxes, depreciation, and amortization. Measures operating profitability.', source: 'financial_metrics' as MetricSource, dbMetricName: 'ebitda' },
   depreciation_amortization: { label: 'Depreciation & Amortization', unit: 'currency' as const, statement: 'income' as StatementType, definition: 'Non-cash expenses for asset value reduction over time.', source: 'financial_metrics' as MetricSource, dbMetricName: 'depreciationAndAmortization' },
   stock_based_comp: { label: 'Stock-Based Compensation', unit: 'currency' as const, statement: 'income' as StatementType, definition: 'Non-cash expense from employee equity compensation including stock options and RSUs.', source: 'financial_metrics' as MetricSource, dbMetricName: 'stockBasedCompensation' },
+  rnd_expense: { label: 'R&D Expense', unit: 'currency' as const, statement: 'income' as StatementType, definition: 'Research and development expenses for new products, technologies, and innovation.', source: 'financial_metrics' as MetricSource, dbMetricName: 'researchAndDevelopmentExpenses' },
 
   // === BALANCE SHEET (from financials_std) ===
   total_assets: { label: 'Total Assets', unit: 'currency' as const, statement: 'balance' as StatementType, definition: 'Everything the company owns, including cash, inventory, property, and investments.', source: 'financials_std' as MetricSource },
@@ -34,6 +35,7 @@ const METRIC_CONFIG = {
   capital_expenditure: { label: 'Capital Expenditure', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Cash spent on acquiring or upgrading physical assets like property, plant, and equipment.', source: 'financial_metrics' as MetricSource, dbMetricName: 'capitalExpenditure' },
   dividends_paid: { label: 'Dividends Paid', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Total cash distributed to shareholders as dividends during the period.', source: 'financial_metrics' as MetricSource, dbMetricName: 'dividendsPaid' },
   stock_buybacks: { label: 'Stock Buybacks', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Cash used to repurchase company shares, returning capital to shareholders.', source: 'financial_metrics' as MetricSource, dbMetricName: 'commonStockRepurchased' },
+  shares_outstanding: { label: 'Shares Outstanding', unit: 'shares' as const, statement: 'cashflow' as StatementType, definition: 'Weighted average number of shares outstanding during the fiscal year.', source: 'financial_metrics' as MetricSource, dbMetricName: 'weightedAverageShsOut' },
 
   // === RATIOS (calculated or from financial_metrics) ===
   gross_margin: { label: 'Gross Margin', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Gross profit as a percentage of revenue. Measures production efficiency.', source: 'financials_std' as MetricSource },
@@ -61,6 +63,27 @@ const METRIC_CONFIG = {
   segment_china: { label: 'Greater China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Greater China' },
   segment_japan: { label: 'Japan Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Japan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Japan' },
   segment_asia_pacific: { label: 'Rest of Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
+
+  // === STOCK SPECIFIC - Operating Income by Region (from company_metrics) ===
+  opex_americas: { label: 'Americas Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from North and South America.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Americas' },
+  opex_europe: { label: 'Europe Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Europe' },
+  opex_china: { label: 'Greater China Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Greater China' },
+  opex_japan: { label: 'Japan Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Japan.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Japan' },
+  opex_asia_pacific: { label: 'Rest of Asia Pacific Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
+
+  // === STOCK SPECIFIC - Cost of Sales (from company_metrics) ===
+  cost_products: { label: 'Cost of Sales - Products', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for physical products including iPhone, Mac, iPad, and Wearables.', source: 'company_metrics' as MetricSource, metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Products' },
+  cost_services: { label: 'Cost of Sales - Services', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for services including App Store, Apple Music, iCloud, and Apple TV+.', source: 'company_metrics' as MetricSource, metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Services' },
+
+  // === STOCK SPECIFIC - Revenue by Country (from company_metrics) ===
+  revenue_us: { label: 'United States Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from the United States market.', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'United States' },
+  revenue_china_country: { label: 'China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from China (country-level, including Hong Kong).', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'China' },
+  revenue_other_countries: { label: 'Other Countries Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from all countries outside the United States and China.', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'Other Countries' },
+
+  // === STOCK SPECIFIC - Long-Lived Assets by Country (from company_metrics) ===
+  assets_us: { label: 'US Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in the United States.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'United States' },
+  assets_china: { label: 'China Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in China.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'China' },
+  assets_other: { label: 'Other Countries Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in other countries.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'Other Countries' },
 } as const
 
 // Ratio metrics that need to be calculated
@@ -113,10 +136,14 @@ function isSegmentMetric(metricId: string): boolean {
 }
 
 // Get segment dimension info for company_metrics
-function getSegmentDimension(metricId: string): { dimensionType: string; dimensionValue: string } | undefined {
-  const config = METRIC_CONFIG[metricId as MetricId] as { dimensionType?: string; dimensionValue?: string }
+function getSegmentDimension(metricId: string): { dimensionType: string; dimensionValue: string; metricName: string } | undefined {
+  const config = METRIC_CONFIG[metricId as MetricId] as { dimensionType?: string; dimensionValue?: string; metricName?: string }
   if (config?.dimensionType && config?.dimensionValue) {
-    return { dimensionType: config.dimensionType, dimensionValue: config.dimensionValue }
+    return {
+      dimensionType: config.dimensionType,
+      dimensionValue: config.dimensionValue,
+      metricName: config.metricName ?? 'segment_revenue' // Default to segment_revenue for backward compatibility
+    }
   }
   return undefined
 }
@@ -264,18 +291,21 @@ export async function getMultipleMetrics(params: {
     // Fetch segment metrics from company_metrics if needed
     const segmentMetricData: Record<string, Record<number, number>> = {}
     if (segmentMetrics.length > 0) {
-      // Build list of dimension queries needed
+      // Build list of dimension queries needed, including metric name
       const dimensionQueries = segmentMetrics
         .map((m) => getSegmentDimension(m))
-        .filter(Boolean) as { dimensionType: string; dimensionValue: string }[]
+        .filter(Boolean) as { dimensionType: string; dimensionValue: string; metricName: string }[]
 
       if (dimensionQueries.length > 0) {
+        // Get unique metric names we need to fetch
+        const metricNames = [...new Set(dimensionQueries.map((d) => d.metricName))]
+
         // Fetch all segment data for the years we need
         const segQuery = supabase
           .from('company_metrics')
-          .select('year, dimension_type, dimension_value, metric_value')
+          .select('year, metric_name, dimension_type, dimension_value, metric_value')
           .eq('symbol', 'AAPL')
-          .eq('metric_name', 'segment_revenue')
+          .in('metric_name', metricNames)
           .in('year', years)
 
         const { data: segData, error: segError } = await segQuery
@@ -283,9 +313,9 @@ export async function getMultipleMetrics(params: {
         if (segError) {
           console.error('Error fetching segment metrics:', segError)
         } else if (segData) {
-          // Organize segment metric data by dimension key and year
+          // Organize segment metric data by metric+dimension key and year
           for (const row of segData) {
-            const key = `${row.dimension_type}:${row.dimension_value}`
+            const key = `${row.metric_name}:${row.dimension_type}:${row.dimension_value}`
             if (!segmentMetricData[key]) {
               segmentMetricData[key] = {}
             }
@@ -302,7 +332,7 @@ export async function getMultipleMetrics(params: {
       if (isSegmentMetric(metricId)) {
         // Get data from company_metrics
         const dimension = getSegmentDimension(metricId)
-        const key = dimension ? `${dimension.dimensionType}:${dimension.dimensionValue}` : ''
+        const key = dimension ? `${dimension.metricName}:${dimension.dimensionType}:${dimension.dimensionValue}` : ''
         const metricYearData = segmentMetricData[key] ?? {}
 
         return {
@@ -399,16 +429,36 @@ export async function getMetricConfig() {
   return METRIC_CONFIG
 }
 
+// Segment category type for dropdown organization
+export type SegmentCategory = 'product' | 'geographic' | 'operating_income' | 'cost_of_sales' | 'revenue_by_country' | 'long_lived_assets'
+
+// Map dimensionType + metricName to segment category for UI grouping
+function getSegmentCategory(metricId: string): SegmentCategory | undefined {
+  const config = METRIC_CONFIG[metricId as MetricId] as { dimensionType?: string; metricName?: string }
+  if (!config?.dimensionType) return undefined
+
+  // Original segment revenue metrics
+  if (config.dimensionType === 'product' && !config.metricName) return 'product'
+  if (config.dimensionType === 'geographic' && !config.metricName) return 'geographic'
+
+  // New metrics by their metricName
+  if (config.metricName === 'segment_operating_income') return 'operating_income'
+  if (config.metricName === 'cost_of_sales') return 'cost_of_sales'
+  if (config.metricName === 'revenue_by_country') return 'revenue_by_country'
+  if (config.metricName === 'long_lived_assets') return 'long_lived_assets'
+
+  return undefined
+}
+
 export async function getAvailableMetrics() {
   return Object.entries(METRIC_CONFIG).map(([id, config]) => {
-    const extendedConfig = config as { dimensionType?: string }
     return {
       id: id as MetricId,
       label: config.label,
       unit: config.unit,
       statement: config.statement,
       definition: config.definition,
-      segmentCategory: extendedConfig.dimensionType as 'product' | 'geographic' | undefined,
+      segmentCategory: getSegmentCategory(id),
     }
   })
 }

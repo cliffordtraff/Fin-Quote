@@ -50,6 +50,9 @@ export const DEFAULT_METRIC_COLORS: Record<string, string> = {
   segment_china: '#f97316',     // orange-500
   segment_japan: '#a855f7',     // purple-500
   segment_asia_pacific: '#f43f5e', // rose-500
+  // Additional metrics
+  rnd_expense: '#7c3aed',       // violet-600
+  shares_outstanding: '#0d9488', // teal-600
 }
 
 // Fallback colors if metric not in map
@@ -59,10 +62,12 @@ interface MultiMetricChartProps {
   data: MetricData[]
   metrics: string[]
   customColors?: Record<string, string>
+  onReset?: () => void
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {} }: MultiMetricChartProps) {
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(true)
+  const [isStacked, setIsStacked] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
@@ -153,26 +158,57 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
     revenue: 100,
   }
 
-  // Sort filtered data by the defined order (smallest first = leftmost bar)
+  // For metrics not in METRIC_SORT_ORDER, calculate dynamic order based on most recent year's value
+  // This ensures segment metrics (iPhone, Services, etc.) are ordered by size: smallest left, largest right
+  const getMostRecentValue = (metricData: MetricData): number => {
+    const dataPoints = metricData.data
+    if (dataPoints.length === 0) return 0
+    // Get the last (most recent) year's value
+    return dataPoints[dataPoints.length - 1]?.value ?? 0
+  }
+
+  // Sort filtered data by the defined order, or by most recent value for dynamic metrics
   const sortedFilteredData = [...filteredData].sort((a, b) => {
-    const orderA = METRIC_SORT_ORDER[a.metric] ?? 45
-    const orderB = METRIC_SORT_ORDER[b.metric] ?? 45
-    return orderA - orderB
+    const orderA = METRIC_SORT_ORDER[a.metric]
+    const orderB = METRIC_SORT_ORDER[b.metric]
+
+    // If both have defined orders, use them
+    if (orderA !== undefined && orderB !== undefined) {
+      return orderA - orderB
+    }
+
+    // If neither has a defined order, sort by most recent year's value (smallest first)
+    if (orderA === undefined && orderB === undefined) {
+      return getMostRecentValue(a) - getMostRecentValue(b)
+    }
+
+    // If only one has a defined order, put undefined ones in the middle (order ~45)
+    // Compare the defined order against the dynamic value scaled to similar range
+    if (orderA === undefined) {
+      // a is dynamic, b has fixed order
+      // Put dynamic metrics after fixed small metrics but before fixed large metrics
+      return 45 - orderB
+    } else {
+      // b is dynamic, a has fixed order
+      return orderA - 45
+    }
   })
 
   // Check which unit types we have
   const hasCurrencyMetrics = filteredData.some((d) => d.unit === 'currency')
   const hasPercentMetrics = filteredData.some((d) => d.unit === 'percent')
   const hasNumberMetrics = filteredData.some((d) => d.unit === 'number')
+  const hasSharesMetrics = filteredData.some((d) => d.unit === 'shares')
 
   // Determine primary axis type (most common or first)
-  const unitCounts = { currency: 0, percent: 0, number: 0 }
-  filteredData.forEach((d) => { unitCounts[d.unit]++ })
-  const primaryUnit = hasCurrencyMetrics ? 'currency' : hasPercentMetrics ? 'percent' : 'number'
+  const unitCounts = { currency: 0, percent: 0, number: 0, shares: 0 }
+  filteredData.forEach((d) => { unitCounts[d.unit as keyof typeof unitCounts]++ })
+  const primaryUnit = hasCurrencyMetrics ? 'currency' : hasSharesMetrics ? 'shares' : hasPercentMetrics ? 'percent' : 'number'
 
   // Need dual axis if mixing different unit types
-  const needsDualAxis = (hasCurrencyMetrics && (hasPercentMetrics || hasNumberMetrics)) ||
-                        (hasPercentMetrics && hasNumberMetrics)
+  const needsDualAxis = (hasCurrencyMetrics && (hasPercentMetrics || hasNumberMetrics || hasSharesMetrics)) ||
+                        (hasPercentMetrics && (hasNumberMetrics || hasSharesMetrics)) ||
+                        (hasSharesMetrics && hasNumberMetrics)
 
   // Generate title
   const metricLabels = filteredData.map((d) => d.label)
@@ -193,8 +229,9 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
   // Build series data (use sortedFilteredData for bar order)
   const series: Highcharts.SeriesOptionsType[] = sortedFilteredData.map((metricData, index) => {
     const isCurrency = metricData.unit === 'currency'
+    const isShares = metricData.unit === 'shares'
     const values = metricData.data.map((d) =>
-      isCurrency ? d.value / 1_000_000_000 : d.value
+      isCurrency || isShares ? d.value / 1_000_000_000 : d.value
     )
 
     // Use custom color if provided, otherwise use default color, fall back to index-based color
@@ -213,17 +250,19 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
   })
 
   // Helper to get Y-axis title based on unit type
-  const getAxisTitle = (unit: 'currency' | 'percent' | 'number') => {
+  const getAxisTitle = (unit: 'currency' | 'percent' | 'number' | 'shares') => {
     if (unit === 'currency') return 'USD (Billions)'
+    if (unit === 'shares') return 'Shares (Billions)'
     if (unit === 'percent') return 'Percentage (%)'
     return filteredData.find((d) => d.unit === 'number')?.label || 'Value'
   }
 
   // Helper to format Y-axis labels based on unit type
-  const getAxisFormatter = (unit: 'currency' | 'percent' | 'number') => {
+  const getAxisFormatter = (unit: 'currency' | 'percent' | 'number' | 'shares') => {
     return function (this: Highcharts.AxisLabelsFormatterContextObject) {
       const val = typeof this.value === 'number' ? this.value : Number(this.value)
       if (unit === 'currency') return `$${val}B`
+      if (unit === 'shares') return `${val}B`
       if (unit === 'percent') return `${val.toFixed(1)}%`
       return val.toLocaleString()
     }
@@ -310,8 +349,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
       enabled: true,
       align: 'left',
       verticalAlign: 'bottom',
-      layout: 'vertical',
-      floating: true,
+      layout: 'horizontal',
+      floating: false,
       itemStyle: {
         fontSize: '14px',
         fontWeight: '500',
@@ -320,25 +359,25 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
       itemHoverStyle: {
         color: isDark ? '#ffffff' : '#111827',
       },
-      x: 0,
-      y: 50,
+      margin: 20,
     },
     plotOptions: {
       column: {
         animation: false,
-        borderRadius: 4,
+        borderRadius: isStacked ? 0 : 4,
         borderWidth: 0,
-        groupPadding: 0.15,
-        pointPadding: 0.05,
+        groupPadding: isStacked ? 0.2 : 0.15,
+        pointPadding: isStacked ? 0.1 : 0.05,
+        stacking: isStacked ? 'normal' : undefined,
         dataLabels: {
           enabled: showDataLabels,
-          verticalAlign: 'bottom',
-          y: -5,
+          verticalAlign: isStacked ? 'middle' : 'bottom',
+          y: isStacked ? 0 : -5,
           style: {
             fontSize: '11px',
             fontWeight: '500',
-            color: isDark ? '#e5e7eb' : '#374151',
-            textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
+            color: isStacked ? '#ffffff' : (isDark ? '#e5e7eb' : '#374151'),
+            textOutline: isStacked ? '1px rgba(0, 0, 0, 0.3)' : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff'),
           },
           formatter: function (this: Highcharts.PointLabelObject) {
             const point = this.point
@@ -346,7 +385,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
             const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
+            // For stacked charts, hide small values to avoid clutter
+            if (isStacked && (unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
             if (unit === 'currency') return val.toFixed(1)
+            if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
             return val.toFixed(2)
           },
@@ -379,20 +421,36 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
       borderWidth: 1,
       shared: true,
       style: {
-        fontSize: '14px',
+        fontSize: '12px',
         color: isDark ? '#f9fafb' : '#1f2937',
+      },
+      positioner: function (labelWidth, labelHeight, point) {
+        // Position tooltip above the point
+        const chart = this.chart
+        let x = point.plotX + chart.plotLeft - labelWidth / 2
+        let y = point.plotY + chart.plotTop - labelHeight - 10
+
+        // Keep tooltip within chart bounds
+        x = Math.max(chart.plotLeft, Math.min(x, chart.plotLeft + chart.plotWidth - labelWidth))
+        y = Math.max(10, y)
+
+        return { x, y }
       },
       formatter: function () {
         const points = this.points || []
-        let html = `<div style="font-weight: 600; margin-bottom: 8px;">FY ${this.x}</div>`
+        // Get the category (year) from the x-axis - this.x is the index, so use point.key or category
+        const year = points[0]?.key || this.x
+        let html = `<div style="font-weight: 600; margin-bottom: 8px;">FY ${year}</div>`
 
         points.forEach((point) => {
-          const metricInfo = filteredData.find((d) => d.label === point.series.name)
+          const metricInfo = filteredData.find((d) => `Apple ${d.label}` === point.series.name)
           const unit = metricInfo?.unit
           // Format based on unit type
           let displayValue: string
           if (unit === 'currency') {
             displayValue = `$${(point.y ?? 0).toFixed(1)}B`
+          } else if (unit === 'shares') {
+            displayValue = `${(point.y ?? 0).toFixed(2)}B shares`
           } else if (unit === 'percent') {
             displayValue = `${(point.y ?? 0).toFixed(1)}%`
           } else {
@@ -461,7 +519,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
   }
 
   // Create a stable key based on the metrics being displayed and options
-  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}`
+  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}`
 
   return (
     <div className="w-full">
@@ -487,6 +545,26 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Show Labels</span>
           </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isStacked}
+              onChange={(e) => setIsStacked(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Stacked</span>
+          </label>
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reset Chart
+            </button>
+          )}
           <div ref={exportMenuRef} className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -549,7 +627,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
           <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
               <tr>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[140px]">
+                <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
                   Metric
                 </th>
                 {years.map((year) => (
@@ -565,10 +643,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
             <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
               {filteredData.map((metricData) => (
                 <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
-                  <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium truncate">
+                  <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
                     {metricData.label}
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
-                      {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'percent' ? '(%)' : ''}
+                      {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : ''}
                     </span>
                   </td>
                   {years.map((year, yearIndex) => {
@@ -576,6 +654,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {} }: M
                     let displayValue: string
                     if (metricData.unit === 'currency') {
                       displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
+                    } else if (metricData.unit === 'shares') {
+                      displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
                     } else if (metricData.unit === 'percent') {
                       displayValue = `${value.toFixed(1)}%`
                     } else {
