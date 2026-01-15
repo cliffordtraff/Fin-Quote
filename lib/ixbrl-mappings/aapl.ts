@@ -171,16 +171,6 @@ export const AAPL_MAPPINGS: CompanyMappings = {
       displayName: 'Other Countries',
       type: 'country',
     },
-
-    // Product type (for cost of sales)
-    'us-gaap:ProductMember': {
-      displayName: 'Products',
-      type: 'product_type',
-    },
-    'us-gaap:ServiceMember': {
-      displayName: 'Services',
-      type: 'product_type',
-    },
   },
 }
 
@@ -274,4 +264,77 @@ export function getFiscalYearFromPeriodEnd(periodEnd: string): number {
     return year
   }
   return year - 1
+}
+
+/**
+ * Calculate fiscal quarter from period end date
+ *
+ * Apple Fiscal Calendar (FY ends late September):
+ * - Q1: Oct 1 - Dec 31 (ends late Dec) → Q1 of NEXT calendar year's FY
+ * - Q2: Jan 1 - Mar 31 (ends late Mar)
+ * - Q3: Apr 1 - Jun 30 (ends late Jun)
+ * - Q4: Jul 1 - Sep 30 (ends late Sep) → covered by 10-K
+ *
+ * Examples:
+ * - Dec 28, 2024 → FY2025 Q1
+ * - Mar 29, 2025 → FY2025 Q2
+ * - Jun 28, 2025 → FY2025 Q3
+ * - Sep 27, 2025 → FY2025 Q4 (10-K)
+ */
+export function getFiscalQuarterFromPeriodEnd(periodEnd: string): {
+  fiscalYear: number
+  fiscalQuarter: 1 | 2 | 3 | 4
+  period: 'Q1' | 'Q2' | 'Q3' | 'Q4'
+} {
+  const date = new Date(periodEnd)
+  const month = date.getMonth() + 1 // 1-indexed
+  const year = date.getFullYear()
+
+  if (month >= 10 && month <= 12) {
+    // Oct-Dec = Q1 of NEXT fiscal year
+    return { fiscalYear: year + 1, fiscalQuarter: 1, period: 'Q1' }
+  } else if (month >= 1 && month <= 3) {
+    // Jan-Mar = Q2 of current fiscal year
+    return { fiscalYear: year, fiscalQuarter: 2, period: 'Q2' }
+  } else if (month >= 4 && month <= 6) {
+    // Apr-Jun = Q3 of current fiscal year
+    return { fiscalYear: year, fiscalQuarter: 3, period: 'Q3' }
+  } else {
+    // Jul-Sep = Q4 of current fiscal year (10-K period)
+    return { fiscalYear: year, fiscalQuarter: 4, period: 'Q4' }
+  }
+}
+
+/**
+ * Check if a duration represents a single quarter (~13 weeks / ~91 days)
+ *
+ * 10-Q filings contain multiple periods:
+ * - Single quarter (~91 days): What we want for quarterly data
+ * - YTD 6 months (~182 days): Q1+Q2 cumulative - skip
+ * - YTD 9 months (~273 days): Q1+Q2+Q3 cumulative - skip
+ * - Prior year comparative - context dates will differ
+ *
+ * @returns true if the duration is approximately one quarter (84-98 days)
+ */
+export function isQuarterlyDuration(startDate: string, endDate: string): boolean {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const days = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+
+  // Single quarter is approximately 84-98 days (allowing for calendar variation)
+  // Apple quarters are typically 91-92 days
+  return days >= 84 && days <= 98
+}
+
+/**
+ * Check if a duration represents a full fiscal year (~365 days)
+ * Used to identify annual periods in 10-K files
+ */
+export function isAnnualDuration(startDate: string, endDate: string): boolean {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const days = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+
+  // Full year is approximately 364-366 days
+  return days >= 360 && days <= 370
 }

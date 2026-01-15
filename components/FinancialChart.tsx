@@ -19,6 +19,7 @@ interface FinancialChartProps {
 export default function FinancialChart({ config }: FinancialChartProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const displaySymbol = config.symbol ?? 'AAPL'
   const [isMounted, setIsMounted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenSize, setFullscreenSize] = useState<{ width: number; height: number } | null>(null)
@@ -403,7 +404,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
     series: [
       {
         type: config.type, // Dynamic: column, line, or candlestick
-        name: config.type === 'candlestick' ? 'AAPL' : config.yAxisLabel,
+        name: config.type === 'candlestick' ? displaySymbol : config.yAxisLabel,
         data: config.data,
         // Candlestick-specific colors
         ...(config.type === 'candlestick' ? {

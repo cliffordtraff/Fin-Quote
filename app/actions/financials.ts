@@ -81,10 +81,16 @@ export type CalculatedFinancialMetric =
 // Combined type for all supported metrics
 export type FinancialMetric = RawFinancialMetric | CalculatedFinancialMetric
 
+// Period type for annual vs quarterly data
+export type PeriodType = 'annual' | 'quarterly'
+
 export type FinancialMetricDataPoint = {
   year: number
   value: number
   metric: FinancialMetric
+  period_type?: PeriodType
+  fiscal_quarter?: number | null
+  fiscal_label?: string | null
   revenue?: number | null
   shareholders_equity?: number | null
   total_assets?: number | null
@@ -103,14 +109,27 @@ function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinanc
 
 export async function getAaplFinancialsByMetric(params: {
   metric: FinancialMetric
-  limit?: number // number of most recent years to fetch
+  limit?: number // number of most recent periods to fetch
+  period?: PeriodType // 'annual' (default) or 'quarterly'
+  quarters?: number[] // optional filter for specific quarters (1-4), only valid when period='quarterly'
 }): Promise<{
   data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
   const { metric } = params
-  const requestedLimit = params.limit ?? 4
-  const safeLimit = Math.min(Math.max(requestedLimit, 1), 20)
+  const period = params.period ?? 'annual'
+  const quarters = params.quarters
+  const requestedLimit = params.limit ?? (period === 'quarterly' ? 12 : 4) // Default 12 quarters or 4 years
+  const maxLimit = period === 'quarterly' ? 40 : 20
+  const safeLimit = Math.min(Math.max(requestedLimit, 1), maxLimit)
+
+  // Parameter validation
+  if (period === 'annual' && quarters && quarters.length > 0) {
+    return { data: null, error: "Invalid parameters: 'quarters' can only be specified when period='quarterly'" }
+  }
+  if (quarters && quarters.some(q => q < 1 || q > 4)) {
+    return { data: null, error: "Invalid parameters: 'quarters' must be between 1 and 4" }
+  }
 
   try {
     const supabase = await createServerClient()
@@ -120,11 +139,19 @@ export async function getAaplFinancialsByMetric(params: {
     // ===============================================
 
     if (metric === 'debt_to_equity_ratio') {
-      const { data, error } = await supabase
+      let query = supabase
         .from('financials_std')
-        .select('year, total_liabilities, shareholders_equity')
+        .select('year, total_liabilities, shareholders_equity, period_type, fiscal_quarter, fiscal_label')
         .eq('symbol', 'AAPL')
+        .eq('period_type', period)
+
+      if (period === 'quarterly' && quarters && quarters.length > 0) {
+        query = query.in('fiscal_quarter', quarters)
+      }
+
+      const { data, error } = await query
         .order('year', { ascending: false })
+        .order('fiscal_quarter', { ascending: false, nullsFirst: false })
         .limit(safeLimit)
 
       if (error) {
@@ -132,7 +159,11 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      type DebtToEquityRow = Pick<Financial, 'year' | 'total_liabilities' | 'shareholders_equity'>
+      type DebtToEquityRow = Pick<Financial, 'year' | 'total_liabilities' | 'shareholders_equity'> & {
+        period_type: PeriodType
+        fiscal_quarter: number | null
+        fiscal_label: string | null
+      }
       const rows: DebtToEquityRow[] = (data ?? []) as DebtToEquityRow[]
 
       const calculated = rows.map((row) => ({
@@ -142,17 +173,28 @@ export async function getAaplFinancialsByMetric(params: {
             ? (row.total_liabilities ?? 0) / row.shareholders_equity
             : 0,
         metric: 'debt_to_equity_ratio' as const,
+        period_type: row.period_type,
+        fiscal_quarter: row.fiscal_quarter,
+        fiscal_label: row.fiscal_label,
       }))
 
       return { data: calculated, error: null }
     }
 
     if (metric === 'gross_margin') {
-      const { data, error } = await supabase
+      let query = supabase
         .from('financials_std')
-        .select('year, gross_profit, revenue')
+        .select('year, gross_profit, revenue, period_type, fiscal_quarter, fiscal_label')
         .eq('symbol', 'AAPL')
+        .eq('period_type', period)
+
+      if (period === 'quarterly' && quarters && quarters.length > 0) {
+        query = query.in('fiscal_quarter', quarters)
+      }
+
+      const { data, error } = await query
         .order('year', { ascending: false })
+        .order('fiscal_quarter', { ascending: false, nullsFirst: false })
         .limit(safeLimit)
 
       if (error) {
@@ -160,7 +202,11 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      type GrossMarginRow = Pick<Financial, 'year' | 'gross_profit' | 'revenue'>
+      type GrossMarginRow = Pick<Financial, 'year' | 'gross_profit' | 'revenue'> & {
+        period_type: PeriodType
+        fiscal_quarter: number | null
+        fiscal_label: string | null
+      }
       const rows: GrossMarginRow[] = (data ?? []) as GrossMarginRow[]
 
       const calculated = rows.map((row) => ({
@@ -170,17 +216,28 @@ export async function getAaplFinancialsByMetric(params: {
             ? ((row.gross_profit ?? 0) / row.revenue) * 100
             : 0,
         metric: 'gross_margin' as const,
+        period_type: row.period_type,
+        fiscal_quarter: row.fiscal_quarter,
+        fiscal_label: row.fiscal_label,
       }))
 
       return { data: calculated, error: null }
     }
 
     if (metric === 'roe') {
-      const { data, error } = await supabase
+      let query = supabase
         .from('financials_std')
-        .select('year, net_income, shareholders_equity')
+        .select('year, net_income, shareholders_equity, period_type, fiscal_quarter, fiscal_label')
         .eq('symbol', 'AAPL')
+        .eq('period_type', period)
+
+      if (period === 'quarterly' && quarters && quarters.length > 0) {
+        query = query.in('fiscal_quarter', quarters)
+      }
+
+      const { data, error } = await query
         .order('year', { ascending: false })
+        .order('fiscal_quarter', { ascending: false, nullsFirst: false })
         .limit(safeLimit)
 
       if (error) {
@@ -188,7 +245,11 @@ export async function getAaplFinancialsByMetric(params: {
         return { data: null, error: error.message }
       }
 
-      type RoeRow = Pick<Financial, 'year' | 'net_income' | 'shareholders_equity'>
+      type RoeRow = Pick<Financial, 'year' | 'net_income' | 'shareholders_equity'> & {
+        period_type: PeriodType
+        fiscal_quarter: number | null
+        fiscal_label: string | null
+      }
       const rows: RoeRow[] = (data ?? []) as RoeRow[]
 
       const calculated = rows.map((row) => ({
@@ -198,6 +259,9 @@ export async function getAaplFinancialsByMetric(params: {
             ? ((row.net_income ?? 0) / row.shareholders_equity) * 100
             : 0,
         metric: 'roe' as const,
+        period_type: row.period_type,
+        fiscal_quarter: row.fiscal_quarter,
+        fiscal_label: row.fiscal_label,
       }))
 
       return { data: calculated, error: null }
@@ -222,13 +286,21 @@ export async function getAaplFinancialsByMetric(params: {
       return { data: null, error: 'Unsupported metric' }
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('financials_std')
       .select(
-        'year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps'
+        'year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, period_type, fiscal_quarter, fiscal_label'
       )
       .eq('symbol', 'AAPL')
+      .eq('period_type', period)
+
+    if (period === 'quarterly' && quarters && quarters.length > 0) {
+      query = query.in('fiscal_quarter', quarters)
+    }
+
+    const { data, error } = await query
       .order('year', { ascending: false })
+      .order('fiscal_quarter', { ascending: false, nullsFirst: false })
       .limit(safeLimit)
 
     if (error) {
@@ -249,7 +321,11 @@ export async function getAaplFinancialsByMetric(params: {
       | 'shareholders_equity'
       | 'operating_cash_flow'
       | 'eps'
-    >
+    > & {
+      period_type: PeriodType
+      fiscal_quarter: number | null
+      fiscal_label: string | null
+    }
 
     const rows: RawRow[] = (data ?? []) as RawRow[]
 
@@ -259,6 +335,9 @@ export async function getAaplFinancialsByMetric(params: {
         year: row.year,
         value: typeof metricValue === 'number' ? metricValue : Number(metricValue ?? 0),
         metric,
+        period_type: row.period_type,
+        fiscal_quarter: row.fiscal_quarter,
+        fiscal_label: row.fiscal_label,
       }
 
       // Include revenue for margin calculations

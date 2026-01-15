@@ -33,6 +33,7 @@ export interface CompleteValidationResults {
   number_validation: ValidationResult
   year_validation: ValidationResult
   filing_validation: ValidationResult
+  period_type_validation?: ValidationResult  // Optional for backward compatibility
   overall_severity: ValidationSeverity
   overall_passed: boolean
   latency_ms: number
@@ -693,6 +694,157 @@ export function validateFilings(answer: string, data: any[]): ValidationResult {
 }
 
 // ============================================================================
+// Period Type Validator
+// ============================================================================
+
+/**
+ * Detect the expected period type from a user question
+ * Returns 'quarterly', 'ttm', 'annual', or null if unclear
+ */
+function detectExpectedPeriodType(question: string): 'annual' | 'quarterly' | 'ttm' | null {
+  const lowerQuestion = question.toLowerCase()
+
+  // TTM patterns
+  if (
+    lowerQuestion.includes('ttm') ||
+    lowerQuestion.includes('trailing twelve') ||
+    lowerQuestion.includes('trailing 12') ||
+    lowerQuestion.includes('ltm') ||
+    lowerQuestion.includes('last twelve months') ||
+    lowerQuestion.includes('last 12 months')
+  ) {
+    return 'ttm'
+  }
+
+  // Quarterly patterns
+  if (
+    lowerQuestion.includes('quarterly') ||
+    lowerQuestion.includes('quarter') ||
+    /\bq[1-4]\b/i.test(question) ||
+    lowerQuestion.includes('last 4 quarters') ||
+    lowerQuestion.includes('last four quarters') ||
+    lowerQuestion.includes('recent quarters')
+  ) {
+    return 'quarterly'
+  }
+
+  // Annual patterns - explicit mentions
+  if (
+    lowerQuestion.includes('annual') ||
+    lowerQuestion.includes('yearly') ||
+    lowerQuestion.includes('year over year')
+  ) {
+    return 'annual'
+  }
+
+  // Default: if question mentions specific years like "2024", "2023", assume annual
+  if (/\b(20\d{2})\b/.test(question) && !lowerQuestion.includes('q')) {
+    return 'annual'
+  }
+
+  return null // Unclear - skip validation
+}
+
+/**
+ * Detect the actual period type from the data
+ */
+function detectDataPeriodType(data: any[]): 'annual' | 'quarterly' | 'ttm' | 'mixed' | null {
+  if (!data || data.length === 0) {
+    return null
+  }
+
+  const periodTypes = new Set<string>()
+
+  for (const row of data) {
+    if (row.period_type) {
+      periodTypes.add(row.period_type)
+    } else if (row.is_ttm) {
+      periodTypes.add('ttm')
+    } else if (row.fiscal_quarter !== undefined && row.fiscal_quarter !== null) {
+      periodTypes.add('quarterly')
+    } else {
+      // Assume annual if no period type indicator
+      periodTypes.add('annual')
+    }
+  }
+
+  if (periodTypes.size === 0) {
+    return null
+  }
+
+  if (periodTypes.size > 1) {
+    return 'mixed'
+  }
+
+  return periodTypes.values().next().value as 'annual' | 'quarterly' | 'ttm'
+}
+
+/**
+ * Validate that the period type in the data matches what the user asked for
+ *
+ * @param question - Original user question
+ * @param answer - LLM-generated answer
+ * @param data - Data returned from tool
+ * @returns Validation result
+ */
+export function validatePeriodType(
+  question: string,
+  answer: string,
+  data: any[]
+): ValidationResult {
+  const expectedPeriod = detectExpectedPeriodType(question)
+  const actualPeriod = detectDataPeriodType(data)
+
+  // If we can't determine expected period, skip validation
+  if (expectedPeriod === null) {
+    return {
+      status: 'skip',
+      severity: 'none',
+      details: 'Could not determine expected period type from question',
+      metadata: { expected: null, actual: actualPeriod },
+    }
+  }
+
+  // If we can't determine actual period, skip validation
+  if (actualPeriod === null) {
+    return {
+      status: 'skip',
+      severity: 'none',
+      details: 'Could not determine period type from data',
+      metadata: { expected: expectedPeriod, actual: null },
+    }
+  }
+
+  // Mixed data is acceptable
+  if (actualPeriod === 'mixed') {
+    return {
+      status: 'pass',
+      severity: 'none',
+      details: 'Data contains mixed period types',
+      metadata: { expected: expectedPeriod, actual: actualPeriod },
+    }
+  }
+
+  // Check if periods match
+  if (expectedPeriod === actualPeriod) {
+    return {
+      status: 'pass',
+      severity: 'none',
+      details: `Period type matches: ${expectedPeriod}`,
+      metadata: { expected: expectedPeriod, actual: actualPeriod },
+    }
+  }
+
+  // Period mismatch
+  return {
+    status: 'fail',
+    severity: 'medium',
+    details: `Period type mismatch: user asked for ${expectedPeriod} but data is ${actualPeriod}`,
+    metadata: { expected: expectedPeriod, actual: actualPeriod },
+  }
+}
+
+// ============================================================================
 // Orchestration - Run All Validators
 // ============================================================================
 
@@ -702,12 +854,14 @@ export function validateFilings(answer: string, data: any[]): ValidationResult {
  * @param answer - LLM-generated answer text
  * @param data - Data returned from tool
  * @param checkYearInDatabase - Optional function to check if year exists in DB
+ * @param question - Optional user question for period type validation
  * @returns Complete validation results
  */
 export async function validateAnswer(
   answer: string,
   data: any[],
-  checkYearInDatabase?: (year: number) => Promise<boolean>
+  checkYearInDatabase?: (year: number) => Promise<boolean>,
+  question?: string
 ): Promise<CompleteValidationResults> {
   const startTime = Date.now()
 
@@ -716,11 +870,17 @@ export async function validateAnswer(
   const yearValidation = await validateYears(answer, data, checkYearInDatabase)
   const filingValidation = validateFilings(answer, data)
 
+  // Period type validation (only if question is provided)
+  const periodTypeValidation = question
+    ? validatePeriodType(question, answer, data)
+    : { status: 'skip' as const, details: 'No question provided for period validation' }
+
   // Determine overall severity (use the highest severity from any validator)
   const severities: ValidationSeverity[] = [
     numberValidation.severity || 'none',
     yearValidation.severity || 'none',
     filingValidation.severity || 'none',
+    periodTypeValidation.severity || 'none',
   ]
 
   const severityOrder: Record<ValidationSeverity, number> = {
@@ -739,7 +899,8 @@ export async function validateAnswer(
   const overallPassed =
     (numberValidation.status === 'pass' || numberValidation.status === 'skip') &&
     (yearValidation.status === 'pass' || yearValidation.status === 'skip') &&
-    (filingValidation.status === 'pass' || filingValidation.status === 'skip')
+    (filingValidation.status === 'pass' || filingValidation.status === 'skip') &&
+    (periodTypeValidation.status === 'pass' || periodTypeValidation.status === 'skip')
 
   const latencyMs = Date.now() - startTime
 
@@ -747,6 +908,7 @@ export async function validateAnswer(
     number_validation: numberValidation,
     year_validation: yearValidation,
     filing_validation: filingValidation,
+    period_type_validation: periodTypeValidation,
     overall_severity: overallSeverity,
     overall_passed: overallPassed,
     latency_ms: latencyMs,

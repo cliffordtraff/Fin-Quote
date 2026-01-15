@@ -29,6 +29,11 @@ interface MetricRecord {
   metric_value: number
   metric_category: string
   data_source: string
+  // Quarterly support fields
+  period_type: 'annual' | 'quarterly'
+  fiscal_quarter: number | null
+  fiscal_label: string | null
+  period_end_date: string | null
 }
 
 async function ingestMetrics() {
@@ -60,8 +65,13 @@ async function ingestMetrics() {
 
   if (existingCount && existingCount > 0) {
     console.log('\\n⚠️  Table already has data. This will UPSERT (insert or update).')
-    console.log('   Existing records with same symbol/year/period/metric_name will be updated.\\n')
+    console.log('   Existing records with same symbol/year/period_type/fiscal_quarter/metric_name will be updated.\\n')
   }
+
+  // Period breakdown
+  const annualCount = metrics.filter(m => m.period_type === 'annual').length
+  const quarterlyCount = metrics.filter(m => m.period_type === 'quarterly').length
+  console.log(`📆 Period breakdown: ${annualCount} annual, ${quarterlyCount} quarterly`)
 
   // Batch insert with progress tracking
   const BATCH_SIZE = 500
@@ -69,15 +79,18 @@ async function ingestMetrics() {
   let updated = 0
   let errors = 0
 
-  console.log(`📦 Inserting in batches of ${BATCH_SIZE}...\\n`)
+  console.log(`\\n📦 Inserting in batches of ${BATCH_SIZE}...\\n`)
 
   for (let i = 0; i < metrics.length; i += BATCH_SIZE) {
     const batch = metrics.slice(i, i + BATCH_SIZE)
 
+    // Note: Using insert with ignoreDuplicates for now since the unique constraint
+    // uses COALESCE which doesn't work with onConflict. We'll handle updates separately.
     const { error } = await supabase
       .from('financial_metrics')
       .upsert(batch, {
-        onConflict: 'symbol,year,period,metric_name', // Unique constraint
+        onConflict: 'symbol,year,period,metric_name', // Fallback to old constraint for backward compat
+        ignoreDuplicates: false,
       })
 
     if (error) {

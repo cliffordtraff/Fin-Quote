@@ -8,6 +8,8 @@
  *   npx tsx scripts/parse-ixbrl-segments.ts --ticker AAPL
  *   npx tsx scripts/parse-ixbrl-segments.ts --ticker AAPL --ingest
  *   npx tsx scripts/parse-ixbrl-segments.ts --ticker AAPL --filing aapl-10-k-2024.html
+ *   npx tsx scripts/parse-ixbrl-segments.ts --ticker AAPL --filing-type 10-q
+ *   npx tsx scripts/parse-ixbrl-segments.ts --ticker AAPL --filing-type 10-q --ingest
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -17,8 +19,14 @@ import {
   getSegmentDisplayName,
   getSegmentTypeFromAxis,
   getFiscalYearFromPeriodEnd,
+  getFiscalQuarterFromPeriodEnd,
+  isQuarterlyDuration,
+  isAnnualDuration,
   type SegmentType,
 } from '../lib/ixbrl-mappings'
+
+type FilingType = '10-k' | '10-q'
+type PeriodType = 'FY' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
 dotenv.config({ path: '.env.local' })
 
@@ -46,6 +54,8 @@ interface XBRLFact {
 
 interface SegmentRevenue {
   fiscalYear: number
+  fiscalQuarter?: 1 | 2 | 3 | 4
+  period: PeriodType
   segmentType: SegmentType
   segmentName: string
   value: number
@@ -134,7 +144,7 @@ function parseContexts(html: string): Map<string, XBRLContext> {
 /**
  * Parse numeric facts from ix:nonFraction elements
  */
-function parseFacts(html: string, revenueFact: string): XBRLFact[] {
+function parseFacts(html: string): XBRLFact[] {
   const facts: XBRLFact[] = []
 
   // Match ix:nonFraction elements
@@ -184,7 +194,8 @@ function parseFacts(html: string, revenueFact: string): XBRLFact[] {
 function extractSegmentRevenue(
   contexts: Map<string, XBRLContext>,
   facts: XBRLFact[],
-  mappings: ReturnType<typeof getMappingsForTicker>
+  mappings: ReturnType<typeof getMappingsForTicker>,
+  filingType: FilingType = '10-k'
 ): SegmentRevenue[] {
   if (!mappings) return []
 
@@ -194,6 +205,27 @@ function extractSegmentRevenue(
     const context = contexts.get(fact.contextId)
     if (!context || context.dimensions.length === 0) continue
 
+    // Only include duration periods (revenue is a flow, not point-in-time)
+    if (context.period?.type !== 'duration') continue
+
+    const periodStart = context.period.start
+    const periodEnd = context.period.end
+    if (!periodStart || !periodEnd) continue
+
+    // Filter by duration based on filing type
+    if (filingType === '10-q') {
+      // For 10-Q, only include single-quarter durations (84-98 days)
+      // Skip YTD cumulative periods (6 months, 9 months)
+      if (!isQuarterlyDuration(periodStart, periodEnd)) {
+        continue
+      }
+    } else {
+      // For 10-K, only include full-year durations (360-370 days)
+      if (!isAnnualDuration(periodStart, periodEnd)) {
+        continue
+      }
+    }
+
     // Check if this context has a product or geographic dimension
     for (const dim of context.dimensions) {
       const segmentType = getSegmentTypeFromAxis(dim.axis)
@@ -202,22 +234,30 @@ function extractSegmentRevenue(
       const segmentName = getSegmentDisplayName(dim.member)
       if (!segmentName) continue
 
-      // Get period info
-      const periodEnd = context.period?.end || context.period?.date
-      if (!periodEnd) continue
+      // Calculate fiscal year and period
+      let fiscalYear: number
+      let fiscalQuarter: 1 | 2 | 3 | 4 | undefined
+      let period: PeriodType
 
-      const fiscalYear = getFiscalYearFromPeriodEnd(periodEnd)
-
-      // Only include duration periods (full year revenue, not point-in-time)
-      if (context.period?.type !== 'duration') continue
+      if (filingType === '10-q') {
+        const quarterInfo = getFiscalQuarterFromPeriodEnd(periodEnd)
+        fiscalYear = quarterInfo.fiscalYear
+        fiscalQuarter = quarterInfo.fiscalQuarter
+        period = quarterInfo.period
+      } else {
+        fiscalYear = getFiscalYearFromPeriodEnd(periodEnd)
+        period = 'FY'
+      }
 
       segments.push({
         fiscalYear,
+        fiscalQuarter,
+        period,
         segmentType,
         segmentName,
         value: fact.value,
-        periodStart: context.period.start,
-        periodEnd: context.period.end,
+        periodStart,
+        periodEnd,
         xbrlMember: dim.member,
         xbrlContextId: context.id,
       })
@@ -230,7 +270,12 @@ function extractSegmentRevenue(
 /**
  * Parse a single filing HTML file
  */
-async function parseFilingHtml(html: string, ticker: string, filename: string): Promise<ParseResult> {
+async function parseFilingHtml(
+  html: string,
+  ticker: string,
+  filename: string,
+  filingType: FilingType = '10-k'
+): Promise<ParseResult> {
   const errors: string[] = []
 
   const mappings = getMappingsForTicker(ticker)
@@ -249,18 +294,18 @@ async function parseFilingHtml(html: string, ticker: string, filename: string): 
     errors.push('No XBRL contexts found in filing')
   }
 
-  const facts = parseFacts(html, mappings.revenueFact)
+  const facts = parseFacts(html)
   if (facts.length === 0) {
     errors.push('No revenue facts found in filing')
   }
 
   // Extract segment revenue
-  const segments = extractSegmentRevenue(contexts, facts, mappings)
+  const segments = extractSegmentRevenue(contexts, facts, mappings, filingType)
 
-  // Deduplicate by fiscal year + segment (keep the one with highest value if duplicates)
+  // Deduplicate by fiscal year + period + segment (keep the one with highest value if duplicates)
   const deduped = new Map<string, SegmentRevenue>()
   for (const seg of segments) {
-    const key = `${seg.fiscalYear}-${seg.segmentType}-${seg.segmentName}`
+    const key = `${seg.fiscalYear}-${seg.period}-${seg.segmentType}-${seg.segmentName}`
     const existing = deduped.get(key)
     if (!existing || seg.value > existing.value) {
       deduped.set(key, seg)
@@ -281,7 +326,8 @@ async function parseFilingHtml(html: string, ticker: string, filename: string): 
 async function parseFilingFromStorage(
   supabase: ReturnType<typeof getSupabaseClient>,
   ticker: string,
-  filename: string
+  filename: string,
+  filingType: FilingType = '10-k'
 ): Promise<ParseResult> {
   const { data: htmlBlob, error } = await supabase.storage
     .from('filings')
@@ -297,7 +343,7 @@ async function parseFilingFromStorage(
   }
 
   const html = await htmlBlob.text()
-  return parseFilingHtml(html, ticker, filename)
+  return parseFilingHtml(html, ticker, filename, filingType)
 }
 
 /**
@@ -305,7 +351,8 @@ async function parseFilingFromStorage(
  */
 async function listFilings(
   supabase: ReturnType<typeof getSupabaseClient>,
-  ticker: string
+  ticker: string,
+  filingType: FilingType = '10-k'
 ): Promise<string[]> {
   const { data: files, error } = await supabase.storage.from('filings').list('html')
 
@@ -314,10 +361,12 @@ async function listFilings(
     return []
   }
 
-  // Filter for this ticker's 10-K files (annual reports have segment data)
+  // Filter for this ticker's files by type
   const tickerLower = ticker.toLowerCase()
+  const prefix = `${tickerLower}-${filingType}`
+
   return files
-    .filter((f) => f.name.startsWith(`${tickerLower}-10-k`))
+    .filter((f) => f.name.startsWith(prefix))
     .map((f) => f.name)
     .sort()
     .reverse() // Most recent first
@@ -339,7 +388,7 @@ async function ingestToDatabase(
   const rows = segments.map((seg) => ({
     symbol: ticker.toUpperCase(),
     year: seg.fiscalYear,
-    period: 'FY',
+    period: seg.period, // 'FY', 'Q1', 'Q2', 'Q3', or 'Q4'
     metric_name: 'segment_revenue',
     metric_category: 'segment_reporting', // ASC 280 - Segment Reporting
     metric_value: seg.value,
@@ -372,7 +421,7 @@ async function ingestToDatabase(
 /**
  * Display parsed segment data
  */
-function displayResults(results: ParseResult[]) {
+function displayResults(results: ParseResult[], filingType: FilingType = '10-k') {
   for (const result of results) {
     console.log(`\n${'='.repeat(60)}`)
     console.log(`Filing: ${result.filing}`)
@@ -388,25 +437,29 @@ function displayResults(results: ParseResult[]) {
       continue
     }
 
-    // Group by fiscal year and type
-    const byYearAndType = new Map<string, SegmentRevenue[]>()
+    // Group by fiscal year, period, and type
+    const byYearPeriodType = new Map<string, SegmentRevenue[]>()
     for (const seg of result.segments) {
-      const key = `${seg.fiscalYear}-${seg.segmentType}`
-      if (!byYearAndType.has(key)) {
-        byYearAndType.set(key, [])
+      const key = `${seg.fiscalYear}-${seg.period}-${seg.segmentType}`
+      if (!byYearPeriodType.has(key)) {
+        byYearPeriodType.set(key, [])
       }
-      byYearAndType.get(key)!.push(seg)
+      byYearPeriodType.get(key)!.push(seg)
     }
 
-    // Display by year
-    const years = [...new Set(result.segments.map((s) => s.fiscalYear))].sort().reverse()
+    // Get unique year-period combinations
+    const yearPeriods = [...new Set(result.segments.map((s) => `${s.fiscalYear}-${s.period}`))]
+      .sort()
+      .reverse()
 
-    for (const year of years) {
-      console.log(`\nFY ${year}:`)
+    for (const yearPeriod of yearPeriods) {
+      const [year, period] = yearPeriod.split('-')
+      const displayLabel = period === 'FY' ? `FY ${year}` : `FY ${year} ${period}`
+      console.log(`\n${displayLabel}:`)
 
       // Product segments
-      const productKey = `${year}-product`
-      const products = byYearAndType.get(productKey) || []
+      const productKey = `${yearPeriod}-product`
+      const products = byYearPeriodType.get(productKey) || []
       if (products.length > 0) {
         console.log('  Product Segments:')
         products
@@ -418,8 +471,8 @@ function displayResults(results: ParseResult[]) {
       }
 
       // Geographic segments
-      const geoKey = `${year}-geographic`
-      const geos = byYearAndType.get(geoKey) || []
+      const geoKey = `${yearPeriod}-geographic`
+      const geos = byYearPeriodType.get(geoKey) || []
       if (geos.length > 0) {
         console.log('  Geographic Segments:')
         geos
@@ -443,6 +496,7 @@ async function main() {
   let ticker = 'AAPL'
   let specificFiling: string | null = null
   let shouldIngest = false
+  let filingType: FilingType = '10-k'
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--ticker' && args[i + 1]) {
@@ -451,6 +505,15 @@ async function main() {
     } else if (args[i] === '--filing' && args[i + 1]) {
       specificFiling = args[i + 1]
       i++
+    } else if (args[i] === '--filing-type' && args[i + 1]) {
+      const ft = args[i + 1].toLowerCase()
+      if (ft === '10-k' || ft === '10-q') {
+        filingType = ft
+      } else {
+        console.error(`Invalid filing type: ${ft}. Use '10-k' or '10-q'.`)
+        process.exit(1)
+      }
+      i++
     } else if (args[i] === '--ingest') {
       shouldIngest = true
     }
@@ -458,6 +521,7 @@ async function main() {
 
   console.log(`iXBRL Segment Parser`)
   console.log(`Ticker: ${ticker}`)
+  console.log(`Filing Type: ${filingType.toUpperCase()}`)
   console.log(`Mode: ${shouldIngest ? 'Parse + Ingest' : 'Parse Only (dry run)'}`)
 
   // Check if ticker is supported
@@ -477,8 +541,8 @@ async function main() {
     filingsToProcess = [specificFiling]
   } else {
     console.log('\nListing available filings...')
-    filingsToProcess = await listFilings(supabase, ticker)
-    console.log(`Found ${filingsToProcess.length} 10-K filings`)
+    filingsToProcess = await listFilings(supabase, ticker, filingType)
+    console.log(`Found ${filingsToProcess.length} ${filingType.toUpperCase()} filings`)
   }
 
   if (filingsToProcess.length === 0) {
@@ -491,19 +555,19 @@ async function main() {
 
   for (const filename of filingsToProcess) {
     console.log(`\nParsing: ${filename}...`)
-    const result = await parseFilingFromStorage(supabase, ticker, filename)
+    const result = await parseFilingFromStorage(supabase, ticker, filename, filingType)
     results.push(result)
     console.log(`  Found ${result.segments.length} segment records`)
   }
 
   // Display results
-  displayResults(results)
+  displayResults(results, filingType)
 
-  // Aggregate all segments and deduplicate (same FY/segment may appear in multiple filings)
+  // Aggregate all segments and deduplicate (same FY/period/segment may appear in multiple filings)
   const allSegments = results.flatMap((r) => r.segments)
   const dedupedMap = new Map<string, SegmentRevenue>()
   for (const seg of allSegments) {
-    const key = `${seg.fiscalYear}-${seg.segmentType}-${seg.segmentName}`
+    const key = `${seg.fiscalYear}-${seg.period}-${seg.segmentType}-${seg.segmentName}`
     // Keep the first occurrence (most recent filing has priority)
     if (!dedupedMap.has(key)) {
       dedupedMap.set(key, seg)
@@ -523,6 +587,20 @@ async function main() {
   const geoCount = dedupedSegments.filter((s) => s.segmentType === 'geographic').length
   console.log(`  Product segments: ${productCount}`)
   console.log(`  Geographic segments: ${geoCount}`)
+
+  // Show period breakdown for quarterly
+  if (filingType === '10-q') {
+    const periodCounts = new Map<string, number>()
+    for (const seg of dedupedSegments) {
+      const key = `${seg.fiscalYear} ${seg.period}`
+      periodCounts.set(key, (periodCounts.get(key) || 0) + 1)
+    }
+    console.log('\n  By period:')
+    const sortedPeriods = [...periodCounts.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+    for (const [period, count] of sortedPeriods) {
+      console.log(`    ${period}: ${count} segments`)
+    }
+  }
 
   // Ingest if requested
   if (shouldIngest) {

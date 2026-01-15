@@ -127,8 +127,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const [showDataLabels, setShowDataLabels] = useState(true)
   const [isStacked, setIsStacked] = useState(false)
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar')
+  const [indexToZero, setIndexToZero] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
@@ -143,6 +146,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       try {
         const HighchartsExporting = require('highcharts/modules/exporting')
         HighchartsExporting(Highcharts)
+      } catch (error) {
+        // Module already loaded
+      }
+      try {
+        const HighchartsOfflineExporting = require('highcharts/modules/offline-exporting')
+        HighchartsOfflineExporting(Highcharts)
       } catch (error) {
         // Module already loaded
       }
@@ -161,6 +170,29 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Handle escape key to exit fullscreen
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isFullscreen])
+
+  // Prevent body scroll when fullscreen
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isFullscreen])
+
   if (!isMounted) {
     return (
       <div className="w-full h-[650px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
@@ -177,8 +209,14 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     )
   }
 
-  // Get years from first metric (all metrics should have same years)
-  const years = data[0].data.map((d) => d.year.toString())
+  // Get x-axis categories from first metric (all metrics should have same categories)
+  // Use fiscal_label if available (quarterly data), otherwise use year
+  const isQuarterlyData = data[0].data.some((d) => d.fiscal_label)
+  const categories = data[0].data.map((d) => isQuarterlyData && d.fiscal_label ? d.fiscal_label : d.year.toString())
+  // Keep years for backward compatibility in tooltips and legend
+  const years = isQuarterlyData ? categories : data[0].data.map((d) => d.year.toString())
+  // Auto-hide data labels when chart is too dense (>20 data points)
+  const isDenseChart = categories.length > 20
 
   // Filter data to only include metrics that are in the metrics prop
   // Also deduplicate by metric id to prevent duplicate series
@@ -319,15 +357,23 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const series: Highcharts.SeriesOptionsType[] = sortedFilteredData.map((metricData, index) => {
     const isCurrency = metricData.unit === 'currency'
     const isShares = metricData.unit === 'shares'
-    const values = metricData.data.map((d) =>
+    let values = metricData.data.map((d) =>
       isCurrency || isShares ? d.value / 1_000_000_000 : d.value
     )
+
+    // Apply "Index to 0" transformation if enabled
+    if (indexToZero && values.length > 0) {
+      const baseValue = values[0]
+      if (baseValue !== 0) {
+        values = values.map((v) => ((v - baseValue) / Math.abs(baseValue)) * 100)
+      }
+    }
 
     // Use custom color if provided, otherwise use theme-aware color, fall back to index-based color
     const color = customColors[metricData.metric] ?? METRIC_COLORS[metricData.metric] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
 
-    // Determine which Y-axis to use
-    const useSecondaryAxis = needsDualAxis && metricData.unit !== primaryUnit
+    // Determine which Y-axis to use (not needed when indexed - all use same scale)
+    const useSecondaryAxis = !indexToZero && needsDualAxis && metricData.unit !== primaryUnit
 
     return {
       type: chartType === 'line' ? 'line' : chartType === 'area' ? 'area' : 'column',
@@ -351,6 +397,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const getAxisFormatter = (unit: 'currency' | 'percent' | 'number' | 'shares') => {
     return function (this: Highcharts.AxisLabelsFormatterContextObject) {
       const val = typeof this.value === 'number' ? this.value : Number(this.value)
+      // When indexed, always show as percentage change
+      if (indexToZero) {
+        const sign = val >= 0 ? '+' : ''
+        return `${sign}${val.toFixed(0)}%`
+      }
       if (unit === 'currency') return `$${val}B`
       if (unit === 'shares') return `${val}B`
       if (unit === 'percent') return `${val.toFixed(1)}%`
@@ -420,15 +471,16 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       text: undefined,
     },
     xAxis: {
-      categories: years,
+      categories,
       title: {
         text: undefined,
       },
       labels: {
         style: {
-          fontSize: '12px',
+          fontSize: isQuarterlyData ? '10px' : '12px',
           color: isDark ? '#9ca3af' : '#6b7280',
         },
+        rotation: isQuarterlyData && categories.length > 16 ? -45 : 0,
       },
       gridLineWidth: 0,
       lineWidth: 2,
@@ -447,7 +499,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         pointPadding: isStacked ? 0.1 : 0.05,
         stacking: (isStacked && chartType === 'bar') ? 'normal' : undefined,
         dataLabels: {
-          enabled: showDataLabels,
+          enabled: showDataLabels && !isDenseChart,
           verticalAlign: isStacked ? 'middle' : 'bottom',
           y: isStacked ? 0 : -5,
           style: {
@@ -462,6 +514,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
+            // When indexed, show as percentage change
+            if (indexToZero) {
+              const sign = val >= 0 ? '+' : ''
+              return `${sign}${val.toFixed(1)}%`
+            }
             // For stacked charts, hide small values to avoid clutter
             if (isStacked && chartType === 'bar' && (unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
             if (unit === 'currency') return val.toFixed(1)
@@ -475,7 +532,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         animation: false,
         lineWidth: 2,
         dataLabels: {
-          enabled: showDataLabels,
+          enabled: showDataLabels && !isDenseChart,
           style: {
             fontSize: '11px',
             fontWeight: '500',
@@ -488,6 +545,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
+            // When indexed, show as percentage change
+            if (indexToZero) {
+              const sign = val >= 0 ? '+' : ''
+              return `${sign}${val.toFixed(1)}%`
+            }
             if (unit === 'currency') return val.toFixed(1)
             if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
@@ -501,7 +563,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         fillOpacity: 0.6,
         stacking: 'normal',
         dataLabels: {
-          enabled: showDataLabels,
+          enabled: showDataLabels && !isDenseChart,
           verticalAlign: 'middle',
           style: {
             fontSize: '11px',
@@ -515,6 +577,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
+            // When indexed, show as percentage change
+            if (indexToZero) {
+              const sign = val >= 0 ? '+' : ''
+              return `${sign}${val.toFixed(1)}%`
+            }
             // Hide small values to avoid clutter
             if ((unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
             if (unit === 'currency') return val.toFixed(1)
@@ -537,6 +604,9 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     },
     exporting: {
       enabled: true,
+      fallbackToExportServer: false,
+      sourceWidth: 1200,
+      sourceHeight: 650,
       buttons: {
         contextButton: {
           enabled: false,
@@ -568,23 +638,29 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       formatter: function () {
         const points = this.points || []
-        // Get the category (year) from the x-axis - this.x is the index, so use point.key or category
-        const year = points[0]?.key || this.x
-        let html = `<div style="font-weight: 600; margin-bottom: 8px;">FY ${year}</div>`
+        // Get the category from the x-axis - this.x is the index, so use point.key or category
+        const category = points[0]?.key || this.x
+        // For quarterly data (e.g., "2024-Q2"), show as-is; for annual, prefix with "FY"
+        const periodLabel = isQuarterlyData ? category : `FY ${category}`
+        let html = `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>`
 
         points.forEach((point) => {
           const metricInfo = filteredData.find((d) => `Apple ${d.label}` === point.series.name)
           const unit = metricInfo?.unit
-          // Format based on unit type
+          const val = point.y ?? 0
+          // Format based on unit type (or indexed mode)
           let displayValue: string
-          if (unit === 'currency') {
-            displayValue = `$${(point.y ?? 0).toFixed(1)}B`
+          if (indexToZero) {
+            const sign = val >= 0 ? '+' : ''
+            displayValue = `${sign}${val.toFixed(1)}%`
+          } else if (unit === 'currency') {
+            displayValue = `$${val.toFixed(1)}B`
           } else if (unit === 'shares') {
-            displayValue = `${(point.y ?? 0).toFixed(2)}B shares`
+            displayValue = `${val.toFixed(2)}B shares`
           } else if (unit === 'percent') {
-            displayValue = `${(point.y ?? 0).toFixed(1)}%`
+            displayValue = `${val.toFixed(1)}%`
           } else {
-            displayValue = (point.y ?? 0).toFixed(2)
+            displayValue = val.toFixed(2)
           }
 
           // Use just the metric label in tooltip (without stats suffix)
@@ -652,7 +728,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   }
 
   // Create a stable key based on the metrics being displayed and options
-  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}-type-${chartType}`
+  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}-type-${chartType}-indexed-${indexToZero}`
 
   // Build legend data with stats
   const legendItems = sortedFilteredData.map((metricData, index) => {
@@ -668,35 +744,59 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   })
 
   return (
-    <div className="w-full">
+    <div
+      ref={containerRef}
+      className={`${isFullscreen
+        ? 'fixed inset-0 z-50 bg-white dark:bg-[rgb(45,45,45)] p-6 overflow-auto'
+        : 'w-full'
+      }`}
+    >
+      {/* Fullscreen close button */}
+      {isFullscreen && (
+        <button
+          onClick={() => setIsFullscreen(false)}
+          className="absolute top-4 right-4 z-50 p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+          title="Exit fullscreen (Esc)"
+        >
+          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
       <HighchartsReact
-        key={chartKey}
+        key={`${chartKey}-fullscreen-${isFullscreen}`}
         highcharts={Highcharts}
-        options={options}
-        immutable={true}
+        options={{
+          ...options,
+          chart: {
+            ...options.chart,
+            height: isFullscreen ? window.innerHeight - 100 : 650,
+          },
+        }}
         callback={(chart: Highcharts.Chart) => {
           chartRef.current = chart
         }}
       />
 
-      {/* Custom Legend */}
-      <div className="mt-2 mb-4">
-        {legendItems.map((item, index) => (
-          <div key={index} className="flex items-center gap-2 mb-1">
-            <span
-              className="w-3 h-3 rounded-full flex-shrink-0"
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              {item.label} ({formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
-            </span>
-          </div>
-        ))}
-      </div>
+      {/* Custom Legend + Controls Row */}
+      <div className="flex items-start justify-between mt-2 mb-4 gap-4">
+        {/* Legend - stacked vertically */}
+        <div className="flex flex-col gap-1">
+          {legendItems.map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                {item.label} ({years[0]}-{years[years.length - 1]}: {formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
+              </span>
+            </div>
+          ))}
+        </div>
 
-      {/* Data Table Section - years as columns */}
-      <div className="mt-4">
-        <div className="flex justify-end items-center gap-4 mb-2">
+        {/* Controls */}
+        <div className="flex items-center gap-4 flex-shrink-0">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -715,6 +815,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Stacked</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer" title="Normalize all metrics to show % change from first year">
+            <input
+              type="checkbox"
+              checked={indexToZero}
+              onChange={(e) => setIndexToZero(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Index to 0</span>
           </label>
           <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
             <button
@@ -804,85 +913,83 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                 >
                   Download PDF
                 </button>
-                <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/svg+xml' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
-                >
-                  Download SVG
-                </button>
               </div>
             )}
           </div>
           <button
-            onClick={copyToClipboard}
+            onClick={() => setIsFullscreen(!isFullscreen)}
             className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium flex items-center gap-1"
+            title={isFullscreen ? 'Exit fullscreen' : 'View fullscreen'}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-            Copy as CSV
+            {isFullscreen ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+              </svg>
+            )}
           </button>
         </div>
-
-        <div className="bg-gray-50 dark:bg-[rgb(40,40,40)] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
-              <tr>
-                <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
-                  Metric
-                </th>
-                {years.map((year) => (
-                  <th
-                    key={year}
-                    className="px-1 py-2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
-                  >
-                    {year}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredData.map((metricData) => (
-                <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
-                  <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
-                    {metricData.label}
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
-                      {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : ''}
-                    </span>
-                  </td>
-                  {years.map((year, yearIndex) => {
-                    const value = metricData.data[yearIndex]?.value || 0
-                    let displayValue: string
-                    if (metricData.unit === 'currency') {
-                      displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
-                    } else if (metricData.unit === 'shares') {
-                      displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
-                    } else if (metricData.unit === 'percent') {
-                      displayValue = `${value.toFixed(1)}%`
-                    } else {
-                      displayValue = value.toFixed(2)
-                    }
-
-                    return (
-                      <td
-                        key={`${metricData.metric}-${year}`}
-                        className="px-1 py-2 text-sm text-gray-900 dark:text-gray-100 text-right"
-                      >
-                        {displayValue}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
+
+      {/* Data Table - hidden in fullscreen mode */}
+      {!isFullscreen && (
+      <div className="bg-gray-50 dark:bg-[rgb(40,40,40)] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
+            <tr>
+              <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
+                Metric
+              </th>
+              {years.map((year) => (
+                <th
+                  key={year}
+                  className="px-1 py-2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+                >
+                  {year}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
+            {filteredData.map((metricData) => (
+              <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
+                <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
+                  {metricData.label}
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
+                    {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : ''}
+                  </span>
+                </td>
+                {years.map((year, yearIndex) => {
+                  const value = metricData.data[yearIndex]?.value || 0
+                  let displayValue: string
+                  if (metricData.unit === 'currency') {
+                    displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
+                  } else if (metricData.unit === 'shares') {
+                    displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
+                  } else if (metricData.unit === 'percent') {
+                    displayValue = `${value.toFixed(1)}%`
+                  } else {
+                    displayValue = value.toFixed(2)
+                  }
+
+                  return (
+                    <td
+                      key={`${metricData.metric}-${year}`}
+                      className="px-1 py-2 text-sm text-gray-900 dark:text-gray-100 text-right"
+                    >
+                      {displayValue}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      )}
     </div>
   )
 }

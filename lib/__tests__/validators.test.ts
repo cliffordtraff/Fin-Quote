@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateNumbers, validateYears, validateFilings, validateAnswer } from '../validators'
+import { validateNumbers, validateYears, validateFilings, validateAnswer, validatePeriodType } from '../validators'
 
 // ============================================================================
 // Number Validator Tests
@@ -500,5 +500,186 @@ describe('Complete Validation', () => {
 
     expect(result.latency_ms).toBeGreaterThanOrEqual(0)
     expect(result.latency_ms).toBeLessThan(1000) // Should be fast
+  })
+
+  it('should include period type validation when question is provided', async () => {
+    const question = "What was Apple's quarterly revenue in Q4 2024?"
+    const answer = 'In Q4 2024, revenue was $124.3B'
+    const data = [{ year: 2024, fiscal_quarter: 4, value: 124300000000 }]
+
+    const result = await validateAnswer(answer, data, undefined, question)
+
+    expect(result.period_type_validation).toBeDefined()
+    expect(result.period_type_validation?.status).toBe('pass')
+  })
+})
+
+// ============================================================================
+// Period Type Validator Tests
+// ============================================================================
+
+describe('Period Type Validator', () => {
+  describe('detectExpectedPeriodType', () => {
+    it('should detect quarterly questions', () => {
+      const question = "What was Apple's quarterly revenue in Q4 2024?"
+      const data = [{ fiscal_quarter: 4 }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.metadata?.expected).toBe('quarterly')
+    })
+
+    it('should detect TTM questions', () => {
+      const question = "What is Apple's TTM revenue?"
+      const data = [{ is_ttm: true }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.metadata?.expected).toBe('ttm')
+    })
+
+    it('should detect "trailing twelve months" pattern', () => {
+      const question = "What is Apple's trailing twelve months net income?"
+      const data = [{ is_ttm: true }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.metadata?.expected).toBe('ttm')
+    })
+
+    it('should detect annual questions', () => {
+      const question = "What was Apple's annual revenue in 2024?"
+      const data = [{ year: 2024 }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.metadata?.expected).toBe('annual')
+    })
+
+    it('should default to annual for year mentions without quarter', () => {
+      const question = "What was Apple's revenue in 2024?"
+      const data = [{ year: 2024 }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.metadata?.expected).toBe('annual')
+    })
+  })
+
+  describe('detectDataPeriodType', () => {
+    it('should detect quarterly data from fiscal_quarter', () => {
+      const data = [{ fiscal_quarter: 4 }]
+
+      const result = validatePeriodType('question', 'answer', data)
+
+      expect(result.metadata?.actual).toBe('quarterly')
+    })
+
+    it('should detect TTM data from is_ttm flag', () => {
+      const data = [{ is_ttm: true }]
+
+      const result = validatePeriodType('question', 'answer', data)
+
+      expect(result.metadata?.actual).toBe('ttm')
+    })
+
+    it('should detect TTM data from period_type field', () => {
+      const data = [{ period_type: 'ttm' }]
+
+      const result = validatePeriodType('question', 'answer', data)
+
+      expect(result.metadata?.actual).toBe('ttm')
+    })
+
+    it('should default to annual when no period indicator', () => {
+      const data = [{ year: 2024, value: 100 }]
+
+      const result = validatePeriodType('question', 'answer', data)
+
+      expect(result.metadata?.actual).toBe('annual')
+    })
+  })
+
+  describe('Period matching', () => {
+    it('should pass when quarterly question matches quarterly data', () => {
+      const question = "What was Apple's Q4 2024 revenue?"
+      const data = [{ fiscal_quarter: 4, year: 2024, value: 100 }]
+
+      const result = validatePeriodType(question, 'Revenue was $100B', data)
+
+      expect(result.status).toBe('pass')
+      expect(result.metadata?.expected).toBe('quarterly')
+      expect(result.metadata?.actual).toBe('quarterly')
+    })
+
+    it('should pass when TTM question matches TTM data', () => {
+      const question = "What is Apple's TTM revenue?"
+      const data = [{ is_ttm: true, value: 383000000000 }]
+
+      const result = validatePeriodType(question, 'TTM revenue is $383B', data)
+
+      expect(result.status).toBe('pass')
+      expect(result.metadata?.expected).toBe('ttm')
+      expect(result.metadata?.actual).toBe('ttm')
+    })
+
+    it('should fail when quarterly question gets annual data', () => {
+      const question = "What was Apple's Q4 2024 revenue?"
+      const data = [{ year: 2024, value: 383000000000 }] // Annual data
+
+      const result = validatePeriodType(question, 'Revenue was $383B', data)
+
+      expect(result.status).toBe('fail')
+      expect(result.severity).toBe('medium')
+      expect(result.metadata?.expected).toBe('quarterly')
+      expect(result.metadata?.actual).toBe('annual')
+    })
+
+    it('should fail when TTM question gets annual data', () => {
+      const question = "What is Apple's trailing twelve months net income?"
+      const data = [{ year: 2024, value: 93000000000 }] // Annual data
+
+      const result = validatePeriodType(question, 'Net income is $93B', data)
+
+      expect(result.status).toBe('fail')
+      expect(result.severity).toBe('medium')
+      expect(result.metadata?.expected).toBe('ttm')
+      expect(result.metadata?.actual).toBe('annual')
+    })
+  })
+
+  describe('Edge cases', () => {
+    it('should skip when question period type is unclear', () => {
+      const question = 'Tell me about Apple'
+      const data = [{ year: 2024, value: 100 }]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.status).toBe('skip')
+      expect(result.metadata?.expected).toBeNull()
+    })
+
+    it('should skip when data is empty', () => {
+      const question = "What was Apple's Q4 revenue?"
+      const data: any[] = []
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.status).toBe('skip')
+      expect(result.metadata?.actual).toBeNull()
+    })
+
+    it('should pass for mixed period data', () => {
+      const question = "What was Apple's Q4 revenue?"
+      const data = [
+        { period_type: 'quarterly', value: 100 },
+        { period_type: 'annual', value: 400 },
+      ]
+
+      const result = validatePeriodType(question, 'answer', data)
+
+      expect(result.status).toBe('pass')
+      expect(result.metadata?.actual).toBe('mixed')
+    })
   })
 })

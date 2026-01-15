@@ -373,6 +373,9 @@ export async function askQuestion(
 
     toolSelectionLatencyMs = Date.now() - toolSelectionStart
 
+    // DEBUG: Log tool selection
+    console.log('🔍 Tool Selection:', JSON.stringify(toolSelection, null, 2))
+
     // Step 2: Execute the tool based on selection
     const toolExecutionStart = Date.now()
     let factsJson: string
@@ -392,15 +395,33 @@ export async function askQuestion(
         'shareholders_equity',
         'operating_cash_flow',
         'eps',
+        'debt_to_equity_ratio',
+        'gross_margin',
+        'roe',
       ]
       if (!validMetrics.includes(metric)) {
         return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid metric', queryLogId: null }
       }
 
+      // Extract period and quarters from args
+      const period = (toolSelection.args.period as 'annual' | 'quarterly') || 'annual'
+      const quarters = toolSelection.args.quarters as number[] | undefined
+
+      console.log('📊 Calling getAaplFinancialsByMetric with:', {
+        metric,
+        limit: toolSelection.args.limit || (period === 'quarterly' ? 12 : 4),
+        period,
+        quarters,
+      })
+
       const toolResult = await getAaplFinancialsByMetric({
         metric,
-        limit: toolSelection.args.limit || 4,
+        limit: toolSelection.args.limit || (period === 'quarterly' ? 12 : 4),
+        period,
+        quarters,
       })
+
+      console.log('📊 Data returned:', toolResult.data?.length, 'rows, sample:', toolResult.data?.[0])
 
       if (toolResult.error || !toolResult.data) {
         toolError = toolResult.error || 'Failed to fetch financial data'
@@ -570,7 +591,13 @@ export async function askQuestion(
 
       // Extract metric names (can be array or single string)
       const metricNames = toolSelection.args.metricNames as string[]
-      const limit = toolSelection.args.limit || 5
+      const period = (toolSelection.args.period as 'annual' | 'quarterly' | 'ttm') || 'annual'
+      const quarters = toolSelection.args.quarters as number[] | undefined
+
+      // TTM doesn't use limit (returns single value per metric)
+      const defaultLimit = period === 'ttm' ? 1 : period === 'quarterly' ? 12 : 5
+      const maxLimit = period === 'ttm' ? 1 : period === 'quarterly' ? 40 : 20
+      const limit = period === 'ttm' ? 1 : (toolSelection.args.limit || defaultLimit)
 
       if (!metricNames || metricNames.length === 0) {
         return {
@@ -582,12 +609,13 @@ export async function askQuestion(
         }
       }
 
-      if (limit < 1 || limit > 20) {
+      // Skip limit validation for TTM since it returns just one value
+      if (period !== 'ttm' && (limit < 1 || limit > maxLimit)) {
         return {
           answer: '',
           dataUsed: null,
           chartConfig: null,
-          error: 'Invalid limit (must be 1-20)',
+          error: `Invalid limit (must be 1-${maxLimit})`,
           queryLogId: null,
         }
       }
@@ -596,6 +624,8 @@ export async function askQuestion(
         symbol: 'AAPL',
         metricNames,
         limit,
+        period,
+        quarters,
       })
 
       if (toolResult.error || !toolResult.data) {
@@ -724,11 +754,12 @@ export async function askQuestion(
       }
     }
 
-    // Run validation
+    // Run validation (pass userQuestion for period type validation)
     let validationResults = await validateAnswer(
       answer.trim(),
       dataUsed.data,
-      checkYearInDatabase
+      checkYearInDatabase,
+      userQuestion
     )
 
     // Phase 3: Auto-Correction with Regeneration
@@ -819,7 +850,8 @@ export async function askQuestion(
           const regeneratedValidation = await validateAnswer(
             regeneratedAnswer.trim(),
             regenerationData,
-            checkYearInDatabase
+            checkYearInDatabase,
+            userQuestion
           )
 
           console.log('🔄 Regeneration validation:', {

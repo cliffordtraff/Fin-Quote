@@ -97,20 +97,27 @@ const CALCULATED_RATIOS: Record<string, (row: ChartFinancialRow) => number> = {
 
 export type MetricId = keyof typeof METRIC_CONFIG
 
+export type PeriodType = 'annual' | 'quarterly'
+
 export type MetricDataPoint = {
   year: number
   value: number
+  fiscal_quarter?: number | null
+  fiscal_label?: string | null
 }
 
 export type MetricData = {
   metric: MetricId
   label: string
-  unit: 'currency' | 'number' | 'percent'
+  unit: 'currency' | 'number' | 'percent' | 'shares'
   data: MetricDataPoint[]
 }
 
 // Type for financial row data used in charts
-type ChartFinancialRow = Pick<Financial, 'year' | 'revenue' | 'gross_profit' | 'net_income' | 'operating_income' | 'total_assets' | 'total_liabilities' | 'shareholders_equity' | 'operating_cash_flow' | 'eps'>
+type ChartFinancialRow = Pick<Financial, 'year' | 'revenue' | 'gross_profit' | 'net_income' | 'operating_income' | 'total_assets' | 'total_liabilities' | 'shareholders_equity' | 'operating_cash_flow' | 'eps'> & {
+  fiscal_quarter?: number | null
+  fiscal_label?: string | null
+}
 
 // Validate that requested metrics are in the whitelist
 function validateMetrics(metrics: string[]): metrics is MetricId[] {
@@ -165,6 +172,7 @@ export async function getMultipleMetrics(params: {
   limit?: number
   minYear?: number
   maxYear?: number
+  period?: PeriodType
 }): Promise<{
   data: MetricData[] | null
   error: string | null
@@ -172,8 +180,12 @@ export async function getMultipleMetrics(params: {
 }> {
   // Deduplicate metrics
   const metrics = [...new Set(params.metrics)]
+  const period = params.period ?? 'annual'
   const hasCustomRange = typeof params.minYear === 'number' || typeof params.maxYear === 'number'
-  const limit = hasCustomRange ? undefined : Math.min(Math.max(params.limit ?? 10, 1), 20) // Clamp between 1-20
+  // Default limit: 12 quarters or 10 years; max limit: 40 quarters or 20 years
+  const defaultLimit = period === 'quarterly' ? 12 : 10
+  const maxLimit = period === 'quarterly' ? 40 : 20
+  const limit = hasCustomRange ? undefined : Math.min(Math.max(params.limit ?? defaultLimit, 1), maxLimit)
 
   // Validate metrics
   if (!metrics || metrics.length === 0) {
@@ -204,9 +216,11 @@ export async function getMultipleMetrics(params: {
       // Fetch std data for year reference and standard metrics
       let query = supabase
         .from('financials_std')
-        .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps')
+        .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label')
         .eq('symbol', 'AAPL')
+        .eq('period_type', period)
         .order('year', { ascending: false })
+        .order('fiscal_quarter', { ascending: false, nullsFirst: false })
 
       if (typeof params.minYear === 'number') {
         query = query.gte('year', params.minYear)
@@ -226,8 +240,12 @@ export async function getMultipleMetrics(params: {
       }
 
       stdRows = (data ?? []) as ChartFinancialRow[]
-      // Sort by year ascending for chart display
-      stdRows = [...stdRows].sort((a, b) => a.year - b.year)
+      // Sort by year ascending for chart display (and by quarter for quarterly data)
+      stdRows = [...stdRows].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year
+        // For quarterly data, sort by fiscal quarter
+        return (a.fiscal_quarter ?? 0) - (b.fiscal_quarter ?? 0)
+      })
       years = stdRows.map((row) => row.year)
     }
 
@@ -289,7 +307,12 @@ export async function getMultipleMetrics(params: {
     }
 
     // Fetch segment metrics from company_metrics if needed
-    const segmentMetricData: Record<string, Record<number, number>> = {}
+    // For quarterly: key -> "year-quarter" -> value
+    // For annual: key -> "year" -> value
+    type SegmentDataRow = { year: number; period: string; metric_name: string; dimension_type: string; dimension_value: string; metric_value: number }
+    const segmentMetricData: Record<string, Record<string, number>> = {}
+    let segmentRows: SegmentDataRow[] = []
+
     if (segmentMetrics.length > 0) {
       // Build list of dimension queries needed, including metric name
       const dimensionQueries = segmentMetrics
@@ -300,29 +323,52 @@ export async function getMultipleMetrics(params: {
         // Get unique metric names we need to fetch
         const metricNames = [...new Set(dimensionQueries.map((d) => d.metricName))]
 
-        // Fetch all segment data for the years we need
-        const segQuery = supabase
+        // Determine which periods to fetch based on periodType
+        const periodsToFetch = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
+
+        // Build segment query with period filter
+        let segQuery = supabase
           .from('company_metrics')
-          .select('year, metric_name, dimension_type, dimension_value, metric_value')
-          .eq('symbol', 'AAPL')
-          .in('metric_name', metricNames)
-          .in('year', years)
+          .select('year, period, metric_name, dimension_type, dimension_value, metric_value')
+          .eq('symbol', 'AAPL' as never)
+          .in('metric_name', metricNames as never)
+          .in('period', periodsToFetch as never)
+          .order('year', { ascending: true })
+          .order('period', { ascending: true })
+
+        // Apply year filters
+        if (typeof params.minYear === 'number') {
+          segQuery = segQuery.gte('year', params.minYear)
+        }
+        if (typeof params.maxYear === 'number') {
+          segQuery = segQuery.lte('year', params.maxYear)
+        }
 
         const { data: segData, error: segError } = await segQuery
 
         if (segError) {
           console.error('Error fetching segment metrics:', segError)
         } else if (segData) {
-          // Organize segment metric data by metric+dimension key and year
-          for (const row of segData) {
+          segmentRows = segData as unknown as SegmentDataRow[]
+
+          // Organize segment metric data by metric+dimension key and year(-quarter)
+          for (const row of segmentRows) {
             const key = `${row.metric_name}:${row.dimension_type}:${row.dimension_value}`
             if (!segmentMetricData[key]) {
               segmentMetricData[key] = {}
             }
-            segmentMetricData[key][row.year] = row.metric_value ?? 0
+            // For quarterly, use year-quarter as key; for annual, just year
+            const dataKey = period === 'quarterly' ? `${row.year}-${row.period}` : `${row.year}`
+            segmentMetricData[key][dataKey] = row.metric_value ?? 0
           }
         }
       }
+    }
+
+    // For segment-only queries, derive years from segment data (if no std data available)
+    let segmentYears: number[] = years
+    if (segmentMetrics.length > 0 && years.length === 0 && segmentRows.length > 0) {
+      segmentYears = [...new Set(segmentRows.map(r => r.year))].sort((a, b) => a - b)
     }
 
     // Build result for all metrics
@@ -335,14 +381,45 @@ export async function getMultipleMetrics(params: {
         const key = dimension ? `${dimension.metricName}:${dimension.dimensionType}:${dimension.dimensionValue}` : ''
         const metricYearData = segmentMetricData[key] ?? {}
 
+        // Build data points based on period type
+        let dataPoints: MetricDataPoint[]
+        if (period === 'quarterly') {
+          // For quarterly, we need to build data points for each year-quarter combination
+          const quarters: Array<{ q: number; period: string; label: string }> = [
+            { q: 1, period: 'Q1', label: 'Q1' },
+            { q: 2, period: 'Q2', label: 'Q2' },
+            { q: 3, period: 'Q3', label: 'Q3' },
+            { q: 4, period: 'Q4', label: 'Q4' },
+          ]
+          dataPoints = []
+          for (const year of segmentYears) {
+            for (const { q, period: periodStr, label } of quarters) {
+              const dataKey = `${year}-${periodStr}`
+              const value = metricYearData[dataKey]
+              // Only include quarters that have data
+              if (value !== undefined) {
+                dataPoints.push({
+                  year,
+                  value,
+                  fiscal_quarter: q,
+                  fiscal_label: `FY${year} ${label}`,
+                })
+              }
+            }
+          }
+        } else {
+          // For annual, use year as key
+          dataPoints = segmentYears.map((year) => ({
+            year,
+            value: metricYearData[`${year}`] ?? 0,
+          }))
+        }
+
         return {
           metric: metricId as MetricId,
           label: config.label,
           unit: config.unit,
-          data: years.map((year) => ({
-            year,
-            value: metricYearData[year] ?? 0,
-          })),
+          data: dataPoints,
         }
       } else if (isExtendedMetric(metricId)) {
         // Get data from financial_metrics
@@ -357,6 +434,8 @@ export async function getMultipleMetrics(params: {
           data: sortedStdData.map((row) => ({
             year: row.year,
             value: (metricYearData[row.year] ?? 0) * transform,
+            fiscal_quarter: row.fiscal_quarter,
+            fiscal_label: row.fiscal_label,
           })),
         }
       } else {
@@ -370,6 +449,8 @@ export async function getMultipleMetrics(params: {
             value: isCalculatedRatio(metricId)
               ? CALCULATED_RATIOS[metricId](row)
               : (row[metricId as keyof ChartFinancialRow] as number | null) ?? 0,
+            fiscal_quarter: row.fiscal_quarter,
+            fiscal_label: row.fiscal_label,
           })),
         }
       }
@@ -379,12 +460,30 @@ export async function getMultipleMetrics(params: {
     let yearBounds: { min: number; max: number } | undefined
 
     if (segmentMetrics.length > 0 && stdMetrics.length === 0 && extendedMetrics.length === 0) {
-      // Only segment metrics - get bounds from company_metrics
+      // Only segment metrics - get bounds from company_metrics filtered by period
+      const periodsForBounds = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
       const { data: boundsData, error: boundsError } = await supabase
         .from('company_metrics')
         .select('year')
+        .eq('symbol', 'AAPL' as never)
+        .eq('metric_name', 'segment_revenue' as never)
+        .in('period', periodsForBounds as never)
+        .order('year', { ascending: true })
+
+      if (!boundsError && boundsData && boundsData.length > 0) {
+        const uniqueYears = [...new Set((boundsData as unknown as { year: number }[]).map((r) => r.year))].sort((a, b) => a - b)
+        yearBounds = {
+          min: uniqueYears[0],
+          max: uniqueYears[uniqueYears.length - 1],
+        }
+      }
+    } else {
+      // Standard/extended metrics - get bounds from financials_std filtered by period
+      const { data: boundsData, error: boundsError } = await supabase
+        .from('financials_std')
+        .select('year')
         .eq('symbol', 'AAPL')
-        .eq('metric_name', 'segment_revenue')
+        .eq('period_type', period)
         .order('year', { ascending: true })
 
       if (!boundsError && boundsData && boundsData.length > 0) {
@@ -392,20 +491,6 @@ export async function getMultipleMetrics(params: {
         yearBounds = {
           min: uniqueYears[0],
           max: uniqueYears[uniqueYears.length - 1],
-        }
-      }
-    } else {
-      // Standard/extended metrics - get bounds from financials_std
-      const { data: boundsData, error: boundsError } = await supabase
-        .from('financials_std')
-        .select('year')
-        .eq('symbol', 'AAPL')
-        .order('year', { ascending: true })
-
-      if (!boundsError && boundsData && boundsData.length > 0) {
-        yearBounds = {
-          min: boundsData[0].year,
-          max: boundsData[boundsData.length - 1].year,
         }
       }
 

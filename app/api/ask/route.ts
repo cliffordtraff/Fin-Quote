@@ -198,9 +198,16 @@ export async function POST(req: NextRequest) {
               return
             }
 
+            // Extract period and quarters from args
+            const period = (toolSelection.args.period as 'annual' | 'quarterly') || 'annual'
+            const quarters = toolSelection.args.quarters as number[] | undefined
+            const defaultLimit = period === 'quarterly' ? 12 : 4
+
             const toolResult = await getAaplFinancialsByMetric({
               metric,
-              limit: toolSelection.args.limit || 4,
+              limit: toolSelection.args.limit || defaultLimit,
+              period,
+              quarters,
             })
 
             if (toolResult.error || !toolResult.data) {
@@ -458,7 +465,13 @@ export async function POST(req: NextRequest) {
           } else if (toolSelection.tool === 'getFinancialMetric') {
             const { getFinancialMetrics } = await import('@/app/actions/get-financial-metric')
             const metricNames = toolSelection.args.metricNames as string[]
-            const limit = toolSelection.args.limit || 5
+            const period = (toolSelection.args.period as 'annual' | 'quarterly' | 'ttm') || 'annual'
+            const quarters = toolSelection.args.quarters as number[] | undefined
+
+            // TTM doesn't use limit (returns single value per metric)
+            const defaultLimit = period === 'ttm' ? 1 : period === 'quarterly' ? 12 : 5
+            const maxLimit = period === 'ttm' ? 1 : period === 'quarterly' ? 40 : 20
+            const limit = period === 'ttm' ? 1 : (toolSelection.args.limit || defaultLimit)
 
             if (!metricNames || metricNames.length === 0) {
               flow.failStep('tool_execution', {
@@ -470,13 +483,13 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            if (limit < 1 || limit > 20) {
+            if (limit < 1 || limit > maxLimit) {
               flow.failStep('tool_execution', {
                 summary: 'Failed to execute tool',
                 why: `Invalid limit "${limit}"`,
                 details: { limit },
               })
-              sendEvent('error', { message: 'Invalid limit (must be 1-20)' })
+              sendEvent('error', { message: `Invalid limit (must be 1-${maxLimit})` })
               controller.close()
               return
             }
@@ -485,6 +498,8 @@ export async function POST(req: NextRequest) {
               symbol: 'AAPL',
               metricNames,
               limit,
+              period,
+              quarters,
             })
 
             if (toolResult.error || !toolResult.data) {

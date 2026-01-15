@@ -9,6 +9,7 @@ export type ChartConfig = {
   yAxisLabel: string // e.g., "Revenue ($B)"
   xAxisLabel: string // e.g., "Year"
   color?: string // Optional custom series color
+  symbol?: string // Optional ticker symbol for labeling
   dataGrouping?: {
     enabled: boolean
     units: [string, number[]][]

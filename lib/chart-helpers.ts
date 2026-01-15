@@ -5,6 +5,20 @@ import type { FinancialData, PriceData } from '@/app/actions/ask-question'
 import type { FinancialMetricResult } from '@/app/actions/get-financial-metric'
 import { METRIC_METADATA } from '@/lib/metric-metadata'
 
+type MetricUnit = 'ratio' | 'percentage' | 'currency' | 'number' | 'days' | 'per_share'
+
+const NATIVE_METRIC_UNITS: Record<string, MetricUnit> = {
+  revenue: 'currency',
+  gross_profit: 'currency',
+  net_income: 'currency',
+  operating_income: 'currency',
+  total_assets: 'currency',
+  total_liabilities: 'currency',
+  shareholders_equity: 'currency',
+  operating_cash_flow: 'currency',
+  eps: 'per_share',
+}
+
 /**
  * Determines if the data type should generate a chart
  */
@@ -91,7 +105,8 @@ function getFilteredYearRange(question: string, availableData: any[]): any[] {
 export function generateFinancialChart(
   data: FinancialData[],
   metric: string,
-  userQuestion?: string
+  userQuestion?: string,
+  symbol: string = 'AAPL'
 ): ChartConfig | null {
   // Edge case: no data
   if (!data || data.length === 0) return null
@@ -239,19 +254,52 @@ export function generateFinancialChart(
     metricName = 'Asset Turnover'
     yAxisLabel = 'Turnover Ratio'
   } else {
-    // Regular financial values in billions
-    values = validData.map((d) => formatFinancialValue(d.value))
     metricName = formatMetricName(metric)
-    yAxisLabel = `${metricName} ($B)`
+    const metricUnit: MetricUnit = METRIC_METADATA[metric]?.unit as MetricUnit || NATIVE_METRIC_UNITS[metric] || 'currency'
+
+    if (metricUnit === 'currency') {
+      // Scale currency intelligently (B/M/$) to avoid tiny numbers for smaller metrics
+      const maxAbs = Math.max(...validData.map((d) => Math.abs(d.value)))
+      let divisor = 1
+      let unitLabel = '$'
+
+      if (maxAbs >= 1_000_000_000) {
+        divisor = 1_000_000_000
+        unitLabel = '$B'
+      } else if (maxAbs >= 1_000_000) {
+        divisor = 1_000_000
+        unitLabel = '$M'
+      }
+
+      values = validData.map((d) => parseFloat((d.value / divisor).toFixed(1)))
+      yAxisLabel = `${metricName} (${unitLabel})`
+    } else if (metricUnit === 'per_share') {
+      values = validData.map((d) => parseFloat(d.value.toFixed(2)))
+      yAxisLabel = `${metricName} ($ per share)`
+    } else if (metricUnit === 'percentage') {
+      values = validData.map((d) => parseFloat((d.value * 100).toFixed(2)))
+      yAxisLabel = `${metricName} (%)`
+    } else if (metricUnit === 'ratio') {
+      values = validData.map((d) => parseFloat(d.value.toFixed(2)))
+      yAxisLabel = metricName
+    } else if (metricUnit === 'days') {
+      values = validData.map((d) => parseFloat(d.value.toFixed(1)))
+      yAxisLabel = `${metricName} (days)`
+    } else {
+      // number / unknown: keep raw with mild rounding
+      values = validData.map((d) => parseFloat(d.value.toFixed(2)))
+      yAxisLabel = metricName
+    }
   }
 
   return {
     type: 'column',
-    title: `AAPL ${metricName} (${categories[0]}-${categories[categories.length - 1]})`,
+    title: `${symbol} ${metricName} (${categories[0]}-${categories[categories.length - 1]})`,
     data: values,
     categories,
     yAxisLabel,
     xAxisLabel: 'Year',
+    symbol,
   }
 }
 
@@ -259,7 +307,7 @@ export function generateFinancialChart(
  * Converts price data to chart configuration
  * Now returns time-series data with timestamps for Highcharts dataGrouping
  */
-export function generatePriceChart(data: PriceData[], range: string): ChartConfig | null {
+export function generatePriceChart(data: PriceData[], range: string, symbol: string = 'AAPL'): ChartConfig | null {
   // Edge case: no data
   if (!data || data.length === 0) return null
 
@@ -390,7 +438,7 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
   // Create the config object
   const config = {
     type: 'candlestick' as const, // Candlestick charts show OHLC data
-    title: `AAPL Stock Price (${formatDateRange(firstDate, lastDate)})`,
+    title: `${symbol} Stock Price (${formatDateRange(firstDate, lastDate)})`,
     data: candlestickData, // OHLC format: [timestamp, open, high, low, close]
     volumeData, // Separate volume data for optional volume chart
     categories: [] as string[], // Empty for time-series charts (uses timestamps instead)
@@ -401,6 +449,7 @@ export function generatePriceChart(data: PriceData[], range: string): ChartConfi
       units: dataGroupingUnits,
       approximation: 'ohlc', // Use OHLC aggregation for candlesticks
     },
+    symbol,
   }
 
   // Validate that the config can be serialized to JSON
@@ -555,7 +604,8 @@ export function formatExtendedMetricName(metricName: string): string {
 export function generateExtendedMetricChart(
   data: FinancialMetricResult[],
   metricName: string,
-  userQuestion?: string
+  userQuestion?: string,
+  symbol: string = 'AAPL'
 ): ChartConfig | null {
   // Edge case: no data
   if (!data || data.length === 0) return null
@@ -626,10 +676,11 @@ export function generateExtendedMetricChart(
 
   return {
     type: chartType,
-    title: `AAPL ${displayName} (${categories[0]}-${categories[categories.length - 1]})`,
+    title: `${symbol} ${displayName} (${categories[0]}-${categories[categories.length - 1]})`,
     data: values,
     categories,
     yAxisLabel,
     xAxisLabel: 'Year',
+    symbol,
   }
 }

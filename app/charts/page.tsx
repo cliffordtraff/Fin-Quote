@@ -46,9 +46,11 @@ export default function ChartsPage() {
 
   const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string }[]>([])
   // Metrics added to the page (from dropdown)
-  const [addedMetrics, setAddedMetrics] = useState<MetricId[]>(['revenue'])
+  const [addedMetrics, setAddedMetrics] = useState<MetricId[]>([])
   // Metrics visible on chart (subset of addedMetrics, controlled by checkboxes)
-  const [visibleMetrics, setVisibleMetrics] = useState<MetricId[]>(['revenue'])
+  const [visibleMetrics, setVisibleMetrics] = useState<MetricId[]>([])
+  // Period type: annual or quarterly
+  const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual')
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,6 +74,12 @@ export default function ChartsPage() {
     }
     loadMetrics()
   }, [])
+
+  // Reset year bounds and initial range when period type changes
+  useEffect(() => {
+    setYearBounds(null)
+    setInitialRangeSet(false)
+  }, [periodType])
 
   useEffect(() => {
     if (!yearBounds) return
@@ -122,6 +130,7 @@ export default function ChartsPage() {
         metrics: visibleMetrics,
         minYear: minYearParam,
         maxYear: maxYearParam,
+        period: periodType,
       })
 
       if (fetchError) {
@@ -150,7 +159,7 @@ export default function ChartsPage() {
     } finally {
       setLoading(false)
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds])
+  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType])
 
   useEffect(() => {
     fetchData()
@@ -202,18 +211,7 @@ export default function ChartsPage() {
         })
         return prev.filter((m) => m !== id)
       } else {
-        // If this is the first user selection and only 'revenue' is shown (default state),
-        // replace revenue with the new selection
-        const isDefaultState = prev.length === 1 && prev[0] === 'revenue'
-        if (isDefaultState) {
-          // Assign first color from palette to the new metric
-          setCustomColors((colors) => ({
-            [id]: COLOR_PALETTE[0]
-          }))
-          setVisibleMetrics([id])
-          return [id]
-        }
-        // Otherwise, add to existing metrics with next available color
+        // Add to existing metrics with next available color
         setCustomColors((colors) => {
           const nextColor = getNextAvailableColor(colors, prev)
           return { ...colors, [id]: nextColor }
@@ -244,14 +242,14 @@ export default function ChartsPage() {
   }
 
   const handleClearAll = () => {
-    setAddedMetrics(['revenue'])
-    setVisibleMetrics(['revenue'])
+    setAddedMetrics([])
+    setVisibleMetrics([])
   }
 
   // Reset everything to default state
   const handleReset = () => {
-    setAddedMetrics(['revenue'])
-    setVisibleMetrics(['revenue'])
+    setAddedMetrics([])
+    setVisibleMetrics([])
     setCustomColors({})
     // Reset year range to full bounds
     if (yearBounds) {
@@ -304,8 +302,35 @@ export default function ChartsPage() {
         <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2">
-          {/* Metric Selectors */}
-          <div>
+          {/* Period Toggle + Metric Selectors */}
+          <div className="flex items-center gap-4">
+            {/* Period Toggle */}
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => setPeriodType('annual')}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  periodType === 'annual'
+                    ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                Annual
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodType('quarterly')}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  periodType === 'quarterly'
+                    ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                Quarterly
+              </button>
+            </div>
+            {/* Metric Selector */}
+            <div className="flex-1">
             <MetricSelector
               metrics={availableMetrics}
               selectedMetrics={addedMetrics}
@@ -313,6 +338,7 @@ export default function ChartsPage() {
               onClear={handleClearAll}
               maxSelections={10}
             />
+            </div>
           </div>
 
           {/* Enabled metrics and Time Range Slider - same row */}

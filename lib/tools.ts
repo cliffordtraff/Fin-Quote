@@ -12,12 +12,14 @@ export type ToolDefinition = {
 export const TOOL_MENU: ToolDefinition[] = [
   {
     name: 'getAaplFinancialsByMetric',
-    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years.',
+    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years or quarters.',
     args: {
-      metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps',
-      limit: 'integer 1–20 (defaults to 4)',
+      metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps | gross_margin | roe | debt_to_equity_ratio',
+      limit: 'integer 1–20 for annual, 1-40 for quarterly (defaults to 4 annual or 12 quarterly)',
+      period: 'annual | quarterly (defaults to annual)',
+      quarters: 'array of 1-4 (optional, only valid when period=quarterly, e.g., [1,2] for Q1 and Q2)',
     },
-    notes: 'Ticker is fixed to AAPL for MVP.',
+    notes: 'Ticker is fixed to AAPL for MVP. Use period=quarterly for quarterly data.',
   },
   {
     name: 'getPrices',
@@ -55,12 +57,14 @@ export const TOOL_MENU: ToolDefinition[] = [
   },
   {
     name: 'getFinancialMetric',
-    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 50+ other metrics.',
+    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 130+ other metrics. Supports annual, quarterly, and TTM (trailing twelve months) data.',
     args: {
       metricNames: 'array of metric names (canonical or common aliases like "P/E", "ROE", "debt to equity")',
-      limit: 'integer 1–20 (defaults to 5) - number of years to fetch',
+      limit: 'integer 1–20 for annual, 1-40 for quarterly (defaults to 5 annual or 12 quarterly; ignored for ttm)',
+      period: 'annual | quarterly | ttm (defaults to annual)',
+      quarters: 'array of 1-4 (optional, only valid when period=quarterly, e.g., [1,2] for Q1 and Q2)',
     },
-    notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call.',
+    notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call. Use period=quarterly for quarterly data. Use period=ttm for trailing twelve months (sum of last 4 quarters for flow metrics like revenue, or latest quarter value for balance sheet items).',
   },
 ]
 
@@ -69,7 +73,7 @@ const TOOL_SELECTION_STATIC_PROMPT = `You are a router. Choose exactly one tool 
 
 Available Tools:
 
-1. getAaplFinancialsByMetric - Financial metrics as NUMBERS over time
+1. getAaplFinancialsByMetric - Financial metrics as NUMBERS over time (ANNUAL or QUARTERLY)
 
    SUPPORTED METRICS:
 
@@ -82,6 +86,10 @@ Available Tools:
    - debt_to_equity_ratio  (total_liabilities / shareholders_equity)
    - gross_margin          (gross_profit / revenue × 100)
    - roe                   (net_income / shareholders_equity × 100)
+
+   PERIOD PARAMETER (NEW):
+   - period: "annual" (default) or "quarterly"
+   - quarters: optional array [1,2,3,4] to filter specific quarters (only when period="quarterly")
 
    METRIC MAPPING (with context clues):
 
@@ -155,7 +163,39 @@ Available Tools:
    - "gross profit" → limit: 4 (no number)
    - "all historical data" → limit: 20 (all data)
 
-   args: {"metric": <exact name>, "limit": <number 1-20>}
+   QUARTERLY DATA RULES - WHEN TO USE period="quarterly":
+
+   1. User explicitly says "quarterly", "quarter", "Q1", "Q2", "Q3", "Q4":
+      - "quarterly revenue" → period: "quarterly"
+      - "Q2 2024 revenue" → period: "quarterly", quarters: [2]
+      - "last 4 quarters" → period: "quarterly", limit: 4
+      - "Q1 revenue over the years" → period: "quarterly", quarters: [1]
+
+   2. User says "last X quarters":
+      - "last 8 quarters" → period: "quarterly", limit: 8
+      - "past 12 quarters" → period: "quarterly", limit: 12
+
+   3. Specific quarter + year:
+      - "revenue in Q3 2023" → period: "quarterly", quarters: [3], limit: 40 (fetch all to find that quarter)
+      - "Q1 2024 net income" → period: "quarterly", quarters: [1], limit: 40
+
+   4. Compare quarters:
+      - "compare Q1 vs Q3 revenue" → period: "quarterly", quarters: [1, 3]
+      - "Q2 revenue year over year" → period: "quarterly", quarters: [2]
+
+   5. DEFAULT to annual when:
+      - No quarterly keywords present
+      - User says "annual", "yearly", "year", or just asks for "revenue", "profit", etc.
+      - "revenue last 5 years" → period: "annual" (default), limit: 5
+
+   QUARTERLY EXAMPLES:
+   - "What was Q2 2024 revenue?" → {"metric": "revenue", "period": "quarterly", "quarters": [2], "limit": 40}
+   - "Show quarterly revenue trend" → {"metric": "revenue", "period": "quarterly", "limit": 12}
+   - "Compare Q1 net income over the years" → {"metric": "net_income", "period": "quarterly", "quarters": [1], "limit": 40}
+   - "Last 8 quarters of EPS" → {"metric": "eps", "period": "quarterly", "limit": 8}
+   - "Revenue last 5 years" → {"metric": "revenue", "limit": 5} (annual by default)
+
+   args: {"metric": <exact name>, "limit": <number>, "period": "annual"|"quarterly", "quarters": [1-4]}
 
 2. getPrices - Stock PRICE history
 
@@ -275,7 +315,17 @@ Available Tools:
 
    args: {"category": "<optional category name>"}
 
-6. getFinancialMetric - GET advanced financial metrics (139 metrics available)
+6. getFinancialMetric - GET advanced financial metrics (130+ metrics, ANNUAL, QUARTERLY, or TTM)
+
+   PERIOD PARAMETER:
+   - period: "annual" (default), "quarterly", or "ttm"
+   - quarters: optional array [1,2,3,4] to filter specific quarters (only when period="quarterly")
+
+   TTM (Trailing Twelve Months):
+   - Use period: "ttm" for trailing twelve months calculations
+   - Flow metrics (revenue, net_income, cash flow, etc.): sum of last 4 quarters
+   - Balance sheet items (assets, equity, etc.): most recent quarter value
+   - Growth rates and price-based ratios do NOT support TTM
 
    COMPLETE METRIC CATALOG (organized by category):
 
@@ -345,12 +395,30 @@ Available Tools:
    - Accepts common aliases: "P/E", "ROE", "debt to equity"
    - Can handle multiple metrics in one call
 
-   LIMIT RULES (same as getAaplFinancialsByMetric):
+   LIMIT RULES:
+   Annual (default):
    - Specific year → limit: 20
-   - Number specified → use that number
    - "trend", "history" → limit: 4
-   - "compare" with multiple metrics → limit: 10 (show more history for comparisons)
+   - "compare" with multiple metrics → limit: 10
    - Default → limit: 5
+
+   Quarterly:
+   - Specific quarter (e.g., "Q2 2024") → period: "quarterly", quarters: [2], limit: 40
+   - "last 8 quarters" → period: "quarterly", limit: 8
+   - "quarterly trend" → period: "quarterly", limit: 12
+   - Default quarterly → limit: 12
+
+   QUARTERLY ROUTING RULES:
+   - "quarterly P/E" or "Q2 2024 P/E" → period: "quarterly"
+   - "last 4 quarters ROE" → period: "quarterly", limit: 4
+   - "Q1 revenue growth year over year" → period: "quarterly", quarters: [1]
+   - No "quarterly" keyword → period: "annual" (default)
+
+   TTM ROUTING RULES:
+   - "TTM revenue", "trailing twelve months", "TTM earnings" → period: "ttm"
+   - "LTM" (last twelve months) → period: "ttm"
+   - "What's Apple's current/latest free cash flow?" → period: "ttm" (current implies TTM)
+   - Note: Growth rates (e.g., revenueGrowth) and price ratios (e.g., P/E) don't support TTM
 
    Examples:
    - "What's Apple's P/E ratio?" → {"metricNames": ["P/E"], "limit": 5}
@@ -360,10 +428,11 @@ Available Tools:
    - "How much did Apple spend on buybacks?" → {"metricNames": ["buybacks"], "limit": 5}
    - "Show me capex trend" → {"metricNames": ["capex"], "limit": 4}
    - "Compare P/E, ROE, and debt to equity" → {"metricNames": ["P/E", "ROE", "debt to equity"], "limit": 10}
-   - "Compare P/E and ROE" → {"metricNames": ["P/E", "ROE"], "limit": 10}
-   - "Dividend yield for 2023" → {"metricNames": ["dividend yield"], "limit": 20}
+   - "Quarterly P/E ratio" → {"metricNames": ["P/E"], "period": "quarterly", "limit": 12}
+   - "Q2 2024 ROE" → {"metricNames": ["ROE"], "period": "quarterly", "quarters": [2], "limit": 40}
+   - "Last 8 quarters free cash flow" → {"metricNames": ["free cash flow"], "period": "quarterly", "limit": 8}
 
-   args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>}
+   args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>, "period": "annual|quarterly", "quarters": [1-4]}
 
 TOOL SELECTION LOGIC:
 
@@ -386,6 +455,9 @@ Return ONLY JSON - examples:
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
 {"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","period":"quarterly","limit":12}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","period":"quarterly","quarters":[2],"limit":40}}
+{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","period":"quarterly","quarters":[1,3],"limit":40}}
 {"tool":"getPrices","args":{"from":"2018-11-15"}}
 {"tool":"getPrices","args":{"from":"2025-01-01","to":"2025-11-15"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
@@ -395,6 +467,8 @@ Return ONLY JSON - examples:
 {"tool":"listMetrics","args":{}}
 {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":5}}
 {"tool":"getFinancialMetric","args":{"metricNames":["ROE","debt to equity"],"limit":10}}
+{"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"period":"quarterly","limit":12}}
+{"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
 
 CRITICAL EXAMPLES - Filing Content vs Metadata:
 Q: "When was the latest 10-K filed?"
@@ -420,7 +494,33 @@ Q: "What's the ROE in 2023?"
 A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"limit":20}}
 
 Q: "Compare P/E and PEG ratio"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":10}}`
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":10}}
+
+CRITICAL EXAMPLES - Quarterly Advanced Metrics:
+Q: "What's the quarterly P/E ratio?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"period":"quarterly","limit":12}}
+
+Q: "Show me Q2 2024 ROE"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
+
+Q: "Last 8 quarters free cash flow"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["free cash flow"],"period":"quarterly","limit":8}}
+
+CRITICAL EXAMPLES - TTM (Trailing Twelve Months):
+Q: "What's Apple's TTM revenue?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["revenue"],"period":"ttm"}}
+
+Q: "What is the trailing twelve months free cash flow?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["free cash flow"],"period":"ttm"}}
+
+Q: "Show me TTM EBITDA and net income"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["ebitda","net income"],"period":"ttm"}}
+
+Q: "What's Apple's current operating cash flow?"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["operating cash flow"],"period":"ttm"}}
+
+Q: "LTM earnings"
+A: {"tool":"getFinancialMetric","args":{"metricNames":["net income"],"period":"ttm"}}`
 
 // New function that returns structured messages for caching
 export const buildToolSelectionMessages = (userQuestion: string) => {
@@ -684,6 +784,30 @@ CRITICAL VALIDATION RULES - Follow These Exactly:
 
    ALWAYS round to 2 decimal places maximum. NEVER show raw decimal values.
 
+8. QUARTERLY AND TTM DATA:
+   When the facts JSON contains quarterly data (period_type: "quarterly") or TTM data (period_type: "ttm"):
+
+   QUARTERLY DATA FORMATTING:
+   - Use the fiscal_label field for quarter identification (e.g., "2024-Q2")
+   - Format as: "In Q2 2024 (fiscal)", "Q1 2025", etc.
+   - Apple's fiscal quarters: Q1=Oct-Dec, Q2=Jan-Mar, Q3=Apr-Jun, Q4=Jul-Sep
+   - When showing quarterly trends, list in chronological order
+   - Example: "Revenue was $94.9B in Q1 2024, $90.8B in Q2 2024, $85.8B in Q3 2024, and $94.3B in Q4 2024."
+
+   TTM (TRAILING TWELVE MONTHS) FORMATTING:
+   - When period_type is "ttm" or is_ttm is true, clearly indicate this is TTM data
+   - Format: "TTM revenue is $391.0B" or "On a trailing twelve months basis, revenue is $391.0B"
+   - TTM represents the sum of the last 4 quarters (for flow metrics like revenue)
+   - Or the most recent quarter value (for balance sheet items like assets)
+   - The fiscal_label will show the latest quarter used (e.g., "TTM (2025-Q1)")
+   - Example: "Apple's TTM free cash flow is $105.2B as of Q1 2025."
+
+   PERIOD TYPE MATCHING:
+   - If user asks for "quarterly" data, respond with quarterly figures (Q1, Q2, Q3, Q4)
+   - If user asks for "TTM", "trailing twelve months", or "LTM", provide TTM values
+   - If user asks for "annual" or no period specified, use annual data
+   - DO NOT mix period types in a single answer unless explicitly comparing them
+
 General Instructions:
 - Be concise and clear.
 - If the user asks for a SPECIFIC YEAR (e.g., "in 2020", "for 2018"), check if that year exists in the facts:
@@ -706,5 +830,9 @@ Examples:
 - Question: "Chart of debt to equity ratio last 5 years" → Answer: "The debt-to-equity ratio decreased from 2.61 in 2022 to 0.11 in 2025; check the chart below for the full trend." (User asked for chart, direct them to it)
 - Question: "Show year to date performance" → Answer: "AAPL is up 9.88% year-to-date, from $243.85 to $267.93 as of the latest date in the data. Check the data table below for the full yearly breakdown." (Calculate percentage, format prices with $, mention trend)
 - Question: "What did AAPL say about risk factors in their latest 10-K? provide quotes." → Answer: "According to the 10-K filed November 1, 2024, Apple identifies several main risks: 'The Company is exposed to the risk of write-downs on the value of its inventory and other assets, in addition to purchase commitment cancellation risk.' The filing also notes that 'rapid technological change and competitive dynamics could materially adversely affect the Company's business, results of operations and financial condition.'" (Provide direct quotes from chunk_text with proper citation)
-- Question: "What does the 10-K say about iPhone sales?" → Answer: "According to the 10-K filed November 1, 2024, iPhone net sales were $201.2 billion in 2024, $200.6 billion in 2023, and $205.5 billion in 2022." (Extract relevant data from the passage that actually mentions iPhone, not unrelated passages about inventory or IP)`
+- Question: "What does the 10-K say about iPhone sales?" → Answer: "According to the 10-K filed November 1, 2024, iPhone net sales were $201.2 billion in 2024, $200.6 billion in 2023, and $205.5 billion in 2022." (Extract relevant data from the passage that actually mentions iPhone, not unrelated passages about inventory or IP)
+- Question: "What was Apple's Q2 2024 revenue?" → Answer: "Apple's Q2 2024 (fiscal) revenue was $90.8 billion." (Use fiscal_label for quarter identification)
+- Question: "Show me quarterly P/E ratio" → Answer: "Apple's P/E ratio for the last 4 quarters: 34.76 in Q4 2025, 31.97 in Q3 2025, 28.51 in Q2 2025, and 27.23 in Q1 2025." (List quarters chronologically)
+- Question: "What's Apple's TTM revenue?" → Answer: "Apple's trailing twelve months (TTM) revenue is $391.0 billion as of Q1 2025." (Clearly indicate TTM with the latest quarter)
+- Question: "TTM free cash flow" → Answer: "Apple's TTM free cash flow is $105.2 billion, representing the sum of the last four quarters through Q1 2025." (Explain TTM is sum of 4 quarters)`
 }
