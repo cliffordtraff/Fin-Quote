@@ -10,53 +10,111 @@ const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
   ssr: false,
 })
 
-// Fixed color mapping for each metric (so colors don't change when adding/removing metrics)
-export const DEFAULT_METRIC_COLORS: Record<string, string> = {
+// Light mode colors - dark, bold colors for contrast against white
+const METRIC_COLORS_LIGHT: Record<string, string> = {
   // Income Statement
-  revenue: '#3b82f6',           // blue-500
-  gross_profit: '#10b981',      // emerald-500
-  net_income: '#f59e0b',        // amber-500
-  operating_income: '#8b5cf6',  // violet-500
-  eps: '#ec4899',               // pink-500
-  ebitda: '#14b8a6',            // teal-500
-  depreciation_amortization: '#78716c', // stone-500
-  stock_based_comp: '#a3e635',  // lime-400
+  revenue: '#1a1a2e',           // Near black (primary)
+  gross_profit: '#252540',      // Dark navy
+  net_income: '#2d4a3e',        // Dark forest green
+  operating_income: '#3a5a4e',  // Forest green
+  eps: '#3d3520',               // Dark bronze
+  ebitda: '#4a6a5e',            // Sage
+  depreciation_amortization: '#2a3540', // Dark blue-gray
+  stock_based_comp: '#3a4550',  // Blue gray
   // Balance Sheet
-  total_assets: '#06b6d4',      // cyan-500
-  total_liabilities: '#f97316', // orange-500
-  shareholders_equity: '#84cc16', // lime-500
+  total_assets: '#2a4050',      // Steel blue
+  total_liabilities: '#4a2c2c', // Dark burgundy
+  shareholders_equity: '#2e2640', // Dark purple
   // Cash Flow
-  operating_cash_flow: '#a855f7', // purple-500
-  free_cash_flow: '#22d3ee',    // cyan-400
-  capital_expenditure: '#fb923c', // orange-400
-  dividends_paid: '#4ade80',    // green-400
-  stock_buybacks: '#c084fc',    // purple-400
+  operating_cash_flow: '#2e2640', // Dark purple
+  free_cash_flow: '#1a3a3a',    // Dark teal
+  capital_expenditure: '#3a3a20', // Dark olive
+  dividends_paid: '#1a3a2a',    // Dark eucalyptus
+  stock_buybacks: '#3a2a3a',    // Dark plum
   // Ratio metrics
-  gross_margin: '#22c55e',      // green-500
-  operating_margin: '#0ea5e9',  // sky-500
-  net_margin: '#eab308',        // yellow-500
-  roe: '#f43f5e',               // rose-500
-  roa: '#8b5cf6',               // violet-500
-  pe_ratio: '#e879f9',          // fuchsia-400
+  gross_margin: '#1a3a3a',      // Dark teal
+  operating_margin: '#2a4a4a',  // Teal
+  net_margin: '#3a5a5a',        // Light teal
+  roe: '#1a3a2a',               // Teal-green
+  roa: '#2a4a3a',               // Sea teal
+  pe_ratio: '#3d3520',          // Dark bronze
   // Stock Specific - Product Segments
-  segment_iphone: '#3b82f6',    // blue-500
-  segment_services: '#10b981',  // emerald-500
-  segment_wearables: '#f59e0b', // amber-500
-  segment_mac: '#8b5cf6',       // violet-500
-  segment_ipad: '#ec4899',      // pink-500
+  segment_iphone: '#1a1a2e',    // Near black
+  segment_services: '#1a3a3a',  // Dark teal
+  segment_wearables: '#3a3028', // Dark taupe
+  segment_mac: '#252540',       // Dark navy
+  segment_ipad: '#2a3540',      // Dark blue-gray
   // Stock Specific - Geographic Segments
-  segment_americas: '#06b6d4',  // cyan-500
-  segment_europe: '#22c55e',    // green-500
-  segment_china: '#f97316',     // orange-500
-  segment_japan: '#a855f7',     // purple-500
-  segment_asia_pacific: '#f43f5e', // rose-500
+  segment_americas: '#1a1a2e',  // Near black
+  segment_europe: '#2d4a3e',    // Dark forest
+  segment_china: '#4a2c2c',     // Dark burgundy
+  segment_japan: '#2e2640',     // Dark purple
+  segment_asia_pacific: '#1a3a3a', // Dark teal
   // Additional metrics
-  rnd_expense: '#7c3aed',       // violet-600
-  shares_outstanding: '#0d9488', // teal-600
+  rnd_expense: '#2a3540',       // Dark blue-gray
+  shares_outstanding: '#2a2a3a', // Dark slate
 }
 
-// Fallback colors if metric not in map
-const FALLBACK_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+// Dark mode colors - lighter, softer colors for contrast against dark
+const METRIC_COLORS_DARK: Record<string, string> = {
+  // Income Statement
+  revenue: '#6b8cce',           // Soft blue (primary)
+  gross_profit: '#7b9cde',      // Lighter blue
+  net_income: '#7ab08a',        // Sage green
+  operating_income: '#8ac09a',  // Light sage
+  eps: '#b8a870',               // Khaki gold
+  ebitda: '#9ad0aa',            // Mint
+  depreciation_amortization: '#8898a8', // Blue gray
+  stock_based_comp: '#98a8b8',  // Light blue gray
+  // Balance Sheet
+  total_assets: '#7898b8',      // Steel blue
+  total_liabilities: '#c27878', // Dusty rose
+  shareholders_equity: '#9888b8', // Lavender
+  // Cash Flow
+  operating_cash_flow: '#9888b8', // Lavender
+  free_cash_flow: '#78a8a8',    // Light teal
+  capital_expenditure: '#a8a878', // Light olive
+  dividends_paid: '#78a888',    // Light eucalyptus
+  stock_buybacks: '#a888a8',    // Light plum
+  // Ratio metrics
+  gross_margin: '#78a8a8',      // Light teal
+  operating_margin: '#88b8b8',  // Lighter teal
+  net_margin: '#98c8c8',        // Lightest teal
+  roe: '#78a898',               // Teal-sage
+  roa: '#88b8a8',               // Sea teal
+  pe_ratio: '#b8a870',          // Khaki gold
+  // Stock Specific - Product Segments
+  segment_iphone: '#6b8cce',    // Soft blue
+  segment_services: '#78a8a8',  // Light teal
+  segment_wearables: '#a89888', // Light taupe
+  segment_mac: '#7b9cde',       // Lighter blue
+  segment_ipad: '#8898a8',      // Blue-gray
+  // Stock Specific - Geographic Segments
+  segment_americas: '#6b8cce',  // Soft blue
+  segment_europe: '#7ab08a',    // Sage green
+  segment_china: '#c27878',     // Dusty rose
+  segment_japan: '#9888b8',     // Lavender
+  segment_asia_pacific: '#78a8a8', // Light teal
+  // Additional metrics
+  rnd_expense: '#8898a8',       // Blue gray
+  shares_outstanding: '#8888a8', // Slate
+}
+
+// Fallback colors for light/dark modes
+const FALLBACK_COLORS_LIGHT = ['#1a1a2e', '#2d4a3e', '#1a3a3a', '#2e2640']
+const FALLBACK_COLORS_DARK = ['#6b8cce', '#7ab08a', '#78a8a8', '#9888b8']
+
+// Export function to get colors based on theme
+export function getMetricColors(isDark: boolean): Record<string, string> {
+  return isDark ? METRIC_COLORS_DARK : METRIC_COLORS_LIGHT
+}
+
+export function getFallbackColors(isDark: boolean): string[] {
+  return isDark ? FALLBACK_COLORS_DARK : FALLBACK_COLORS_LIGHT
+}
+
+// Keep DEFAULT_METRIC_COLORS for backwards compatibility (defaults to light mode)
+export const DEFAULT_METRIC_COLORS = METRIC_COLORS_LIGHT
 
 interface MultiMetricChartProps {
   data: MetricData[]
@@ -68,12 +126,17 @@ interface MultiMetricChartProps {
 export default function MultiMetricChart({ data, metrics, customColors = {}, onReset }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(true)
   const [isStacked, setIsStacked] = useState(false)
+  const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar')
   const [showExportMenu, setShowExportMenu] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
   const chartRef = useRef<Highcharts.Chart | null>(null)
+
+  // Get theme-aware colors
+  const METRIC_COLORS = getMetricColors(isDark)
+  const FALLBACK_COLORS = getFallbackColors(isDark)
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Highcharts) {
@@ -226,6 +289,32 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     return value.toFixed(2)
   }
 
+  // Calculate total change percentage from first to last value
+  const calculateTotalChange = (dataPoints: { year: number; value: number }[]): number | null => {
+    if (dataPoints.length < 2) return null
+    const firstValue = dataPoints[0].value
+    const lastValue = dataPoints[dataPoints.length - 1].value
+    if (firstValue === 0) return null
+    return ((lastValue - firstValue) / Math.abs(firstValue)) * 100
+  }
+
+  // Calculate CAGR (Compound Annual Growth Rate)
+  const calculateCAGR = (dataPoints: { year: number; value: number }[]): number | null => {
+    if (dataPoints.length < 2) return null
+    const firstValue = dataPoints[0].value
+    const lastValue = dataPoints[dataPoints.length - 1].value
+    const years = dataPoints[dataPoints.length - 1].year - dataPoints[0].year
+    if (firstValue <= 0 || lastValue <= 0 || years === 0) return null
+    return (Math.pow(lastValue / firstValue, 1 / years) - 1) * 100
+  }
+
+  // Format percentage with sign
+  const formatPct = (value: number | null): string => {
+    if (value === null) return 'N/A'
+    const sign = value >= 0 ? '+' : ''
+    return `${sign}${value.toFixed(2)}%`
+  }
+
   // Build series data (use sortedFilteredData for bar order)
   const series: Highcharts.SeriesOptionsType[] = sortedFilteredData.map((metricData, index) => {
     const isCurrency = metricData.unit === 'currency'
@@ -234,18 +323,19 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       isCurrency || isShares ? d.value / 1_000_000_000 : d.value
     )
 
-    // Use custom color if provided, otherwise use default color, fall back to index-based color
-    const color = customColors[metricData.metric] ?? DEFAULT_METRIC_COLORS[metricData.metric] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
+    // Use custom color if provided, otherwise use theme-aware color, fall back to index-based color
+    const color = customColors[metricData.metric] ?? METRIC_COLORS[metricData.metric] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
 
     // Determine which Y-axis to use
     const useSecondaryAxis = needsDualAxis && metricData.unit !== primaryUnit
 
     return {
-      type: 'column',
+      type: chartType === 'line' ? 'line' : chartType === 'area' ? 'area' : 'column',
       name: `Apple ${metricData.label}`,
       data: values,
       color,
       yAxis: useSecondaryAxis ? 1 : 0,
+      marker: chartType === 'line' || chartType === 'area' ? { enabled: true, radius: 4 } : undefined,
     }
   })
 
@@ -324,7 +414,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       style: {
         fontFamily: 'inherit',
       },
-      spacingBottom: 70,
+      spacingBottom: 20,
     },
     title: {
       text: undefined,
@@ -346,20 +436,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     },
     yAxis,
     legend: {
-      enabled: true,
-      align: 'left',
-      verticalAlign: 'bottom',
-      layout: 'horizontal',
-      floating: false,
-      itemStyle: {
-        fontSize: '14px',
-        fontWeight: '500',
-        color: isDark ? '#e5e7eb' : '#374151',
-      },
-      itemHoverStyle: {
-        color: isDark ? '#ffffff' : '#111827',
-      },
-      margin: 20,
+      enabled: false,
     },
     plotOptions: {
       column: {
@@ -368,7 +445,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         borderWidth: 0,
         groupPadding: isStacked ? 0.2 : 0.15,
         pointPadding: isStacked ? 0.1 : 0.05,
-        stacking: isStacked ? 'normal' : undefined,
+        stacking: (isStacked && chartType === 'bar') ? 'normal' : undefined,
         dataLabels: {
           enabled: showDataLabels,
           verticalAlign: isStacked ? 'middle' : 'bottom',
@@ -386,7 +463,60 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             const unit = metricInfo?.unit
             const val = point.y ?? 0
             // For stacked charts, hide small values to avoid clutter
-            if (isStacked && (unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
+            if (isStacked && chartType === 'bar' && (unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
+            if (unit === 'currency') return val.toFixed(1)
+            if (unit === 'shares') return val.toFixed(1)
+            if (unit === 'percent') return `${val.toFixed(1)}%`
+            return val.toFixed(2)
+          },
+        },
+      },
+      line: {
+        animation: false,
+        lineWidth: 2,
+        dataLabels: {
+          enabled: showDataLabels,
+          style: {
+            fontSize: '11px',
+            fontWeight: '500',
+            color: isDark ? '#e5e7eb' : '#374151',
+            textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
+          },
+          formatter: function (this: Highcharts.PointLabelObject) {
+            const point = this.point
+            const seriesName = this.series.name
+            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const unit = metricInfo?.unit
+            const val = point.y ?? 0
+            if (unit === 'currency') return val.toFixed(1)
+            if (unit === 'shares') return val.toFixed(1)
+            if (unit === 'percent') return `${val.toFixed(1)}%`
+            return val.toFixed(2)
+          },
+        },
+      },
+      area: {
+        animation: false,
+        lineWidth: 2,
+        fillOpacity: 0.6,
+        stacking: 'normal',
+        dataLabels: {
+          enabled: showDataLabels,
+          verticalAlign: 'middle',
+          style: {
+            fontSize: '11px',
+            fontWeight: '500',
+            color: '#ffffff',
+            textOutline: '1px rgba(0, 0, 0, 0.3)',
+          },
+          formatter: function (this: Highcharts.PointLabelObject) {
+            const point = this.point
+            const seriesName = this.series.name
+            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const unit = metricInfo?.unit
+            const val = point.y ?? 0
+            // Hide small values to avoid clutter
+            if ((unit === 'currency' || unit === 'shares') && Math.abs(val) < 5) return ''
             if (unit === 'currency') return val.toFixed(1)
             if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
@@ -457,9 +587,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             displayValue = (point.y ?? 0).toFixed(2)
           }
 
+          // Use just the metric label in tooltip (without stats suffix)
+          const tooltipLabel = metricInfo ? `Apple ${metricInfo.label}` : point.series.name
+
           html += `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
             <span style="width: 10px; height: 10px; background-color: ${point.color}; border-radius: 50%;"></span>
-            <span>${point.series.name}: <strong>${displayValue}</strong></span>
+            <span>${tooltipLabel}: <strong>${displayValue}</strong></span>
           </div>`
         })
 
@@ -519,7 +652,20 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   }
 
   // Create a stable key based on the metrics being displayed and options
-  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}`
+  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}-type-${chartType}`
+
+  // Build legend data with stats
+  const legendItems = sortedFilteredData.map((metricData, index) => {
+    const color = customColors[metricData.metric] ?? METRIC_COLORS[metricData.metric] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
+    const totalChange = calculateTotalChange(metricData.data)
+    const cagr = calculateCAGR(metricData.data)
+    return {
+      label: `Apple ${metricData.label}`,
+      color,
+      totalChange,
+      cagr,
+    }
+  })
 
   return (
     <div className="w-full">
@@ -533,6 +679,21 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         }}
       />
 
+      {/* Custom Legend */}
+      <div className="mt-2 mb-4">
+        {legendItems.map((item, index) => (
+          <div key={index} className="flex items-center gap-2 mb-1">
+            <span
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: item.color }}
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {item.label} ({formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* Data Table Section - years as columns */}
       <div className="mt-4">
         <div className="flex justify-end items-center gap-4 mb-2">
@@ -545,15 +706,60 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Show Labels</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className={`flex items-center gap-2 cursor-pointer ${chartType !== 'bar' ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <input
               type="checkbox"
-              checked={isStacked}
+              checked={isStacked || chartType === 'area'}
               onChange={(e) => setIsStacked(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+              disabled={chartType !== 'bar'}
+              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Stacked</span>
           </label>
+          <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+            <button
+              onClick={() => setChartType('bar')}
+              className={`px-2 py-1 text-sm flex items-center gap-1 ${
+                chartType === 'bar'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="4" y="10" width="4" height="10" rx="1" />
+                <rect x="10" y="6" width="4" height="14" rx="1" />
+                <rect x="16" y="2" width="4" height="18" rx="1" />
+              </svg>
+              Bar
+            </button>
+            <button
+              onClick={() => { setChartType('line'); setIsStacked(false) }}
+              className={`px-2 py-1 text-sm flex items-center gap-1 ${
+                chartType === 'line'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8" />
+              </svg>
+              Line
+            </button>
+            <button
+              onClick={() => { setChartType('area'); setIsStacked(false) }}
+              className={`px-2 py-1 text-sm flex items-center gap-1 ${
+                chartType === 'area'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 17l6-6 4 4 8-8v10H3v0z" opacity="0.6" />
+                <path d="M3 17l6-6 4 4 8-8" fill="none" stroke="currentColor" strokeWidth={2} />
+              </svg>
+              Area
+            </button>
+          </div>
           {onReset && (
             <button
               onClick={onReset}

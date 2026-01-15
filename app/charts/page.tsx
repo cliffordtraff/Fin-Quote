@@ -3,26 +3,47 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
-import MultiMetricChart, { DEFAULT_METRIC_COLORS } from '@/components/MultiMetricChart'
+import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
+import { useTheme } from '@/components/ThemeProvider'
 
-// Color palette for the color picker
-const COLOR_PALETTE = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-  '#f97316', // orange
-  '#84cc16', // lime
-  '#a855f7', // purple
-  '#ef4444', // red
-  '#14b8a6', // teal
-  '#6366f1', // indigo
+// Dual color palettes for light/dark mode
+const COLOR_PALETTE_LIGHT = [
+  '#1a1a2e', // Near black (primary)
+  '#2d4a3e', // Dark forest (profits)
+  '#4a2c2c', // Dark burgundy (liabilities)
+  '#3d3520', // Dark bronze (value)
+  '#1a3a3a', // Dark teal (cash flow)
+  '#2e2640', // Dark purple (equity)
+  '#2a3540', // Dark blue-gray (neutral)
+  '#3a3028', // Dark taupe (secondary)
+  '#1a3a2a', // Dark eucalyptus (margins)
+  '#3a2a30', // Dark plum (alternative)
+  '#3a3a20', // Dark olive (operating)
+  '#2a2a3a', // Dark slate (tertiary)
+]
+
+const COLOR_PALETTE_DARK = [
+  '#6b8cce', // Soft blue (primary)
+  '#7ab08a', // Sage green (profits)
+  '#c27878', // Dusty rose (liabilities)
+  '#b8a870', // Khaki gold (value)
+  '#78a8a8', // Light teal (cash flow)
+  '#9888b8', // Lavender (equity)
+  '#8898a8', // Light blue-gray (neutral)
+  '#a89888', // Light taupe (secondary)
+  '#78a888', // Light eucalyptus (margins)
+  '#a88898', // Light plum (alternative)
+  '#a8a878', // Light olive (operating)
+  '#8888a8', // Light slate (tertiary)
 ]
 
 export default function ChartsPage() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  const COLOR_PALETTE = isDark ? COLOR_PALETTE_DARK : COLOR_PALETTE_LIGHT
+  const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
+
   const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string }[]>([])
   // Metrics added to the page (from dropdown)
   const [addedMetrics, setAddedMetrics] = useState<MetricId[]>(['revenue'])
@@ -31,9 +52,11 @@ export default function ChartsPage() {
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const DEFAULT_MIN_YEAR = 2018
   const [minYear, setMinYear] = useState<number | null>(null)
   const [maxYear, setMaxYear] = useState<number | null>(null)
   const [yearBounds, setYearBounds] = useState<{ min: number; max: number } | null>(null)
+  const [initialRangeSet, setInitialRangeSet] = useState(false)
   const [sliderWidth, setSliderWidth] = useState(0)
   const sliderRef = useRef<HTMLDivElement | null>(null)
   const thumbEffectivePx = 24 // matches CSS width + borders + shadow
@@ -113,6 +136,13 @@ export default function ChartsPage() {
           if (prev && prev.min === bounds.min && prev.max === bounds.max) return prev
           return bounds
         })
+        // Set initial range to DEFAULT_MIN_YEAR-present on first load
+        if (!initialRangeSet) {
+          const effectiveMin = Math.max(bounds.min, DEFAULT_MIN_YEAR)
+          setMinYear(effectiveMin)
+          setMaxYear(bounds.max)
+          setInitialRangeSet(true)
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')

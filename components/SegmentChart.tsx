@@ -10,23 +10,48 @@ const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
   ssr: false,
 })
 
-// Color palette for segments
-const SEGMENT_COLORS: Record<string, string> = {
+// Light mode colors - dark, bold colors for contrast against white
+const SEGMENT_COLORS_LIGHT: Record<string, string> = {
   // Product segments
-  iPhone: '#3b82f6',                            // blue
-  Services: '#10b981',                          // emerald
-  'Wearables, Home and Accessories': '#f59e0b', // amber
-  Mac: '#8b5cf6',                               // violet
-  iPad: '#ec4899',                              // pink
+  iPhone: '#1a1a2e',                            // Near black (flagship)
+  Services: '#1a3a3a',                          // Dark teal
+  'Wearables, Home and Accessories': '#3a3028', // Dark taupe
+  Mac: '#252540',                               // Dark navy
+  iPad: '#2a3540',                              // Dark blue-gray
   // Geographic segments
-  Americas: '#3b82f6',                          // blue
-  Europe: '#10b981',                            // emerald
-  'Greater China': '#f59e0b',                   // amber
-  Japan: '#8b5cf6',                             // violet
-  'Rest of Asia Pacific': '#ec4899',            // pink
+  Americas: '#1a1a2e',                          // Near black
+  Europe: '#2d4a3e',                            // Dark forest
+  'Greater China': '#4a2c2c',                   // Dark burgundy
+  Japan: '#2e2640',                             // Dark purple
+  'Rest of Asia Pacific': '#1a3a3a',            // Dark teal
 }
 
-const FALLBACK_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+// Dark mode colors - lighter, softer colors for contrast against dark
+const SEGMENT_COLORS_DARK: Record<string, string> = {
+  // Product segments
+  iPhone: '#6b8cce',                            // Soft blue (flagship)
+  Services: '#78a8a8',                          // Light teal
+  'Wearables, Home and Accessories': '#a89888', // Light taupe
+  Mac: '#7b9cde',                               // Lighter blue
+  iPad: '#8898a8',                              // Blue-gray
+  // Geographic segments
+  Americas: '#6b8cce',                          // Soft blue
+  Europe: '#7ab08a',                            // Sage green
+  'Greater China': '#c27878',                   // Dusty rose
+  Japan: '#9888b8',                             // Lavender
+  'Rest of Asia Pacific': '#78a8a8',            // Light teal
+}
+
+const FALLBACK_COLORS_LIGHT = ['#1a1a2e', '#2d4a3e', '#1a3a3a', '#2e2640', '#3a3028']
+const FALLBACK_COLORS_DARK = ['#6b8cce', '#7ab08a', '#78a8a8', '#9888b8', '#a89888']
+
+// Export function to get segment colors based on theme
+export function getSegmentColors(isDark: boolean): Record<string, string> {
+  return isDark ? SEGMENT_COLORS_DARK : SEGMENT_COLORS_LIGHT
+}
+
+// Keep SEGMENT_COLORS for backwards compatibility
+const SEGMENT_COLORS = SEGMENT_COLORS_LIGHT
 
 interface SegmentChartProps {
   data: SegmentData[]
@@ -50,6 +75,10 @@ export default function SegmentChart({
   const isDark = theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
   const chartRef = useRef<Highcharts.Chart | null>(null)
+
+  // Get theme-aware colors
+  const COLORS = isDark ? SEGMENT_COLORS_DARK : SEGMENT_COLORS_LIGHT
+  const FALLBACK_COLORS = isDark ? FALLBACK_COLORS_DARK : FALLBACK_COLORS_LIGHT
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Highcharts) {
@@ -111,7 +140,7 @@ export default function SegmentChart({
   // Build series data
   const series: Highcharts.SeriesOptionsType[] = filteredData.map((segmentData, index) => {
     const values = segmentData.data.map(d => d.value / 1_000_000_000) // Convert to billions
-    const color = customColors[segmentData.segment] ?? SEGMENT_COLORS[segmentData.segment] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
+    const color = customColors[segmentData.segment] ?? COLORS[segmentData.segment] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
 
     return {
       type: 'column',
