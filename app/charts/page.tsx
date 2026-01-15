@@ -52,6 +52,7 @@ export default function ChartsPage() {
   // Period type: annual or quarterly
   const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual')
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
+  const [fullMetricsData, setFullMetricsData] = useState<MetricData[]>([]) // Store ALL data, filter client-side
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const DEFAULT_MIN_YEAR = 2018
@@ -93,51 +94,48 @@ export default function ChartsPage() {
     }
   }, [yearBounds, minYear, maxYear])
 
-  // Fetch data when visible metrics or year range changes
+  // Filter data client-side when year range changes (instant, no network)
+  const filterDataByYearRange = useCallback((data: MetricData[], min: number | null, max: number | null): MetricData[] => {
+    if (!min && !max) return data
+    return data.map(metric => ({
+      ...metric,
+      data: metric.data.filter(point => {
+        const year = point.year
+        if (min && year < min) return false
+        if (max && year > max) return false
+        return true
+      })
+    }))
+  }, [])
+
+  // Fetch ALL data when visible metrics or period type changes (not year range)
   const fetchData = useCallback(async () => {
     if (visibleMetrics.length === 0) {
       setMetricsData([])
+      setFullMetricsData([])
       return
-    }
-
-    let minYearParam: number | undefined
-    let maxYearParam: number | undefined
-
-    if (yearBounds) {
-      const clampYear = (value: number) => Math.min(Math.max(value, yearBounds.min), yearBounds.max)
-      const resolvedMin = minYear ?? yearBounds.min
-      const resolvedMax = maxYear ?? yearBounds.max
-      minYearParam = clampYear(resolvedMin)
-      maxYearParam = clampYear(resolvedMax)
-    } else {
-      minYearParam = minYear ?? undefined
-      maxYearParam = maxYear ?? undefined
-    }
-
-    if (typeof minYearParam === 'number' && typeof maxYearParam === 'number' && minYearParam > maxYearParam) {
-      const correctedMin = Math.min(minYearParam, maxYearParam)
-      const correctedMax = Math.max(minYearParam, maxYearParam)
-      updateRange(correctedMin, correctedMax)
-      minYearParam = correctedMin
-      maxYearParam = correctedMax
     }
 
     setLoading(true)
     setError(null)
 
     try {
+      // Fetch ALL data without year filters - we'll filter client-side
       const { data, error: fetchError, yearBounds: bounds } = await getMultipleMetrics({
         metrics: visibleMetrics,
-        minYear: minYearParam,
-        maxYear: maxYearParam,
         period: periodType,
+        // No minYear/maxYear - fetch everything
       })
 
       if (fetchError) {
         setError(fetchError)
         setMetricsData([])
+        setFullMetricsData([])
       } else if (data) {
-        setMetricsData(data)
+        setFullMetricsData(data) // Store full data
+        // Apply current filter
+        const filteredData = filterDataByYearRange(data, minYear, maxYear)
+        setMetricsData(filteredData)
       }
 
       if (bounds) {
@@ -156,11 +154,21 @@ export default function ChartsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
       setMetricsData([])
+      setFullMetricsData([])
     } finally {
       setLoading(false)
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType])
+  }, [visibleMetrics, periodType, filterDataByYearRange, initialRangeSet]) // Only refetch when metrics or period changes, NOT year range
 
+  // When year range changes, filter existing data client-side (instant)
+  useEffect(() => {
+    if (fullMetricsData.length > 0) {
+      const filteredData = filterDataByYearRange(fullMetricsData, minYear, maxYear)
+      setMetricsData(filteredData)
+    }
+  }, [minYear, maxYear, fullMetricsData, filterDataByYearRange])
+
+  // Fetch data when metrics or period changes
   useEffect(() => {
     fetchData()
   }, [fetchData])
