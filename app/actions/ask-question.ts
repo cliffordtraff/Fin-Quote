@@ -106,8 +106,8 @@ export type PassageData = FilingPassage
 export type AskQuestionResponse = {
   answer: string
   dataUsed: {
-    type: 'financials' | 'prices' | 'filings' | 'passages'
-    data: FinancialData[] | PriceData[] | FilingData[] | PassageData[]
+    type: 'financials' | 'prices' | 'filings' | 'passages' | 'financial_metrics' | 'metrics_catalog'
+    data: any[]
   } | null
   chartConfig: ChartConfig | null
   error: string | null
