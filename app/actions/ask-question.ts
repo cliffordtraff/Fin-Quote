@@ -735,11 +735,11 @@ export async function askQuestion(
     // Helper function to check if a year exists in the database
     const checkYearInDatabase = async (year: number): Promise<boolean> => {
       try {
-        const { data, error } = await (supabase as any)
-          .from('financials_std')
+        const { data, error } = await supabase
+          .from('financials_std' as any)
           .select('year')
-          .eq('symbol', 'AAPL')
-          .eq('year', year)
+          .eq('symbol', 'AAPL' as any)
+          .eq('year', year as any)
           .limit(1)
 
         if (error) {
