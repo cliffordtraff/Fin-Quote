@@ -1,16 +1,25 @@
 /**
- * Script to fetch AAPL financial data from FMP API
+ * Script to fetch financial data from FMP API for any stock symbol
  * Supports both annual and quarterly data
- * Saves to data/aapl-financials.json for ingestion
+ * Saves to data/{symbol}-financials.json for ingestion
  *
  * Usage:
- *   npx tsx scripts/fetch-aapl-data.ts           # Fetch annual data (default)
- *   npx tsx scripts/fetch-aapl-data.ts annual    # Fetch annual data
- *   npx tsx scripts/fetch-aapl-data.ts quarterly # Fetch quarterly data
- *   npx tsx scripts/fetch-aapl-data.ts both      # Fetch both annual and quarterly
+ *   npx tsx scripts/fetch-aapl-data.ts AAPL           # Fetch annual data (default)
+ *   npx tsx scripts/fetch-aapl-data.ts GOOGL annual   # Fetch annual data for GOOGL
+ *   npx tsx scripts/fetch-aapl-data.ts AAPL quarterly # Fetch quarterly data
+ *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly
  */
 
 const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+
+// Fiscal year end month by symbol (1-12)
+const FISCAL_YEAR_END_MONTH: Record<string, number> = {
+  'AAPL': 9,   // September
+  'GOOGL': 12, // December
+  'MSFT': 6,   // June
+  'AMZN': 12,  // December
+  'META': 12,  // December
+}
 
 type PeriodType = 'annual' | 'quarterly'
 
@@ -42,39 +51,43 @@ function parseFiscalQuarter(period: string): number | null {
 }
 
 /**
- * Get fiscal year from Apple's fiscal calendar
- * Apple's fiscal year ends in September, so Q1 is Oct-Dec
+ * Get fiscal year based on company's fiscal calendar
+ * @param date - The date string from FMP
+ * @param period - The period string (FY, Q1, Q2, Q3, Q4)
+ * @param symbol - The stock symbol to determine fiscal year end
  */
-function getFiscalYear(date: string, period: string): number {
+function getFiscalYear(date: string, period: string, symbol: string): number {
   const dateObj = new Date(date)
   const calendarYear = dateObj.getFullYear()
   const month = dateObj.getMonth() + 1 // 1-12
+  const fiscalYearEndMonth = FISCAL_YEAR_END_MONTH[symbol] || 12 // Default to December
 
   // For annual data, use the calendar year from FMP
   if (period === 'FY') {
     return calendarYear
   }
 
-  // For quarterly: Apple's fiscal year starts in October
-  // Q1 (Oct-Dec) belongs to the next calendar year's fiscal year
-  // e.g., Oct 2023 - Dec 2023 is Q1 FY2024
-  if (month >= 10) {
+  // For quarterly data:
+  // If fiscal year ends in December (12), FY = calendar year (no adjustment needed)
+  // If fiscal year ends in September (AAPL), months Oct-Dec belong to next FY
+  // General rule: if current month > fiscal year end month, it's next fiscal year
+  if (fiscalYearEndMonth !== 12 && month > fiscalYearEndMonth) {
     return calendarYear + 1
   }
   return calendarYear
 }
 
-async function fetchFinancials(periodType: PeriodType): Promise<FinancialRecord[]> {
+async function fetchFinancials(periodType: PeriodType, symbol: string): Promise<FinancialRecord[]> {
   const periodParam = periodType === 'quarterly' ? '&period=quarter' : ''
   const limit = periodType === 'quarterly' ? 40 : 20 // ~10 years of quarters
 
   const endpoints = {
-    incomeStatement: `https://financialmodelingprep.com/api/v3/income-statement/AAPL?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
-    balanceSheet: `https://financialmodelingprep.com/api/v3/balance-sheet-statement/AAPL?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
-    cashFlow: `https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
+    incomeStatement: `https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
+    balanceSheet: `https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
+    cashFlow: `https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}${periodParam}&apikey=${FMP_API_KEY}`,
   }
 
-  console.log(`Fetching AAPL ${periodType} financial data from FMP API...\n`)
+  console.log(`Fetching ${symbol} ${periodType} financial data from FMP API...\n`)
 
   const [incomeData, balanceData, cashFlowData] = await Promise.all([
     fetch(endpoints.incomeStatement).then((r) => r.json()),
@@ -88,7 +101,7 @@ async function fetchFinancials(periodType: PeriodType): Promise<FinancialRecord[
 
   // Create unique key for each period
   const getKey = (date: string, period: string) => {
-    const fiscalYear = getFiscalYear(date, period)
+    const fiscalYear = getFiscalYear(date, period, symbol)
     const fiscalQuarter = parseFiscalQuarter(period)
     return fiscalQuarter ? `${fiscalYear}-Q${fiscalQuarter}` : `${fiscalYear}-FY`
   }
@@ -99,11 +112,11 @@ async function fetchFinancials(periodType: PeriodType): Promise<FinancialRecord[
   incomeData.forEach((item: any) => {
     const period = item.period || 'FY'
     const key = getKey(item.date, period)
-    const fiscalYear = getFiscalYear(item.date, period)
+    const fiscalYear = getFiscalYear(item.date, period, symbol)
     const fiscalQuarter = parseFiscalQuarter(period)
 
     combinedByPeriod[key] = {
-      symbol: 'AAPL',
+      symbol: symbol,
       year: fiscalYear,
       period_type: periodType,
       fiscal_quarter: fiscalQuarter,
@@ -176,20 +189,28 @@ function validateCompleteness(financials: FinancialRecord[]): void {
 
 async function main() {
   const args = process.argv.slice(2)
-  const mode = args[0] || 'annual'
+
+  // Parse arguments: first arg is symbol (required), second is mode (optional)
+  // Example: npx tsx scripts/fetch-aapl-data.ts GOOGL annual
+  const symbol = args[0]?.toUpperCase() || 'AAPL'
+  const mode = args[1] || 'annual'
+
+  console.log(`\n📊 Fetching financial data for ${symbol}...`)
+  console.log(`   Mode: ${mode}`)
+  console.log(`   Fiscal year end: Month ${FISCAL_YEAR_END_MONTH[symbol] || 12}\n`)
 
   let financials: FinancialRecord[] = []
 
   if (mode === 'both') {
     const [annual, quarterly] = await Promise.all([
-      fetchFinancials('annual'),
-      fetchFinancials('quarterly'),
+      fetchFinancials('annual', symbol),
+      fetchFinancials('quarterly', symbol),
     ])
     financials = [...annual, ...quarterly]
   } else if (mode === 'quarterly') {
-    financials = await fetchFinancials('quarterly')
+    financials = await fetchFinancials('quarterly', symbol)
   } else {
-    financials = await fetchFinancials('annual')
+    financials = await fetchFinancials('annual', symbol)
   }
 
   // Validate completeness
@@ -207,11 +228,12 @@ async function main() {
   const dataDir = path.join(process.cwd(), 'data')
   await fs.mkdir(dataDir, { recursive: true })
 
+  const symbolLower = symbol.toLowerCase()
   const filename = mode === 'both'
-    ? 'aapl-financials-all.json'
+    ? `${symbolLower}-financials-all.json`
     : mode === 'quarterly'
-      ? 'aapl-financials-quarterly.json'
-      : 'aapl-financials.json'
+      ? `${symbolLower}-financials-quarterly.json`
+      : `${symbolLower}-financials.json`
 
   const filePath = path.join(dataDir, filename)
   await fs.writeFile(filePath, JSON.stringify(financials, null, 2))

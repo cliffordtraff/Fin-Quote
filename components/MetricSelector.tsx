@@ -12,6 +12,7 @@ interface Metric {
   statement: StatementType
   definition?: string
   segmentCategory?: SegmentCategory
+  stock?: string  // Stock symbol this metric belongs to (for segment metrics)
 }
 
 interface MetricSelectorProps {
@@ -20,6 +21,7 @@ interface MetricSelectorProps {
   onToggle: (metricId: string) => void
   onClear: () => void
   maxSelections?: number
+  selectedStock?: string  // Currently selected stock symbol for filtering
 }
 
 const STATEMENT_LABELS: Record<StatementType | 'stock', string> = {
@@ -424,13 +426,21 @@ export default function MetricSelector({
   onToggle,
   onClear,
   maxSelections = 4,
+  selectedStock,
 }: MetricSelectorProps) {
   // Group metrics by statement type
   const incomeMetrics = metrics.filter((m) => m.statement === 'income')
   const balanceMetrics = metrics.filter((m) => m.statement === 'balance')
   const cashflowMetrics = metrics.filter((m) => m.statement === 'cashflow')
   const ratioMetrics = metrics.filter((m) => m.statement === 'ratios')
-  const stockMetrics = metrics.filter((m) => m.statement === 'stock')
+  // Filter stock metrics by selected stock symbol
+  const stockMetrics = metrics.filter((m) => {
+    if (m.statement !== 'stock') return false
+    // If no stock filter or metric has no stock restriction, include it
+    if (!selectedStock || !m.stock) return true
+    // Only include metrics that match the selected stock
+    return m.stock === selectedStock
+  })
 
   const totalSelected = selectedMetrics.length
 

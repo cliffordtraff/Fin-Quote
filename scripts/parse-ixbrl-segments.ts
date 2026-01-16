@@ -16,14 +16,40 @@ import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import {
   getMappingsForTicker,
-  getSegmentDisplayName,
-  getSegmentTypeFromAxis,
-  getFiscalYearFromPeriodEnd,
-  getFiscalQuarterFromPeriodEnd,
-  isQuarterlyDuration,
-  isAnnualDuration,
+  getSegmentDisplayNameForTicker,
+  getSegmentTypeFromAxisForTicker,
+  getSupportedTickers,
   type SegmentType,
 } from '../lib/ixbrl-mappings'
+import {
+  getFiscalYearFromPeriodEnd as aaplGetFiscalYear,
+  getFiscalQuarterFromPeriodEnd as aaplGetFiscalQuarter,
+  isQuarterlyDuration,
+  isAnnualDuration,
+} from '../lib/ixbrl-mappings/aapl'
+import {
+  getFiscalYearFromPeriodEnd as googlGetFiscalYear,
+  getFiscalQuarterFromPeriodEnd as googlGetFiscalQuarter,
+} from '../lib/ixbrl-mappings/googl'
+
+// Wrapper functions to handle different tickers
+function getFiscalYearFromPeriodEnd(ticker: string, periodEnd: string): number {
+  if (ticker.toUpperCase() === 'GOOGL') {
+    return googlGetFiscalYear(periodEnd)
+  }
+  return aaplGetFiscalYear(periodEnd)
+}
+
+function getFiscalQuarterFromPeriodEnd(ticker: string, periodEnd: string): {
+  fiscalYear: number
+  fiscalQuarter: 1 | 2 | 3 | 4
+  period: 'Q1' | 'Q2' | 'Q3' | 'Q4'
+} {
+  if (ticker.toUpperCase() === 'GOOGL') {
+    return googlGetFiscalQuarter(periodEnd)
+  }
+  return aaplGetFiscalQuarter(periodEnd)
+}
 
 type FilingType = '10-k' | '10-q'
 type PeriodType = 'FY' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
@@ -195,6 +221,7 @@ function extractSegmentRevenue(
   contexts: Map<string, XBRLContext>,
   facts: XBRLFact[],
   mappings: ReturnType<typeof getMappingsForTicker>,
+  ticker: string,
   filingType: FilingType = '10-k'
 ): SegmentRevenue[] {
   if (!mappings) return []
@@ -228,10 +255,10 @@ function extractSegmentRevenue(
 
     // Check if this context has a product or geographic dimension
     for (const dim of context.dimensions) {
-      const segmentType = getSegmentTypeFromAxis(dim.axis)
+      const segmentType = getSegmentTypeFromAxisForTicker(ticker, dim.axis)
       if (!segmentType) continue
 
-      const segmentName = getSegmentDisplayName(dim.member)
+      const segmentName = getSegmentDisplayNameForTicker(ticker, dim.member)
       if (!segmentName) continue
 
       // Calculate fiscal year and period
@@ -240,12 +267,12 @@ function extractSegmentRevenue(
       let period: PeriodType
 
       if (filingType === '10-q') {
-        const quarterInfo = getFiscalQuarterFromPeriodEnd(periodEnd)
+        const quarterInfo = getFiscalQuarterFromPeriodEnd(ticker, periodEnd)
         fiscalYear = quarterInfo.fiscalYear
         fiscalQuarter = quarterInfo.fiscalQuarter
         period = quarterInfo.period
       } else {
-        fiscalYear = getFiscalYearFromPeriodEnd(periodEnd)
+        fiscalYear = getFiscalYearFromPeriodEnd(ticker, periodEnd)
         period = 'FY'
       }
 
@@ -300,7 +327,7 @@ async function parseFilingHtml(
   }
 
   // Extract segment revenue
-  const segments = extractSegmentRevenue(contexts, facts, mappings, filingType)
+  const segments = extractSegmentRevenue(contexts, facts, mappings, ticker, filingType)
 
   // Deduplicate by fiscal year + period + segment (keep the one with highest value if duplicates)
   const deduped = new Map<string, SegmentRevenue>()
@@ -528,7 +555,7 @@ async function main() {
   const mappings = getMappingsForTicker(ticker)
   if (!mappings) {
     console.error(`\nError: No mappings found for ticker ${ticker}`)
-    console.error('Supported tickers: AAPL')
+    console.error(`Supported tickers: ${getSupportedTickers().join(', ')}`)
     process.exit(1)
   }
 

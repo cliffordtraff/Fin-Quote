@@ -1,16 +1,49 @@
 /**
- * One-time script to fetch AAPL SEC filings from SEC EDGAR API
- * Saves to data/aapl-filings.json for ingestion
+ * Script to fetch SEC filings from SEC EDGAR API for any stock symbol
+ * Saves to data/{symbol}-filings.json for ingestion
+ *
+ * Usage:
+ *   npx tsx scripts/fetch-sec-filings.ts AAPL    # Fetch AAPL filings
+ *   npx tsx scripts/fetch-sec-filings.ts GOOGL   # Fetch GOOGL filings
  *
  * SEC API docs: https://www.sec.gov/edgar/sec-api-documentation
  * Important: SEC requires User-Agent header with contact info
  */
 
-// AAPL CIK (Central Index Key) with leading zeros removed for API
-const AAPL_CIK = '0000320193'
+// CIK (Central Index Key) lookup by symbol
+const CIK_MAP: Record<string, string> = {
+  'AAPL': '0000320193',
+  'GOOGL': '0001652044',
+  'MSFT': '0000789019',
+  'AMZN': '0001018724',
+  'META': '0001326801',
+}
+
+// Fiscal year end month by symbol (1-12)
+const FISCAL_YEAR_END_MONTH: Record<string, number> = {
+  'AAPL': 9,   // September
+  'GOOGL': 12, // December
+  'MSFT': 6,   // June
+  'AMZN': 12,  // December
+  'META': 12,  // December
+}
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const SYMBOL = args[0]?.toUpperCase() || 'AAPL'
 
 async function fetchSecFilings() {
-  console.log('Fetching AAPL SEC filings from EDGAR API...\n')
+  const CIK = CIK_MAP[SYMBOL]
+  if (!CIK) {
+    console.error(`Error: Unknown symbol "${SYMBOL}". Supported symbols: ${Object.keys(CIK_MAP).join(', ')}`)
+    process.exit(1)
+  }
+
+  const fiscalYearEndMonth = FISCAL_YEAR_END_MONTH[SYMBOL] || 12
+
+  console.log(`Fetching ${SYMBOL} SEC filings from EDGAR API...`)
+  console.log(`  CIK: ${CIK}`)
+  console.log(`  Fiscal year end: Month ${fiscalYearEndMonth}\n`)
 
   // SEC requires a User-Agent header with contact information
   const headers = {
@@ -18,7 +51,7 @@ async function fetchSecFilings() {
     Accept: 'application/json',
   }
 
-  const url = `https://data.sec.gov/submissions/CIK${AAPL_CIK}.json`
+  const url = `https://data.sec.gov/submissions/CIK${CIK}.json`
 
   try {
     const response = await fetch(url, { headers })
@@ -48,28 +81,24 @@ async function fetchSecFilings() {
         // Extract fiscal year from report date
         const fiscalYear = new Date(reportDate).getFullYear()
 
-        // Determine fiscal quarter for 10-Q
+        // Determine fiscal quarter for 10-Q based on company's fiscal year end
         let fiscalQuarter = null
         if (form === '10-Q') {
           const month = new Date(reportDate).getMonth() + 1
-          // AAPL fiscal year ends in September
-          // Q1: Oct-Dec (month 12, 1, 2)
-          // Q2: Jan-Mar (month 3, 4, 5)
-          // Q3: Apr-Jun (month 6, 7, 8)
-          // Q4: Jul-Sep (month 9, 10, 11) - but 10-K is filed for this period
-          if (month >= 10 || month <= 12) fiscalQuarter = 1
-          else if (month >= 1 && month <= 3) fiscalQuarter = 2
-          else if (month >= 4 && month <= 6) fiscalQuarter = 3
-          else if (month >= 7 && month <= 9) fiscalQuarter = 4
+          // Calculate fiscal quarter based on fiscal year end month
+          // For December year-end: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec (but 10-K filed for Q4)
+          // For September year-end (AAPL): Q1=Oct-Dec, Q2=Jan-Mar, Q3=Apr-Jun, Q4=Jul-Sep (but 10-K filed for Q4)
+          const fiscalMonthOffset = (month - fiscalYearEndMonth + 11) % 12 // Months since fiscal year start
+          fiscalQuarter = Math.floor(fiscalMonthOffset / 3) + 1
         }
 
         // Construct document URL
         // Format: https://www.sec.gov/Archives/edgar/data/{CIK}/{accession-no-dashes}/{primary-document}
         const accessionNoDashes = accessionNumber.replace(/-/g, '')
-        const documentUrl = `https://www.sec.gov/Archives/edgar/data/${AAPL_CIK.replace(/^0+/, '')}/${accessionNoDashes}/${primaryDocument}`
+        const documentUrl = `https://www.sec.gov/Archives/edgar/data/${CIK.replace(/^0+/, '')}/${accessionNoDashes}/${primaryDocument}`
 
         filings.push({
-          ticker: 'AAPL',
+          ticker: SYMBOL,
           filing_type: form,
           filing_date: filingDate,
           period_end_date: reportDate,
@@ -103,10 +132,11 @@ async function fetchSecFilings() {
     const dataDir = path.join(process.cwd(), 'data')
     await fs.mkdir(dataDir, { recursive: true })
 
-    const filePath = path.join(dataDir, 'aapl-filings.json')
+    const symbolLower = SYMBOL.toLowerCase()
+    const filePath = path.join(dataDir, `${symbolLower}-filings.json`)
     await fs.writeFile(filePath, JSON.stringify(recentFilings10Years, null, 2))
 
-    console.log(`✓ Saved ${recentFilings10Years.length} filings to data/aapl-filings.json\n`)
+    console.log(`✓ Saved ${recentFilings10Years.length} filings to data/${symbolLower}-filings.json\n`)
 
     // Show summary by type
     const tenKCount = recentFilings10Years.filter((f) => f.filing_type === '10-K').length

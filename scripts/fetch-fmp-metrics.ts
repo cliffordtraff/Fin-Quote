@@ -1,13 +1,14 @@
 /**
- * Fetch 96 financial metrics from FMP API for AAPL
+ * Fetch 96+ financial metrics from FMP API for any stock symbol
  * Covers: key-metrics, ratios, financial-growth, enterprise-values
  * Supports both annual and quarterly data
- * Saves to data/aapl-fmp-metrics.json for ingestion into financial_metrics table
+ * Saves to data/{symbol}-fmp-metrics.json for ingestion into financial_metrics table
  *
  * Usage:
- *   npx tsx scripts/fetch-fmp-metrics.ts           # Fetch annual only (default)
- *   npx tsx scripts/fetch-fmp-metrics.ts quarterly # Fetch quarterly only
- *   npx tsx scripts/fetch-fmp-metrics.ts both      # Fetch both annual and quarterly
+ *   npx tsx scripts/fetch-fmp-metrics.ts AAPL            # Fetch annual only (default)
+ *   npx tsx scripts/fetch-fmp-metrics.ts GOOGL annual    # Fetch annual for GOOGL
+ *   npx tsx scripts/fetch-fmp-metrics.ts AAPL quarterly  # Fetch quarterly only
+ *   npx tsx scripts/fetch-fmp-metrics.ts GOOGL both      # Fetch both annual and quarterly
  */
 
 import dotenv from 'dotenv'
@@ -17,11 +18,21 @@ import * as path from 'path'
 dotenv.config({ path: '.env.local' })
 
 const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
-const SYMBOL = 'AAPL'
 
-// Command line argument for period type
+// Command line arguments: first is symbol, second is period type
+const args = process.argv.slice(2)
+const SYMBOL = args[0]?.toUpperCase() || 'AAPL'
 type FetchMode = 'annual' | 'quarterly' | 'both'
-const mode: FetchMode = (process.argv[2] as FetchMode) || 'annual'
+const mode: FetchMode = (args[1] as FetchMode) || 'annual'
+
+// Fiscal year end month by symbol (1-12)
+const FISCAL_YEAR_END_MONTH: Record<string, number> = {
+  'AAPL': 9,   // September
+  'GOOGL': 12, // December
+  'MSFT': 6,   // June
+  'AMZN': 12,  // December
+  'META': 12,  // December
+}
 
 /**
  * Metrics to skip during ingestion (duplicates from different FMP endpoints)
@@ -397,7 +408,9 @@ async function fetchForPeriod(periodType: 'annual' | 'quarterly'): Promise<{
 }
 
 async function fetchFMPData() {
-  console.log(`📊 Fetching financial metrics from FMP API (mode: ${mode})...\\n`)
+  console.log(`\n📊 Fetching financial metrics for ${SYMBOL} from FMP API`)
+  console.log(`   Mode: ${mode}`)
+  console.log(`   Fiscal year end: Month ${FISCAL_YEAR_END_MONTH[SYMBOL] || 12}\n`)
 
   const periodsToFetch: Array<'annual' | 'quarterly'> =
     mode === 'both' ? ['annual', 'quarterly'] : [mode === 'quarterly' ? 'quarterly' : 'annual']
@@ -549,16 +562,18 @@ async function fetchFMPData() {
     const sameYearCount = enterpriseValues.filter(e => new Date(e.date).getFullYear() === year).length
     const isQuarterly = sameYearCount > 1
 
-    // For quarterly, try to determine quarter from date
+    // For quarterly, try to determine quarter from date based on the company's fiscal year
     const date = new Date(item.date)
-    const month = date.getMonth() + 1 // 0-indexed
-    // Apple fiscal quarters: Q1=Oct-Dec, Q2=Jan-Mar, Q3=Apr-Jun, Q4=Jul-Sep
+    const month = date.getMonth() + 1 // 1-indexed
+    const fiscalYearEndMonth = FISCAL_YEAR_END_MONTH[SYMBOL] || 12
+
     let fiscalQuarter: number | null = null
     if (isQuarterly) {
-      if (month >= 10 || month <= 12) fiscalQuarter = 1
-      else if (month >= 1 && month <= 3) fiscalQuarter = 2
-      else if (month >= 4 && month <= 6) fiscalQuarter = 3
-      else fiscalQuarter = 4
+      // Calculate fiscal quarter based on fiscal year end month
+      // For December year-end: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
+      // For September year-end (AAPL): Q1=Oct-Dec, Q2=Jan-Mar, Q3=Apr-Jun, Q4=Jul-Sep
+      const fiscalMonthOffset = (month - fiscalYearEndMonth + 11) % 12 // Months since fiscal year start
+      fiscalQuarter = Math.floor(fiscalMonthOffset / 3) + 1
     }
     const fiscalLabel = generateFiscalLabel(year, fiscalQuarter)
 
@@ -697,10 +712,11 @@ async function fetchFMPData() {
   const dataDir = path.join(process.cwd(), 'data')
   await fs.mkdir(dataDir, { recursive: true })
 
-  const filePath = path.join(dataDir, 'aapl-fmp-metrics.json')
+  const symbolLower = SYMBOL.toLowerCase()
+  const filePath = path.join(dataDir, `${symbolLower}-fmp-metrics.json`)
   await fs.writeFile(filePath, JSON.stringify(metrics, null, 2))
 
-  console.log(`✅ Saved to: data/aapl-fmp-metrics.json`)
+  console.log(`✅ Saved to: data/${symbolLower}-fmp-metrics.json`)
   console.log(`\\n📋 Sample metrics (2024):`)
   const sample2024 = metrics.filter((m) => m.year === 2024).slice(0, 10)
   console.table(sample2024.map(m => ({

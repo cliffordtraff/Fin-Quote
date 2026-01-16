@@ -1,6 +1,10 @@
 /**
- * Ingest FMP metrics from data/aapl-fmp-metrics.json into Supabase
- * Loads into financial_metrics table (key-value format)
+ * Ingest FMP metrics into Supabase financial_metrics table
+ * Supports any stock symbol
+ *
+ * Usage:
+ *   npx tsx scripts/ingest-fmp-metrics.ts AAPL    # Ingest AAPL metrics
+ *   npx tsx scripts/ingest-fmp-metrics.ts GOOGL   # Ingest GOOGL metrics
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -10,6 +14,10 @@ import * as path from 'path'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const SYMBOL = args[0]?.toUpperCase() || 'AAPL'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY! // Use service role to bypass RLS
@@ -37,16 +45,17 @@ interface MetricRecord {
 }
 
 async function ingestMetrics() {
-  console.log('📥 Loading FMP metrics from file...\\n')
+  console.log(`📥 Loading FMP metrics for ${SYMBOL} from file...\n`)
 
   // Load JSON file
-  const filePath = path.join(process.cwd(), 'data/aapl-fmp-metrics.json')
+  const symbolLower = SYMBOL.toLowerCase()
+  const filePath = path.join(process.cwd(), `data/${symbolLower}-fmp-metrics.json`)
   const fileContent = await fs.readFile(filePath, 'utf-8')
   const metrics: MetricRecord[] = JSON.parse(fileContent)
 
-  console.log(`✅ Loaded ${metrics.length} metric records`)
+  console.log(`✅ Loaded ${metrics.length} metric records for ${SYMBOL}`)
   console.log(`📅 Years: ${Math.min(...metrics.map((m) => m.year))} - ${Math.max(...metrics.map((m) => m.year))}`)
-  console.log(`🔢 Unique metrics: ${new Set(metrics.map((m) => m.metric_name)).size}\\n`)
+  console.log(`🔢 Unique metrics: ${new Set(metrics.map((m) => m.metric_name)).size}\n`)
 
   // Check if table exists and has data
   const { count: existingCount, error: countError } = await supabase
@@ -116,17 +125,17 @@ async function ingestMetrics() {
 
   console.log(`   Total records in table: ${finalCount}`)
 
-  // Sample query - get P/E ratio for 2024
+  // Sample query - get P/E ratio for recent years
   const { data: sampleData, error: sampleError } = await supabase
     .from('financial_metrics')
     .select('*')
-    .eq('symbol', 'AAPL')
+    .eq('symbol', SYMBOL)
     .eq('metric_name', 'peRatio')
     .order('year', { ascending: false })
     .limit(5)
 
   if (!sampleError && sampleData && sampleData.length > 0) {
-    console.log(`\\n📊 Sample query - AAPL P/E Ratio (last 5 years):`)
+    console.log(`\n📊 Sample query - ${SYMBOL} P/E Ratio (last 5 years):`)
     console.table(sampleData.map((d: any) => ({
       year: d.year,
       value: d.metric_value?.toFixed(2),
@@ -135,15 +144,15 @@ async function ingestMetrics() {
     })))
   }
 
-  // Get unique metrics count
+  // Get unique metrics count for this symbol
   const { data: uniqueMetrics } = await supabase
     .from('financial_metrics')
     .select('metric_name')
-    .eq('symbol', 'AAPL')
+    .eq('symbol', SYMBOL)
 
   if (uniqueMetrics) {
     const uniqueCount = new Set(uniqueMetrics.map((m: any) => m.metric_name)).size
-    console.log(`\\n🎯 Unique metrics in database: ${uniqueCount}`)
+    console.log(`\n🎯 Unique metrics for ${SYMBOL} in database: ${uniqueCount}`)
   }
 
   console.log(`\\n✅ Done! You can now query financial_metrics table.`)

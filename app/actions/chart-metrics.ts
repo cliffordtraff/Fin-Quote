@@ -50,40 +50,58 @@ const METRIC_CONFIG = {
   ev_ebitda: { label: 'EV/EBITDA', unit: 'number' as const, statement: 'ratios' as StatementType, definition: 'Enterprise value divided by EBITDA. A capital structure-neutral valuation metric preferred by analysts.', source: 'financial_metrics' as MetricSource, dbMetricName: 'enterpriseValueMultiple' },
   fcf_yield: { label: 'FCF Yield', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Free cash flow per share divided by stock price. Shows cash return on investment.', source: 'financial_metrics' as MetricSource, dbMetricName: 'freeCashFlowYield', valueTransform: 100 },
 
-  // === STOCK SPECIFIC - Product Segments (from company_metrics) ===
-  segment_iphone: { label: 'iPhone Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPhone sales including all iPhone models.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'iPhone' },
-  segment_services: { label: 'Services Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from services including App Store, Apple Music, iCloud, Apple TV+, and AppleCare.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Services' },
-  segment_wearables: { label: 'Wearables Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Wearables, Home and Accessories including Apple Watch, AirPods, and HomePod.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Wearables, Home and Accessories' },
-  segment_mac: { label: 'Mac Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Mac computers including MacBook, iMac, Mac Pro, and Mac mini.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'Mac' },
-  segment_ipad: { label: 'iPad Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPad tablets including all iPad models.', source: 'company_metrics' as MetricSource, dimensionType: 'product', dimensionValue: 'iPad' },
+  // === AAPL STOCK SPECIFIC - Product Segments (from company_metrics) ===
+  segment_iphone: { label: 'iPhone Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPhone sales including all iPhone models.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'product', dimensionValue: 'iPhone' },
+  segment_services: { label: 'Services Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from services including App Store, Apple Music, iCloud, Apple TV+, and AppleCare.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'product', dimensionValue: 'Services' },
+  segment_wearables: { label: 'Wearables Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Wearables, Home and Accessories including Apple Watch, AirPods, and HomePod.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'product', dimensionValue: 'Wearables, Home and Accessories' },
+  segment_mac: { label: 'Mac Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Mac computers including MacBook, iMac, Mac Pro, and Mac mini.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'product', dimensionValue: 'Mac' },
+  segment_ipad: { label: 'iPad Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from iPad tablets including all iPad models.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'product', dimensionValue: 'iPad' },
 
-  // === STOCK SPECIFIC - Geographic Segments (from company_metrics) ===
-  segment_americas: { label: 'Americas Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from North and South America including the United States.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Americas' },
-  segment_europe: { label: 'Europe Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Europe' },
-  segment_china: { label: 'Greater China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Greater China' },
-  segment_japan: { label: 'Japan Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Japan.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Japan' },
-  segment_asia_pacific: { label: 'Rest of Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
+  // === AAPL STOCK SPECIFIC - Geographic Segments (from company_metrics) ===
+  segment_americas: { label: 'Americas Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from North and South America including the United States.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'geographic', dimensionValue: 'Americas' },
+  segment_europe: { label: 'Europe Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'geographic', dimensionValue: 'Europe' },
+  segment_china: { label: 'Greater China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'geographic', dimensionValue: 'Greater China' },
+  segment_japan: { label: 'Japan Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Japan.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'geographic', dimensionValue: 'Japan' },
+  segment_asia_pacific: { label: 'Rest of Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, stock: 'AAPL', dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
 
-  // === STOCK SPECIFIC - Operating Income by Region (from company_metrics) ===
-  opex_americas: { label: 'Americas Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from North and South America.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Americas' },
-  opex_europe: { label: 'Europe Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Europe' },
-  opex_china: { label: 'Greater China Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Greater China' },
-  opex_japan: { label: 'Japan Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Japan.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Japan' },
-  opex_asia_pacific: { label: 'Rest of Asia Pacific Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
+  // === AAPL STOCK SPECIFIC - Operating Income by Region (from company_metrics) ===
+  opex_americas: { label: 'Americas Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from North and South America.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Americas' },
+  opex_europe: { label: 'Europe Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Europe, India, the Middle East, and Africa.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Europe' },
+  opex_china: { label: 'Greater China Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from mainland China, Hong Kong, and Taiwan.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Greater China' },
+  opex_japan: { label: 'Japan Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Japan.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Japan' },
+  opex_asia_pacific: { label: 'Rest of Asia Pacific Operating Income', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Operating income from Australia, South Korea, and other Asia Pacific countries.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'segment_operating_income', dimensionType: 'geographic', dimensionValue: 'Rest of Asia Pacific' },
 
-  // === STOCK SPECIFIC - Cost of Sales (from company_metrics) ===
-  cost_products: { label: 'Cost of Sales - Products', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for physical products including iPhone, Mac, iPad, and Wearables.', source: 'company_metrics' as MetricSource, metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Products' },
-  cost_services: { label: 'Cost of Sales - Services', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for services including App Store, Apple Music, iCloud, and Apple TV+.', source: 'company_metrics' as MetricSource, metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Services' },
+  // === AAPL STOCK SPECIFIC - Cost of Sales (from company_metrics) ===
+  cost_products: { label: 'Cost of Sales - Products', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for physical products including iPhone, Mac, iPad, and Wearables.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Products' },
+  cost_services: { label: 'Cost of Sales - Services', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Cost of sales for services including App Store, Apple Music, iCloud, and Apple TV+.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'cost_of_sales', dimensionType: 'product_type', dimensionValue: 'Services' },
 
-  // === STOCK SPECIFIC - Revenue by Country (from company_metrics) ===
-  revenue_us: { label: 'United States Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from the United States market.', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'United States' },
-  revenue_china_country: { label: 'China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from China (country-level, including Hong Kong).', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'China' },
-  revenue_other_countries: { label: 'Other Countries Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from all countries outside the United States and China.', source: 'company_metrics' as MetricSource, metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'Other Countries' },
+  // === AAPL STOCK SPECIFIC - Revenue by Country (from company_metrics) ===
+  revenue_us: { label: 'United States Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from the United States market.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'United States' },
+  revenue_china_country: { label: 'China Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from China (country-level, including Hong Kong).', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'China' },
+  revenue_other_countries: { label: 'Other Countries Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from all countries outside the United States and China.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'revenue_by_country', dimensionType: 'country', dimensionValue: 'Other Countries' },
 
-  // === STOCK SPECIFIC - Long-Lived Assets by Country (from company_metrics) ===
-  assets_us: { label: 'US Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in the United States.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'United States' },
-  assets_china: { label: 'China Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in China.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'China' },
-  assets_other: { label: 'Other Countries Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in other countries.', source: 'company_metrics' as MetricSource, metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'Other Countries' },
+  // === AAPL STOCK SPECIFIC - Long-Lived Assets by Country (from company_metrics) ===
+  assets_us: { label: 'US Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in the United States.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'United States' },
+  assets_china: { label: 'China Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in China.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'China' },
+  assets_other: { label: 'Other Countries Long-Lived Assets', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Property, plant, and equipment located in other countries.', source: 'company_metrics' as MetricSource, stock: 'AAPL', metricName: 'long_lived_assets', dimensionType: 'country', dimensionValue: 'Other Countries' },
+
+  // === GOOGL SEGMENTS - Business Segments (from company_metrics) ===
+  googl_segment_services: { label: 'Google Services Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Google Services including Search, YouTube, Android, Chrome, Maps, Play, and Devices.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Google Services' },
+  googl_segment_cloud: { label: 'Google Cloud Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Google Cloud Platform (GCP) and Google Workspace.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Google Cloud' },
+  googl_segment_other_bets: { label: 'Other Bets Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Other Bets including Waymo, Verily, Wing, and other ventures.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Other Bets' },
+
+  // === GOOGL SEGMENTS - Product/Service Breakdown (from company_metrics) ===
+  googl_search: { label: 'Google Search Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Google Search and other Google-owned properties.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Google Search & Other' },
+  googl_youtube: { label: 'YouTube Advertising Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from YouTube advertising including video ads and YouTube TV.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'YouTube Advertising' },
+  googl_network: { label: 'Google Network Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from Google Network including AdSense and AdMob on partner sites.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Google Network' },
+  googl_subscriptions: { label: 'Subscriptions & Platforms Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Revenue from subscriptions, platforms, and devices including YouTube Premium, Google Play, and Pixel devices.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Subscriptions, Platforms & Devices' },
+  googl_advertising_total: { label: 'Google Advertising (Total)', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Total advertising revenue from Google Search, YouTube, and Google Network combined.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'product', dimensionValue: 'Google Advertising (Total)' },
+
+  // === GOOGL SEGMENTS - Geographic (from company_metrics) ===
+  googl_geo_us: { label: 'GOOGL US Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from the United States.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'United States' },
+  googl_geo_emea: { label: 'GOOGL EMEA Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Europe, Middle East, and Africa.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'EMEA' },
+  googl_geo_apac: { label: 'GOOGL Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Asia Pacific region.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'Asia Pacific' },
+  googl_geo_other_americas: { label: 'GOOGL Other Americas Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Americas excluding the United States.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'Other Americas' },
 } as const
 
 // Ratio metrics that need to be calculated
@@ -168,6 +186,7 @@ function getValueTransform(metricId: string): number {
 }
 
 export async function getMultipleMetrics(params: {
+  symbol?: string  // Stock symbol (default: AAPL)
   metrics: string[]
   limit?: number
   minYear?: number
@@ -180,6 +199,7 @@ export async function getMultipleMetrics(params: {
 }> {
   // Deduplicate metrics
   const metrics = [...new Set(params.metrics)]
+  const symbol = params.symbol ?? 'AAPL'
   const period = params.period ?? 'annual'
   const hasCustomRange = typeof params.minYear === 'number' || typeof params.maxYear === 'number'
   // Default limit: 12 quarters or 10 years; max limit: 40 quarters or 20 years
@@ -217,7 +237,7 @@ export async function getMultipleMetrics(params: {
       let query = supabase
         .from('financials_std')
         .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('period_type', period)
         .order('year', { ascending: false })
         .order('fiscal_quarter', { ascending: false, nullsFirst: false })
@@ -254,7 +274,7 @@ export async function getMultipleMetrics(params: {
       let yearQuery = supabase
         .from('company_metrics')
         .select('year')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('metric_name', 'segment_revenue')
         .order('year', { ascending: true })
 
@@ -291,7 +311,7 @@ export async function getMultipleMetrics(params: {
         let extQuery = supabase
           .from('financial_metrics')
           .select('year, period, metric_name, metric_value')
-          .eq('symbol', 'AAPL')
+          .eq('symbol', symbol)
           .in('metric_name', dbMetricNames)
           .in('period', periodsToFetch)
 
@@ -345,7 +365,7 @@ export async function getMultipleMetrics(params: {
         let segQuery = supabase
           .from('company_metrics')
           .select('year, period, metric_name, dimension_type, dimension_value, metric_value')
-          .eq('symbol', 'AAPL' as never)
+          .eq('symbol', symbol as never)
           .in('metric_name', metricNames as never)
           .in('period', periodsToFetch as never)
           .order('year', { ascending: true })
@@ -486,7 +506,7 @@ export async function getMultipleMetrics(params: {
       const { data: boundsData, error: boundsError } = await supabase
         .from('company_metrics')
         .select('year')
-        .eq('symbol', 'AAPL' as never)
+        .eq('symbol', symbol as never)
         .eq('metric_name', 'segment_revenue' as never)
         .in('period', periodsForBounds as never)
         .order('year', { ascending: true })
@@ -503,7 +523,7 @@ export async function getMultipleMetrics(params: {
       const { data: boundsData, error: boundsError } = await supabase
         .from('financials_std')
         .select('year')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('period_type', period)
         .order('year', { ascending: true })
 
@@ -556,6 +576,12 @@ function getSegmentCategory(metricId: string): SegmentCategory | undefined {
   return undefined
 }
 
+// Get stock symbol for a metric (only segment metrics have this)
+function getMetricStock(metricId: string): string | undefined {
+  const config = METRIC_CONFIG[metricId as MetricId] as { stock?: string }
+  return config?.stock
+}
+
 export async function getAvailableMetrics() {
   return Object.entries(METRIC_CONFIG).map(([id, config]) => {
     return {
@@ -565,6 +591,7 @@ export async function getAvailableMetrics() {
       statement: config.statement,
       definition: config.definition,
       segmentCategory: getSegmentCategory(id),
+      stock: getMetricStock(id),
     }
   })
 }

@@ -1,11 +1,12 @@
 /**
- * Ingestion script: Loads AAPL financial data from seed file into Supabase
- * Supports both annual and quarterly data
+ * Ingestion script: Loads financial data from seed file into Supabase
+ * Supports both annual and quarterly data for any symbol
  *
  * Usage:
- *   npx tsx scripts/ingest-financials.ts                           # Ingest annual data (default)
- *   npx tsx scripts/ingest-financials.ts quarterly                  # Ingest quarterly data
- *   npx tsx scripts/ingest-financials.ts both                       # Ingest both annual and quarterly
+ *   npx tsx scripts/ingest-financials.ts AAPL            # Ingest annual data (default)
+ *   npx tsx scripts/ingest-financials.ts GOOGL annual    # Ingest annual data for GOOGL
+ *   npx tsx scripts/ingest-financials.ts AAPL quarterly  # Ingest quarterly data
+ *   npx tsx scripts/ingest-financials.ts GOOGL both      # Ingest both annual and quarterly
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -42,16 +43,18 @@ async function ingestFinancials() {
   }
 
   const args = process.argv.slice(2)
-  const mode = args[0] || 'annual'
+  const symbol = args[0]?.toUpperCase() || 'AAPL'
+  const mode = args[1] || 'annual'
 
-  // Determine which file to load based on mode
+  // Determine which file to load based on mode and symbol
+  const symbolLower = symbol.toLowerCase()
   const filename = mode === 'both'
-    ? 'aapl-financials-all.json'
+    ? `${symbolLower}-financials-all.json`
     : mode === 'quarterly'
-      ? 'aapl-financials-quarterly.json'
-      : 'aapl-financials.json'
+      ? `${symbolLower}-financials-quarterly.json`
+      : `${symbolLower}-financials.json`
 
-  console.log(`Starting AAPL financials ingestion (${mode} mode)...\n`)
+  console.log(`Starting ${symbol} financials ingestion (${mode} mode)...\n`)
 
   // Read seed data
   const filePath = path.join(process.cwd(), 'data', filename)
@@ -63,7 +66,7 @@ async function ingestFinancials() {
   } catch (error) {
     console.error(`Error reading ${filename}:`, error)
     console.error(`\nMake sure to run the fetch script first:`)
-    console.error(`  npx tsx scripts/fetch-aapl-data.ts ${mode}`)
+    console.error(`  npx tsx scripts/fetch-aapl-data.ts ${symbol} ${mode}`)
     return
   }
 
@@ -87,18 +90,18 @@ async function ingestFinancials() {
   // Create Supabase client
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-  // Get existing AAPL rows
+  // Get existing rows for this symbol
   const { data: existingRows, error: fetchError } = await supabase
     .from('financials_std')
     .select('*')
-    .eq('symbol', 'AAPL')
+    .eq('symbol', symbol)
 
   if (fetchError) {
     console.error('Error fetching existing rows:', fetchError)
     return
   }
 
-  console.log(`Found ${existingRows?.length || 0} existing AAPL rows in database\n`)
+  console.log(`Found ${existingRows?.length || 0} existing ${symbol} rows in database\n`)
 
   let updated = 0
   let inserted = 0

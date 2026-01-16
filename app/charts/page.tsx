@@ -3,9 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
+import StockSelector from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
 import { useTheme } from '@/components/ThemeProvider'
+
+// Available stocks for selection
+const AVAILABLE_STOCKS = [
+  { symbol: 'AAPL', name: 'Apple Inc.' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+]
 
 // Dual color palettes for light/dark mode
 const COLOR_PALETTE_LIGHT = [
@@ -44,7 +51,9 @@ export default function ChartsPage() {
   const COLOR_PALETTE = isDark ? COLOR_PALETTE_DARK : COLOR_PALETTE_LIGHT
   const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
 
-  const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string }[]>([])
+  const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string; stock?: string }[]>([])
+  // Selected stock symbol
+  const [selectedStock, setSelectedStock] = useState<string>('AAPL')
   // Metrics added to the page (from dropdown)
   const [addedMetrics, setAddedMetrics] = useState<MetricId[]>([])
   // Metrics visible on chart (subset of addedMetrics, controlled by checkboxes)
@@ -75,11 +84,35 @@ export default function ChartsPage() {
     loadMetrics()
   }, [])
 
-  // Reset year bounds and initial range when period type changes
+  // Reset year bounds and initial range when period type or stock changes
   useEffect(() => {
     setYearBounds(null)
     setInitialRangeSet(false)
-  }, [periodType])
+  }, [periodType, selectedStock])
+
+  // Remove segment metrics that don't match the selected stock when stock changes
+  useEffect(() => {
+    if (availableMetrics.length === 0) return
+
+    // Find metrics that belong to a different stock
+    const incompatibleMetrics = addedMetrics.filter((metricId) => {
+      const metric = availableMetrics.find((m) => m.id === metricId)
+      // If metric has a stock restriction and it doesn't match, it's incompatible
+      return metric?.stock && metric.stock !== selectedStock
+    })
+
+    if (incompatibleMetrics.length > 0) {
+      // Remove incompatible metrics from added and visible
+      setAddedMetrics((prev) => prev.filter((m) => !incompatibleMetrics.includes(m)))
+      setVisibleMetrics((prev) => prev.filter((m) => !incompatibleMetrics.includes(m)))
+      // Clean up custom colors for removed metrics
+      setCustomColors((prev) => {
+        const next = { ...prev }
+        incompatibleMetrics.forEach((m) => delete next[m])
+        return next
+      })
+    }
+  }, [selectedStock, availableMetrics])
 
   useEffect(() => {
     if (!yearBounds) return
@@ -127,6 +160,7 @@ export default function ChartsPage() {
 
     try {
       const { data, error: fetchError, yearBounds: bounds } = await getMultipleMetrics({
+        symbol: selectedStock,
         metrics: visibleMetrics,
         minYear: minYearParam,
         maxYear: maxYearParam,
@@ -159,7 +193,7 @@ export default function ChartsPage() {
     } finally {
       setLoading(false)
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType])
+  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStock])
 
   useEffect(() => {
     fetchData()
@@ -302,8 +336,14 @@ export default function ChartsPage() {
         <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2">
-          {/* Period Toggle + Metric Selectors */}
+          {/* Stock Selector + Period Toggle + Metric Selectors */}
           <div className="flex items-center gap-4">
+            {/* Stock Selector */}
+            <StockSelector
+              availableStocks={AVAILABLE_STOCKS}
+              selectedStock={selectedStock}
+              onSelect={setSelectedStock}
+            />
             {/* Period Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
               <button
@@ -337,6 +377,7 @@ export default function ChartsPage() {
               onToggle={handleMetricToggle}
               onClear={handleClearAll}
               maxSelections={10}
+              selectedStock={selectedStock}
             />
             </div>
           </div>

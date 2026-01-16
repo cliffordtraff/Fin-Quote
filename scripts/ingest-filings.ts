@@ -1,11 +1,19 @@
 /**
- * Ingestion script: Loads AAPL SEC filings from seed file into Supabase
- * Run with: npx tsx scripts/ingest-filings.ts
+ * Ingestion script: Loads SEC filings from seed file into Supabase
+ * Supports any stock symbol
+ *
+ * Usage:
+ *   npx tsx scripts/ingest-filings.ts AAPL    # Ingest AAPL filings
+ *   npx tsx scripts/ingest-filings.ts GOOGL   # Ingest GOOGL filings
  */
 
 import { createClient } from '@supabase/supabase-js'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const SYMBOL = args[0]?.toUpperCase() || 'AAPL'
 
 async function ingestFilings() {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -17,14 +25,25 @@ async function ingestFilings() {
     console.error('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'Found' : 'Missing')
     return
   }
-  console.log('Starting AAPL filings ingestion...\n')
+  console.log(`Starting ${SYMBOL} filings ingestion...\n`)
 
   // Read seed data
-  const filePath = path.join(process.cwd(), 'data', 'aapl-filings.json')
-  const fileContent = await fs.readFile(filePath, 'utf-8')
+  const symbolLower = SYMBOL.toLowerCase()
+  const filePath = path.join(process.cwd(), 'data', `${symbolLower}-filings.json`)
+
+  let fileContent: string
+  try {
+    fileContent = await fs.readFile(filePath, 'utf-8')
+  } catch (error) {
+    console.error(`Error reading ${symbolLower}-filings.json:`, error)
+    console.error(`\nMake sure to run the fetch script first:`)
+    console.error(`  npx tsx scripts/fetch-sec-filings.ts ${SYMBOL}`)
+    return
+  }
+
   const filings = JSON.parse(fileContent)
 
-  console.log(`✓ Loaded ${filings.length} filings from seed file\n`)
+  console.log(`✓ Loaded ${filings.length} filings from data/${symbolLower}-filings.json\n`)
 
   // Create Supabase client
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -33,7 +52,7 @@ async function ingestFilings() {
   const { data: existingFilings, error: fetchError } = await supabase
     .from('filings')
     .select('accession_number')
-    .eq('ticker', 'AAPL')
+    .eq('ticker', SYMBOL)
 
   if (fetchError) {
     console.error('Error fetching existing filings:', fetchError)

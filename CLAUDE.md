@@ -120,6 +120,8 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 | `lib/regeneration.ts` | Auto-correction on validation failures |
 | `lib/metric-resolver.ts` | Alias resolution ("P/E" → `peRatio`, "profit" → `net_income`) |
 | `lib/chart-helpers.ts` | Chart generation for financial/price data |
+| `lib/ttm-calculator.ts` | TTM value calculation from quarterly data |
+| `lib/ttm-config.ts` | TTM calculation type config per metric |
 | `app/page.tsx` | Homepage with market dashboard + chatbot sidebar |
 | `components/Sidebar.tsx` | Chatbot UI with conversation history |
 
@@ -186,15 +188,40 @@ Auto-regeneration (`lib/regeneration.ts`):
 - Enables follow-up questions ("What about 2022?" after asking about 2023)
 - Auto-generates titles using LLM after first Q&A pair
 
+### TTM (Trailing Twelve Months) Calculation
+
+For quarterly data, TTM values are calculated differently by metric type (`lib/ttm-config.ts`, `lib/ttm-calculator.ts`):
+
+| Type | Method | Examples |
+|------|--------|----------|
+| `sum` | Add last 4 quarters | revenue, net_income, operating_cash_flow |
+| `point_in_time` | Use latest quarter | total_assets, shareholders_equity, marketCap |
+| `average` | Average of 4 quarters | daysOfInventoryOnHand, cashConversionCycle |
+| `derived` | Recalculate from TTM components | gross_margin (gross_profit TTM / revenue TTM) |
+| `not_applicable` | Cannot be TTM'd | growth rates, P/E ratio, multi-year CAGRs |
+
+### Admin Dashboards
+
+- `/admin/validation` - Answer validation results and failure analysis
+- `/admin/costs` - Token usage and cost tracking
+- `/admin/evaluations` - Prompt evaluation run history
+- `/admin/review` - Manual query review interface
+
 ---
 
 ## Testing
 
-**Unit tests**: `lib/__tests__/validators.test.ts` covers number/year/filing validation
+**Unit tests** (in `lib/__tests__/`):
+- `validators.test.ts` - Number/year/filing validation
+- `ttm-calculator.test.ts` - TTM calculation logic
 
 **Golden test set**: `test-data/golden-test-set.json` (100+ questions for prompt evaluation)
 
-**Evaluation**: `npx tsx scripts/evaluate.ts` scores tool selection accuracy, argument correctness, and answer quality
+**Evaluation**: `npx tsx scripts/evaluate.ts` with options:
+- `--mode fast` - Routing-only evaluation (2-3 min)
+- `--mode full` - End-to-end including answer generation (10+ min)
+- `--llm-judge` - Add GPT-4 answer quality scoring (full mode only)
+- `--limit N` - Limit to first N questions
 
 ---
 

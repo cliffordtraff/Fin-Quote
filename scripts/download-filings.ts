@@ -1,11 +1,19 @@
 /**
  * Download SEC filing HTML documents from EDGAR and save to Supabase Storage
- * Run with: npx tsx scripts/download-filings.ts
+ * Supports any stock symbol
+ *
+ * Usage:
+ *   npx tsx scripts/download-filings.ts AAPL    # Download AAPL filings
+ *   npx tsx scripts/download-filings.ts GOOGL   # Download GOOGL filings
  */
 
 import { createClient } from '@supabase/supabase-js'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const SYMBOL = args[0]?.toUpperCase() || 'AAPL'
 
 async function downloadFilings() {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -16,7 +24,7 @@ async function downloadFilings() {
     return
   }
 
-  console.log('Starting SEC filing downloads...\n')
+  console.log(`Starting ${SYMBOL} SEC filing downloads...\n`)
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -24,7 +32,7 @@ async function downloadFilings() {
   const { data: filings, error: fetchError } = await supabase
     .from('filings')
     .select('*')
-    .eq('ticker', 'AAPL')
+    .eq('ticker', SYMBOL)
     .eq('filing_type', '10-K')
     .order('filing_date', { ascending: false })
     .limit(10)
