@@ -133,8 +133,19 @@ export default function ChartsPage() {
         setFullMetricsData([])
       } else if (data) {
         setFullMetricsData(data) // Store full data
-        // Apply current filter
-        const filteredData = filterDataByYearRange(data, minYear, maxYear)
+
+        // Determine what year range to use for initial filter
+        let filterMin = minYear
+        let filterMax = maxYear
+
+        // On first load, use DEFAULT_MIN_YEAR to present
+        if (bounds && !initialRangeSet) {
+          filterMin = Math.max(bounds.min, DEFAULT_MIN_YEAR)
+          filterMax = bounds.max
+        }
+
+        // Apply filter
+        const filteredData = filterDataByYearRange(data, filterMin, filterMax)
         setMetricsData(filteredData)
       }
 
@@ -163,7 +174,9 @@ export default function ChartsPage() {
   // When year range changes, filter existing data client-side (instant)
   useEffect(() => {
     if (fullMetricsData.length > 0) {
+      console.log('Filtering data:', { minYear, maxYear, fullDataYears: fullMetricsData[0]?.data.map(d => d.year) })
       const filteredData = filterDataByYearRange(fullMetricsData, minYear, maxYear)
+      console.log('Filtered result years:', filteredData[0]?.data.map(d => d.year))
       setMetricsData(filteredData)
     }
   }, [minYear, maxYear, fullMetricsData, filterDataByYearRange])
