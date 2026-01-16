@@ -278,29 +278,44 @@ export async function getMultipleMetrics(params: {
     const sortedStdData = stdRows
 
     // Fetch extended metrics from financial_metrics if needed
-    const extendedMetricData: Record<string, Record<number, number>> = {}
+    // For quarterly: key -> "year-quarter" -> value
+    // For annual: key -> "year" -> value
+    const extendedMetricData: Record<string, Record<string, number>> = {}
     if (extendedMetrics.length > 0) {
       const dbMetricNames = extendedMetrics.map((m) => getDbMetricName(m)).filter(Boolean) as string[]
 
       if (dbMetricNames.length > 0) {
-        const extQuery = supabase
+        // Determine which periods to fetch based on periodType
+        const periodsToFetch = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
+
+        let extQuery = supabase
           .from('financial_metrics')
-          .select('year, metric_name, metric_value')
+          .select('year, period, metric_name, metric_value')
           .eq('symbol', 'AAPL')
           .in('metric_name', dbMetricNames)
-          .in('year', years)
+          .in('period', periodsToFetch)
+
+        // Apply year filters
+        if (typeof params.minYear === 'number') {
+          extQuery = extQuery.gte('year', params.minYear)
+        }
+        if (typeof params.maxYear === 'number') {
+          extQuery = extQuery.lte('year', params.maxYear)
+        }
 
         const { data: extData, error: extError } = await extQuery
 
         if (extError) {
           console.error('Error fetching extended metrics:', extError)
         } else if (extData) {
-          // Organize extended metric data by metric name and year
+          // Organize extended metric data by metric name and year(-quarter)
           for (const row of extData) {
             if (!extendedMetricData[row.metric_name]) {
               extendedMetricData[row.metric_name] = {}
             }
-            extendedMetricData[row.metric_name][row.year] = row.metric_value ?? 0
+            // Use year-quarter key for quarterly, just year for annual
+            const key = period === 'quarterly' && row.period ? `${row.year}-${row.period}` : String(row.year)
+            extendedMetricData[row.metric_name][key] = row.metric_value ?? 0
           }
         }
       }
@@ -431,12 +446,18 @@ export async function getMultipleMetrics(params: {
           metric: metricId as MetricId,
           label: config.label,
           unit: config.unit,
-          data: sortedStdData.map((row) => ({
-            year: row.year,
-            value: (metricYearData[row.year] ?? 0) * transform,
-            fiscal_quarter: row.fiscal_quarter,
-            fiscal_label: row.fiscal_label,
-          })),
+          data: sortedStdData.map((row) => {
+            // Build the key: "year-Q#" for quarterly, "year" for annual
+            const key = period === 'quarterly' && row.fiscal_quarter
+              ? `${row.year}-Q${row.fiscal_quarter}`
+              : String(row.year)
+            return {
+              year: row.year,
+              value: (metricYearData[key] ?? 0) * transform,
+              fiscal_quarter: row.fiscal_quarter,
+              fiscal_label: row.fiscal_label,
+            }
+          }),
         }
       } else {
         // Get data from financials_std
