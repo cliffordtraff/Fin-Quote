@@ -268,19 +268,45 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     return dataPoints[dataPoints.length - 1]?.value ?? 0
   }
 
-  // Sort filtered data by the defined order, or by most recent value for dynamic metrics
-  const sortedFilteredData = [...filteredData].sort((a, b) => {
-    const orderA = METRIC_SORT_ORDER[a.metric]
-    const orderB = METRIC_SORT_ORDER[b.metric]
+  // Helper to extract base metric from prefixed ID (e.g., "AAPL:revenue" -> "revenue")
+  const getBaseMetric = (metricId: string): string => {
+    return metricId.includes(':') ? metricId.split(':')[1] : metricId
+  }
 
-    // If both have defined orders, use them
+  // Helper to extract stock symbol from prefixed ID (e.g., "AAPL:revenue" -> "AAPL")
+  const getStockSymbol = (metricId: string): string => {
+    return metricId.includes(':') ? metricId.split(':')[0] : ''
+  }
+
+  // Sort filtered data by the defined order, or by most recent value for dynamic metrics
+  // For multi-stock: group by metric first, then by stock symbol
+  const sortedFilteredData = [...filteredData].sort((a, b) => {
+    const baseMetricA = getBaseMetric(a.metric)
+    const baseMetricB = getBaseMetric(b.metric)
+    const stockA = getStockSymbol(a.metric)
+    const stockB = getStockSymbol(b.metric)
+
+    const orderA = METRIC_SORT_ORDER[baseMetricA]
+    const orderB = METRIC_SORT_ORDER[baseMetricB]
+
+    // If both have defined orders, use them (group by metric first)
     if (orderA !== undefined && orderB !== undefined) {
-      return orderA - orderB
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      // Same metric, sort by stock symbol alphabetically
+      return stockA.localeCompare(stockB)
     }
 
     // If neither has a defined order, sort by most recent year's value (smallest first)
     if (orderA === undefined && orderB === undefined) {
-      return getMostRecentValue(a) - getMostRecentValue(b)
+      const valueA = getMostRecentValue(a)
+      const valueB = getMostRecentValue(b)
+      if (valueA !== valueB) {
+        return valueA - valueB
+      }
+      // Same value, sort by stock symbol
+      return stockA.localeCompare(stockB)
     }
 
     // If only one has a defined order, put undefined ones in the middle (order ~45)
@@ -377,7 +403,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
     return {
       type: chartType === 'line' ? 'line' : chartType === 'area' ? 'area' : 'column',
-      name: `Apple ${metricData.label}`,
+      name: metricData.label,
       data: values,
       color,
       yAxis: useSecondaryAxis ? 1 : 0,
@@ -511,7 +537,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           formatter: function (this: Highcharts.PointLabelObject) {
             const point = this.point
             const seriesName = this.series.name
-            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const metricInfo = filteredData.find((d) => d.label === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
             // When indexed, show as percentage change
@@ -542,7 +568,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           formatter: function (this: Highcharts.PointLabelObject) {
             const point = this.point
             const seriesName = this.series.name
-            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const metricInfo = filteredData.find((d) => d.label === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
             // When indexed, show as percentage change
@@ -574,7 +600,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           formatter: function (this: Highcharts.PointLabelObject) {
             const point = this.point
             const seriesName = this.series.name
-            const metricInfo = filteredData.find((d) => `Apple ${d.label}` === seriesName)
+            const metricInfo = filteredData.find((d) => d.label === seriesName)
             const unit = metricInfo?.unit
             const val = point.y ?? 0
             // When indexed, show as percentage change
@@ -612,7 +638,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           enabled: false,
         },
       },
-      filename: 'apple_financials',
+      filename: 'financials_chart',
     },
     tooltip: {
       backgroundColor: isDark ? '#1f2937' : '#ffffff',
@@ -645,7 +671,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         let html = `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>`
 
         points.forEach((point) => {
-          const metricInfo = filteredData.find((d) => `Apple ${d.label}` === point.series.name)
+          const metricInfo = filteredData.find((d) => d.label === point.series.name)
           const unit = metricInfo?.unit
           const val = point.y ?? 0
           // Format based on unit type (or indexed mode)
@@ -664,7 +690,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           }
 
           // Use just the metric label in tooltip (without stats suffix)
-          const tooltipLabel = metricInfo ? `Apple ${metricInfo.label}` : point.series.name
+          const tooltipLabel = metricInfo ? metricInfo.label : point.series.name
 
           html += `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
             <span style="width: 10px; height: 10px; background-color: ${point.color}; border-radius: 50%;"></span>
@@ -736,7 +762,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     const totalChange = calculateTotalChange(metricData.data)
     const cagr = calculateCAGR(metricData.data)
     return {
-      label: `Apple ${metricData.label}`,
+      label: metricData.label,
       color,
       totalChange,
       cagr,

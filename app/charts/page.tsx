@@ -14,6 +14,46 @@ const AVAILABLE_STOCKS = [
   { symbol: 'GOOGL', name: 'Alphabet Inc.' },
 ]
 
+// Stock-specific color families for multi-stock comparison
+// AAPL: Blue family, GOOGL: Green/Teal family
+const STOCK_COLOR_FAMILIES_LIGHT: Record<string, string[]> = {
+  AAPL: [
+    '#1a3a5c', // Dark navy blue
+    '#2a4a6c', // Navy blue
+    '#3a5a7c', // Medium blue
+    '#4a6a8c', // Steel blue
+    '#5a7a9c', // Light steel blue
+    '#6a8aac', // Soft blue
+  ],
+  GOOGL: [
+    '#1a4a3a', // Dark teal
+    '#2a5a4a', // Forest teal
+    '#3a6a5a', // Medium teal
+    '#4a7a6a', // Sea green
+    '#5a8a7a', // Sage
+    '#6a9a8a', // Light sage
+  ],
+}
+
+const STOCK_COLOR_FAMILIES_DARK: Record<string, string[]> = {
+  AAPL: [
+    '#6b8cce', // Soft blue
+    '#7b9cde', // Light blue
+    '#8bacee', // Sky blue
+    '#5b7cbe', // Medium blue
+    '#4b6cae', // Steel blue
+    '#9bbcfe', // Pale blue
+  ],
+  GOOGL: [
+    '#7ab08a', // Sage green
+    '#8ac09a', // Light sage
+    '#9ad0aa', // Pale green
+    '#6aa07a', // Medium green
+    '#5a906a', // Forest green
+    '#aae0ba', // Mint
+  ],
+}
+
 // Dual color palettes for light/dark mode
 const COLOR_PALETTE_LIGHT = [
   '#1a1a2e', // Near black (primary)
@@ -52,8 +92,10 @@ export default function ChartsPage() {
   const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
 
   const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string; stock?: string }[]>([])
-  // Selected stock symbol
-  const [selectedStock, setSelectedStock] = useState<string>('AAPL')
+  // Selected stock symbols (supports multi-select)
+  const [selectedStocks, setSelectedStocks] = useState<string[]>(['AAPL'])
+  // Helper to get primary stock for filtering segment metrics
+  const selectedStock = selectedStocks[0] || 'AAPL'
   // Metrics added to the page (from dropdown)
   const [addedMetrics, setAddedMetrics] = useState<MetricId[]>([])
   // Metrics visible on chart (subset of addedMetrics, controlled by checkboxes)
@@ -84,21 +126,21 @@ export default function ChartsPage() {
     loadMetrics()
   }, [])
 
-  // Reset year bounds and initial range when period type or stock changes
+  // Reset year bounds and initial range when period type or stocks change
   useEffect(() => {
     setYearBounds(null)
     setInitialRangeSet(false)
-  }, [periodType, selectedStock])
+  }, [periodType, selectedStocks])
 
-  // Remove segment metrics that don't match the selected stock when stock changes
+  // Remove segment metrics that don't match any selected stock when stocks change
   useEffect(() => {
     if (availableMetrics.length === 0) return
 
-    // Find metrics that belong to a different stock
+    // Find metrics that belong to a stock not in selectedStocks
     const incompatibleMetrics = addedMetrics.filter((metricId) => {
       const metric = availableMetrics.find((m) => m.id === metricId)
-      // If metric has a stock restriction and it doesn't match, it's incompatible
-      return metric?.stock && metric.stock !== selectedStock
+      // If metric has a stock restriction and that stock isn't selected, it's incompatible
+      return metric?.stock && !selectedStocks.includes(metric.stock)
     })
 
     if (incompatibleMetrics.length > 0) {
@@ -112,7 +154,7 @@ export default function ChartsPage() {
         return next
       })
     }
-  }, [selectedStock, availableMetrics])
+  }, [selectedStocks, availableMetrics])
 
   useEffect(() => {
     if (!yearBounds) return
@@ -128,7 +170,7 @@ export default function ChartsPage() {
 
   // Fetch data when visible metrics or year range changes
   const fetchData = useCallback(async () => {
-    if (visibleMetrics.length === 0) {
+    if (visibleMetrics.length === 0 || selectedStocks.length === 0) {
       setMetricsData([])
       return
     }
@@ -159,31 +201,74 @@ export default function ChartsPage() {
     setError(null)
 
     try {
-      const { data, error: fetchError, yearBounds: bounds } = await getMultipleMetrics({
-        symbol: selectedStock,
-        metrics: visibleMetrics,
-        minYear: minYearParam,
-        maxYear: maxYearParam,
-        period: periodType,
+      // Fetch data for all selected stocks
+      const fetchPromises = selectedStocks.map((symbol) =>
+        getMultipleMetrics({
+          symbol,
+          metrics: visibleMetrics,
+          minYear: minYearParam,
+          maxYear: maxYearParam,
+          period: periodType,
+        })
+      )
+
+      const results = await Promise.all(fetchPromises)
+
+      // Merge data from all stocks
+      const mergedData: MetricData[] = []
+      let combinedBounds: { min: number; max: number } | null = null
+      let firstError: string | null = null
+
+      results.forEach((result, index) => {
+        const symbol = selectedStocks[index]
+
+        if (result.error && !firstError) {
+          firstError = result.error
+        }
+
+        if (result.data) {
+          result.data.forEach((metricData) => {
+            // For multi-stock, prefix metric ID with stock symbol
+            const prefixedId = selectedStocks.length > 1 ? `${symbol}:${metricData.metric}` : metricData.metric
+            // Use stock symbol (AAPL, GOOGL) as prefix for cleaner labels
+            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} ${metricData.label}` : metricData.label
+
+            mergedData.push({
+              ...metricData,
+              metric: prefixedId as MetricId,
+              label: prefixedLabel,
+            })
+          })
+        }
+
+        if (result.yearBounds) {
+          if (!combinedBounds) {
+            combinedBounds = { ...result.yearBounds }
+          } else {
+            // Combine bounds across all stocks (use intersection for tighter range)
+            combinedBounds.min = Math.max(combinedBounds.min, result.yearBounds.min)
+            combinedBounds.max = Math.min(combinedBounds.max, result.yearBounds.max)
+          }
+        }
       })
 
-      if (fetchError) {
-        setError(fetchError)
+      if (firstError && mergedData.length === 0) {
+        setError(firstError)
         setMetricsData([])
-      } else if (data) {
-        setMetricsData(data)
+      } else {
+        setMetricsData(mergedData)
       }
 
-      if (bounds) {
+      if (combinedBounds) {
         setYearBounds((prev) => {
-          if (prev && prev.min === bounds.min && prev.max === bounds.max) return prev
-          return bounds
+          if (prev && prev.min === combinedBounds!.min && prev.max === combinedBounds!.max) return prev
+          return combinedBounds
         })
         // Set initial range to DEFAULT_MIN_YEAR-present on first load
         if (!initialRangeSet) {
-          const effectiveMin = Math.max(bounds.min, DEFAULT_MIN_YEAR)
+          const effectiveMin = Math.max(combinedBounds.min, DEFAULT_MIN_YEAR)
           setMinYear(effectiveMin)
-          setMaxYear(bounds.max)
+          setMaxYear(combinedBounds.max)
           setInitialRangeSet(true)
         }
       }
@@ -193,7 +278,7 @@ export default function ChartsPage() {
     } finally {
       setLoading(false)
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStock])
+  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStocks])
 
   useEffect(() => {
     fetchData()
@@ -341,8 +426,9 @@ export default function ChartsPage() {
             {/* Stock Selector */}
             <StockSelector
               availableStocks={AVAILABLE_STOCKS}
-              selectedStock={selectedStock}
-              onSelect={setSelectedStock}
+              selectedStocks={selectedStocks}
+              onSelect={setSelectedStocks}
+              allowMultiple={true}
             />
             {/* Period Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
@@ -378,6 +464,7 @@ export default function ChartsPage() {
               onClear={handleClearAll}
               maxSelections={10}
               selectedStock={selectedStock}
+              selectedStocks={selectedStocks}
             />
             </div>
           </div>
@@ -534,7 +621,39 @@ export default function ChartsPage() {
                 </div>
               </div>
             ) : metricsData.length > 0 ? (
-              <MultiMetricChart data={metricsData} metrics={visibleMetrics} customColors={customColors} onReset={handleReset} />
+              <MultiMetricChart
+                data={metricsData}
+                metrics={metricsData.map(d => d.metric)}
+                customColors={
+                  // Use stock-based color families for multi-stock comparison
+                  selectedStocks.length > 1
+                    ? Object.fromEntries(
+                        (() => {
+                          // Track metric index per stock for color assignment
+                          const stockMetricIndex: Record<string, number> = {}
+                          const stockColorFamilies = isDark ? STOCK_COLOR_FAMILIES_DARK : STOCK_COLOR_FAMILIES_LIGHT
+
+                          return metricsData.map((d) => {
+                            // Extract stock symbol from prefixed ID (e.g., "AAPL:revenue" -> "AAPL")
+                            const stockSymbol = d.metric.includes(':') ? d.metric.split(':')[0] : selectedStocks[0]
+
+                            // Get the color family for this stock
+                            const colorFamily = stockColorFamilies[stockSymbol] ?? COLOR_PALETTE
+
+                            // Get the next color index for this stock
+                            const metricIndex = stockMetricIndex[stockSymbol] ?? 0
+                            stockMetricIndex[stockSymbol] = metricIndex + 1
+
+                            // Assign color from the stock's color family
+                            const color = colorFamily[metricIndex % colorFamily.length]
+                            return [d.metric, color]
+                          })
+                        })()
+                      )
+                    : customColors
+                }
+                onReset={handleReset}
+              />
             ) : (
               <div className="h-[650px] flex items-center justify-center">
                 <p className="text-gray-600 dark:text-gray-400">Select at least one metric to display</p>

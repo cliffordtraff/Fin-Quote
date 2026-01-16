@@ -21,7 +21,8 @@ interface MetricSelectorProps {
   onToggle: (metricId: string) => void
   onClear: () => void
   maxSelections?: number
-  selectedStock?: string  // Currently selected stock symbol for filtering
+  selectedStock?: string  // Currently selected stock symbol for filtering (primary stock)
+  selectedStocks?: string[]  // All selected stocks for multi-stock filtering
 }
 
 const STATEMENT_LABELS: Record<StatementType | 'stock', string> = {
@@ -427,19 +428,22 @@ export default function MetricSelector({
   onClear,
   maxSelections = 4,
   selectedStock,
+  selectedStocks,
 }: MetricSelectorProps) {
   // Group metrics by statement type
   const incomeMetrics = metrics.filter((m) => m.statement === 'income')
   const balanceMetrics = metrics.filter((m) => m.statement === 'balance')
   const cashflowMetrics = metrics.filter((m) => m.statement === 'cashflow')
   const ratioMetrics = metrics.filter((m) => m.statement === 'ratios')
-  // Filter stock metrics by selected stock symbol
+  // Filter stock metrics by selected stock symbol(s)
+  // Use selectedStocks array if provided, otherwise fall back to selectedStock
+  const activeStocks = selectedStocks ?? (selectedStock ? [selectedStock] : [])
   const stockMetrics = metrics.filter((m) => {
     if (m.statement !== 'stock') return false
     // If no stock filter or metric has no stock restriction, include it
-    if (!selectedStock || !m.stock) return true
-    // Only include metrics that match the selected stock
-    return m.stock === selectedStock
+    if (activeStocks.length === 0 || !m.stock) return true
+    // Only include metrics that match any of the selected stocks
+    return activeStocks.includes(m.stock)
   })
 
   const totalSelected = selectedMetrics.length
