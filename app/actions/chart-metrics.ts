@@ -35,7 +35,7 @@ const METRIC_CONFIG = {
   capital_expenditure: { label: 'Capital Expenditure', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Cash spent on acquiring or upgrading physical assets like property, plant, and equipment.', source: 'financial_metrics' as MetricSource, dbMetricName: 'capitalExpenditure' },
   dividends_paid: { label: 'Dividends Paid', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Total cash distributed to shareholders as dividends during the period.', source: 'financial_metrics' as MetricSource, dbMetricName: 'dividendsPaid' },
   stock_buybacks: { label: 'Stock Buybacks', unit: 'currency' as const, statement: 'cashflow' as StatementType, definition: 'Cash used to repurchase company shares, returning capital to shareholders.', source: 'financial_metrics' as MetricSource, dbMetricName: 'commonStockRepurchased' },
-  shares_outstanding: { label: 'Shares Outstanding', unit: 'shares' as const, statement: 'cashflow' as StatementType, definition: 'Weighted average number of shares outstanding during the fiscal year.', source: 'financial_metrics' as MetricSource, dbMetricName: 'weightedAverageShsOut' },
+  shares_outstanding: { label: 'Shares Outstanding', unit: 'shares' as const, statement: 'cashflow' as StatementType, definition: 'Total number of shares outstanding.', source: 'financial_metrics' as MetricSource, dbMetricName: 'numberOfShares' },
 
   // === RATIOS (calculated or from financial_metrics) ===
   gross_margin: { label: 'Gross Margin', unit: 'percent' as const, statement: 'ratios' as StatementType, definition: 'Gross profit as a percentage of revenue. Measures production efficiency.', source: 'financials_std' as MetricSource },
