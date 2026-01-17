@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Fin Quote** is a Next.js-based financial data platform with an AI-powered Q&A chatbot that answers natural language questions about Apple (AAPL) stock. The system uses a two-step LLM architecture with tool selection, data execution, answer generation, and validation.
+**The Intraday** (formerly Fin Quote) is a Next.js-based financial data platform featuring:
+1. **Market Dashboard** - Real-time market data with index charts (S&P 500, NASDAQ, DOW, Russell 2000), sector heatmaps, VIX, gainers/losers, futures, and economic calendar
+2. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation
+3. **Multi-Stock Charts** - Stock-specific pages with price charts and financial metrics (currently AAPL, expanding to S&P 500)
 
 **Core Design Philosophy:**
 - **Safety First**: LLMs cannot execute arbitrary database queries. Instead, they select from a whitelist of pre-built "tools" (server actions) with validated inputs.
@@ -41,6 +44,12 @@ npx tsx scripts/fetch-aapl-data.ts  # Fetch core financials from FMP API
 npx tsx scripts/ingest-financials.ts # Load into financials_std table
 npm run fetch:metrics && npm run ingest:metrics  # Extended metrics (139 metrics)
 npm run generate:catalog            # Regenerate metrics catalog
+
+# GitHub Actions (runs daily at 2am UTC)
+# Workflow: .github/workflows/daily-data-update.yml
+# - Fetches AAPL financial data from FMP API
+# - Fetches SEC filings
+# - Requires secrets: SUPABASE_URL, SUPABASE_ANON_KEY, FMP_API_KEY
 ```
 
 ---
@@ -122,8 +131,11 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 | `lib/chart-helpers.ts` | Chart generation for financial/price data |
 | `lib/ttm-calculator.ts` | TTM value calculation from quarterly data |
 | `lib/ttm-config.ts` | TTM calculation type config per metric |
-| `app/page.tsx` | Homepage with market dashboard + chatbot sidebar |
+| `app/page.tsx` | Homepage with market dashboard (indexes, sectors, gainers/losers, VIX, calendar) |
+| `app/stock/aapl/page.tsx` | AAPL stock detail page with price chart and financials |
 | `components/Sidebar.tsx` | Chatbot UI with conversation history |
+| `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
+| `components/SectorHeatmap.tsx` | Sector performance visualization |
 
 ---
 
@@ -253,13 +265,28 @@ For quarterly data, TTM values are calculated differently by metric type (`lib/t
 
 ## Important Constraints
 
-- **AAPL-only**: All tools hardcoded to Apple stock for MVP
+- **Chatbot AAPL-only**: Chatbot tools hardcoded to Apple stock for MVP
 - **Read-only**: No write operations; LLM cannot execute arbitrary queries
 - **Row limits**: Financials (1-20 years), Filings (1-10), Passages (1-10)
 - **Metric coverage**: Extended metrics available 2006-2025 (FMP API limits)
 
 ---
 
+## Market Dashboard Server Actions
+
+The homepage fetches data from these server actions in `app/actions/`:
+
+| Action | Purpose |
+|--------|---------|
+| `market-data.ts` | Index data (S&P 500, NASDAQ, DOW, Russell 2000) with price history |
+| `futures.ts` | Futures quotes (ES, NQ, YM, etc.) |
+| `gainers.ts` / `losers.ts` | Top gainers and losers |
+| `sectors.ts` | Sector performance for heatmap |
+| `vix.ts` | VIX volatility index data |
+| `economic-calendar.ts` | Upcoming economic events |
+
+---
+
 ## Tech Stack
 
-Next.js 14 (App Router) · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · Tailwind CSS · TypeScript · Vitest · FMP API
+Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · Tailwind CSS · TypeScript · Vitest · FMP API
