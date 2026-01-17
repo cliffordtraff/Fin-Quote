@@ -1,12 +1,13 @@
-import { Suspense } from 'react';
 import Navigation from '@/components/Navigation';
 import StockPriceChart from '@/components/StockPriceChart';
+import FinancialStatementsTabs from '@/components/FinancialStatementsTabs';
+import NewsFeed from '@/components/NewsFeed';
+import CompanyDescription from '@/components/CompanyDescription';
 import { getStockOverview } from '@/app/actions/stock-overview';
 import { getStockKeyStats } from '@/app/actions/stock-key-stats';
 import { getAllFinancials } from '@/app/actions/get-all-financials';
-import { getAllMetrics } from '@/app/actions/get-all-metrics';
-import { getRecentFilings } from '@/app/actions/filings';
-import { formatExtendedMetricName } from '@/lib/chart-helpers';
+import { getStockNews } from '@/app/actions/get-stock-news';
+import { getCompanyProfile } from '@/app/actions/get-company-profile';
 
 export const metadata = {
   title: 'Apple Inc. (AAPL) Stock - Financial Data, Metrics & AI Analysis | Fin Quote',
@@ -46,733 +47,546 @@ function formatPercentage(value: number | null | undefined, decimals: number = 2
 
 export default async function StockPage() {
   // Parallel data fetching for all sections
-  const [overview, keyStats, financials, metrics, filings] = await Promise.all([
+  const [overview, keyStats, financials, news, profile] = await Promise.all([
     getStockOverview(),
     getStockKeyStats(),
     getAllFinancials(),
-    getAllMetrics(),
-    getRecentFilings('AAPL', 20),
+    getStockNews(30),
+    getCompanyProfile('AAPL'),
   ]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)]">
+    <div className="min-h-screen bg-white dark:bg-[rgb(45,45,45)]">
       {/* Navigation Header */}
       <Navigation />
 
-      {/* Stock Header Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-900 dark:to-blue-950 text-white">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Stock Header Section - Sticky */}
+      <section className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-[rgb(45,45,45)]/90 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl h-full px-4 sm:px-6 lg:px-8 flex items-center">
+          <div className="flex items-center justify-between w-full">
             {/* Company Info */}
-            <div>
-              <h1 className="text-3xl font-bold">{overview.company.name}</h1>
-              <p className="mt-1 text-sm text-blue-100">
-                {overview.company.symbol} · {overview.company.sector} ·{' '}
-                {overview.company.industry}
-              </p>
+            <div className="flex items-end gap-3">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{overview.company.name}</h1>
+              <span className="text-sm text-gray-500 dark:text-gray-400 leading-none">
+                {overview.company.symbol} · {overview.company.sector}
+              </span>
             </div>
 
             {/* Price Display */}
-            <div className="text-right">
-              <div className="text-4xl font-bold">
+            <div className="flex items-center gap-4">
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 ${overview.currentPrice.toFixed(2)}
               </div>
               <div
-                className={`mt-1 text-lg font-semibold ${
+                className={`text-sm font-semibold ${
                   overview.priceChange >= 0
-                    ? 'text-green-300'
-                    : 'text-red-300'
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
                 }`}
               >
                 {overview.priceChange >= 0 ? '+' : ''}
-                ${overview.priceChange.toFixed(2)} (
-                {overview.priceChangePercent.toFixed(2)}%)
+                ${overview.priceChange.toFixed(2)} ({overview.priceChangePercent.toFixed(2)}%)
               </div>
-              <div className="mt-1">
-                <span
-                  className={`inline-block rounded px-2 py-1 text-xs font-medium ${
-                    overview.marketStatus === 'open'
-                      ? 'bg-green-600 text-white'
-                      : overview.marketStatus === 'closed'
-                        ? 'bg-gray-600 text-white'
-                        : 'bg-yellow-600 text-white'
-                  }`}
-                >
-                  {overview.marketStatus === 'open' && 'Market Open'}
-                  {overview.marketStatus === 'closed' && 'Market Closed'}
-                  {overview.marketStatus === 'premarket' && 'Pre-Market'}
-                  {overview.marketStatus === 'afterhours' && 'After Hours'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Quick Stats Grid Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            Key Statistics
-          </h2>
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
-            {/* Valuation Column */}
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Market Cap</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.marketCap / 1e12).toFixed(2)}T
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Enterprise Value</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.enterpriseValue / 1e12).toFixed(2)}T
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">P/E Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.peRatio.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Forward P/E</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatMetric(keyStats.forwardPE)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">PEG Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatMetric(keyStats.pegRatio)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">P/S Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.priceToSales.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">P/B Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.priceToBook.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">P/CF Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.priceToCashFlow.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* Performance Column */}
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">52-Week High</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${keyStats.fiftyTwoWeekHigh.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">52-Week Low</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${keyStats.fiftyTwoWeekLow.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">YTD Return</span>
-                <span
-                  className={`font-medium ${
-                    keyStats.ytdReturn === 0 || keyStats.ytdReturn === null || keyStats.ytdReturn === undefined
-                      ? 'text-gray-500 dark:text-gray-400'
-                      : keyStats.ytdReturn >= 0
-                        ? 'text-green-600'
-                        : 'text-red-600'
-                  }`}
-                >
-                  {formatPercentage(keyStats.ytdReturn, 2, false)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">1-Year Return</span>
-                <span
-                  className={`font-medium ${
-                    keyStats.oneYearReturn === 0 || keyStats.oneYearReturn === null || keyStats.oneYearReturn === undefined
-                      ? 'text-gray-500 dark:text-gray-400'
-                      : keyStats.oneYearReturn >= 0
-                        ? 'text-green-600'
-                        : 'text-red-600'
-                  }`}
-                >
-                  {formatPercentage(keyStats.oneYearReturn, 2, false)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">3-Year CAGR</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPercentage(keyStats.threeYearCAGR, 2, false)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">5-Year CAGR</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPercentage(keyStats.fiveYearCAGR, 2, false)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Beta</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatMetric(keyStats.beta)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Avg Volume</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {(keyStats.avgVolume / 1e6).toFixed(1)}M
-                </span>
-              </div>
-            </div>
-
-            {/* Profitability Column */}
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Gross Margin</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.grossMargin.toFixed(2)}%
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Operating Margin</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPercentage(keyStats.operatingMargin, 2, true)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Net Margin</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPercentage(keyStats.netMargin, 2, true)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">ROE</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.roe.toFixed(2)}%
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">ROA</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.roa.toFixed(2)}%
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">ROIC</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.roic.toFixed(2)}%
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Revenue (TTM)</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.revenue / 1e9).toFixed(1)}B
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Net Income (TTM)</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.netIncome / 1e9).toFixed(1)}B
-                </span>
-              </div>
-            </div>
-
-            {/* Financial Health Column */}
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Debt-to-Equity</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatMetric(keyStats.debtToEquity)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Current Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.currentRatio.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Quick Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.quickRatio.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Operating CF</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.operatingCashFlow / 1e9).toFixed(1)}B
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Free Cash Flow</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${(keyStats.freeCashFlow / 1e9).toFixed(1)}B
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Dividend Yield</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPercentage(keyStats.dividendYield, 2, false)}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1 dark:border-gray-700">
-                <span className="text-gray-600 dark:text-gray-400">Payout Ratio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {keyStats.payoutRatio.toFixed(2)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">EPS (TTM)</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  ${keyStats.eps.toFixed(2)}
-                </span>
-              </div>
+              <span
+                className={`rounded px-2 py-0.5 text-xs font-medium ${
+                  overview.marketStatus === 'open'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    : overview.marketStatus === 'closed'
+                      ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                }`}
+              >
+                {overview.marketStatus === 'open' && 'Open'}
+                {overview.marketStatus === 'closed' && 'Closed'}
+                {overview.marketStatus === 'premarket' && 'Pre-Market'}
+                {overview.marketStatus === 'afterhours' && 'After Hours'}
+              </span>
             </div>
           </div>
         </div>
       </section>
 
       {/* Price Chart Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            Price Chart
-          </h2>
-          <StockPriceChart initialRange="365d" />
+      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <div className="mx-auto max-w-7xl px-4 pt-0 pb-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <StockPriceChart initialRange="365d" />
+          </div>
         </div>
       </section>
+
+      {/* Quick Stats Grid Section - Finviz Style */}
+      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-4">
+            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+            {/* Column 1: Company Info */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Index</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.index || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Market Cap</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.marketCap >= 1e12 ? `${(keyStats.marketCap / 1e12).toFixed(2)}T` : `${(keyStats.marketCap / 1e9).toFixed(2)}B`}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Enterprise Value</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.enterpriseValue >= 1e12 ? `${(keyStats.enterpriseValue / 1e12).toFixed(2)}T` : `${(keyStats.enterpriseValue / 1e9).toFixed(2)}B`}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Income</span>
+                <span className="font-medium text-gray-900 dark:text-white">${(keyStats.income / 1e9).toFixed(2)}B</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Sales</span>
+                <span className="font-medium text-gray-900 dark:text-white">${(keyStats.sales / 1e9).toFixed(2)}B</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Book/sh</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.bookValuePerShare)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Cash/sh</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.cashPerShare)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Dividend Est.</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.dividendEst)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Dividend TTM</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.dividendTTM)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Dividend Ex-Date</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.dividendExDate || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Dividend Gr. 3/5Y</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.dividendGrowth3Y5Y)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Payout</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.payoutRatio.toFixed(2)}%</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Employees</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.employees?.toLocaleString() || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">IPO</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.ipoDate || 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* Column 2: Valuation Ratios */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">P/E</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.peRatio)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Forward P/E</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.forwardPE)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">PEG</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.pegRatio)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">P/S</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.priceToSales)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">P/B</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.priceToBook)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">P/C</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.priceToCashFlow)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">P/FCF</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.priceToFreeCashFlow)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EV/EBITDA</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.evToEbitda)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EV/Sales</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.evToSales)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Quick Ratio</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.quickRatio)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Current Ratio</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.currentRatio)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Debt/Eq</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.debtToEquity)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">LT Debt/Eq</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.ltDebtToEquity)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Option/Short</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.optionShort || 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* Column 3: EPS & Sales */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS (ttm)</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.eps)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS next Y</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.epsNextY)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS next Q</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.epsNextQ)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS this Y</span>
+                <span className={`font-medium ${keyStats.epsThisYGrowth !== null && keyStats.epsThisYGrowth < 0 ? 'text-red-600' : keyStats.epsThisYGrowth !== null && keyStats.epsThisYGrowth > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.epsThisYGrowth)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS next Y</span>
+                <span className={`font-medium ${keyStats.epsNextYGrowth !== null && keyStats.epsNextYGrowth < 0 ? 'text-red-600' : keyStats.epsNextYGrowth !== null && keyStats.epsNextYGrowth > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.epsNextYGrowth)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS next 5Y</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.epsNext5Y)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS past 3/5Y</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.epsPast3Y5Y)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Sales past 3/5Y</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.salesPast3Y5Y)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Sales Y/Y TTM</span>
+                <span className={`font-medium ${keyStats.salesYoYTTM !== null && keyStats.salesYoYTTM < 0 ? 'text-red-600' : keyStats.salesYoYTTM !== null && keyStats.salesYoYTTM > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.salesYoYTTM)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS Q/Q</span>
+                <span className={`font-medium ${keyStats.epsQoQ !== null && keyStats.epsQoQ < 0 ? 'text-red-600' : keyStats.epsQoQ !== null && keyStats.epsQoQ > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.epsQoQ)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Sales Q/Q</span>
+                <span className={`font-medium ${keyStats.salesQoQ !== null && keyStats.salesQoQ < 0 ? 'text-red-600' : keyStats.salesQoQ !== null && keyStats.salesQoQ > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.salesQoQ)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Earnings</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.earningsDate || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">EPS Surpr.</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.epsSurprise)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Sales Surpr.</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.salesSurprise)}</span>
+              </div>
+            </div>
+
+            {/* Column 4: Ownership & Returns */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Insider Own</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.insiderOwn)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Insider Trans</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.insiderTrans)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Inst Own</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.instOwn)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Inst Trans</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.instTrans)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">ROA</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.roa, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">ROE</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.roe, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">ROIC</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.roic, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Gross Margin</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.grossMargin, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Oper. Margin</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.operatingMargin, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Profit Margin</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.netMargin, 2, true)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">SMA20</span>
+                <span className={`font-medium ${keyStats.sma20 !== null && keyStats.sma20 < 0 ? 'text-red-600' : keyStats.sma20 !== null && keyStats.sma20 > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.sma20)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">SMA50</span>
+                <span className={`font-medium ${keyStats.sma50 !== null && keyStats.sma50 < 0 ? 'text-red-600' : keyStats.sma50 !== null && keyStats.sma50 > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.sma50)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">SMA200</span>
+                <span className={`font-medium ${keyStats.sma200 !== null && keyStats.sma200 < 0 ? 'text-red-600' : keyStats.sma200 !== null && keyStats.sma200 > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.sma200)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Trades</span>
+                <span className="font-medium text-gray-900 dark:text-white">N/A</span>
+              </div>
+            </div>
+
+            {/* Column 5: Shares & Volatility */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Shs Outstand</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.sharesOutstanding ? `${(keyStats.sharesOutstanding / 1e9).toFixed(2)}B` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Shs Float</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.sharesFloat ? `${(keyStats.sharesFloat / 1e9).toFixed(2)}B` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Short Float</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatPercentage(keyStats.shortFloat)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Short Ratio</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.shortRatio)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Short Interest</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.shortInterest ? `${(keyStats.shortInterest / 1e6).toFixed(2)}M` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">52W High</span>
+                <span className="font-medium text-gray-900 dark:text-white">${keyStats.fiftyTwoWeekHigh.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">52W Low</span>
+                <span className="font-medium text-gray-900 dark:text-white">${keyStats.fiftyTwoWeekLow.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Volatility</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.volatilityWeek !== null && keyStats.volatilityMonth !== null
+                    ? `${keyStats.volatilityWeek.toFixed(2)}% ${keyStats.volatilityMonth.toFixed(2)}%`
+                    : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">ATR (14)</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.atr14)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">RSI (14)</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.rsi14)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Beta</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.beta)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Rel Volume</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.relVolume)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Avg Volume</span>
+                <span className="font-medium text-gray-900 dark:text-white">{(keyStats.avgVolume / 1e6).toFixed(2)}M</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Volume</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {keyStats.volume ? `${(keyStats.volume / 1e6).toFixed(2)}M` : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            {/* Column 6: Performance */}
+            <div className="space-y-0.5">
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf Week</span>
+                <span className={`font-medium ${keyStats.perfWeek !== null && keyStats.perfWeek < 0 ? 'text-red-600' : keyStats.perfWeek !== null && keyStats.perfWeek > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfWeek)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf Month</span>
+                <span className={`font-medium ${keyStats.perfMonth !== null && keyStats.perfMonth < 0 ? 'text-red-600' : keyStats.perfMonth !== null && keyStats.perfMonth > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfMonth)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf Quarter</span>
+                <span className={`font-medium ${keyStats.perfQuarter !== null && keyStats.perfQuarter < 0 ? 'text-red-600' : keyStats.perfQuarter !== null && keyStats.perfQuarter > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfQuarter)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf Half Y</span>
+                <span className={`font-medium ${keyStats.perfHalfY !== null && keyStats.perfHalfY < 0 ? 'text-red-600' : keyStats.perfHalfY !== null && keyStats.perfHalfY > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfHalfY)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf YTD</span>
+                <span className={`font-medium ${keyStats.perfYTD !== null && keyStats.perfYTD < 0 ? 'text-red-600' : keyStats.perfYTD !== null && keyStats.perfYTD > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfYTD)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf Year</span>
+                <span className={`font-medium ${keyStats.perfYear !== null && keyStats.perfYear < 0 ? 'text-red-600' : keyStats.perfYear !== null && keyStats.perfYear > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perfYear)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf 3Y</span>
+                <span className={`font-medium ${keyStats.perf3Y !== null && keyStats.perf3Y < 0 ? 'text-red-600' : keyStats.perf3Y !== null && keyStats.perf3Y > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perf3Y)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf 5Y</span>
+                <span className={`font-medium ${keyStats.perf5Y !== null && keyStats.perf5Y < 0 ? 'text-red-600' : keyStats.perf5Y !== null && keyStats.perf5Y > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perf5Y)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Perf 10Y</span>
+                <span className={`font-medium ${keyStats.perf10Y !== null && keyStats.perf10Y < 0 ? 'text-red-600' : keyStats.perf10Y !== null && keyStats.perf10Y > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.perf10Y)}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Recom</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatMetric(keyStats.analystRecom)}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Target Price</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.targetPrice ? `$${keyStats.targetPrice.toFixed(2)}` : 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Prev Close</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.prevClose ? `$${keyStats.prevClose.toFixed(2)}` : 'N/A'}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
+                <span className="text-gray-600 dark:text-gray-400">Price</span>
+                <span className="font-medium text-gray-900 dark:text-white">{keyStats.price ? `$${keyStats.price.toFixed(2)}` : 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Change</span>
+                <span className={`font-medium ${keyStats.change !== null && keyStats.change < 0 ? 'text-red-600' : keyStats.change !== null && keyStats.change > 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                  {formatPercentage(keyStats.change)}
+                </span>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+      </section>
+
+      {/* News Section */}
+      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <NewsFeed news={news} />
+          </div>
+        </div>
+      </section>
+
+      {/* Company Description Section */}
+      {profile && (
+        <section className="bg-white dark:bg-[rgb(45,45,45)]">
+          <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+            <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+              <CompanyDescription
+                description={profile.description}
+                ceo={profile.ceo}
+                fullTimeEmployees={profile.fullTimeEmployees}
+                website={profile.website}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Financial Statements Section */}
       <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-2xl font-semibold text-gray-900 dark:text-white">
-            Financial Statements
-          </h2>
-
-          {(() => {
-            // Helper to format large numbers
-            const formatCurrency = (value: number): string => {
-              if (value === 0 || value === null || value === undefined) return 'N/A'
-              const absValue = Math.abs(value)
-              if (absValue >= 1e12) return `$${(value / 1e12).toFixed(2)}T`
-              if (absValue >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
-              if (absValue >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
-              if (absValue >= 1e3) return `$${(value / 1e3).toFixed(2)}K`
-              return `$${value.toFixed(2)}`
-            }
-
-            const formatPercentage = (value: number): string => {
-              if (value === null || value === undefined) return 'N/A'
-              return `${value.toFixed(2)}%`
-            }
-
-            const formatRatio = (value: number): string => {
-              if (value === null || value === undefined || value === 0) return 'N/A'
-              return value.toFixed(2)
-            }
-
-            // Get years from income statement (they should all have the same years)
-            const years = financials.incomeStatement.map(f => f.year).sort((a, b) => b - a)
-
-            // Financial Statement Table Component
-            const FinancialTable = ({ 
-              title, 
-              rows 
-            }: { 
-              title: string
-              rows: Array<{ label: string; values: (number | null)[]; format: 'currency' | 'percentage' | 'ratio' | 'eps' }>
-            }) => {
-              if (years.length === 0) return null
-
-              return (
-                <div className="mb-12">
-                  <h3 className="mb-4 text-xl font-semibold text-gray-800 dark:text-gray-200">{title}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            Metric
-                          </th>
-                          {years.map(year => (
-                            <th key={year} className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                              FY {year}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-[rgb(45,45,45)]">
-                        {rows.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {row.label}
-                            </td>
-                            {row.values.map((value, yearIdx) => (
-                              <td key={yearIdx} className="whitespace-nowrap px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                                {row.format === 'currency' && formatCurrency(value ?? 0)}
-                                {row.format === 'percentage' && formatPercentage(value ?? 0)}
-                                {row.format === 'ratio' && formatRatio(value ?? 0)}
-                                {row.format === 'eps' && (value ? `$${value.toFixed(2)}` : 'N/A')}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )
-            }
-
-            return (
-              <div className="space-y-8">
-                {/* Income Statement */}
-                <FinancialTable
-                  title="Income Statement"
-                  rows={[
-                    {
-                      label: 'Revenue',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.revenue ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Cost of Revenue',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.costOfRevenue ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Gross Profit',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.grossProfit ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Gross Margin',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.grossMargin ?? null
-                      }),
-                      format: 'percentage'
-                    },
-                    {
-                      label: 'Operating Expenses',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.operatingExpenses ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Operating Income',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.operatingIncome ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Operating Margin',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.operatingMargin ?? null
-                      }),
-                      format: 'percentage'
-                    },
-                    {
-                      label: 'Net Income',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.netIncome ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Net Margin',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.netMargin ?? null
-                      }),
-                      format: 'percentage'
-                    },
-                    {
-                      label: 'EPS (Basic)',
-                      values: years.map(year => {
-                        const data = financials.incomeStatement.find(f => f.year === year)
-                        return data?.eps ?? null
-                      }),
-                      format: 'eps'
-                    }
-                  ]}
-                />
-
-                {/* Balance Sheet */}
-                <FinancialTable
-                  title="Balance Sheet"
-                  rows={[
-                    {
-                      label: 'Total Assets',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.totalAssets ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Current Assets',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.currentAssets ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Cash & Equivalents',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.cashAndEquivalents ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Total Liabilities',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.totalLiabilities ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Current Liabilities',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.currentLiabilities ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Long-Term Debt',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.longTermDebt ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: "Shareholders' Equity",
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.shareholdersEquity ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Debt-to-Equity',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.debtToEquity ?? null
-                      }),
-                      format: 'ratio'
-                    },
-                    {
-                      label: 'Current Ratio',
-                      values: years.map(year => {
-                        const data = financials.balanceSheet.find(f => f.year === year)
-                        return data?.currentRatio ?? null
-                      }),
-                      format: 'ratio'
-                    }
-                  ]}
-                />
-
-                {/* Cash Flow Statement */}
-                <FinancialTable
-                  title="Cash Flow Statement"
-                  rows={[
-                    {
-                      label: 'Operating Cash Flow',
-                      values: years.map(year => {
-                        const data = financials.cashFlow.find(f => f.year === year)
-                        return data?.operatingCashFlow ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Investing Cash Flow',
-                      values: years.map(year => {
-                        const data = financials.cashFlow.find(f => f.year === year)
-                        return data?.investingCashFlow ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Financing Cash Flow',
-                      values: years.map(year => {
-                        const data = financials.cashFlow.find(f => f.year === year)
-                        return data?.financingCashFlow ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Capital Expenditures',
-                      values: years.map(year => {
-                        const data = financials.cashFlow.find(f => f.year === year)
-                        return data?.capitalExpenditures ?? null
-                      }),
-                      format: 'currency'
-                    },
-                    {
-                      label: 'Free Cash Flow',
-                      values: years.map(year => {
-                        const data = financials.cashFlow.find(f => f.year === year)
-                        return data?.freeCashFlow ?? null
-                      }),
-                      format: 'currency'
-                    }
-                  ]}
-                />
-              </div>
-            )
-          })()}
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <FinancialStatementsTabs
+              incomeStatement={financials.incomeStatement}
+              balanceSheet={financials.balanceSheet}
+              cashFlow={financials.cashFlow}
+            />
+          </div>
         </div>
       </section>
 
-      {/* Financial Metrics Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-2xl font-semibold text-gray-900 dark:text-white">
-            Financial Metrics
-          </h2>
-
-          {/* Metrics Display */}
-          {(() => {
-
-            const formatMetricValue = (value: number, metricName: string): string => {
-              if (value === 0 || value === null || value === undefined) return 'N/A'
-              
-              // Check if it's a percentage metric
-              const lowerName = metricName.toLowerCase()
-              if (lowerName.includes('ratio') && !lowerName.includes('turnover') && !lowerName.includes('multiple')) {
-                return value.toFixed(2)
-              }
-              if (lowerName.includes('margin') || lowerName.includes('yield') || lowerName.includes('growth') || lowerName.includes('return')) {
-                return `${value.toFixed(2)}%`
-              }
-              if (lowerName.includes('turnover') || lowerName.includes('multiple')) {
-                return value.toFixed(2)
-              }
-              if (lowerName.includes('days') || lowerName.includes('cycle')) {
-                return value.toFixed(0)
-              }
-              if (lowerName.includes('per share') || lowerName.includes('pershare')) {
-                return `$${value.toFixed(2)}`
-              }
-              if (lowerName.includes('capitalization') || lowerName.includes('value') || lowerName.includes('expenditure') || lowerName.includes('shares')) {
-                if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
-                if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
-                if (Math.abs(value) >= 1e3) return `$${(value / 1e3).toFixed(2)}K`
-                return `$${value.toFixed(2)}`
-              }
-              return value.toFixed(2)
-            }
-
-            const MetricCategory = ({ title, metrics }: { title: string; metrics: typeof metrics.valuation }) => {
-              if (metrics.length === 0) return null
-
-              return (
-                <div className="mb-8">
-                  <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">{title}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            Metric
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            Current
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            1Y Ago
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            3Y Ago
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                            5Y Ago
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-[rgb(45,45,45)]">
-                        {metrics.map((metric) => (
-                          <tr key={metric.metricName} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {formatExtendedMetricName(metric.metricName)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100">
-                              {formatMetricValue(metric.current, metric.metricName)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-400">
-                              {formatMetricValue(metric.oneYearAgo, metric.metricName)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-400">
-                              {formatMetricValue(metric.threeYearsAgo, metric.metricName)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-400">
-                              {formatMetricValue(metric.fiveYearsAgo, metric.metricName)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )
-            }
-
-            return (
-              <div className="space-y-8">
-                <MetricCategory title="Valuation Metrics" metrics={metrics.valuation} />
-                <MetricCategory title="Profitability & Returns" metrics={metrics.profitability} />
-                <MetricCategory title="Leverage & Solvency" metrics={metrics.leverage} />
-                <MetricCategory title="Efficiency & Working Capital" metrics={metrics.efficiency} />
-                <MetricCategory title="Growth Metrics" metrics={metrics.growth} />
-                <MetricCategory title="Per-Share Metrics" metrics={metrics.perShare} />
-                <MetricCategory title="Capital Returns & Distribution" metrics={metrics.capitalReturns} />
-              </div>
-            )
-          })()}
+      {/* Footer */}
+      <footer className="bg-white dark:bg-[rgb(45,45,45)] border-t border-gray-200 dark:border-gray-800">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              &copy; {new Date().getFullYear()} The Intraday. All rights reserved.
+            </div>
+            <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+              <span>Data provided by FMP</span>
+            </div>
+          </div>
         </div>
-      </section>
-
-      <section className="border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            SEC Filings
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Recent filings: {filings.length}
-          </p>
-        </div>
-      </section>
+      </footer>
     </div>
   );
 }

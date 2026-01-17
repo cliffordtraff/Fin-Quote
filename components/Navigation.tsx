@@ -10,13 +10,19 @@ export default function Navigation() {
 
   return (
     <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
+      {/* Top Header Row */}
+      <div className="w-full border-b border-gray-200 dark:border-gray-700">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
+          <Link href="/" className="text-lg font-bold text-gray-900 dark:text-white">
+            The Intraday
+          </Link>
+        </div>
+      </div>
+      {/* Navigation Tabs Row */}
       <div className="w-full">
-        <div className="flex justify-between items-center h-16 px-6">
-          {/* Logo and Navigation Tabs */}
-          <div className="flex items-center space-x-8">
-            <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
-              The Intraday
-            </Link>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
+          {/* Navigation Tabs */}
+          <div className="flex items-center">
             <div className="flex items-center space-x-1">
               <Link
                 href="/"
@@ -36,7 +42,7 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Financials
+                Company
               </Link>
               <Link
                 href="/charts"
@@ -46,7 +52,7 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Charts
+                Charting
               </Link>
               <Link
                 href="/chatbot"
@@ -56,13 +62,13 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Chatbot
+                Chat
               </Link>
             </div>
           </div>
 
           {/* Right side: Theme toggle and User menu */}
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-2">
             <ThemeToggle />
             <UserMenu />
           </div>

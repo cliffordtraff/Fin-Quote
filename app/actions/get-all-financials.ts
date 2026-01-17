@@ -14,28 +14,101 @@ interface FinancialYear {
   netIncome: number;
   netMargin: number;
   eps: number;
+  // Additional metrics
+  ebitda: number | null;
+  stockBasedCompensation: number | null;
+  peRatio: number | null;
+  priceToSalesRatio: number | null;
+  sharesOutstanding: number | null;
+  marketCap: number | null;
 }
 
 interface BalanceSheetYear {
   year: number;
-  totalAssets: number;
-  currentAssets: number;
-  cashAndEquivalents: number;
-  totalLiabilities: number;
-  currentLiabilities: number;
-  longTermDebt: number;
-  shareholdersEquity: number;
-  debtToEquity: number;
-  currentRatio: number;
+  // Assets
+  cashAndShortTermInvestments: number | null;
+  shortTermReceivables: number | null;
+  inventories: number | null;
+  otherCurrentAssets: number | null;
+  totalCurrentAssets: number | null;
+  netPropertyPlantEquipment: number | null;
+  totalInvestmentsAndAdvances: number | null;
+  longTermNoteReceivable: number | null;
+  intangibleAssets: number | null;
+  deferredTaxAssets: number | null;
+  otherAssets: number | null;
+  totalAssets: number | null;
+  // Liabilities
+  shortTermDebt: number | null;
+  accountsPayable: number | null;
+  incomeTaxPayable: number | null;
+  otherCurrentLiabilities: number | null;
+  totalCurrentLiabilities: number | null;
+  longTermDebt: number | null;
+  provisionForRisksCharges: number | null;
+  deferredTaxLiabilities: number | null;
+  otherLiabilities: number | null;
+  totalLiabilities: number | null;
+  // Equity
+  nonEquityReserves: number | null;
+  preferredStock: number | null;
+  commonEquity: number | null;
+  totalShareholdersEquity: number | null;
+  accumulatedMinorityInterest: number | null;
+  totalEquity: number | null;
+  totalLiabilitiesAndEquity: number | null;
+  // Per Share & Ratios
+  bookValuePerShare: number | null;
+  tangibleBookValuePerShare: number | null;
+  fullTimeEmployees: number | null;
+  priceToBookRatio: number | null;
+  returnOnAssets: number | null;
+  returnOnEquity: number | null;
+  returnOnInvestedCapital: number | null;
+  quickRatio: number | null;
+  currentRatio: number | null;
 }
 
 interface CashFlowYear {
   year: number;
-  operatingCashFlow: number;
-  investingCashFlow: number;
-  financingCashFlow: number;
-  freeCashFlow: number;
-  capitalExpenditures: number;
+  // Operating Activities
+  netIncome: number | null;
+  depreciation: number | null;
+  otherFundsNonCash: number | null;
+  fundsFromOperations: number | null;
+  extraordinaryItem: number | null;
+  changesInWorkingCapital: number | null;
+  incomeTaxesPayable: number | null;
+  cashFromOperatingActivities: number | null;
+  // Investing Activities
+  capitalExpenditures: number | null;
+  netAssetsFromAcquisitions: number | null;
+  saleOfFixedAssetsAndBusinesses: number | null;
+  purchaseOrSaleOfInvestments: number | null;
+  purchaseOfInvestments: number | null;
+  saleOrMaturityOfInvestments: number | null;
+  otherUses: number | null;
+  otherSources: number | null;
+  cashFromInvestingActivities: number | null;
+  // Financing Activities
+  cashDividendsPaid: number | null;
+  changeInCapitalStock: number | null;
+  repurchaseOfCommonPrefStock: number | null;
+  saleOfCommonPrefStock: number | null;
+  proceedsFromStockOptions: number | null;
+  issuanceOrReductionOfDebtNet: number | null;
+  changeInLongTermDebt: number | null;
+  issuanceOfLongTermDebt: number | null;
+  reductionOfLongTermDebt: number | null;
+  netFinancingActiveOtherCashFlow: number | null;
+  otherFinancingActivitiesUses: number | null;
+  cashFromFinancingActivities: number | null;
+  // Summary
+  exchangeRateEffect: number | null;
+  netChangeInCash: number | null;
+  freeCashFlow: number | null;
+  preferredDividends: number | null;
+  priceToFreeCashFlow: number | null;
 }
 
 interface AllFinancials {
@@ -45,7 +118,7 @@ interface AllFinancials {
 }
 
 /**
- * Get all financial statements for the last 5 years
+ * Get all financial statements for the last 8 years
  * Returns income statement, balance sheet, and cash flow data
  * Currently hardcoded to AAPL
  */
@@ -53,16 +126,68 @@ export async function getAllFinancials(): Promise<AllFinancials> {
   try {
     const supabase = await createServerClient();
 
-    // Fetch last 5 years of financial data
+    // Fetch last 8 years of annual financial data for AAPL from financials_std
     const { data: financialsData, error } = await supabase
       .from('financials_std')
       .select('*')
+      .eq('symbol', 'AAPL')
+      .eq('period_type', 'annual')
       .order('year', { ascending: false })
-      .limit(5);
+      .limit(8);
 
     if (error) {
       console.error('Error fetching financials:', error);
       throw error;
+    }
+
+    // Also fetch additional metrics from financial_metrics table
+    const additionalMetrics = [
+      // Income statement metrics
+      'ebitda',
+      'stockBasedCompensation',
+      'peRatio',
+      'priceToSalesRatio',
+      'numberOfShares',
+      'marketCap',
+      // Balance sheet metrics
+      'bookValuePerShare',
+      'tangibleBookValuePerShare',
+      'priceToBookRatio',
+      'returnOnAssets',
+      'returnOnEquity',
+      'roic',
+      'quickRatio',
+      'currentRatio',
+      // Cash flow metrics
+      'freeCashFlow',
+      'capitalExpenditure',
+      'priceToFreeCashFlowsRatio',
+      'depreciationAndAmortization',
+      'dividendsPaid',
+      'commonStockRepurchased',
+    ];
+
+    const { data: metricsData, error: metricsError } = await supabase
+      .from('financial_metrics')
+      .select('year, metric_name, metric_value')
+      .eq('symbol', 'AAPL')
+      .eq('period_type', 'annual')
+      .in('metric_name', additionalMetrics)
+      .order('year', { ascending: false });
+
+    if (metricsError) {
+      console.error('Error fetching additional metrics:', metricsError);
+    }
+
+    // Create a lookup map for additional metrics: { year: { metricName: value } }
+    const metricsMap: Record<number, Record<string, number | null>> = {};
+    if (metricsData) {
+      for (const row of metricsData) {
+        if (!metricsMap[row.year]) {
+          metricsMap[row.year] = {};
+        }
+        metricsMap[row.year][row.metric_name] = row.metric_value;
+      }
     }
 
     if (!financialsData || financialsData.length === 0) {
@@ -80,6 +205,7 @@ export async function getAllFinancials(): Promise<AllFinancials> {
       const grossProfit = row.gross_profit || 0;
       const operatingIncome = row.operating_income || 0;
       const netIncome = row.net_income || 0;
+      const yearMetrics = metricsMap[row.year] || {};
 
       return {
         year: row.year,
@@ -93,41 +219,114 @@ export async function getAllFinancials(): Promise<AllFinancials> {
         netIncome,
         netMargin: revenue > 0 ? (netIncome / revenue) * 100 : 0,
         eps: row.eps || 0,
+        // Additional metrics from financial_metrics table
+        ebitda: yearMetrics['ebitda'] ?? null,
+        stockBasedCompensation: yearMetrics['stockBasedCompensation'] ?? null,
+        peRatio: yearMetrics['peRatio'] ?? null,
+        priceToSalesRatio: yearMetrics['priceToSalesRatio'] ?? null,
+        sharesOutstanding: yearMetrics['numberOfShares'] ?? null,
+        marketCap: yearMetrics['marketCap'] ?? null,
       };
     });
 
     const balanceSheet: BalanceSheetYear[] = financialsData.map((row) => {
-      const totalAssets = row.total_assets || 0;
-      const currentAssets = totalAssets * 0.4; // Approximate - not in financials_std
-      const totalLiabilities = row.total_liabilities || 0;
-      const currentLiabilities = totalLiabilities * 0.5; // Approximate
-      const shareholdersEquity = row.shareholders_equity || 0;
+      const totalAssets = row.total_assets || null;
+      const totalLiabilities = row.total_liabilities || null;
+      const shareholdersEquity = row.shareholders_equity || null;
+      const yearMetrics = metricsMap[row.year] || {};
 
       return {
         year: row.year,
+        // Assets - most are null until we ingest detailed balance sheet data
+        cashAndShortTermInvestments: null,
+        shortTermReceivables: null,
+        inventories: null,
+        otherCurrentAssets: null,
+        totalCurrentAssets: null,
+        netPropertyPlantEquipment: null,
+        totalInvestmentsAndAdvances: null,
+        longTermNoteReceivable: null,
+        intangibleAssets: null,
+        deferredTaxAssets: null,
+        otherAssets: null,
         totalAssets,
-        currentAssets,
-        cashAndEquivalents: currentAssets * 0.2, // Approximate
+        // Liabilities - most are null until we ingest detailed balance sheet data
+        shortTermDebt: null,
+        accountsPayable: null,
+        incomeTaxPayable: null,
+        otherCurrentLiabilities: null,
+        totalCurrentLiabilities: null,
+        longTermDebt: null,
+        provisionForRisksCharges: null,
+        deferredTaxLiabilities: null,
+        otherLiabilities: null,
         totalLiabilities,
-        currentLiabilities,
-        longTermDebt: totalLiabilities * 0.35, // Approximate
-        shareholdersEquity,
-        debtToEquity: shareholdersEquity > 0 ? totalLiabilities / shareholdersEquity : 0,
-        currentRatio: currentLiabilities > 0 ? currentAssets / currentLiabilities : 0,
+        // Equity - most are null until we ingest detailed balance sheet data
+        nonEquityReserves: null,
+        preferredStock: null,
+        commonEquity: null,
+        totalShareholdersEquity: shareholdersEquity,
+        accumulatedMinorityInterest: null,
+        totalEquity: shareholdersEquity,
+        totalLiabilitiesAndEquity: totalAssets, // Should equal total assets
+        // Per Share & Ratios - from financial_metrics table
+        bookValuePerShare: yearMetrics['bookValuePerShare'] ?? null,
+        tangibleBookValuePerShare: yearMetrics['tangibleBookValuePerShare'] ?? null,
+        fullTimeEmployees: null, // Not in our database yet
+        priceToBookRatio: yearMetrics['priceToBookRatio'] ?? null,
+        returnOnAssets: yearMetrics['returnOnAssets'] ? yearMetrics['returnOnAssets'] * 100 : null,
+        returnOnEquity: yearMetrics['returnOnEquity'] ? yearMetrics['returnOnEquity'] * 100 : null,
+        returnOnInvestedCapital: yearMetrics['roic'] ? yearMetrics['roic'] * 100 : null,
+        quickRatio: yearMetrics['quickRatio'] ?? null,
+        currentRatio: yearMetrics['currentRatio'] ?? null,
       };
     });
 
     const cashFlow: CashFlowYear[] = financialsData.map((row) => {
-      const operatingCashFlow = row.operating_cash_flow || 0;
-      const capex = operatingCashFlow * 0.1; // Approximate - not in financials_std
+      const operatingCashFlow = row.operating_cash_flow || null;
+      const netIncome = row.net_income || null;
+      const yearMetrics = metricsMap[row.year] || {};
 
       return {
         year: row.year,
-        operatingCashFlow,
-        investingCashFlow: -capex * 1.2, // Approximate (negative)
-        financingCashFlow: -(operatingCashFlow * 0.9), // Approximate (negative, buybacks/dividends)
-        freeCashFlow: operatingCashFlow - capex,
-        capitalExpenditures: capex,
+        // Operating Activities
+        netIncome,
+        depreciation: yearMetrics['depreciationAndAmortization'] ?? null,
+        otherFundsNonCash: null,
+        fundsFromOperations: null,
+        extraordinaryItem: null,
+        changesInWorkingCapital: null,
+        incomeTaxesPayable: null,
+        cashFromOperatingActivities: operatingCashFlow,
+        // Investing Activities
+        capitalExpenditures: yearMetrics['capitalExpenditure'] ?? null,
+        netAssetsFromAcquisitions: null,
+        saleOfFixedAssetsAndBusinesses: null,
+        purchaseOrSaleOfInvestments: null,
+        purchaseOfInvestments: null,
+        saleOrMaturityOfInvestments: null,
+        otherUses: null,
+        otherSources: null,
+        cashFromInvestingActivities: null,
+        // Financing Activities
+        cashDividendsPaid: yearMetrics['dividendsPaid'] ?? null,
+        changeInCapitalStock: null,
+        repurchaseOfCommonPrefStock: yearMetrics['commonStockRepurchased'] ?? null,
+        saleOfCommonPrefStock: null,
+        proceedsFromStockOptions: null,
+        issuanceOrReductionOfDebtNet: null,
+        changeInLongTermDebt: null,
+        issuanceOfLongTermDebt: null,
+        reductionOfLongTermDebt: null,
+        netFinancingActiveOtherCashFlow: null,
+        otherFinancingActivitiesUses: null,
+        cashFromFinancingActivities: null,
+        // Summary
+        exchangeRateEffect: null,
+        netChangeInCash: null,
+        freeCashFlow: yearMetrics['freeCashFlow'] ?? null,
+        preferredDividends: null,
+        priceToFreeCashFlow: yearMetrics['priceToFreeCashFlowsRatio'] ?? null,
       };
     });
 
