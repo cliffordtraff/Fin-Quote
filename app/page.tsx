@@ -1,762 +1,412 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
-import Typed from 'typed.js'
+import { useEffect, useState } from 'react'
 import Navigation from '@/components/Navigation'
-import RecentQueries from '@/components/RecentQueries'
-import FinancialChart from '@/components/FinancialChart'
-import ThemeToggle from '@/components/ThemeToggle'
-import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { User } from '@supabase/supabase-js'
-import type { Database } from '@/lib/database.types'
-import type { ChartConfig } from '@/types/chart'
-import type { ConversationHistory, Message } from '@/types/conversation'
-import { useRouter, useSearchParams } from 'next/navigation'
-
-function HomeContent() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const supabase = createClientComponentClient<Database>()
-
-  // Auth and UI state
-  const [user, setUser] = useState<User | null>(null)
-  const [sessionId, setSessionId] = useState<string>('')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [refreshQueriesTrigger, setRefreshQueriesTrigger] = useState(0)
-
-  // Chatbot state
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('')
-  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null)
-  const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
-  const [chatbotLoading, setChatbotLoading] = useState(false)
-  const [chatbotError, setChatbotError] = useState('')
-  const [dataReceived, setDataReceived] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState<string>('')
-  const [selectedTool, setSelectedTool] = useState<string | null>(null)
-  const [typedReady, setTypedReady] = useState(false)
-  const [showTypedHints, setShowTypedHints] = useState(true)
-
-  // Refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const lastUserMessageRef = useRef<HTMLDivElement | null>(null)
-  const typedRef = useRef<HTMLSpanElement | null>(null)
-  const typedInstanceRef = useRef<Typed | null>(null)
-  const lastTypedSuggestionRef = useRef<string>('')
-  const lastSuggestionReadyRef = useRef<boolean>(false)
-
-  const showCenteredInput = conversationHistory.length === 0
-
-  const lastUserMessageIndex = useMemo(() => {
-    for (let i = conversationHistory.length - 1; i >= 0; i--) {
-      if (conversationHistory[i].role === 'user') {
-        return i
-      }
-    }
-    return -1
-  }, [conversationHistory])
-
-  // Generate or retrieve session ID on mount
-  useEffect(() => {
-    let id = localStorage.getItem('finquote_session_id')
-    if (!id) {
-      id = crypto.randomUUID()
-      localStorage.setItem('finquote_session_id', id)
-    }
-    setSessionId(id)
-  }, [])
-
-  // Disable typed hints once there is any conversation content
-  useEffect(() => {
-    if (conversationHistory.length > 0) {
-      setShowTypedHints(false)
-    }
-  }, [conversationHistory.length])
-
-  // Typed.js hint for sample questions (shows when input is empty)
-  useEffect(() => {
-    setTypedReady(false)
-    if (!typedRef.current || !showTypedHints) {
-      if (typedInstanceRef.current) {
-        typedInstanceRef.current.destroy()
-        typedInstanceRef.current = null
-      }
-      return
-    }
-
-    const typed = new Typed(typedRef.current, {
-      strings: [
-        "What's AAPL's revenue trend over 5 years?",
-        'Show me EPS for 2023 vs 2024',
-        'Compare P/E and ROE for Apple',
-        'What did the latest 10-K say about risks?',
-        'How much has Apple spent on buybacks?',
-      ],
-      typeSpeed: 28,
-      backSpeed: 16,
-      backDelay: 1800,
-      smartBackspace: true,
-      loop: true,
-      showCursor: false,
-      preStringTyped: () => {
-        setTypedReady(false)
-        lastSuggestionReadyRef.current = false
-      },
-      onStringTyped: (_pos, self) => {
-        const currentText = typedRef.current?.textContent?.trim() || ''
-        lastTypedSuggestionRef.current = currentText
-        lastSuggestionReadyRef.current = true
-        setTypedReady(true) // stays true while deleting so Tab can still accept the completed line
-      },
-      onDestroy: () => {
-        setTypedReady(false)
-      },
-    })
-    typedInstanceRef.current = typed
-
-    return () => {
-      typed.destroy()
-      typedInstanceRef.current = null
-    }
-  }, [showTypedHints])
-
-  // Auth state management
-  useEffect(() => {
-    // Get current user on mount
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
-    })
-
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  // Auto-focus textarea when user starts typing
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only auto-focus if:
-      // 1. User is not already focused in an input/textarea
-      // 2. It's a printable character or space
-      // 3. Not a modifier key combination (except Shift for uppercase)
-      const target = e.target as HTMLElement
-      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
-
-      if (!isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        // Check if it's a printable character
-        if (e.key.length === 1) {
-          // Focus the textarea and manually insert the character
-          textareaRef.current?.focus()
-
-          // Set the question state with the new character
-          setQuestion(prev => prev + e.key)
-
-          // Prevent default to avoid duplicate character
-          e.preventDefault()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
-  // Auto-scroll to keep the latest USER message at the top when conversation updates
-  useEffect(() => {
-    if (conversationHistory.length === 0) return
-    if (lastUserMessageIndex === -1) return
-
-    const userMessageDiv = lastUserMessageRef.current
-    if (!userMessageDiv) return
-
-    const performScroll = () => {
-      // Get the absolute position of the message relative to the viewport
-      const rect = userMessageDiv.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-
-      // Calculate target position (message position + current scroll - desired offset from top)
-      // Offset of 20px puts the question near the top of the viewport
-      const targetPosition = rect.top + scrollTop - 20
-
-      // Scroll the WINDOW, not the container
-      window.scrollTo({
-        top: targetPosition,
-        behavior: 'smooth'
-      })
-    }
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        performScroll()
-      })
-    })
-  }, [conversationHistory.length, lastUserMessageIndex])
-
-  const handleQueryClick = async (conversationId: string) => {
-    // Load the conversation
-    const { conversation, error } = await getConversation(conversationId)
-    if (!error && conversation) {
-      setCurrentConversationId(conversation.id)
-      // Convert database messages to conversation history format
-      const history: ConversationHistory = conversation.messages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: msg.created_at,
-        chartConfig: msg.chart_config as ChartConfig | undefined,
-        followUpQuestions: msg.follow_up_questions || undefined,
-        dataUsed: msg.data_used as any,
-      }))
-      setConversationHistory(history)
-    }
-  }
-
-  const handleNewChat = async () => {
-    // Clear conversation state
-    setConversationHistory([])
-    setCurrentConversationId(null)
-    setAnswer('')
-    setChartConfig(null)
-    setChatbotError('')
-    setQuestion('')
-    setLoadingMessage('')
-    setSelectedTool(null)
-    setShowTypedHints(true)
-
-    // Generate new session ID for fresh conversation
-    const newSessionId = crypto.randomUUID()
-    localStorage.setItem('finquote_session_id', newSessionId)
-    setSessionId(newSessionId)
-
-    // Create new conversation immediately if authenticated
-    if (user) {
-      const { conversation, error: createError } = await createConversation()
-      if (!createError && conversation) {
-        setCurrentConversationId(conversation.id)
-        setRefreshQueriesTrigger(prev => prev + 1)
-      }
-    }
-
-    // Focus textarea
-    setTimeout(() => {
-      textareaRef.current?.focus()
-    }, 100)
-  }
-
-  const handleSubmitStreaming = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!question.trim()) {
-      setChatbotError('Please enter a question')
-      return
-    }
-
-    setChatbotLoading(true)
-    setChatbotError('')
-    setAnswer('')
-    setChartConfig(null)
-    setDataReceived(false)
-    setLoadingMessage('')
-    setSelectedTool(null)
-
-    // Create user message
-    const userMessage: Message = {
-      role: 'user',
-      content: question,
-      timestamp: new Date().toISOString(),
-    }
-
-    // Add user message to conversation history immediately
-    setConversationHistory(prev => [...prev, userMessage])
-    setShowTypedHints(false)
-
-    // Clear the input box immediately
-    setQuestion('')
-
-    try {
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: userMessage.content,
-          conversationHistory,
-          sessionId,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-
-      if (!reader) {
-        throw new Error('No response body')
-      }
-
-      let streamedAnswer = ''
-      let receivedData: any = null
-      let receivedChart: any = null
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n\n')
-
-        for (const line of lines) {
-          if (!line.trim()) continue
-
-          const eventMatch = line.match(/event: (\w+)\ndata: (.+)/)
-          if (!eventMatch) continue
-
-          const [, eventType, dataStr] = eventMatch
-          const data = JSON.parse(dataStr)
-
-          switch (eventType) {
-            case 'flow':
-              // Update loading message with detailed flow information
-              const flowEvent = data
-              if (flowEvent.status === 'active') {
-                let message = ''
-                if (flowEvent.step === 'tool_selection') {
-                  message = '🔍 Analyzing question and selecting tool...'
-                } else if (flowEvent.step === 'tool_execution') {
-                  message = `📊 ${flowEvent.summary || 'Fetching data'}...`
-                } else if (flowEvent.step === 'chart_generation') {
-                  message = `📈 ${flowEvent.summary || 'Preparing chart'}...`
-                } else if (flowEvent.step === 'answer_generation') {
-                  // Customize message based on selected tool
-                  if (selectedTool === 'getAaplFinancialsByMetric') {
-                    message = '✍️ Generating answer from financial data...'
-                  } else if (selectedTool === 'getFinancialMetric') {
-                    message = '✍️ Generating answer from financial metrics...'
-                  } else if (selectedTool === 'getPrices') {
-                    message = '✍️ Generating answer from price data...'
-                  } else if (selectedTool === 'searchFilings') {
-                    message = '✍️ Generating answer from SEC filings...'
-                  } else if (selectedTool === 'getRecentFilings') {
-                    message = '✍️ Generating answer from filing metadata...'
-                  } else if (selectedTool === 'listMetrics') {
-                    message = '✍️ Generating answer from metrics catalog...'
-                  } else {
-                    message = '✍️ Generating answer from fetched data...'
-                  }
-                } else if (flowEvent.step === 'validation') {
-                  message = '🔎 Validating answer accuracy...'
-                } else if (flowEvent.step === 'followup_generation') {
-                  message = '💡 Generating follow-up suggestions...'
-                }
-                if (message) {
-                  setLoadingMessage(message)
-                }
-              } else if (flowEvent.status === 'success' && flowEvent.step === 'tool_selection') {
-                // Capture the selected tool and show it prominently
-                const toolName = flowEvent.summary?.replace('Selected ', '') || 'tool'
-                setSelectedTool(toolName)
-                setLoadingMessage(`✓ ${flowEvent.summary}`)
-              }
-              break
-
-            case 'data':
-              receivedData = data.dataUsed
-              receivedChart = data.chartConfig
-              setChartConfig(data.chartConfig)
-              setDataReceived(true)
-              break
-
-            case 'answer':
-              streamedAnswer += data.content
-              setAnswer(streamedAnswer)
-              break
-
-            case 'error':
-              setChatbotError(data.message)
-              break
-          }
-        }
-      }
-
-      // Update conversation history
-      if (streamedAnswer && !chatbotError) {
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: streamedAnswer,
-          timestamp: new Date().toISOString(),
-          chartConfig: receivedChart,
-          dataUsed: receivedData,
-        }
-
-        setConversationHistory(prev => [...prev, assistantMessage])
-
-        // Save to database if user is authenticated
-        if (user) {
-          let convId = currentConversationId
-          if (!convId) {
-            const { conversation, error: createError } = await createConversation()
-            if (!createError && conversation) {
-              convId = conversation.id
-              setCurrentConversationId(convId)
-              setRefreshQueriesTrigger(prev => prev + 1)
-              await saveMessage(convId, 'user', userMessage.content)
-            }
-          } else {
-            await saveMessage(convId, 'user', userMessage.content)
-          }
-
-          if (convId) {
-            await saveMessage(convId, 'assistant', streamedAnswer, {
-              chart_config: receivedChart,
-              data_used: receivedData,
-            })
-
-            if (conversationHistory.length === 0) {
-              await autoGenerateTitle(convId)
-              setRefreshQueriesTrigger(prev => prev + 1)
-            }
-          }
-        }
-
-        setRefreshQueriesTrigger(prev => prev + 1)
-      }
-    } catch (err) {
-      setChatbotError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
-      setChatbotLoading(false)
-    }
-  }
-
-  const handleFollowUpQuestionClick = (selectedQuestion: string) => {
-    setQuestion(selectedQuestion)
-    setTimeout(() => {
-      const form = document.querySelector('form')
-      if (form) {
-        const event = new Event('submit', { bubbles: true, cancelable: true })
-        form.dispatchEvent(event)
-      }
-    }, 0)
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
-      {/* Sidebar - fixed position overlay */}
-      <div
-        className={`hidden lg:block fixed left-0 top-0 h-screen w-64 xl:w-80 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(26,26,26)] z-[60] transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <RecentQueries
-          userId={user?.id}
-          sessionId={!user ? sessionId : undefined}
-          onQueryClick={handleQueryClick}
-          onNewChat={handleNewChat}
-          refreshTrigger={refreshQueriesTrigger}
-          currentConversationId={currentConversationId}
-        />
-      </div>
-
-      {/* Sidebar Toggle Button */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`hidden lg:flex fixed top-1/2 -translate-y-1/2 z-[70] bg-white dark:bg-[rgb(45,45,45)] border border-gray-300 dark:border-gray-600 rounded-r-lg px-2 py-4 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)] transition-all shadow-lg ${
-          sidebarOpen ? 'xl:left-80 left-64' : 'left-0'
-        }`}
-        title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-      >
-        {sidebarOpen ? (
-          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        )}
-      </button>
-
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 z-40">
-        <Navigation />
-      </div>
-
-      {/* Chatbot content area */}
-      <div
-        ref={scrollContainerRef}
-        className={`${sidebarOpen ? 'lg:ml-64' : ''} flex-1 overflow-y-auto pt-20 pb-32 relative z-50 pointer-events-none transition-[margin] duration-300`}
-      >
-        <div className="max-w-4xl mx-auto px-6 pointer-events-auto">
-          {conversationHistory.map((message, index) => {
-            const isLastUserMessage = message.role === 'user' && index === lastUserMessageIndex
-
-            return (
-              <div
-                key={index}
-                ref={isLastUserMessage ? lastUserMessageRef : null}
-                data-message-index={index}
-                className={`mb-6 ${index > 0 ? 'mt-6' : ''}`}
-              >
-              {message.role === 'user' ? (
-                <div className="flex justify-end">
-                  <div className="bg-gray-100 dark:bg-[rgb(55,55,55)] text-gray-900 dark:text-white rounded-2xl px-6 py-4 max-w-3xl">
-                    <p className="text-xl">{message.content}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{message.content}</p>
-                  </div>
-
-                  {/* Chart */}
-                  {message.chartConfig && (
-                    <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-[3px] border-gray-200 dark:border-[rgb(50,50,50)] p-6">
-                      <FinancialChart config={message.chartConfig} />
-                    </div>
-                  )}
-
-                </div>
-              )}
-              </div>
-            )
-          })}
-
-          {/* Loading indicator */}
-          {chatbotLoading && !answer && (
-            <div
-              className="space-y-4"
-              style={{ minHeight: 'calc(100vh - 200px)' }}
-            >
-              {/* Show selected tool indicator if tool has been chosen */}
-              {selectedTool && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Using {selectedTool}
-                  </span>
-                </div>
-              )}
-              <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                <p className="text-gray-600 dark:text-gray-400 text-xl">
-                  {loadingMessage || 'Analyzing...'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Streaming answer */}
-          {chatbotLoading && answer && (
-            <div
-              className="space-y-4"
-              style={{ minHeight: 'calc(100vh - 200px)' }}
-            >
-              {/* Show selected tool indicator */}
-              {selectedTool && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Using {selectedTool}
-                  </span>
-                </div>
-              )}
-              <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
-              </div>
-
-              {!dataReceived && (
-                <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="flex gap-2">
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
-                        ? '📊 Preparing financial chart and data table...'
-                        : selectedTool === 'getPrices'
-                        ? '📈 Preparing price chart...'
-                        : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
-                        ? '📄 Preparing filing data table...'
-                        : selectedTool === 'listMetrics'
-                        ? '📋 Preparing metrics catalog table...'
-                        : '📊 Generating chart and data table...'}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Error */}
-          {chatbotError && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg">
-              <p className="font-medium text-lg">Error</p>
-              <p className="text-base">{chatbotError}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Input bar */}
-      {showCenteredInput ? (
-        <div className="fixed inset-x-0 top-[42vh] flex justify-center px-6 z-40 pointer-events-none">
-          <div className="w-full max-w-3xl pointer-events-auto">
-            <form onSubmit={handleSubmitStreaming}>
-              <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
-                {/* Typed sample prompts overlayed as a "dynamic placeholder" when the input is empty */}
-                <div
-                  className={`pointer-events-none absolute left-6 right-16 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xl leading-normal ${
-                    question || !showTypedHints ? 'hidden' : 'block'
-                  }`}
-                >
-                  <span ref={typedRef}></span>
-                  {typedReady && (
-                    <span className="ml-2 text-lg text-gray-400 dark:text-gray-500">(tab)</span>
-                  )}
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey && question.trim().length === 0 && showTypedHints) {
-                      const suggestion = typedRef.current?.textContent?.trim()
-                      if (suggestion && typedReady) {
-                        e.preventDefault()
-                        setQuestion(suggestion)
-                        // Move caret to end after state update
-                        requestAnimationFrame(() => {
-                          if (textareaRef.current) {
-                            const len = suggestion.length
-                            textareaRef.current.selectionStart = len
-                            textareaRef.current.selectionEnd = len
-                          }
-                        })
-                        return
-                      }
-                    }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (question.trim()) {
-                        handleSubmitStreaming(e as any)
-                      }
-                    }
-                  }}
-                  rows={1}
-                  className="relative z-10 flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
-                  style={{ height: 'auto' }}
-                  disabled={chatbotLoading}
-                  aria-label="Ask a question"
-                />
-                <button
-                  type="submit"
-                  disabled={chatbotLoading || !question.trim()}
-                  className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                  {chatbotLoading ? (
-                    <div className="w-4 h-4 bg-white rounded-sm"></div>
-                  ) : (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : (
-        <div className={`${sidebarOpen ? 'lg:ml-64' : ''} fixed bottom-0 left-0 right-0 bg-gray-50 dark:bg-[rgb(33,33,33)] pb-12 z-50 transition-[margin] duration-300`}>
-          <div className="max-w-4xl mx-auto px-6">
-            <form onSubmit={handleSubmitStreaming}>
-              <div className="relative flex items-center gap-4 bg-blue-100 dark:bg-[rgb(55,55,55)] rounded-full px-6 py-5 border border-blue-300 dark:border-gray-600">
-                {/* Typed sample prompts overlayed as a "dynamic placeholder" when the input is empty */}
-                <div
-                  className={`pointer-events-none absolute left-6 right-16 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xl leading-normal ${
-                    question || !showTypedHints ? 'hidden' : 'block'
-                  }`}
-                >
-                  <span ref={typedRef}></span>
-                  {typedReady && (
-                    <span className="ml-2 text-lg text-gray-400 dark:text-gray-500">(tab)</span>
-                  )}
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey && question.trim().length === 0 && showTypedHints) {
-                    const suggestionReady = lastSuggestionReadyRef.current
-                    const suggestion = suggestionReady
-                      ? (lastTypedSuggestionRef.current || '').trim()
-                      : (typedRef.current?.textContent?.trim() || '').trim()
-                    if (suggestion && suggestionReady) {
-                      e.preventDefault()
-                      setQuestion(suggestion)
-                      // Move caret to end after state update
-                      requestAnimationFrame(() => {
-                          if (textareaRef.current) {
-                            const len = suggestion.length
-                            textareaRef.current.selectionStart = len
-                            textareaRef.current.selectionEnd = len
-                          }
-                        })
-                        return
-                      }
-                    }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (question.trim()) {
-                        handleSubmitStreaming(e as any)
-                      }
-                    }
-                  }}
-                  rows={1}
-                  className="relative z-10 flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
-                  style={{ height: 'auto' }}
-                  disabled={chatbotLoading}
-                  aria-label="Ask a question"
-                />
-                <button
-                  type="submit"
-                  disabled={chatbotLoading || !question.trim()}
-                  className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                  {chatbotLoading ? (
-                    <div className="w-4 h-4 bg-white rounded-sm"></div>
-                  ) : (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+import SimpleCanvasChart from '@/components/SimpleCanvasChart'
+import FuturesTable from '@/components/FuturesTable'
+import GainersTable from '@/components/GainersTable'
+import LosersTable from '@/components/LosersTable'
+import StocksTable from '@/components/StocksTable'
+import SectorHeatmap from '@/components/SectorHeatmap'
+import VIXCard from '@/components/VIXCard'
+import EconomicCalendar from '@/components/EconomicCalendar'
+import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData } from '@/app/actions/market-data'
+import { getFuturesData } from '@/app/actions/futures'
+import { getGainersData } from '@/app/actions/gainers'
+import { getLosersData } from '@/app/actions/losers'
+import { getStocksData } from '@/app/actions/stocks'
+import { getSectorPerformance } from '@/app/actions/sectors'
+import { getVIXData } from '@/app/actions/vix'
+import { getEconomicEvents } from '@/app/actions/economic-calendar'
+import type { GainerData } from '@/app/actions/gainers'
+import type { LoserData } from '@/app/actions/losers'
+import type { StockData } from '@/app/actions/stocks'
+import type { SectorData } from '@/app/actions/sectors'
+import type { VIXData } from '@/app/actions/vix'
+import type { EconomicEvent } from '@/app/actions/economic-calendar'
+
+interface MarketData {
+  currentPrice: number
+  priceChange: number
+  priceChangePercent: number
+  date: string
+  priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }>
+}
+
+interface FutureData {
+  symbol: string
+  name: string
+  price: number
+  change: number
+  changesPercentage: number
 }
 
 export default function Home() {
+  // Market data state
+  const [spxData, setSpxData] = useState<MarketData | null>(null)
+  const [nasdaqData, setNasdaqData] = useState<MarketData | null>(null)
+  const [dowData, setDowData] = useState<MarketData | null>(null)
+  const [russellData, setRussellData] = useState<MarketData | null>(null)
+  const [futuresData, setFuturesData] = useState<FutureData[]>([])
+  const [gainersData, setGainersData] = useState<GainerData[]>([])
+  const [losersData, setLosersData] = useState<LoserData[]>([])
+  const [stocksData, setStocksData] = useState<StockData[]>([])
+  const [sectorsData, setSectorsData] = useState<SectorData[]>([])
+  const [vixData, setVixData] = useState<VIXData | null>(null)
+  const [economicEvents, setEconomicEvents] = useState<EconomicEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch all market data in parallel
+        const [spxResult, nasdaqResult, dowResult, russellResult, futuresResult, gainersResult, losersResult, stocksResult, sectorsResult, vixResult, economicResult] = await Promise.all([
+          getAaplMarketData(),
+          getNasdaqMarketData(),
+          getDowMarketData(),
+          getRussellMarketData(),
+          getFuturesData(),
+          getGainersData(),
+          getLosersData(),
+          getStocksData(),
+          getSectorPerformance(),
+          getVIXData(),
+          getEconomicEvents()
+        ])
+
+        if ('error' in spxResult) {
+          setError(spxResult.error)
+        } else {
+          console.log('SPX data received:', {
+            hasPriceHistory: !!spxResult.priceHistory,
+            priceHistoryLength: spxResult.priceHistory?.length,
+          })
+          setSpxData(spxResult as MarketData)
+        }
+
+        if ('error' in nasdaqResult) {
+          setError(nasdaqResult.error)
+        } else {
+          console.log('Nasdaq data received:', {
+            hasPriceHistory: !!nasdaqResult.priceHistory,
+            priceHistoryLength: nasdaqResult.priceHistory?.length,
+          })
+          setNasdaqData(nasdaqResult as MarketData)
+        }
+
+        if ('error' in dowResult) {
+          setError(dowResult.error)
+        } else {
+          console.log('Dow data received:', {
+            hasPriceHistory: !!dowResult.priceHistory,
+            priceHistoryLength: dowResult.priceHistory?.length,
+          })
+          setDowData(dowResult as MarketData)
+        }
+
+        if ('error' in russellResult) {
+          setError(russellResult.error)
+        } else {
+          console.log('Russell data received:', {
+            hasPriceHistory: !!russellResult.priceHistory,
+            priceHistoryLength: russellResult.priceHistory?.length,
+          })
+          setRussellData(russellResult as MarketData)
+        }
+
+        if ('error' in futuresResult) {
+          console.error('Futures data error:', futuresResult.error)
+        } else {
+          setFuturesData(futuresResult.futures)
+        }
+
+        if ('error' in gainersResult) {
+          console.error('Gainers data error:', gainersResult.error)
+        } else {
+          setGainersData(gainersResult.gainers)
+        }
+
+        if ('error' in losersResult) {
+          console.error('Losers data error:', losersResult.error)
+        } else {
+          setLosersData(losersResult.losers)
+        }
+
+        if ('error' in stocksResult) {
+          console.error('Stocks data error:', stocksResult.error)
+        } else {
+          setStocksData(stocksResult.stocks)
+        }
+
+        if ('error' in sectorsResult) {
+          console.error('Sector performance data error:', sectorsResult.error)
+        } else if ('sectors' in sectorsResult) {
+          setSectorsData(sectorsResult.sectors)
+        }
+
+        if ('error' in vixResult) {
+          console.error('VIX data error:', vixResult.error)
+        } else if ('vix' in vixResult) {
+          setVixData(vixResult.vix)
+        }
+
+        if ('error' in economicResult) {
+          console.error('Economic calendar error:', economicResult.error)
+        } else if ('events' in economicResult) {
+          setEconomicEvents(economicResult.events)
+        }
+      } catch (err) {
+        setError('Failed to load market data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+
+    // Refresh data every 10 seconds
+    const interval = setInterval(fetchData, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <HomeContent />
-    </Suspense>
+    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
+      <Navigation />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-600 dark:text-gray-400">Loading market data...</div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-red-600 dark:text-red-400">{error}</div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center relative">
+            <div className="flex gap-6 items-start">
+          {/* SPX Chart */}
+          {spxData && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="mb-0">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">SPX</h2>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {new Date(spxData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span
+                    className={`text-xs font-medium mr-12 ${
+                      spxData.priceChange >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {spxData.priceChange >= 0 ? '+' : ''}
+                    {spxData.priceChange.toFixed(2)} (
+                    {spxData.priceChangePercent >= 0 ? '+' : ''}
+                    {spxData.priceChangePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Simple Canvas Chart */}
+              {spxData.priceHistory && spxData.priceHistory.length > 0 ? (
+                <SimpleCanvasChart
+                  data={spxData.priceHistory}
+                  previousClose={spxData.currentPrice - spxData.priceChange}
+                  currentPrice={spxData.currentPrice}
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {spxData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Nasdaq Chart */}
+          {nasdaqData && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="mb-0">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">NASDAQ</h2>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {new Date(nasdaqData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span
+                    className={`text-xs font-medium mr-12 ${
+                      nasdaqData.priceChange >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {nasdaqData.priceChange >= 0 ? '+' : ''}
+                    {nasdaqData.priceChange.toFixed(2)} (
+                    {nasdaqData.priceChangePercent >= 0 ? '+' : ''}
+                    {nasdaqData.priceChangePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Simple Canvas Chart */}
+              {nasdaqData.priceHistory && nasdaqData.priceHistory.length > 0 ? (
+                <SimpleCanvasChart
+                  data={nasdaqData.priceHistory}
+                  previousClose={nasdaqData.currentPrice - nasdaqData.priceChange}
+                  currentPrice={nasdaqData.currentPrice}
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {nasdaqData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Dow Chart */}
+          {dowData && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="mb-0">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">DOW</h2>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {new Date(dowData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span
+                    className={`text-xs font-medium mr-12 ${
+                      dowData.priceChange >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {dowData.priceChange >= 0 ? '+' : ''}
+                    {dowData.priceChange.toFixed(2)} (
+                    {dowData.priceChangePercent >= 0 ? '+' : ''}
+                    {dowData.priceChangePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Simple Canvas Chart */}
+              {dowData.priceHistory && dowData.priceHistory.length > 0 ? (
+                <SimpleCanvasChart
+                  data={dowData.priceHistory}
+                  previousClose={dowData.currentPrice - dowData.priceChange}
+                  currentPrice={dowData.currentPrice}
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {dowData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Russell 2000 Chart */}
+          {russellData && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-2 pb-2 pl-2 pr-0" style={{ width: '310px', minWidth: '310px' }}>
+              <div className="mb-0">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-xs font-bold text-gray-600 dark:text-gray-400 ml-2">RUSSELL 2000</h2>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {new Date(russellData.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span
+                    className={`text-xs font-medium mr-12 ${
+                      russellData.priceChange >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {russellData.priceChange >= 0 ? '+' : ''}
+                    {russellData.priceChange.toFixed(2)} (
+                    {russellData.priceChangePercent >= 0 ? '+' : ''}
+                    {russellData.priceChangePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Simple Canvas Chart */}
+              {russellData.priceHistory && russellData.priceHistory.length > 0 ? (
+                <SimpleCanvasChart
+                  data={russellData.priceHistory}
+                  previousClose={russellData.currentPrice - russellData.priceChange}
+                  currentPrice={russellData.currentPrice}
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {russellData.priceHistory ? 'No intraday data available' : 'Loading chart...'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          </div>
+
+            {/* Gainers, Losers, VIX, and Sector Performance */}
+            <div className="mt-12 flex gap-8 self-start ml-[-50px]">
+              {/* Gainers Table */}
+              {gainersData.length > 0 && (
+                <div>
+                  <GainersTable gainers={gainersData} />
+                </div>
+              )}
+
+              {/* Losers Table */}
+              {losersData.length > 0 && (
+                <div>
+                  <LosersTable losers={losersData} />
+                </div>
+              )}
+
+              {/* VIX Card and Stocks Table Column */}
+              <div className="flex flex-col gap-4">
+                <VIXCard vix={vixData} />
+
+                {/* Stocks Table */}
+                {stocksData.length > 0 && (
+                  <div>
+                    <StocksTable stocks={stocksData} />
+                  </div>
+                )}
+              </div>
+
+              {/* Sector Performance Heatmap */}
+              {sectorsData.length > 0 && (
+                <div style={{ width: '250px' }}>
+                  <SectorHeatmap sectors={sectorsData} />
+                </div>
+              )}
+            </div>
+
+            {/* Futures Table and Economic Calendar */}
+            <div className="mt-8 flex gap-8 self-start ml-[-50px]">
+              {/* Futures Table */}
+              {futuresData.length > 0 && (
+                <div>
+                  <FuturesTable futures={futuresData} />
+                </div>
+              )}
+
+              {/* Economic Calendar */}
+              {economicEvents.length > 0 && (
+                <div style={{ width: '400px' }}>
+                  <EconomicCalendar events={economicEvents} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   )
 }
