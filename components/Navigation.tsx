@@ -15,7 +15,7 @@ export default function Navigation() {
           {/* Logo and Navigation Tabs */}
           <div className="flex items-center space-x-8">
             <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
-              Fin Quote
+              The Intraday
             </Link>
             <div className="flex items-center space-x-1">
               <Link
