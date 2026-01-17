@@ -3,6 +3,7 @@
 export type PriceRange = '7d' | '30d' | '90d' | '365d' | 'ytd' | '3y' | '5y' | '10y' | '20y' | 'max'
 
 export type PriceParams = {
+  symbol?: string // Stock symbol (defaults to AAPL for backward compatibility)
   from?: string
   to?: string
   range?: PriceRange
@@ -60,10 +61,11 @@ function rangeToFromDate(range: PriceRange): string {
   return fromDate.toISOString().split('T')[0]
 }
 
-export async function getAaplPrices(params: PriceParams): Promise<{
+export async function getPrices(params: PriceParams): Promise<{
   data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
   error: string | null
 }> {
+  const symbol = params.symbol ?? 'AAPL'
   let { from, to } = params
   const { range } = params
 
@@ -103,7 +105,7 @@ export async function getAaplPrices(params: PriceParams): Promise<{
     const today = new Date().toISOString().split('T')[0]
     const isAskingForTodayOnly = fromDate === today && toDate === today
 
-    let url = `https://financialmodelingprep.com/api/v3/historical-price-full/AAPL?apikey=${apiKey}&from=${fromDate}&to=${toDate}`
+    let url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&from=${fromDate}&to=${toDate}`
 
     // Only use fallback if asking for today's data specifically (not for ranges that include today)
     if (isAskingForTodayOnly) {
@@ -111,7 +113,7 @@ export async function getAaplPrices(params: PriceParams): Promise<{
       const fiveDaysAgo = new Date()
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)
       const fallbackFrom = fiveDaysAgo.toISOString().split('T')[0]
-      url = `https://financialmodelingprep.com/api/v3/historical-price-full/AAPL?apikey=${apiKey}&from=${fallbackFrom}`
+      url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&from=${fallbackFrom}`
     }
 
     const response = await fetch(url, {
@@ -182,10 +184,18 @@ export async function getAaplPrices(params: PriceParams): Promise<{
 
     return { data: filteredData, error: null }
   } catch (err) {
-    console.error('Error fetching AAPL prices:', err)
+    console.error(`Error fetching ${symbol} prices:`, err)
     return {
       data: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',
     }
   }
+}
+
+// Backward-compatible alias for existing code
+export async function getAaplPrices(params: Omit<PriceParams, 'symbol'>): Promise<{
+  data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
+  error: string | null
+}> {
+  return getPrices({ ...params, symbol: 'AAPL' })
 }

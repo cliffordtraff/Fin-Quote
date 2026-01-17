@@ -2,6 +2,15 @@
  * Ingestion script: Loads financial data from seed file into Supabase
  * Supports both annual and quarterly data for any symbol
  *
+ * Uses UPSERT with conflict target (symbol, period_type, period_end_date).
+ * Records without period_end_date are skipped to maintain data integrity.
+ *
+ * IMPORTANT: This script assumes the fetch script (fetch-aapl-data.ts) always
+ * combines all three statements (income, balance, cash flow) before saving.
+ * This makes naive UPSERT safe - we never overwrite complete data with partial data.
+ * If you ever need to ingest statements separately, use the COALESCE-based SQL
+ * approach documented in docs/FINANCIALS_STD_GUARDRAILS_DESIGN.md Section 5.
+ *
  * Usage:
  *   npx tsx scripts/ingest-financials.ts AAPL            # Ingest annual data (default)
  *   npx tsx scripts/ingest-financials.ts GOOGL annual    # Ingest annual data for GOOGL
@@ -90,84 +99,68 @@ async function ingestFinancials() {
   // Create Supabase client
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-  // Get existing rows for this symbol
-  const { data: existingRows, error: fetchError } = await supabase
-    .from('financials_std')
-    .select('*')
-    .eq('symbol', symbol)
+  // Filter out records without period_end_date (required for UNIQUE constraint)
+  const recordsWithDates = financials.filter((f) => f.period_end_date !== null)
+  const skippedNullDates = financials.length - recordsWithDates.length
 
-  if (fetchError) {
-    console.error('Error fetching existing rows:', fetchError)
+  if (skippedNullDates > 0) {
+    console.log(`⚠ WARNING: Skipping ${skippedNullDates} records with null period_end_date`)
+    console.log('  These records cannot be upserted. Consider re-fetching the data.\n')
+  }
+
+  // Filter out records without symbol (required for UNIQUE constraint)
+  const validRecords = recordsWithDates.filter((f) => f.symbol !== null && f.symbol !== '')
+  const skippedNullSymbols = recordsWithDates.length - validRecords.length
+
+  if (skippedNullSymbols > 0) {
+    console.log(`⚠ WARNING: Skipping ${skippedNullSymbols} records with null/empty symbol\n`)
+  }
+
+  if (validRecords.length === 0) {
+    console.error('No valid records to upsert. All records have null period_end_date or symbol.')
     return
   }
 
-  console.log(`Found ${existingRows?.length || 0} existing ${symbol} rows in database\n`)
+  // Prepare records for upsert
+  const upsertData = validRecords.map((f) => ({
+    symbol: f.symbol,
+    year: f.year,
+    period_type: f.period_type,
+    fiscal_quarter: f.fiscal_quarter,
+    fiscal_label: f.fiscal_label,
+    period_end_date: f.period_end_date,
+    revenue: f.revenue,
+    gross_profit: f.gross_profit,
+    net_income: f.net_income,
+    operating_income: f.operating_income,
+    total_assets: f.total_assets,
+    total_liabilities: f.total_liabilities,
+    shareholders_equity: f.shareholders_equity,
+    operating_cash_flow: f.operating_cash_flow,
+    eps: f.eps,
+  }))
 
-  let updated = 0
-  let inserted = 0
-  let errors = 0
+  console.log(`Upserting ${upsertData.length} records...`)
 
-  for (const financial of financials) {
-    // Find existing row by composite key: symbol + year + period_type + fiscal_quarter
-    const existingRow = existingRows?.find((row) =>
-      row.year === financial.year &&
-      row.period_type === financial.period_type &&
-      row.fiscal_quarter === financial.fiscal_quarter
-    )
+  // UPSERT using new conflict target: (symbol, period_type, period_end_date)
+  // This is safe because fetch-aapl-data.ts always combines all 3 statements before saving
+  const { error } = await supabase
+    .from('financials_std')
+    .upsert(upsertData, {
+      onConflict: 'symbol,period_type,period_end_date',
+      ignoreDuplicates: false,
+    })
 
-    const rowData = {
-      symbol: financial.symbol,
-      year: financial.year,
-      period_type: financial.period_type,
-      fiscal_quarter: financial.fiscal_quarter,
-      fiscal_label: financial.fiscal_label,
-      period_end_date: financial.period_end_date,
-      revenue: financial.revenue,
-      gross_profit: financial.gross_profit,
-      net_income: financial.net_income,
-      operating_income: financial.operating_income,
-      total_assets: financial.total_assets,
-      total_liabilities: financial.total_liabilities,
-      shareholders_equity: financial.shareholders_equity,
-      operating_cash_flow: financial.operating_cash_flow,
-      eps: financial.eps,
-    }
-
-    const label = financial.fiscal_label || `FY${financial.year}`
-
-    if (existingRow) {
-      // UPDATE existing row
-      const { error } = await supabase
-        .from('financials_std')
-        .update(rowData)
-        .eq('id', existingRow.id)
-
-      if (error) {
-        console.error(`✗ Error updating ${label}:`, error.message)
-        errors++
-      } else {
-        console.log(`✓ Updated ${label}`)
-        updated++
-      }
-    } else {
-      // INSERT new row
-      const { error } = await supabase.from('financials_std').insert(rowData)
-
-      if (error) {
-        console.error(`✗ Error inserting ${label}:`, error.message)
-        errors++
-      } else {
-        console.log(`✓ Inserted ${label}`)
-        inserted++
-      }
-    }
+  if (error) {
+    console.error('Error upserting records:', error.message)
+    return
   }
 
   console.log(`\n--- Summary ---`)
-  console.log(`Updated: ${updated}`)
-  console.log(`Inserted: ${inserted}`)
-  console.log(`Errors: ${errors}`)
-  console.log(`Total: ${financials.length}`)
+  console.log(`Upserted: ${upsertData.length} records`)
+  console.log(`Skipped (null period_end_date): ${skippedNullDates}`)
+  console.log(`Skipped (null symbol): ${skippedNullSymbols}`)
+  console.log(`Total in file: ${financials.length}`)
 }
 
 // Load environment variables from .env.local

@@ -56,9 +56,10 @@ export async function getCompaniesWithFinancials(): Promise<{
   }
 }
 
-// Safe, purpose-built tool for fetching a specific financial metric for AAPL only (v2)
+// Safe, purpose-built tool for fetching a specific financial metric for any S&P 500 stock
 // This is designed to be called by server code (e.g., an LLM routing step) and returns
 // a minimal, predictable shape for easy prompting and display.
+// Supports all S&P 500 stocks via the symbol parameter (defaults to AAPL for backward compatibility)
 
 // Raw metrics stored directly in the database
 export type RawFinancialMetric =
@@ -107,7 +108,8 @@ function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinanc
   return calculatedMetrics.includes(metric as CalculatedFinancialMetric)
 }
 
-export async function getAaplFinancialsByMetric(params: {
+export async function getFinancialsByMetric(params: {
+  symbol?: string // Stock symbol (defaults to AAPL for backward compatibility)
   metric: FinancialMetric
   limit?: number // number of most recent periods to fetch
   period?: PeriodType // 'annual' (default) or 'quarterly'
@@ -116,6 +118,7 @@ export async function getAaplFinancialsByMetric(params: {
   data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
+  const symbol = params.symbol ?? 'AAPL'
   const { metric } = params
   const period = params.period ?? 'annual'
   const quarters = params.quarters
@@ -142,7 +145,7 @@ export async function getAaplFinancialsByMetric(params: {
       let query = supabase
         .from('financials_std')
         .select('year, total_liabilities, shareholders_equity, period_type, fiscal_quarter, fiscal_label')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('period_type', period)
 
       if (period === 'quarterly' && quarters && quarters.length > 0) {
@@ -185,7 +188,7 @@ export async function getAaplFinancialsByMetric(params: {
       let query = supabase
         .from('financials_std')
         .select('year, gross_profit, revenue, period_type, fiscal_quarter, fiscal_label')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('period_type', period)
 
       if (period === 'quarterly' && quarters && quarters.length > 0) {
@@ -228,7 +231,7 @@ export async function getAaplFinancialsByMetric(params: {
       let query = supabase
         .from('financials_std')
         .select('year, net_income, shareholders_equity, period_type, fiscal_quarter, fiscal_label')
-        .eq('symbol', 'AAPL')
+        .eq('symbol', symbol)
         .eq('period_type', period)
 
       if (period === 'quarterly' && quarters && quarters.length > 0) {
@@ -291,7 +294,7 @@ export async function getAaplFinancialsByMetric(params: {
       .select(
         'year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, period_type, fiscal_quarter, fiscal_label'
       )
-      .eq('symbol', 'AAPL')
+      .eq('symbol', symbol)
       .eq('period_type', period)
 
     if (period === 'quarterly' && quarters && quarters.length > 0) {
@@ -375,10 +378,23 @@ export async function getAaplFinancialsByMetric(params: {
 
     return { data: mapped, error: null }
   } catch (err) {
-    console.error('Unexpected error (getAaplFinancialsByMetric):', err)
+    console.error(`Unexpected error (getFinancialsByMetric for ${symbol}):`, err)
     return {
       data: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',
     }
   }
+}
+
+// Backward-compatible alias for existing code
+export async function getAaplFinancialsByMetric(params: {
+  metric: FinancialMetric
+  limit?: number
+  period?: PeriodType
+  quarters?: number[]
+}): Promise<{
+  data: FinancialMetricDataPoint[] | null
+  error: string | null
+}> {
+  return getFinancialsByMetric({ ...params, symbol: 'AAPL' })
 }

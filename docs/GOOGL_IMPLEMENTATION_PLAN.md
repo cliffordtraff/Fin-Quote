@@ -317,11 +317,11 @@ interface StockSelectorProps {
 
 ---
 
-## Phase 2: SEC Filings & RAG
+## Phase 2: SEC Filings (Metadata + Segment Parsing Prep)
 
-**Goal:** Download and index GOOGL 10-K/10-Q filings for semantic search (chatbot).
+**Goal:** Download and store GOOGL 10-K/10-Q filings for metadata and segment parsing. Semantic search/RAG is deferred.
 
-**Priority:** MEDIUM - Enables chatbot to answer questions about GOOGL filings.
+**Priority:** MEDIUM - Needed for filings metadata and downstream segment extraction; filing content search is out of scope.
 
 ### 2.1 Fetch Filing Metadata
 
@@ -401,43 +401,17 @@ https://data.sec.gov/submissions/CIK{cik}.json
 - Overlap: 100 words
 - Section detection: Risk Factors, MD&A, Business, Financial Statements, Notes
 
-### 2.5 Embed Filings
+### 2.5 Filings Pipeline (No Embeddings)
 
-#### 2.5.1 `scripts/embed-filings.ts`
+**Scope:** Fetch metadata → download HTML → chunk text for segment parsing. Skip embeddings/RAG.
 
-**Current State:** Already symbol-agnostic.
-
-**Changes Required:** None.
-
-**Embedding Settings:**
-- Model: `text-embedding-3-small`
-- Dimensions: 1536
-- Batch size: 10 chunks
-- Rate limiting: 500ms between batches
-
-### 2.6 Update RAG Search
-
-#### 2.6.1 Modify `app/actions/search-filings.ts`
-
-**Current State:** May be hardcoded to AAPL.
-
-**Changes Required:**
-
-1. Add `symbol` parameter to search function
-
-2. Filter search results by ticker:
-   ```typescript
-   .eq('filings.ticker', symbol)
-   ```
-
-### 2.7 Testing Phase 2
+### 2.6 Testing Phase 2
 
 - [ ] Verify filing metadata fetched for GOOGL (10 years of 10-K/10-Q)
 - [ ] Verify filings ingested into database
 - [ ] Verify HTML files downloaded to Supabase Storage
 - [ ] Verify chunking produces expected number of chunks
-- [ ] Verify embeddings generated
-- [ ] Test RAG search: "What are Google's risk factors?"
+- [ ] Confirm no embedding/RAG step is executed
 
 ---
 
@@ -789,13 +763,12 @@ CREATE TABLE filings (
   fiscal_quarter INTEGER
 );
 
--- Filing chunks for RAG
+-- Filing chunks (for segment parsing; embeddings deferred)
 CREATE TABLE filing_chunks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   filing_id UUID REFERENCES filings(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   chunk_text TEXT NOT NULL,
-  embedding vector(1536),
   section_name TEXT,
   word_count INTEGER,
   UNIQUE(filing_id, chunk_index)
@@ -825,7 +798,7 @@ CREATE TABLE filing_chunks (
 | `app/actions/chart-metrics.ts` | Add symbol parameter to all functions |
 | `app/actions/financials.ts` | Add symbol parameter |
 | `app/actions/get-financial-metric.ts` | Add symbol parameter |
-| `app/actions/search-filings.ts` | Add symbol filter |
+| `app/actions/search-filings.ts` | Mark filing content search as disabled/deferred |
 
 ### New Files to Create
 
@@ -868,7 +841,7 @@ CREATE TABLE filing_chunks (
 - [ ] **1.14** Test AAPL charts (regression)
 - [ ] **1.15** Commit and deploy
 
-### Phase 2: SEC Filings & RAG
+### Phase 2: SEC Filings (No RAG)
 
 - [ ] **2.1** Update `fetch-sec-filings.ts` with symbol parameter and CIK map
 - [ ] **2.2** Run fetch for GOOGL filings: `npx tsx scripts/fetch-sec-filings.ts GOOGL`
@@ -877,10 +850,9 @@ CREATE TABLE filing_chunks (
 - [ ] **2.5** Update `download-filings.ts` with symbol parameter
 - [ ] **2.6** Run download for GOOGL filings
 - [ ] **2.7** Run chunking for GOOGL filings
-- [ ] **2.8** Run embedding for GOOGL filings
-- [ ] **2.9** Update `search-filings.ts` with symbol filter
-- [ ] **2.10** Test RAG search for GOOGL
-- [ ] **2.11** Commit and deploy
+- [ ] **2.8** (Deferred) Embeddings/RAG search — do not execute in this phase
+- [ ] **2.9** Mark `search-filings.ts` as disabled/deferred
+- [ ] **2.10** Commit and deploy
 
 ### Phase 3: Segment Metrics
 

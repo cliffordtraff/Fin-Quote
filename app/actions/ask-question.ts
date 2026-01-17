@@ -2,10 +2,10 @@
 
 import OpenAI from 'openai'
 import { createServerClient } from '@/lib/supabase/server'
-import { getAaplFinancialsByMetric, FinancialMetric } from './financials'
-import { getAaplPrices, PriceRange, PriceParams } from './prices'
+import { getFinancialsByMetric, getAaplFinancialsByMetric, FinancialMetric } from './financials'
+import { getPrices, getAaplPrices, PriceRange, PriceParams } from './prices'
 import { getRecentFilings } from './filings'
-import { searchFilings, FilingPassage } from './search-filings'
+import { FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer, CompleteValidationResults } from '@/lib/validators'
@@ -382,7 +382,7 @@ export async function askQuestion(
     let dataUsed: { type: 'financials' | 'prices' | 'filings' | 'passages' | 'metrics_catalog' | 'financial_metrics'; data: any[] }
     let chartConfig: ChartConfig | null = null
 
-    if (toolSelection.tool === 'getAaplFinancialsByMetric') {
+    if (toolSelection.tool === 'getFinancialsByMetric' || toolSelection.tool === 'getAaplFinancialsByMetric') {
       // Validate metric
       const metric = toolSelection.args.metric as FinancialMetric
       const validMetrics: FinancialMetric[] = [
@@ -403,18 +403,21 @@ export async function askQuestion(
         return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid metric', queryLogId: null }
       }
 
-      // Extract period and quarters from args
+      // Extract symbol, period and quarters from args
+      const symbol = toolSelection.args.symbol as string || 'AAPL'
       const period = (toolSelection.args.period as 'annual' | 'quarterly') || 'annual'
       const quarters = toolSelection.args.quarters as number[] | undefined
 
-      console.log('📊 Calling getAaplFinancialsByMetric with:', {
+      console.log('📊 Calling getFinancialsByMetric with:', {
+        symbol,
         metric,
         limit: toolSelection.args.limit || (period === 'quarterly' ? 12 : 4),
         period,
         quarters,
       })
 
-      const toolResult = await getAaplFinancialsByMetric({
+      const toolResult = await getFinancialsByMetric({
+        symbol,
         metric,
         limit: toolSelection.args.limit || (period === 'quarterly' ? 12 : 4),
         period,
@@ -441,7 +444,8 @@ export async function askQuestion(
       chartConfig = generateFinancialChart(toolResult.data, metric, userQuestion)
     } else if (toolSelection.tool === 'getPrices') {
       // Support both preset ranges and custom dates
-      let priceParams: PriceParams
+      const symbol = toolSelection.args.symbol as string || 'AAPL'
+      let priceParams: PriceParams = { symbol }
 
       if ('range' in toolSelection.args) {
         // Preset range mode
@@ -450,7 +454,7 @@ export async function askQuestion(
         if (!allowedRanges.includes(range)) {
           return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid range', queryLogId: null }
         }
-        priceParams = { range }
+        priceParams = { symbol, range }
       } else if ('from' in toolSelection.args) {
         // Custom date range mode
         const from = toolSelection.args.from as string
@@ -465,12 +469,13 @@ export async function askQuestion(
           return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid to date format', queryLogId: null }
         }
 
-        priceParams = to ? { from, to } : { from }
+        priceParams = to ? { symbol, from, to } : { symbol, from }
       } else {
         return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid getPrices args: must have range or from', queryLogId: null }
       }
 
-      const toolResult = await getAaplPrices(priceParams)
+      console.log('📈 Calling getPrices with:', priceParams)
+      const toolResult = await getPrices(priceParams)
 
       if (toolResult.error || !toolResult.data) {
         toolError = toolResult.error || 'Failed to fetch price data'
@@ -537,32 +542,10 @@ export async function askQuestion(
       factsJson = createFactsJson(toolResult.data)
       dataUsed = { type: 'filings', data: toolResult.data }
     } else if (toolSelection.tool === 'searchFilings') {
-      // Validate query
-      const query = toolSelection.args.query || userQuestion
-      if (!query || query.trim().length === 0) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Search query cannot be empty', queryLogId: null }
-      }
-
-      const limit = toolSelection.args.limit || 5
-      if (limit < 1 || limit > 10) {
-        return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)', queryLogId: null }
-      }
-
-      const toolResult = await searchFilings({ query, limit })
-
-      if (toolResult.error || !toolResult.data) {
-        toolError = toolResult.error || 'Failed to search filings'
-        return {
-          answer: '',
-          dataUsed: null,
-          chartConfig: null,
-          error: toolError,
-          queryLogId: null,
-        }
-      }
-
-      factsJson = createFactsJson(toolResult.data)
-      dataUsed = { type: 'passages', data: toolResult.data }
+      // Filing content search is disabled; respond gracefully
+      const message =
+        'Filing content search is temporarily unavailable. I can share filing dates/types or financial metrics instead.'
+      return { answer: message, dataUsed: null, chartConfig: null, error: null, queryLogId: null }
     } else if (toolSelection.tool === 'listMetrics') {
       // Import at the top if not already imported
       const { listMetrics } = await import('./list-metrics')
@@ -589,7 +572,8 @@ export async function askQuestion(
       // Import at the top if not already imported
       const { getFinancialMetrics } = await import('./get-financial-metric')
 
-      // Extract metric names (can be array or single string)
+      // Extract symbol and metric names (can be array or single string)
+      const symbol = toolSelection.args.symbol as string || 'AAPL'
       const metricNames = toolSelection.args.metricNames as string[]
       const period = (toolSelection.args.period as 'annual' | 'quarterly' | 'ttm') || 'annual'
       const quarters = toolSelection.args.quarters as number[] | undefined
@@ -620,8 +604,9 @@ export async function askQuestion(
         }
       }
 
+      console.log('📊 Calling getFinancialMetrics with:', { symbol, metricNames, limit, period, quarters })
       const toolResult = await getFinancialMetrics({
-        symbol: 'AAPL',
+        symbol,
         metricNames,
         limit,
         period,
@@ -798,8 +783,13 @@ export async function askQuestion(
         if (action.refetchData && action.refetchArgs) {
           console.log('🔄 Refetching data with corrected args:', action.refetchArgs)
 
-          if (toolSelection.tool === 'getAaplFinancialsByMetric') {
-            const refetchResult = await getAaplFinancialsByMetric(action.refetchArgs)
+          if (toolSelection.tool === 'getFinancialsByMetric' || toolSelection.tool === 'getAaplFinancialsByMetric') {
+            // Ensure symbol is passed in refetch args
+            const refetchArgs = {
+              ...action.refetchArgs,
+              symbol: action.refetchArgs.symbol || toolSelection.args.symbol || 'AAPL',
+            }
+            const refetchResult = await getFinancialsByMetric(refetchArgs)
             if (refetchResult.data) {
               regenerationData = refetchResult.data
               dataUsed.data = refetchResult.data // Update dataUsed for final response

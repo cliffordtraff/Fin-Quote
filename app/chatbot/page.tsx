@@ -604,8 +604,6 @@ function AskPageContent() {
                     message = '✍️ Generating answer from financial metrics...'
                   } else if (selectedTool === 'getPrices') {
                     message = '✍️ Generating answer from price data...'
-                  } else if (selectedTool === 'searchFilings') {
-                    message = '✍️ Generating answer from SEC filings...'
                   } else if (selectedTool === 'getRecentFilings') {
                     message = '✍️ Generating answer from filing metadata...'
                   } else if (selectedTool === 'listMetrics') {
@@ -792,14 +790,16 @@ function AskPageContent() {
 
       // Step 3: Calling tool (show actual tool)
       setLoadingStep('calling')
-      if (toolInfo.tool === 'getAaplFinancialsByMetric' && toolInfo.metric) {
+      const effectiveTool = toolInfo.tool === 'searchFilings' ? 'getRecentFilings' : toolInfo.tool
+
+      if (effectiveTool === 'getAaplFinancialsByMetric' && toolInfo.metric) {
         setLoadingMessage(`Calling getAaplFinancialsByMetric('${toolInfo.metric}')`)
-      } else if (toolInfo.tool === 'getPrices') {
+      } else if (effectiveTool === 'getPrices') {
         setLoadingMessage(`Calling getPrices({ range: '${toolInfo.range}' })`)
-      } else if (toolInfo.tool === 'searchFilings') {
-        setLoadingMessage('Calling searchFilings (semantic search)')
+      } else if (effectiveTool === 'getRecentFilings') {
+        setLoadingMessage('Calling getRecentFilings (filing metadata)')
       } else {
-        setLoadingMessage(`Calling ${toolInfo.tool}()`)
+        setLoadingMessage(`Calling ${effectiveTool}()`)
       }
       await new Promise(resolve => setTimeout(resolve, 400))
 
@@ -1002,11 +1002,10 @@ function AskPageContent() {
       return { tool: 'getPrices', range }
     }
 
-    // Check for filing queries
+    // Check for filing queries (content search is disabled; return metadata tool)
     if (lower.includes('filing') || lower.includes('10-k') || lower.includes('10-q') ||
         lower.includes('risk') || lower.includes('sec')) {
-      return lower.includes('search') || lower.includes('find') ?
-        { tool: 'searchFilings' } : { tool: 'getRecentFilings' }
+      return { tool: 'getRecentFilings' }
     }
 
     // Financial metrics
@@ -1366,7 +1365,7 @@ function AskPageContent() {
                           ? '📊 Preparing financial chart and data table...'
                           : selectedTool === 'getPrices'
                           ? '📈 Preparing price chart...'
-                          : selectedTool === 'searchFilings' || selectedTool === 'getRecentFilings'
+                          : selectedTool === 'getRecentFilings'
                           ? '📄 Preparing filing data table...'
                           : selectedTool === 'listMetrics'
                           ? '📋 Preparing metrics catalog table...'

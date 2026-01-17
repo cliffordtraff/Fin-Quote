@@ -4,11 +4,20 @@
  * Fetches and ingests financial data (income, balance sheet, cash flow) for
  * all S&P 500 constituents using the per-symbol FMP API approach.
  *
+ * Uses UPSERT with conflict target (symbol, period_type, period_end_date).
+ * Records without period_end_date are skipped to maintain data integrity.
+ *
+ * IMPORTANT: This script fetches all three statements (income, balance, cash flow)
+ * in parallel and combines them before upserting. This makes naive UPSERT safe.
+ * If you ever need to ingest statements separately, use the COALESCE-based SQL
+ * approach documented in docs/FINANCIALS_STD_GUARDRAILS_DESIGN.md Section 5.
+ *
  * Features:
  * - Rate limiting (250 requests/min to stay under 300 limit)
  * - Progress tracking in sp500_constituents.data_status
  * - Error recovery and resume support
  * - Both annual and quarterly data
+ * - Validates period_end_date before upsert
  *
  * Usage:
  *   npx tsx scripts/sp500/batch-ingest-financials.ts              # All pending stocks
@@ -199,9 +208,28 @@ async function ingestSingleStock(
       }
     }
 
-    // Upsert to database
-    const { error } = await supabase.from('financials_std').upsert(allRecords, {
-      onConflict: 'symbol,year,period_type,fiscal_quarter',
+    // Filter out records without period_end_date (required for UNIQUE constraint)
+    const validRecords = allRecords.filter((r) => r.period_end_date !== null)
+    const skippedCount = allRecords.length - validRecords.length
+
+    if (skippedCount > 0) {
+      console.warn(`  (${skippedCount} records skipped - null period_end_date)`)
+    }
+
+    if (validRecords.length === 0) {
+      return {
+        symbol,
+        success: false,
+        annualRecords: 0,
+        quarterlyRecords: 0,
+        error: 'All records have null period_end_date',
+      }
+    }
+
+    // Upsert to database using new conflict target: (symbol, period_type, period_end_date)
+    // This is safe because we fetch all 3 statements together and combine before upserting
+    const { error } = await supabase.from('financials_std').upsert(validRecords, {
+      onConflict: 'symbol,period_type,period_end_date',
       ignoreDuplicates: false,
     })
 
@@ -215,14 +243,19 @@ async function ingestSingleStock(
       }
     }
 
+    // Count valid records by type for status tracking
+    const validAnnualCount = validRecords.filter((r) => r.period_type === 'annual').length
+    const validQuarterlyCount = validRecords.filter((r) => r.period_type === 'quarterly').length
+
     // Update status in sp500_constituents
     const dataStatus = {
       ...constituent.data_status,
       financials_std: {
         status: 'complete',
         last_updated: new Date().toISOString(),
-        annual_count: annualData.length,
-        quarterly_count: quarterlyData.length,
+        annual_count: validAnnualCount,
+        quarterly_count: validQuarterlyCount,
+        skipped_null_dates: skippedCount,
       },
     }
 
@@ -234,8 +267,8 @@ async function ingestSingleStock(
     return {
       symbol,
       success: true,
-      annualRecords: annualData.length,
-      quarterlyRecords: quarterlyData.length,
+      annualRecords: validAnnualCount,
+      quarterlyRecords: validQuarterlyCount,
     }
   } catch (error) {
     // Update status with error

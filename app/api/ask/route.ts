@@ -4,7 +4,6 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getAaplFinancialsByMetric, FinancialMetric } from '@/app/actions/financials'
 import { getAaplPrices, PriceParams } from '@/app/actions/prices'
 import { getRecentFilings } from '@/app/actions/filings'
-import { searchFilings } from '@/app/actions/search-filings'
 import { buildToolSelectionMessages, buildFinalAnswerPrompt, buildFollowUpQuestionsPrompt } from '@/lib/tools'
 import { generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer } from '@/lib/validators'
@@ -399,53 +398,23 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            factsJson = JSON.stringify(toolResult.data, null, 2)
-            dataUsed = { type: 'filings', data: toolResult.data }
-          } else if (toolSelection.tool === 'searchFilings') {
-            const query = toolSelection.args.query || question
-            if (!query || query.trim().length === 0) {
-              flow.failStep('tool_execution', {
-                summary: 'Failed to execute tool',
-                why: 'Search query missing',
-              })
-              sendEvent('error', { message: 'Search query cannot be empty' })
-              controller.close()
-              return
-            }
-
-            const limit = toolSelection.args.limit || 5
-            if (limit < 1 || limit > 10) {
-              flow.failStep('tool_execution', {
-                summary: 'Failed to execute tool',
-                why: `Invalid search limit "${limit}"`,
-                details: { limit },
-              })
-              sendEvent('error', { message: 'Invalid limit (must be 1-10)' })
-              controller.close()
-              return
-            }
-
-            const toolResult = await searchFilings({ query, limit })
-
-            if (toolResult.error || !toolResult.data) {
-              flow.failStep('tool_execution', {
-                summary: 'Filing search failed',
-                why: toolResult.error || 'No data returned',
-                details: { query, limit },
-              })
-              sendEvent('error', { message: toolResult.error || 'Failed to search filings' })
-              controller.close()
-              return
-            }
-
-            // Track embedding tokens for cost analysis
-            embeddingTokens = toolResult.embeddingTokens || 0
-
-            factsJson = JSON.stringify(toolResult.data, null, 2)
-            dataUsed = { type: 'passages', data: toolResult.data }
-          } else if (toolSelection.tool === 'listMetrics') {
-            const { listMetrics } = await import('@/app/actions/list-metrics')
-            const category = toolSelection.args.category as string | undefined
+          factsJson = JSON.stringify(toolResult.data, null, 2)
+          dataUsed = { type: 'filings', data: toolResult.data }
+        } else if (toolSelection.tool === 'searchFilings') {
+          flow.failStep('tool_execution', {
+            summary: 'Filing search disabled',
+            why: 'Filing content search is temporarily unavailable',
+            details: { query: toolSelection.args.query, limit: toolSelection.args.limit },
+          })
+          sendEvent('error', {
+            message:
+              'Filing content search is temporarily unavailable. I can share filing dates/types or financial metrics instead.',
+          })
+          controller.close()
+          return
+        } else if (toolSelection.tool === 'listMetrics') {
+          const { listMetrics } = await import('@/app/actions/list-metrics')
+          const category = toolSelection.args.category as string | undefined
 
             const toolResult = await listMetrics(category ? { category } : undefined)
 

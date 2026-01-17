@@ -1,6 +1,6 @@
 // Definitions for AI-exposed tools and prompt templates
 
-export type ToolName = 'getAaplFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
+export type ToolName = 'getFinancialsByMetric' | 'getPrices' | 'getRecentFilings' | 'searchFilings' | 'listMetrics' | 'getFinancialMetric'
 
 export type ToolDefinition = {
   name: ToolName
@@ -11,41 +11,43 @@ export type ToolDefinition = {
 
 export const TOOL_MENU: ToolDefinition[] = [
   {
-    name: 'getAaplFinancialsByMetric',
-    description: 'Get AAPL financial metrics (income statement, balance sheet, cash flow) for recent years or quarters.',
+    name: 'getFinancialsByMetric',
+    description: 'Get financial metrics (income statement, balance sheet, cash flow) for any S&P 500 stock.',
     args: {
+      symbol: 'Stock ticker symbol (e.g., AAPL, MSFT, GOOGL) - REQUIRED',
       metric: 'revenue | gross_profit | net_income | operating_income | total_assets | total_liabilities | shareholders_equity | operating_cash_flow | eps | gross_margin | roe | debt_to_equity_ratio',
       limit: 'integer 1–20 for annual, 1-40 for quarterly (defaults to 4 annual or 12 quarterly)',
       period: 'annual | quarterly (defaults to annual)',
       quarters: 'array of 1-4 (optional, only valid when period=quarterly, e.g., [1,2] for Q1 and Q2)',
     },
-    notes: 'Ticker is fixed to AAPL for MVP. Use period=quarterly for quarterly data.',
+    notes: 'Supports all S&P 500 stocks. Extract symbol from user question (e.g., "Apple revenue" → symbol: "AAPL"). Use period=quarterly for quarterly data.',
   },
   {
     name: 'getPrices',
-    description: 'Get AAPL stock price history using custom date ranges.',
+    description: 'Get stock price history for any S&P 500 stock using custom date ranges.',
     args: {
+      symbol: 'Stock ticker symbol (e.g., AAPL, MSFT, GOOGL) - REQUIRED',
       from: 'YYYY-MM-DD (required)',
       to: 'YYYY-MM-DD (optional, defaults to today)',
     },
-    notes: 'Calculate the from date based on user request (e.g., "last 7 years" = 7 years ago from today). Returns daily closing prices.',
+    notes: 'Supports all S&P 500 stocks. Calculate the from date based on user request (e.g., "last 7 years" = 7 years ago from today). Returns daily closing prices.',
   },
   {
     name: 'getRecentFilings',
-    description: 'Get recent SEC filings (10-K annual reports, 10-Q quarterly reports) for AAPL.',
+    description: 'Get recent SEC filings (10-K annual reports, 10-Q quarterly reports) for AAPL only.',
     args: {
       limit: 'integer 1–10 (defaults to 5)',
     },
-    notes: 'Returns filing metadata with links to SEC EDGAR documents. Ticker is fixed to AAPL for MVP.',
+    notes: 'Returns filing metadata with links to SEC EDGAR documents. Currently only supports AAPL.',
   },
   {
     name: 'searchFilings',
-    description: 'Search AAPL SEC filing content to answer questions about risks, strategy, management commentary, business description, etc.',
+    description: 'DISABLED: Filing content search is temporarily unavailable.',
     args: {
-      query: 'natural language search query',
-      limit: 'integer 1–10 (defaults to 5)',
+      query: 'disabled',
+      limit: 'disabled',
     },
-    notes: 'Uses semantic search to find relevant passages from 10-K/10-Q documents. Returns text passages with citations.',
+    notes: 'Do not select this tool. If a user asks about filing content, we cannot provide passage search right now.',
   },
   {
     name: 'listMetrics',
@@ -57,23 +59,69 @@ export const TOOL_MENU: ToolDefinition[] = [
   },
   {
     name: 'getFinancialMetric',
-    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 130+ other metrics. Supports annual, quarterly, and TTM (trailing twelve months) data.',
+    description: 'Get advanced financial metrics including P/E ratio, ROE, debt ratios, growth rates, and 130+ other metrics. Supports annual, quarterly, and TTM (trailing twelve months) data for any S&P 500 stock.',
     args: {
+      symbol: 'Stock ticker symbol (e.g., AAPL, MSFT, GOOGL) - REQUIRED',
       metricNames: 'array of metric names (canonical or common aliases like "P/E", "ROE", "debt to equity")',
       limit: 'integer 1–20 for annual, 1-40 for quarterly (defaults to 5 annual or 12 quarterly; ignored for ttm)',
       period: 'annual | quarterly | ttm (defaults to annual)',
       quarters: 'array of 1-4 (optional, only valid when period=quarterly, e.g., [1,2] for Q1 and Q2)',
     },
-    notes: 'Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call. Use period=quarterly for quarterly data. Use period=ttm for trailing twelve months (sum of last 4 quarters for flow metrics like revenue, or latest quarter value for balance sheet items).',
+    notes: 'Supports all S&P 500 stocks. Supports flexible metric names via alias resolution. Use listMetrics first if uncertain about metric names. Can fetch multiple metrics in one call. Use period=quarterly for quarterly data. Use period=ttm for trailing twelve months (sum of last 4 quarters for flow metrics like revenue, or latest quarter value for balance sheet items).',
   },
 ]
 
 // Static instructions that will be cached by OpenAI
 const TOOL_SELECTION_STATIC_PROMPT = `You are a router. Choose exactly one tool and return ONLY valid JSON: {"tool": string, "args": object}. No prose.
 
+CRITICAL: Filing content search (searchFilings) is DISABLED. Never select searchFilings. If the user asks about filing content, you must instead:
+- Use getRecentFilings only when they want filing dates/types/links.
+- Otherwise pick the best financial/metrics tool and the assistant will explain that filing text search is unavailable.
+
+⚠️ SYMBOL EXTRACTION (CRITICAL - ALL TOOLS REQUIRE SYMBOL):
+
+All financial data tools now support any S&P 500 stock. You MUST extract the stock symbol from the user's question.
+
+SYMBOL MAPPING (company name → ticker):
+- "Apple", "AAPL" → symbol: "AAPL"
+- "Microsoft", "MSFT" → symbol: "MSFT"
+- "Google", "Alphabet", "GOOGL" → symbol: "GOOGL"
+- "Amazon", "AMZN" → symbol: "AMZN"
+- "Tesla", "TSLA" → symbol: "TSLA"
+- "Nvidia", "NVDA" → symbol: "NVDA"
+- "Meta", "Facebook", "META" → symbol: "META"
+- "JPMorgan", "JP Morgan", "JPM" → symbol: "JPM"
+- "Berkshire", "BRK.B" → symbol: "BRK.B"
+- "Johnson & Johnson", "JNJ" → symbol: "JNJ"
+- "Visa", "V" → symbol: "V"
+- "Mastercard", "MA" → symbol: "MA"
+- "Coca-Cola", "Coke", "KO" → symbol: "KO"
+- "Pepsi", "PEP" → symbol: "PEP"
+- "Disney", "DIS" → symbol: "DIS"
+- "Netflix", "NFLX" → symbol: "NFLX"
+- "Salesforce", "CRM" → symbol: "CRM"
+- "Adobe", "ADBE" → symbol: "ADBE"
+- "Intel", "INTC" → symbol: "INTC"
+- "AMD", "Advanced Micro Devices" → symbol: "AMD"
+- "Walmart", "WMT" → symbol: "WMT"
+- "Home Depot", "HD" → symbol: "HD"
+- "Boeing", "BA" → symbol: "BA"
+- "Goldman Sachs", "GS" → symbol: "GS"
+- "Bank of America", "BAC" → symbol: "BAC"
+- Any other S&P 500 ticker (1-5 uppercase letters) → use as-is
+
+DEFAULT: If no company is mentioned, default to symbol: "AAPL"
+
+EXAMPLES:
+- "Microsoft revenue" → symbol: "MSFT"
+- "What's Tesla's P/E ratio?" → symbol: "TSLA"
+- "Google stock price last 5 years" → symbol: "GOOGL"
+- "revenue last 5 years" (no company) → symbol: "AAPL" (default)
+- "NVDA earnings" → symbol: "NVDA"
+
 Available Tools:
 
-1. getAaplFinancialsByMetric - Financial metrics as NUMBERS over time (ANNUAL or QUARTERLY)
+1. getFinancialsByMetric - Financial metrics as NUMBERS over time (ANNUAL or QUARTERLY)
 
    SUPPORTED METRICS:
 
@@ -195,11 +243,11 @@ Available Tools:
    - "Last 8 quarters of EPS" → {"metric": "eps", "period": "quarterly", "limit": 8}
    - "Revenue last 5 years" → {"metric": "revenue", "limit": 5} (annual by default)
 
-   args: {"metric": <exact name>, "limit": <number>, "period": "annual"|"quarterly", "quarters": [1-4]}
+   args: {"symbol": "<ticker>", "metric": <exact name>, "limit": <number>, "period": "annual"|"quarterly", "quarters": [1-4]}
 
-2. getPrices - Stock PRICE history
+2. getPrices - Stock PRICE history for any S&P 500 stock
 
-   ALWAYS use custom date ranges. Calculate the "from" date based on the user's request.
+   ALWAYS include the symbol and use custom date ranges. Calculate the "from" date based on the user's request.
    Today's date is {{TODAY_DATE}} (use this for calculations).
 
    Date format: YYYY-MM-DD
@@ -224,7 +272,7 @@ Available Tools:
    - "prices between 2015 and 2020" → args: {"from": "2015-01-01", "to": "2020-12-31"}
    - "from March 2018 to now" → args: {"from": "2018-03-01"}
 
-   args: {"from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}  (to is optional)
+   args: {"symbol": "<ticker>", "from": "<YYYY-MM-DD>", "to": "<YYYY-MM-DD>"}  (to is optional)
 
 3. getRecentFilings - LIST SEC filings metadata ONLY
 
@@ -240,7 +288,7 @@ Available Tools:
    - User asks WHAT the filing says
    - User wants content, quotes, or information FROM the filing
    - User asks about topics like risks, strategy, etc.
-   → Use searchFilings instead for content questions!
+   → Filing content search is disabled; the assistant will explain unavailability.
 
    LIMIT RULES:
 
@@ -260,35 +308,10 @@ Available Tools:
 
    args: {"limit": <number 1-10>}
 
-4. searchFilings - SEARCH filing content (for WHAT they say)
+4. Filing content search (DISABLED)
 
-   ⚠️ IMPORTANT: Use this when user asks about CONTENT, not just dates!
-
-   Use for ANY question about WHAT the filings say:
-   - Risk factors, strategy, operations, business model
-   - Management commentary, outlook, quotes
-   - Products, markets, competition
-   - Governance, compensation
-   - ANY question asking "what did they say", "provide quotes", etc.
-
-   Even if they mention "latest 10-K" or specific filing:
-   - "What are risk factors in latest 10-K?" → USE searchFilings
-   - "What does the 10-K say about AI?" → USE searchFilings
-   - "Provide quotes from recent filing" → USE searchFilings
-
-   QUERY RULES:
-   - Extract key terms from user's question
-   - Keep it simple (1-3 words usually best)
-   - Don't need full sentences
-
-   Examples:
-   - "What are the risk factors?" → {"query": "risk factors", "limit": 5}
-   - "What about risk factors in latest 10-K?" → {"query": "risk factors", "limit": 5}
-   - "Tell me about competition" → {"query": "competition", "limit": 5}
-   - "Provide quotes about AI strategy" → {"query": "AI strategy", "limit": 5}
-   - "What does the 10-K say about iPhone?" → {"query": "iPhone", "limit": 5}
-
-   args: {"query": "<keywords>", "limit": 5}
+   - searchFilings is disabled. Do NOT choose it.
+   - If the user wants filing content/quotes/topics, pick getRecentFilings only when they asked for filing dates/types/links; otherwise pick the closest financial/metrics tool and the assistant will explain filing text search is unavailable.
 
 5. listMetrics - DISCOVER available financial metrics
 
@@ -432,95 +455,86 @@ Available Tools:
    - "Q2 2024 ROE" → {"metricNames": ["ROE"], "period": "quarterly", "quarters": [2], "limit": 40}
    - "Last 8 quarters free cash flow" → {"metricNames": ["free cash flow"], "period": "quarterly", "limit": 8}
 
-   args: {"metricNames": ["<metric1>", "<metric2>"], "limit": <number>, "period": "annual|quarterly", "quarters": [1-4]}
+   args: {"symbol": "<ticker>", "metricNames": ["<metric1>", "<metric2>"], "limit": <number>, "period": "annual|quarterly", "quarters": [1-4]}
 
 TOOL SELECTION LOGIC:
 
-1. Basic financial metrics (revenue, assets, eps, etc.)? → getAaplFinancialsByMetric
+1. Basic financial metrics (revenue, assets, eps, etc.)? → getFinancialsByMetric
 2. Advanced metrics (P/E, ROE, debt ratios, etc.)? → getFinancialMetric
 3. User asks "what metrics available"? → listMetrics
 4. Stock price? → getPrices
 5. Filing metadata ONLY (when/which filings)? → getRecentFilings
-6. Filing CONTENT (what they say, quotes, topics)? → searchFilings
-
-⚠️ KEY DISTINCTION for #6 vs #7:
-- "When was the latest 10-K filed?" → getRecentFilings (metadata)
-- "What does the latest 10-K say about risks?" → searchFilings (content)
-- "Show me recent filings" → getRecentFilings (metadata)
-- "What are risk factors in the latest 10-K?" → searchFilings (content)
-- "Provide quotes from the 10-K" → searchFilings (content)
+6. Filing content/quotes/topics? Filing search is DISABLED. Do NOT choose searchFilings. If the user just wants dates/types/links, use getRecentFilings. Otherwise choose the closest financial/metrics tool and the assistant will explain filing text search is unavailable.
 
 Return ONLY JSON - examples:
 
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","limit":5}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","limit":1}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"total_liabilities","limit":4}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"revenue","period":"quarterly","limit":12}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"net_income","period":"quarterly","quarters":[2],"limit":40}}
-{"tool":"getAaplFinancialsByMetric","args":{"metric":"eps","period":"quarterly","quarters":[1,3],"limit":40}}
-{"tool":"getPrices","args":{"from":"2018-11-15"}}
-{"tool":"getPrices","args":{"from":"2025-01-01","to":"2025-11-15"}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"AAPL","metric":"revenue","limit":5}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"MSFT","metric":"eps","limit":1}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"GOOGL","metric":"total_liabilities","limit":4}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"AAPL","metric":"revenue","period":"quarterly","limit":12}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"TSLA","metric":"net_income","period":"quarterly","quarters":[2],"limit":40}}
+{"tool":"getFinancialsByMetric","args":{"symbol":"NVDA","metric":"eps","period":"quarterly","quarters":[1,3],"limit":40}}
+{"tool":"getPrices","args":{"symbol":"AAPL","from":"2018-11-15"}}
+{"tool":"getPrices","args":{"symbol":"GOOGL","from":"2025-01-01","to":"2025-11-15"}}
 {"tool":"getRecentFilings","args":{"limit":3}}
-{"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
-{"tool":"searchFilings","args":{"query":"AI strategy","limit":5}}
 {"tool":"listMetrics","args":{"category":"Valuation"}}
 {"tool":"listMetrics","args":{}}
-{"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":5}}
-{"tool":"getFinancialMetric","args":{"metricNames":["ROE","debt to equity"],"limit":10}}
-{"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"period":"quarterly","limit":12}}
-{"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
+{"tool":"getFinancialMetric","args":{"symbol":"AAPL","metricNames":["P/E"],"limit":5}}
+{"tool":"getFinancialMetric","args":{"symbol":"MSFT","metricNames":["ROE","debt to equity"],"limit":10}}
+{"tool":"getFinancialMetric","args":{"symbol":"AMZN","metricNames":["P/E"],"period":"quarterly","limit":12}}
+{"tool":"getFinancialMetric","args":{"symbol":"META","metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
 
 CRITICAL EXAMPLES - Filing Content vs Metadata:
 Q: "When was the latest 10-K filed?"
 A: {"tool":"getRecentFilings","args":{"limit":1}}
 
 Q: "What about risk factors in their latest 10k? provide quotes."
-A: {"tool":"searchFilings","args":{"query":"risk factors","limit":5}}
+A: {"tool":"getRecentFilings","args":{"limit":1}}  // Filing content search disabled; assistant will explain unavailability.
 
 Q: "What does the 10-K say about iPhone sales?"
-A: {"tool":"searchFilings","args":{"query":"iPhone sales","limit":5}}
+A: {"tool":"getRecentFilings","args":{"limit":1}}  // Filing content search disabled; assistant will explain unavailability.
 
 Q: "Provide quotes from the latest filing about competition"
-A: {"tool":"searchFilings","args":{"query":"competition","limit":5}}
+A: {"tool":"getRecentFilings","args":{"limit":1}}  // Filing content search disabled; assistant will explain unavailability.
 
 CRITICAL EXAMPLES - Advanced Metrics:
 Q: "What is AAPL's debt to equity ratio?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["debt to equity"],"limit":5}}
+A: {"tool":"getFinancialMetric","args":{"symbol":"AAPL","metricNames":["debt to equity"],"limit":5}}
 
-Q: "Show me P/E ratio trend"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"limit":4}}
+Q: "Show me Microsoft's P/E ratio trend"
+A: {"tool":"getFinancialMetric","args":{"symbol":"MSFT","metricNames":["P/E"],"limit":4}}
 
-Q: "What's the ROE in 2023?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"limit":20}}
+Q: "What's Google's ROE in 2023?"
+A: {"tool":"getFinancialMetric","args":{"symbol":"GOOGL","metricNames":["ROE"],"limit":20}}
 
-Q: "Compare P/E and PEG ratio"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E","PEG"],"limit":10}}
+Q: "Compare Tesla's P/E and PEG ratio"
+A: {"tool":"getFinancialMetric","args":{"symbol":"TSLA","metricNames":["P/E","PEG"],"limit":10}}
 
 CRITICAL EXAMPLES - Quarterly Advanced Metrics:
-Q: "What's the quarterly P/E ratio?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["P/E"],"period":"quarterly","limit":12}}
+Q: "What's Apple's quarterly P/E ratio?"
+A: {"tool":"getFinancialMetric","args":{"symbol":"AAPL","metricNames":["P/E"],"period":"quarterly","limit":12}}
 
-Q: "Show me Q2 2024 ROE"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
+Q: "Show me Amazon's Q2 2024 ROE"
+A: {"tool":"getFinancialMetric","args":{"symbol":"AMZN","metricNames":["ROE"],"period":"quarterly","quarters":[2],"limit":40}}
 
-Q: "Last 8 quarters free cash flow"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["free cash flow"],"period":"quarterly","limit":8}}
+Q: "Nvidia's last 8 quarters free cash flow"
+A: {"tool":"getFinancialMetric","args":{"symbol":"NVDA","metricNames":["free cash flow"],"period":"quarterly","limit":8}}
 
 CRITICAL EXAMPLES - TTM (Trailing Twelve Months):
 Q: "What's Apple's TTM revenue?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["revenue"],"period":"ttm"}}
+A: {"tool":"getFinancialMetric","args":{"symbol":"AAPL","metricNames":["revenue"],"period":"ttm"}}
 
-Q: "What is the trailing twelve months free cash flow?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["free cash flow"],"period":"ttm"}}
+Q: "What is Microsoft's trailing twelve months free cash flow?"
+A: {"tool":"getFinancialMetric","args":{"symbol":"MSFT","metricNames":["free cash flow"],"period":"ttm"}}
 
-Q: "Show me TTM EBITDA and net income"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["ebitda","net income"],"period":"ttm"}}
+Q: "Show me Google's TTM EBITDA and net income"
+A: {"tool":"getFinancialMetric","args":{"symbol":"GOOGL","metricNames":["ebitda","net income"],"period":"ttm"}}
 
-Q: "What's Apple's current operating cash flow?"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["operating cash flow"],"period":"ttm"}}
+Q: "What's Tesla's current operating cash flow?"
+A: {"tool":"getFinancialMetric","args":{"symbol":"TSLA","metricNames":["operating cash flow"],"period":"ttm"}}
 
-Q: "LTM earnings"
-A: {"tool":"getFinancialMetric","args":{"metricNames":["net income"],"period":"ttm"}}`
+Q: "Amazon LTM earnings"
+A: {"tool":"getFinancialMetric","args":{"symbol":"AMZN","metricNames":["net income"],"period":"ttm"}}`
 
 // New function that returns structured messages for caching
 export const buildToolSelectionMessages = (userQuestion: string) => {
