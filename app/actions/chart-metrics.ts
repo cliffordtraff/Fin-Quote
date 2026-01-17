@@ -266,6 +266,14 @@ export async function getMultipleMetrics(params: {
         // For quarterly data, sort by fiscal quarter
         return (a.fiscal_quarter ?? 0) - (b.fiscal_quarter ?? 0)
       })
+      // Deduplicate rows by year+quarter combination (in case of data issues)
+      const seenKeys = new Set<string>()
+      stdRows = stdRows.filter((row) => {
+        const key = `${row.year}-${row.fiscal_quarter ?? 'FY'}`
+        if (seenKeys.has(key)) return false
+        seenKeys.add(key)
+        return true
+      })
       years = stdRows.map((row) => row.year)
     }
 

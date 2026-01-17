@@ -969,9 +969,9 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
                 Metric
               </th>
-              {years.map((year) => (
+              {years.map((year, yearIndex) => (
                 <th
-                  key={year}
+                  key={`year-header-${yearIndex}`}
                   className="px-1 py-2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider"
                 >
                   {year}

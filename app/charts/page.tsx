@@ -6,12 +6,13 @@ import MetricSelector from '@/components/MetricSelector'
 import StockSelector from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
+import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
 import { useTheme } from '@/components/ThemeProvider'
 
-// Available stocks for selection
-const AVAILABLE_STOCKS = [
-  { symbol: 'AAPL', name: 'Apple Inc.' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+// Popular/commonly searched stocks for quick access
+const POPULAR_STOCKS = [
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'JPM', 'V',
+  'UNH', 'XOM', 'MA', 'JNJ', 'PG', 'HD', 'AVGO', 'CVX', 'MRK', 'COST',
 ]
 
 // Stock-specific color families for multi-stock comparison
@@ -92,6 +93,8 @@ export default function ChartsPage() {
   const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
 
   const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string; stock?: string }[]>([])
+  // Available stocks from database
+  const [availableStocks, setAvailableStocks] = useState<Stock[]>([])
   // Selected stock symbols (supports multi-select)
   const [selectedStocks, setSelectedStocks] = useState<string[]>(['AAPL'])
   // Helper to get primary stock for filtering segment metrics
@@ -117,13 +120,19 @@ export default function ChartsPage() {
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
 
-  // Load available metrics on mount
+  // Load available metrics and stocks on mount
   useEffect(() => {
-    async function loadMetrics() {
-      const metrics = await getAvailableMetrics()
+    async function loadData() {
+      const [metrics, stocksResult] = await Promise.all([
+        getAvailableMetrics(),
+        getAvailableStocks(),
+      ])
       setAvailableMetrics(metrics)
+      if (stocksResult.data) {
+        setAvailableStocks(stocksResult.data)
+      }
     }
-    loadMetrics()
+    loadData()
   }, [])
 
   // Reset year bounds and initial range when period type or stocks change
@@ -425,10 +434,11 @@ export default function ChartsPage() {
           <div className="flex items-center gap-4">
             {/* Stock Selector */}
             <StockSelector
-              availableStocks={AVAILABLE_STOCKS}
+              availableStocks={availableStocks}
               selectedStocks={selectedStocks}
               onSelect={setSelectedStocks}
               allowMultiple={true}
+              popularStocks={POPULAR_STOCKS}
             />
             {/* Period Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
