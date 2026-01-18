@@ -4,10 +4,10 @@ import { createServerClient } from '@/lib/supabase/server'
 import { Financial } from '@/lib/database.types'
 
 // Statement types for categorization
-export type StatementType = 'income' | 'balance' | 'cashflow' | 'ratios' | 'stock'
+export type StatementType = 'income' | 'balance' | 'cashflow' | 'ratios' | 'stock' | 'price'
 
 // Source table for each metric
-type MetricSource = 'financials_std' | 'financial_metrics' | 'company_metrics'
+type MetricSource = 'financials_std' | 'financial_metrics' | 'company_metrics' | 'price'
 
 // Metric configuration with labels, units, statement type, definitions, and source
 const METRIC_CONFIG = {
@@ -102,6 +102,9 @@ const METRIC_CONFIG = {
   googl_geo_emea: { label: 'GOOGL EMEA Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Europe, Middle East, and Africa.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'EMEA' },
   googl_geo_apac: { label: 'GOOGL Asia Pacific Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Asia Pacific region.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'Asia Pacific' },
   googl_geo_other_americas: { label: 'GOOGL Other Americas Revenue', unit: 'currency' as const, statement: 'stock' as StatementType, definition: 'Google/Alphabet revenue from Americas excluding the United States.', source: 'company_metrics' as MetricSource, stock: 'GOOGL', dimensionType: 'geographic', dimensionValue: 'Other Americas' },
+
+  // === PRICE (special handling - fetched from FMP API) ===
+  stock_price: { label: 'Stock Price', unit: 'price' as const, statement: 'price' as StatementType, definition: 'Closing stock price at the fiscal period end date. Aligned to the same fiscal periods as financial metrics.', source: 'price' as MetricSource },
 } as const
 
 // Ratio metrics that need to be calculated
@@ -122,12 +125,13 @@ export type MetricDataPoint = {
   value: number
   fiscal_quarter?: number | null
   fiscal_label?: string | null
+  date?: string | null  // period_end_date for price matching
 }
 
 export type MetricData = {
   metric: MetricId
   label: string
-  unit: 'currency' | 'number' | 'percent' | 'shares'
+  unit: 'currency' | 'number' | 'percent' | 'shares' | 'price'
   data: MetricDataPoint[]
 }
 
@@ -135,6 +139,7 @@ export type MetricData = {
 type ChartFinancialRow = Pick<Financial, 'year' | 'revenue' | 'gross_profit' | 'net_income' | 'operating_income' | 'total_assets' | 'total_liabilities' | 'shareholders_equity' | 'operating_cash_flow' | 'eps'> & {
   fiscal_quarter?: number | null
   fiscal_label?: string | null
+  period_end_date?: string | null
 }
 
 // Validate that requested metrics are in the whitelist
@@ -236,7 +241,7 @@ export async function getMultipleMetrics(params: {
       // Fetch std data for year reference and standard metrics
       let query = supabase
         .from('financials_std')
-        .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label')
+        .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label, period_end_date')
         .eq('symbol', symbol)
         .eq('period_type', period)
         .order('year', { ascending: false })
@@ -484,6 +489,7 @@ export async function getMultipleMetrics(params: {
               value: (metricYearData[key] ?? 0) * transform,
               fiscal_quarter: row.fiscal_quarter,
               fiscal_label: row.fiscal_label,
+              date: row.period_end_date,
             }
           }),
         }
@@ -500,6 +506,7 @@ export async function getMultipleMetrics(params: {
               : (row[metricId as keyof ChartFinancialRow] as number | null) ?? 0,
             fiscal_quarter: row.fiscal_quarter,
             fiscal_label: row.fiscal_label,
+            date: row.period_end_date,
           })),
         }
       }

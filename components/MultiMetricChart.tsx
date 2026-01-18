@@ -53,6 +53,8 @@ const METRIC_COLORS_LIGHT: Record<string, string> = {
   // Additional metrics
   rnd_expense: '#2a3540',       // Dark blue-gray
   shares_outstanding: '#2a2a3a', // Dark slate
+  // Price metrics
+  stock_price: '#166534',       // Forest green
 }
 
 // Dark mode colors - lighter, softer colors for contrast against dark
@@ -98,6 +100,8 @@ const METRIC_COLORS_DARK: Record<string, string> = {
   // Additional metrics
   rnd_expense: '#8898a8',       // Blue gray
   shares_outstanding: '#8888a8', // Slate
+  // Price metrics
+  stock_price: '#4ade80',       // Light green
 }
 
 // Fallback colors for light/dark modes
@@ -326,16 +330,20 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const hasPercentMetrics = filteredData.some((d) => d.unit === 'percent')
   const hasNumberMetrics = filteredData.some((d) => d.unit === 'number')
   const hasSharesMetrics = filteredData.some((d) => d.unit === 'shares')
+  const hasPriceMetrics = filteredData.some((d) => d.unit === 'price')
 
   // Determine primary axis type (most common or first)
-  const unitCounts = { currency: 0, percent: 0, number: 0, shares: 0 }
+  // Price is always secondary (goes on right axis), so never primary
+  const unitCounts = { currency: 0, percent: 0, number: 0, shares: 0, price: 0 }
   filteredData.forEach((d) => { unitCounts[d.unit as keyof typeof unitCounts]++ })
-  const primaryUnit = hasCurrencyMetrics ? 'currency' : hasSharesMetrics ? 'shares' : hasPercentMetrics ? 'percent' : 'number'
+  const primaryUnit = hasCurrencyMetrics ? 'currency' : hasSharesMetrics ? 'shares' : hasPercentMetrics ? 'percent' : hasPriceMetrics ? 'price' : 'number'
 
   // Need dual axis if mixing different unit types
-  const needsDualAxis = (hasCurrencyMetrics && (hasPercentMetrics || hasNumberMetrics || hasSharesMetrics)) ||
-                        (hasPercentMetrics && (hasNumberMetrics || hasSharesMetrics)) ||
-                        (hasSharesMetrics && hasNumberMetrics)
+  // Price always needs its own axis when combined with other metrics
+  const needsDualAxis = (hasCurrencyMetrics && (hasPercentMetrics || hasNumberMetrics || hasSharesMetrics || hasPriceMetrics)) ||
+                        (hasPercentMetrics && (hasNumberMetrics || hasSharesMetrics || hasPriceMetrics)) ||
+                        (hasSharesMetrics && (hasNumberMetrics || hasPriceMetrics)) ||
+                        (hasPriceMetrics && hasNumberMetrics)
 
   // Generate title
   const metricLabels = filteredData.map((d) => d.label)
@@ -383,6 +391,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const series: Highcharts.SeriesOptionsType[] = sortedFilteredData.map((metricData, index) => {
     const isCurrency = metricData.unit === 'currency'
     const isShares = metricData.unit === 'shares'
+    const isPrice = metricData.unit === 'price'
+    // Price values are NOT scaled (displayed as raw dollar amounts)
     let values = metricData.data.map((d) =>
       isCurrency || isShares ? d.value / 1_000_000_000 : d.value
     )
@@ -412,15 +422,16 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   })
 
   // Helper to get Y-axis title based on unit type
-  const getAxisTitle = (unit: 'currency' | 'percent' | 'number' | 'shares') => {
+  const getAxisTitle = (unit: 'currency' | 'percent' | 'number' | 'shares' | 'price') => {
     if (unit === 'currency') return 'USD (Billions)'
     if (unit === 'shares') return 'Shares (Billions)'
     if (unit === 'percent') return 'Percentage (%)'
+    if (unit === 'price') return 'Stock Price ($)'
     return filteredData.find((d) => d.unit === 'number')?.label || 'Value'
   }
 
   // Helper to format Y-axis labels based on unit type
-  const getAxisFormatter = (unit: 'currency' | 'percent' | 'number' | 'shares') => {
+  const getAxisFormatter = (unit: 'currency' | 'percent' | 'number' | 'shares' | 'price') => {
     return function (this: Highcharts.AxisLabelsFormatterContextObject) {
       const val = typeof this.value === 'number' ? this.value : Number(this.value)
       // When indexed, always show as percentage change
@@ -431,6 +442,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       if (unit === 'currency') return `$${val}B`
       if (unit === 'shares') return `${val}B`
       if (unit === 'percent') return `${val.toFixed(1)}%`
+      if (unit === 'price') return `$${val.toFixed(0)}`
       return val.toLocaleString()
     }
   }
@@ -459,10 +471,14 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   // This axis is on the left side (opposite: false) since the primary axis is now on the right
   if (needsDualAxis) {
     // Find the secondary unit type
-    const secondaryUnit: 'currency' | 'percent' | 'number' =
+    // Price should be on secondary axis when combined with currency (most common case)
+    const secondaryUnit: 'currency' | 'percent' | 'number' | 'price' =
       primaryUnit === 'currency'
-        ? (hasPercentMetrics ? 'percent' : 'number')
-        : (primaryUnit === 'percent' ? (hasNumberMetrics ? 'number' : 'currency') : 'currency')
+        ? (hasPriceMetrics ? 'price' : hasPercentMetrics ? 'percent' : 'number')
+        : (primaryUnit === 'percent' ? (hasPriceMetrics ? 'price' : hasNumberMetrics ? 'number' : 'currency')
+          : primaryUnit === 'shares' ? (hasPriceMetrics ? 'price' : hasPercentMetrics ? 'percent' : hasNumberMetrics ? 'number' : 'currency')
+          : primaryUnit === 'price' ? (hasCurrencyMetrics ? 'currency' : hasPercentMetrics ? 'percent' : 'number')
+          : 'currency')
 
     yAxis.push({
       title: {
@@ -550,6 +566,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             if (unit === 'currency') return val.toFixed(1)
             if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
+            if (unit === 'price') return `$${val.toFixed(0)}`
             return val.toFixed(2)
           },
         },
@@ -579,6 +596,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             if (unit === 'currency') return val.toFixed(1)
             if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
+            if (unit === 'price') return `$${val.toFixed(0)}`
             return val.toFixed(2)
           },
         },
@@ -613,6 +631,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             if (unit === 'currency') return val.toFixed(1)
             if (unit === 'shares') return val.toFixed(1)
             if (unit === 'percent') return `${val.toFixed(1)}%`
+            if (unit === 'price') return `$${val.toFixed(0)}`
             return val.toFixed(2)
           },
         },
@@ -685,6 +704,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             displayValue = `${val.toFixed(2)}B shares`
           } else if (unit === 'percent') {
             displayValue = `${val.toFixed(1)}%`
+          } else if (unit === 'price') {
+            displayValue = `$${val.toFixed(2)}`
           } else {
             displayValue = val.toFixed(2)
           }
@@ -985,7 +1006,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                 <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
                   {metricData.label}
                   <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
-                    {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : ''}
+                    {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : metricData.unit === 'price' ? '($)' : ''}
                   </span>
                 </td>
                 {years.map((year, yearIndex) => {
@@ -997,6 +1018,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                     displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
                   } else if (metricData.unit === 'percent') {
                     displayValue = `${value.toFixed(1)}%`
+                  } else if (metricData.unit === 'price') {
+                    displayValue = `$${value.toFixed(2)}`
                   } else {
                     displayValue = value.toFixed(2)
                   }

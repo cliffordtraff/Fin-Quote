@@ -31,6 +31,7 @@ const STATEMENT_LABELS: Record<StatementType | 'stock', string> = {
   cashflow: 'Cash Flow',
   ratios: 'Ratios',
   stock: 'Stock Specific',
+  price: 'Price',
 }
 
 interface DropdownProps {
@@ -435,6 +436,7 @@ export default function MetricSelector({
   const balanceMetrics = metrics.filter((m) => m.statement === 'balance')
   const cashflowMetrics = metrics.filter((m) => m.statement === 'cashflow')
   const ratioMetrics = metrics.filter((m) => m.statement === 'ratios')
+  const priceMetrics = metrics.filter((m) => m.statement === 'price')
   // Filter stock metrics by selected stock symbol(s)
   // Use selectedStocks array if provided, otherwise fall back to selectedStock
   const activeStocks = selectedStocks ?? (selectedStock ? [selectedStock] : [])
@@ -452,7 +454,7 @@ export default function MetricSelector({
 
   return (
     <div>
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-6 gap-2">
         <StatementDropdown
           label={STATEMENT_LABELS.income}
           metrics={incomeMetrics as Metric[]}
@@ -480,6 +482,14 @@ export default function MetricSelector({
         <StatementDropdown
           label={STATEMENT_LABELS.ratios}
           metrics={ratioMetrics as Metric[]}
+          selectedMetrics={selectedMetrics}
+          onToggle={onToggle}
+          maxSelections={maxSelections}
+          totalSelected={totalSelected}
+        />
+        <StatementDropdown
+          label={STATEMENT_LABELS.price}
+          metrics={priceMetrics as Metric[]}
           selectedMetrics={selectedMetrics}
           onToggle={onToggle}
           maxSelections={maxSelections}

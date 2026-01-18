@@ -48,6 +48,10 @@ export interface Database {
           shareholders_equity: number | null
           operating_cash_flow: number | null
           eps: number | null
+          period_type: string
+          fiscal_quarter: number | null
+          fiscal_label: string | null
+          period_end_date: string | null
         }
         Insert: {
           id?: string
@@ -63,6 +67,10 @@ export interface Database {
           shareholders_equity?: number | null
           operating_cash_flow?: number | null
           eps?: number | null
+          period_type?: string
+          fiscal_quarter?: number | null
+          fiscal_label?: string | null
+          period_end_date?: string | null
         }
         Update: {
           id?: string
@@ -78,6 +86,10 @@ export interface Database {
           shareholders_equity?: number | null
           operating_cash_flow?: number | null
           eps?: number | null
+          period_type?: string
+          fiscal_quarter?: number | null
+          fiscal_label?: string | null
+          period_end_date?: string | null
         }
         Relationships: [
           {

@@ -5,8 +5,10 @@ import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
 import StockSelector, { type StockSelectorHandle } from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
-import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
+import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
+import { getChartPriceData } from '@/app/actions/chart-price'
+import { isPriceMetric } from '@/lib/price-matcher'
 import { useTheme } from '@/components/ThemeProvider'
 
 // Popular/commonly searched stocks for quick access
@@ -232,15 +234,21 @@ export default function ChartsPage() {
     setError(null)
 
     try {
-      // Fetch data for all selected stocks
+      // Separate price metrics from other metrics
+      const priceMetrics = visibleMetrics.filter(isPriceMetric)
+      const otherMetrics = visibleMetrics.filter(m => !isPriceMetric(m))
+
+      // Fetch non-price data for all selected stocks
       const fetchPromises = selectedStocks.map((symbol) =>
-        getMultipleMetrics({
-          symbol,
-          metrics: visibleMetrics,
-          minYear: minYearParam,
-          maxYear: maxYearParam,
-          period: periodType,
-        })
+        otherMetrics.length > 0
+          ? getMultipleMetrics({
+              symbol,
+              metrics: otherMetrics,
+              minYear: minYearParam,
+              maxYear: maxYearParam,
+              period: periodType,
+            })
+          : Promise.resolve({ data: [], error: null, yearBounds: null })
       )
 
       const results = await Promise.all(fetchPromises)
@@ -249,6 +257,9 @@ export default function ChartsPage() {
       const mergedData: MetricData[] = []
       let combinedBounds: { min: number; max: number } | null = null
       let firstError: string | null = null
+
+      // Collect period_end_dates from financial data for price matching
+      const periodEndDatesByStock: Record<string, Array<{ date: string; year: number; fiscal_quarter?: number | null; fiscal_label?: string | null }>> = {}
 
       results.forEach((result, index) => {
         const symbol = selectedStocks[index]
@@ -269,6 +280,18 @@ export default function ChartsPage() {
               metric: prefixedId as MetricId,
               label: prefixedLabel,
             })
+
+            // Collect period_end_dates for price matching (use first metric with dates)
+            if (!periodEndDatesByStock[symbol] && metricData.data.length > 0) {
+              periodEndDatesByStock[symbol] = metricData.data
+                .filter(d => d.date)
+                .map(d => ({
+                  date: d.date!,
+                  year: d.year,
+                  fiscal_quarter: d.fiscal_quarter,
+                  fiscal_label: d.fiscal_label,
+                }))
+            }
           })
         }
 
@@ -282,6 +305,42 @@ export default function ChartsPage() {
           }
         }
       })
+
+      // Fetch price data if price metrics are selected
+      if (priceMetrics.length > 0) {
+        const priceFetchPromises = selectedStocks.map(async (symbol) => {
+          const periodEndDates = periodEndDatesByStock[symbol]
+          const priceResult = await getChartPriceData({
+            symbol,
+            periodEndDates,
+            periodType: periodType as PeriodType,
+            minYear: minYearParam,
+            maxYear: maxYearParam,
+          })
+
+          if (priceResult.data) {
+            // For multi-stock, prefix metric ID and label with stock symbol
+            const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
+            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
+
+            return {
+              ...priceResult.data,
+              metric: prefixedId as MetricId,
+              label: prefixedLabel,
+            }
+          }
+          return null
+        })
+
+        const priceResults = await Promise.all(priceFetchPromises)
+
+        // Add price data to merged results
+        priceResults.forEach(priceData => {
+          if (priceData) {
+            mergedData.push(priceData)
+          }
+        })
+      }
 
       if (firstError && mergedData.length === 0) {
         setError(firstError)
