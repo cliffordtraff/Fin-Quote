@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
-import StockSelector from '@/components/StockSelector'
+import StockSelector, { type StockSelectorHandle } from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
@@ -119,6 +119,7 @@ export default function ChartsPage() {
   const [initialRangeSet, setInitialRangeSet] = useState(false)
   const [sliderWidth, setSliderWidth] = useState(0)
   const sliderRef = useRef<HTMLDivElement | null>(null)
+  const stockSelectorRef = useRef<StockSelectorHandle>(null)
   const thumbEffectivePx = 24 // matches CSS width + borders + shadow
   // Custom colors for metrics (overrides default colors)
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
@@ -137,6 +138,22 @@ export default function ChartsPage() {
       }
     }
     loadData()
+  }, [])
+
+  // Keyboard shortcut: '/' to focus stock search
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      // Ignore if user is typing in an input or textarea
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      if (event.key === '/') {
+        event.preventDefault()
+        stockSelectorRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   // Reset year bounds and initial range when period type changes
@@ -416,6 +433,45 @@ export default function ChartsPage() {
     setVisibleMetrics([])
   }
 
+  // Preset configurations for quick start
+  const CHART_PRESETS = [
+    {
+      label: 'AAPL Revenue and Net Income',
+      stocks: ['AAPL'],
+      metrics: ['revenue', 'net_income'] as MetricId[],
+    },
+    {
+      label: 'AAPL Profitability Ratios',
+      stocks: ['AAPL'],
+      metrics: ['gross_margin', 'operating_margin', 'roe'] as MetricId[],
+    },
+    {
+      label: 'AAPL vs MSFT Revenue',
+      stocks: ['AAPL', 'MSFT'],
+      metrics: ['revenue'] as MetricId[],
+    },
+    {
+      label: 'NVDA Valuation Ratios',
+      stocks: ['NVDA'],
+      metrics: ['pe_ratio', 'pb_ratio', 'ev_ebitda'] as MetricId[],
+    },
+  ]
+
+  // Apply a preset configuration
+  const handleApplyPreset = (preset: { stocks: string[]; metrics: MetricId[] }) => {
+    // Set stocks
+    setAddedStocks(preset.stocks)
+    setVisibleStocks(preset.stocks)
+    // Set metrics with colors
+    const newColors: Record<string, string> = {}
+    preset.metrics.forEach((metricId, index) => {
+      newColors[metricId] = COLOR_PALETTE[index % COLOR_PALETTE.length]
+    })
+    setCustomColors(newColors)
+    setAddedMetrics(preset.metrics)
+    setVisibleMetrics(preset.metrics)
+  }
+
   // Reset everything to default state
   const handleReset = () => {
     setAddedMetrics([])
@@ -472,52 +528,37 @@ export default function ChartsPage() {
         <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2">
-          {/* Stock Selector + Period Toggle + Metric Selectors */}
+          {/* Stock Selector + Metric Selectors */}
           <div className="flex items-center gap-4">
-            {/* Stock Selector */}
-            <StockSelector
-              availableStocks={availableStocks}
-              selectedStocks={addedStocks}
-              onSelect={handleStockSelect}
-              allowMultiple={true}
-              popularStocks={POPULAR_STOCKS}
-            />
-            {/* Period Toggle */}
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
-              <button
-                type="button"
-                onClick={() => setPeriodType('annual')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  periodType === 'annual'
-                    ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Annual
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriodType('quarterly')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  periodType === 'quarterly'
-                    ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Quarterly
-              </button>
+            {/* Stock Selector - wider */}
+            <div className="relative w-72">
+              {addedStocks.length === 0 && (
+                <div className="absolute inset-0 ring-2 ring-blue-400 dark:ring-blue-500 rounded-lg animate-pulse-subtle pointer-events-none z-10" />
+              )}
+              <StockSelector
+                ref={stockSelectorRef}
+                availableStocks={availableStocks}
+                selectedStocks={addedStocks}
+                onSelect={handleStockSelect}
+                allowMultiple={true}
+                popularStocks={POPULAR_STOCKS}
+                autoFocus={true}
+              />
             </div>
             {/* Metric Selector */}
-            <div className="flex-1">
-            <MetricSelector
-              metrics={availableMetrics}
-              selectedMetrics={addedMetrics}
-              onToggle={handleMetricToggle}
-              onClear={handleClearAll}
-              maxSelections={10}
-              selectedStock={selectedStock}
-              selectedStocks={selectedStocks}
-            />
+            <div className="relative flex-1">
+              {addedStocks.length > 0 && addedMetrics.length === 0 && (
+                <div className="absolute inset-0 ring-2 ring-blue-400 dark:ring-blue-500 rounded-lg animate-pulse-subtle pointer-events-none" />
+              )}
+              <MetricSelector
+                metrics={availableMetrics}
+                selectedMetrics={addedMetrics}
+                onToggle={handleMetricToggle}
+                onClear={handleClearAll}
+                maxSelections={10}
+                selectedStock={selectedStock}
+                selectedStocks={selectedStocks}
+              />
             </div>
           </div>
 
@@ -630,8 +671,35 @@ export default function ChartsPage() {
               </div>
             </div>
 
-            {/* Time Range Slider - right half */}
-            <div className="w-[700px] flex-shrink-0 space-y-2 range-slider-wrap">
+            {/* Period Toggle + Time Range Slider - right half */}
+            <div className="flex items-start gap-4 flex-shrink-0">
+              {/* Period Toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setPeriodType('annual')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    periodType === 'annual'
+                      ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Annual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodType('quarterly')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    periodType === 'quarterly'
+                      ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Quarterly
+                </button>
+              </div>
+              {/* Time Range Slider */}
+              <div className="w-[550px] space-y-2 range-slider-wrap">
               <div className="range-slider" ref={sliderRef}>
                 <div className="range-slider-track" />
                 <div
@@ -688,6 +756,7 @@ export default function ChartsPage() {
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
           </div>
@@ -745,13 +814,42 @@ export default function ChartsPage() {
               />
             ) : (
               <div className="h-[650px] flex items-center justify-center">
-                <p className="text-gray-600 dark:text-gray-400">
-                  {visibleStocks.length === 0 && visibleMetrics.length === 0
-                    ? 'Select a stock and metric to display'
-                    : visibleStocks.length === 0
-                    ? 'Enable at least one stock to display'
-                    : 'Select at least one metric to display'}
-                </p>
+                <div className="text-center max-w-lg">
+                  {/* Guided steps */}
+                  {addedStocks.length === 0 ? (
+                    <>
+                      <div className="mb-8">
+                        <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Pick a stock</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Use the dropdown above to select a stock</p>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">or try a preset</span>
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                      </div>
+
+                      {/* Preset buttons */}
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {CHART_PRESETS.map((preset) => (
+                          <button
+                            key={preset.label}
+                            onClick={() => handleApplyPreset(preset)}
+                            className="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-700 dark:hover:text-blue-300 transition-colors border border-gray-200 dark:border-gray-700"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Choose metrics to compare</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Use the metrics dropdown to add data to your chart</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             </div>

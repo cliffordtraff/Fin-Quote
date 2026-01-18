@@ -291,7 +291,7 @@ function StockSpecificDropdown({
 
       {isOpen && (
         <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-[500px] overflow-y-auto">
             {metricsByCategory.map(({ key, title, metrics: sectionMetrics }) => (
               <CollapsibleSection
                 key={key}
@@ -374,8 +374,8 @@ function StatementDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[200px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
-          <div className="max-h-64 overflow-y-auto">
+        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+          <div className="max-h-[500px] overflow-y-auto">
             {metrics.map((metric) => {
               const isSelected = selectedMetrics.includes(metric.id)
               const isDisabled = !isSelected && totalSelected >= maxSelections
@@ -440,8 +440,10 @@ export default function MetricSelector({
   const activeStocks = selectedStocks ?? (selectedStock ? [selectedStock] : [])
   const stockMetrics = metrics.filter((m) => {
     if (m.statement !== 'stock') return false
-    // If no stock filter or metric has no stock restriction, include it
-    if (activeStocks.length === 0 || !m.stock) return true
+    // If no stocks selected, don't show any stock-specific metrics
+    if (activeStocks.length === 0) return false
+    // If metric has no stock restriction, include it for any selected stock
+    if (!m.stock) return true
     // Only include metrics that match any of the selected stocks
     return activeStocks.includes(m.stock)
   })
