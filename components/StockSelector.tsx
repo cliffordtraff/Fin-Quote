@@ -175,7 +175,7 @@ export default function StockSelector({
           </div>
 
           {/* Stock List */}
-          <div className="max-h-64 overflow-y-auto p-2">
+          <div className="max-h-[500px] overflow-y-auto p-2">
             {!searchQuery && popularStocks.length > 0 && (
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
                 Popular

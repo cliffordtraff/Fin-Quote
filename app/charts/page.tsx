@@ -96,9 +96,9 @@ export default function ChartsPage() {
   // Available stocks from database
   const [availableStocks, setAvailableStocks] = useState<Stock[]>([])
   // Selected stock symbols (supports multi-select)
-  const [selectedStocks, setSelectedStocks] = useState<string[]>(['AAPL'])
+  const [selectedStocks, setSelectedStocks] = useState<string[]>([])
   // Helper to get primary stock for filtering segment metrics
-  const selectedStock = selectedStocks[0] || 'AAPL'
+  const selectedStock = selectedStocks[0] || ''
   // Metrics added to the page (from dropdown)
   const [addedMetrics, setAddedMetrics] = useState<MetricId[]>([])
   // Metrics visible on chart (subset of addedMetrics, controlled by checkboxes)

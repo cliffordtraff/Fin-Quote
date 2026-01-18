@@ -4,410 +4,562 @@ This document outlines all the financial metrics required for the S&P 500 compan
 
 ## Overview
 
-We have added all the Finviz metrics to our UI, but many fields show "N/A" because we haven't ingested the data yet. This document tracks what we have and what we need.
+We have **132 unique metrics already ingested** in the `financial_metrics` table from FMP's key-metrics, ratios, and growth endpoints. Many UI fields showing "N/A" are actually **query/mapping issues**, not missing data.
+
+### Root Causes of N/A Fields
+
+1. **Metric name mismatches** - UI code looks for wrong field name (e.g., `evToSales` vs actual stored name)
+2. **Live API fallback failures** - `stock-key-stats.ts` still makes live FMP calls instead of DB-only reads
+3. **Genuinely missing data** - analyst estimates, insider trading, technicals not yet ingested
 
 ---
 
-## Key Statistics Table
+## Current Database Inventory
+
+### `financial_metrics` table (132 metrics already available)
+
+**Valuation:**
+- `peRatio`, `pbRatio`, `pfcfRatio`, `priceSalesRatio`, `priceEarningsToGrowthRatio`
+- `enterpriseValue`, `enterpriseValueMultiple`, `evToSales`, `evToFreeCashFlow`, `evToOperatingCashFlow`
+- `marketCap`, `marketCapitalization`, `grahamNumber`, `grahamNetNet`, `priceFairValue`
+
+**Profitability & Returns:**
+- `returnOnAssets`, `returnOnEquity`, `roic`, `returnOnCapitalEmployed`, `returnOnTangibleAssets`
+- `grossProfitMargin`, `operatingProfitMargin`, `netProfitMargin`, `ebitdaMargin`, `pretaxProfitMargin`
+- `ebitPerRevenue`, `ebtPerEbit`, `netIncomePerEBT`, `effectiveTaxRate`
+
+**Leverage & Liquidity:**
+- `currentRatio`, `quickRatio`, `cashRatio`
+- `debtRatio`, `debtEquityRatio`, `longTermDebtToCapitalization`, `totalDebtToCapitalization`
+- `interestCoverage`, `cashFlowCoverageRatios`, `shortTermCoverageRatios`
+
+**Efficiency:**
+- `assetTurnover`, `fixedAssetTurnover`, `inventoryTurnover`, `receivablesTurnover`, `payablesTurnover`
+- `daysOfInventoryOnHand`, `daysOfSalesOutstanding`, `daysOfPayablesOutstanding`
+- `cashConversionCycle`, `operatingCycle`
+
+**Growth (3Y, 5Y, 10Y available):**
+- `revenueGrowth`, `netIncomeGrowth`, `grossProfitGrowth`, `operatingIncomeGrowth`
+- `freeCashFlowGrowth`, `operatingCashFlowGrowth`, `assetGrowth`, `debtGrowth`
+- `threeYRevenueGrowthPerShare`, `fiveYRevenueGrowthPerShare`, `tenYRevenueGrowthPerShare`
+- `threeYNetIncomeGrowthPerShare`, `fiveYNetIncomeGrowthPerShare`, `tenYNetIncomeGrowthPerShare`
+- `dividendsperShareGrowth`, `threeYDividendperShareGrowthPerShare`, `fiveYDividendperShareGrowthPerShare`
+
+**Per-Share Metrics:**
+- `bookValuePerShare`, `tangibleBookValuePerShare`, `revenuePerShare`, `netIncomePerShare`
+- `freeCashFlowPerShare`, `operatingCashFlowPerShare`, `cashPerShare`, `capexPerShare`
+- `interestDebtPerShare`, `epsdilutedGrowth`, `epsgrowth`
+
+**Dividends:**
+- `dividendYield`, `dividendPayoutRatio`, `payoutRatio`
+
+**Cash Flow:**
+- `freeCashFlow`, `capitalExpenditure`, `depreciationAndAmortization`
+- `dividendsPaid`, `commonStockRepurchased`, `stockBasedCompensation`
+- `freeCashFlowYield`, `freeCashFlowOperatingCashFlowRatio`
+- `capexToDepreciation`, `capexToOperatingCashFlow`, `capexToRevenue`
+- `dividendPaidAndCapexCoverageRatio`, `capitalExpenditureCoverageRatio`
+
+**Other:**
+- `beta`, `numberOfShares`, `workingCapital`, `investedCapital`
+- `tangibleAssetValue`, `netCurrentAssetValue`, `netDebtToEBITDA`
+
+---
+
+## Key Statistics Table - Corrected Status
 
 ### Column 1: Company Info
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| Index | Missing | Need separate data source (S&P 500, NASDAQ, etc.) |
-| Market Cap | Available | FMP Quote API (`marketCap`) |
-| Enterprise Value | Available | FMP Key Metrics (`enterpriseValue`) |
-| Income | Available | `financials_std.net_income` |
-| Sales | Available | `financials_std.revenue` |
-| Book/sh | Available | FMP Key Metrics (`bookValuePerShare`) |
-| Cash/sh | Available | FMP Key Metrics (`cashPerShare`) |
-| Dividend Est. | Missing | FMP Analyst Estimates API |
-| Dividend TTM | Available | `financial_metrics.dividendPerShare` |
-| Dividend Ex-Date | Missing | FMP Stock Dividend Calendar API |
-| Dividend Gr. 3/5Y | Missing | Need to calculate from historical data |
-| Payout | Available | `financial_metrics.payoutRatio` |
-| Employees | Missing | FMP Company Profile (`fullTimeEmployees`) |
-| IPO | Missing | FMP Company Profile (`ipoDate`) |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| Index | **Missing** | — | Need separate data source |
+| Market Cap | **In DB** | `marketCap` or `marketCapitalization` | ✅ |
+| Enterprise Value | **In DB** | `enterpriseValue` | ✅ |
+| Income | **In DB** | `financials_std.net_income` | ✅ |
+| Sales | **In DB** | `financials_std.revenue` | ✅ |
+| Book/sh | **In DB** | `bookValuePerShare` | ✅ |
+| Cash/sh | **In DB** | `cashPerShare` | ✅ |
+| Dividend Est. | **Missing** | — | Need FMP Analyst Estimates API |
+| Dividend TTM | **In DB** | `dividendYield` (calculate back) | Check mapping |
+| Dividend Ex-Date | **Missing** | — | Need FMP Stock Dividend Calendar API |
+| Dividend Gr. 3/5Y | **In DB** | `threeYDividendperShareGrowthPerShare`, `fiveYDividendperShareGrowthPerShare` | Fix query |
+| Payout | **In DB** | `payoutRatio` or `dividendPayoutRatio` | ✅ |
+| Employees | **Missing** | — | Need FMP Company Profile |
+| IPO | **Missing** | — | Need FMP Company Profile |
 
 ### Column 2: Valuation Ratios
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| P/E | Available | FMP Quote API (`pe`) |
-| Forward P/E | Available | FMP Key Metrics (`forwardPE`) |
-| PEG | Available | FMP Key Metrics (`pegRatio`) |
-| P/S | Available | FMP Key Metrics (`priceToSalesRatio`) |
-| P/B | Available | FMP Key Metrics (`pbRatio`) |
-| P/C | Available | FMP Key Metrics (`pfcfRatio`) |
-| P/FCF | Available | `financial_metrics.priceToFreeCashFlowsRatio` |
-| EV/EBITDA | Available | FMP Key Metrics (`enterpriseValueOverEBITDA`) |
-| EV/Sales | Missing | Need to calculate (EV / Revenue) |
-| Quick Ratio | Available | `financial_metrics.quickRatio` |
-| Current Ratio | Available | `financial_metrics.currentRatio` |
-| Debt/Eq | Available | `financial_metrics.debtToEquity` |
-| LT Debt/Eq | Missing | `financial_metrics.longTermDebtToCapitalization` |
-| Option/Short | Missing | Separate data source needed |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| P/E | **In DB** | `peRatio` | ✅ |
+| Forward P/E | **Missing** | — | Not in FMP ratios/key-metrics endpoints |
+| PEG | **In DB** | `priceEarningsToGrowthRatio` | Check field name mapping |
+| P/S | **In DB** | `priceSalesRatio` | ✅ |
+| P/B | **In DB** | `pbRatio` or `ptbRatio` | ✅ |
+| P/C | **In DB** | `pfcfRatio` or `priceCashFlowRatio` | ✅ |
+| P/FCF | **In DB** | `priceToFreeCashFlowsRatio` (check exact name) | Fix mapping |
+| EV/EBITDA | **In DB** | `enterpriseValueMultiple` | ✅ |
+| EV/Sales | **In DB** | `evToSales` | ✅ |
+| Quick Ratio | **In DB** | `quickRatio` | ✅ |
+| Current Ratio | **In DB** | `currentRatio` | ✅ |
+| Debt/Eq | **In DB** | `debtEquityRatio` | ✅ |
+| LT Debt/Eq | **In DB** | `longTermDebtToCapitalization` | Fix mapping in UI |
+| Option/Short | **Missing** | — | Premium data source |
 
 ### Column 3: EPS & Sales Growth
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| EPS (ttm) | Available | FMP Quote API (`eps`) |
-| EPS next Y | Missing | FMP Analyst Estimates API |
-| EPS next Q | Missing | FMP Analyst Estimates API |
-| EPS this Y | Partial | `financial_metrics.netIncomeGrowth` |
-| EPS next Y (growth) | Missing | FMP Analyst Estimates API |
-| EPS next 5Y | Missing | FMP Analyst Estimates API |
-| EPS past 3/5Y | Partial | `financial_metrics.threeYNetIncomeGrowthPerShare` |
-| Sales past 3/5Y | Partial | `financial_metrics.threeYRevenueGrowthPerShare` |
-| Sales Y/Y TTM | Available | `financial_metrics.revenueGrowth` |
-| EPS Q/Q | Missing | Need quarterly data calculation |
-| Sales Q/Q | Missing | Need quarterly data calculation |
-| Earnings | Missing | FMP Earnings Calendar API |
-| EPS Surpr. | Missing | FMP Earnings Surprises API |
-| Sales Surpr. | Missing | FMP Earnings Surprises API |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| EPS (ttm) | **In DB** | `financials_std.eps` | ✅ |
+| EPS next Y | **Missing** | — | Need FMP Analyst Estimates API |
+| EPS next Q | **Missing** | — | Need FMP Analyst Estimates API |
+| EPS this Y | **In DB** | `netIncomeGrowth` or `epsgrowth` | ✅ |
+| EPS next Y (growth) | **Missing** | — | Need FMP Analyst Estimates API |
+| EPS next 5Y | **Missing** | — | Need FMP Analyst Estimates API |
+| EPS past 3/5Y | **In DB** | `threeYNetIncomeGrowthPerShare`, `fiveYNetIncomeGrowthPerShare` | ✅ |
+| Sales past 3/5Y | **In DB** | `threeYRevenueGrowthPerShare`, `fiveYRevenueGrowthPerShare` | ✅ |
+| Sales Y/Y TTM | **In DB** | `revenueGrowth` | ✅ |
+| EPS Q/Q | **Missing** | — | Need quarterly calculation |
+| Sales Q/Q | **Missing** | — | Need quarterly calculation |
+| Earnings Date | **Missing** | — | Need FMP Earnings Calendar |
+| EPS Surpr. | **Missing** | — | Need FMP Earnings Surprises |
+| Sales Surpr. | **Missing** | — | Need FMP Earnings Surprises |
 
 ### Column 4: Ownership & Returns
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| Insider Own | Missing | FMP Insider Trading API |
-| Insider Trans | Missing | FMP Insider Trading API |
-| Inst Own | Missing | FMP Institutional Holders API |
-| Inst Trans | Missing | FMP Institutional Holders API |
-| ROA | Available | `financial_metrics.returnOnAssets` |
-| ROE | Available | `financial_metrics.returnOnEquity` |
-| ROIC | Available | `financial_metrics.returnOnCapitalEmployed` |
-| Gross Margin | Available | `financial_metrics.grossProfitMargin` |
-| Oper. Margin | Available | `financial_metrics.operatingProfitMargin` |
-| Profit Margin | Available | `financial_metrics.netProfitMargin` |
-| SMA20 | Missing | FMP Technical Indicators API |
-| SMA50 | Missing | FMP Technical Indicators API |
-| SMA200 | Missing | FMP Technical Indicators API |
-| Trades | Missing | Premium data source needed |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| Insider Own | **Missing** | — | Need FMP Insider Trading API |
+| Insider Trans | **Missing** | — | Need FMP Insider Trading API |
+| Inst Own | **Missing** | — | Need FMP Institutional Holders |
+| Inst Trans | **Missing** | — | Need FMP Institutional Holders |
+| ROA | **In DB** | `returnOnAssets` | ✅ |
+| ROE | **In DB** | `returnOnEquity` | ✅ |
+| ROIC | **In DB** | `roic` or `returnOnCapitalEmployed` | ✅ |
+| Gross Margin | **In DB** | `grossProfitMargin` | ✅ |
+| Oper. Margin | **In DB** | `operatingProfitMargin` or `ebitPerRevenue` | ✅ |
+| Profit Margin | **In DB** | `netProfitMargin` | ✅ |
+| SMA20 | **Missing** | — | Need FMP Technical Indicators |
+| SMA50 | **Missing** | — | Need FMP Technical Indicators |
+| SMA200 | **Missing** | — | Need FMP Technical Indicators |
 
 ### Column 5: Shares & Volatility
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| Shs Outstand | Available | FMP Quote API (`sharesOutstanding`) |
-| Shs Float | Missing | FMP Stock Screener or separate API |
-| Short Float | Missing | FMP Short Interest API |
-| Short Ratio | Missing | FMP Short Interest API |
-| Short Interest | Missing | FMP Short Interest API |
-| 52W High | Available | FMP Quote API (`yearHigh`) |
-| 52W Low | Available | FMP Quote API (`yearLow`) |
-| Volatility | Missing | Need to calculate from price history |
-| ATR (14) | Missing | FMP Technical Indicators API |
-| RSI (14) | Missing | FMP Technical Indicators API |
-| Beta | Available | FMP Key Metrics (`beta`) |
-| Rel Volume | Available | Calculated (`volume / avgVolume`) |
-| Avg Volume | Available | FMP Quote API (`avgVolume`) |
-| Volume | Available | FMP Quote API (`volume`) |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| Shs Outstand | **In DB** | `numberOfShares` | ✅ |
+| Shs Float | **Missing** | — | Need separate API |
+| Short Float | **Missing** | — | Need FMP Short Interest |
+| Short Ratio | **Missing** | — | Need FMP Short Interest |
+| Short Interest | **Missing** | — | Need FMP Short Interest |
+| 52W High | **Live API** | FMP Quote | OK (real-time needed) |
+| 52W Low | **Live API** | FMP Quote | OK (real-time needed) |
+| Volatility | **Missing** | — | Calculate from price history |
+| ATR (14) | **Missing** | — | Need FMP Technical Indicators |
+| RSI (14) | **Missing** | — | Need FMP Technical Indicators |
+| Beta | **In DB** | `beta` | ✅ |
+| Rel Volume | **Live API** | Calculated | OK |
+| Avg Volume | **Live API** | FMP Quote | OK |
+| Volume | **Live API** | FMP Quote | OK |
 
 ### Column 6: Performance
 
-| Metric | Status | Source |
-|--------|--------|--------|
-| Perf Week | Missing | FMP Stock Price Change API |
-| Perf Month | Missing | FMP Stock Price Change API |
-| Perf Quarter | Missing | FMP Stock Price Change API |
-| Perf Half Y | Missing | FMP Stock Price Change API |
-| Perf YTD | Available | FMP Quote API (`ytdChange`) |
-| Perf Year | Missing | FMP Stock Price Change API |
-| Perf 3Y | Missing | Need to calculate from price history |
-| Perf 5Y | Missing | Need to calculate from price history |
-| Perf 10Y | Missing | Need to calculate from price history |
-| Recom | Missing | FMP Analyst Estimates API |
-| Target Price | Partial | FMP Quote API (`targetPrice`) |
-| Prev Close | Available | FMP Quote API (`previousClose`) |
-| Price | Available | FMP Quote API (`price`) |
-| Change | Available | FMP Quote API (`changesPercentage`) |
-
-### FMP API Endpoints for Key Statistics
-
-| Data Category | FMP Endpoint |
-|---------------|--------------|
-| Real-time Quote | `GET /api/v3/quote/{symbol}` |
-| Key Metrics | `GET /api/v3/key-metrics/{symbol}` |
-| Financial Ratios | `GET /api/v3/ratios/{symbol}` |
-| Company Profile | `GET /api/v3/profile/{symbol}` |
-| Analyst Estimates | `GET /api/v3/analyst-estimates/{symbol}` |
-| Earnings Calendar | `GET /api/v3/earning_calendar` |
-| Earnings Surprises | `GET /api/v3/earnings-surprises/{symbol}` |
-| Insider Trading | `GET /api/v4/insider-trading` |
-| Institutional Holders | `GET /api/v3/institutional-holder/{symbol}` |
-| Stock Price Change | `GET /api/v3/stock-price-change/{symbol}` |
-| Technical Indicators | `GET /api/v3/technical_indicator/daily/{symbol}` |
+| Metric | Status | Database Field | Issue |
+|--------|--------|----------------|-------|
+| Perf Week | **Missing** | — | Need FMP Stock Price Change |
+| Perf Month | **Missing** | — | Need FMP Stock Price Change |
+| Perf Quarter | **Missing** | — | Need FMP Stock Price Change |
+| Perf Half Y | **Missing** | — | Need FMP Stock Price Change |
+| Perf YTD | **Live API** | FMP Quote | OK |
+| Perf Year | **Missing** | — | Need FMP Stock Price Change |
+| Perf 3Y | **Missing** | — | Calculate from price history |
+| Perf 5Y | **Missing** | — | Calculate from price history |
+| Perf 10Y | **Missing** | — | Calculate from price history |
+| Recom | **Missing** | — | Need FMP Analyst Estimates |
+| Target Price | **Live API** | FMP Quote | OK |
+| Prev Close | **Live API** | FMP Quote | OK |
+| Price | **Live API** | FMP Quote | OK |
+| Change | **Live API** | FMP Quote | OK |
 
 ---
 
-## Balance Sheet
+## Priority Actions
 
-### Currently Available (from `financial_metrics` table)
+### Phase 1: Fix Query/Mapping Issues (No new data needed)
 
-| Metric | Database Field |
-|--------|----------------|
-| Total Assets | `financials_std.total_assets` |
-| Total Liabilities | `financials_std.total_liabilities` |
-| Total Shareholders Equity | `financials_std.shareholders_equity` |
-| Book Value Per Share | `bookValuePerShare` |
-| Tangible Book Value Per Share | `tangibleBookValuePerShare` |
-| Price to Book Ratio | `priceToBookRatio` |
-| Return on Assets | `returnOnAssets` |
-| Return on Equity | `returnOnEquity` |
-| Return on Invested Capital | `roic` |
-| Quick Ratio | `quickRatio` |
-| Current Ratio | `currentRatio` |
+These metrics are IN THE DATABASE but showing N/A due to code issues:
 
-### Missing Data - Needs FMP Balance Sheet API Ingestion
+1. **`stock-key-stats.ts`** - Fix metric name lookups:
+   - `longTermDebtToCapitalization` → LT Debt/Eq
+   - `evToSales` → EV/Sales
+   - `threeYDividendperShareGrowthPerShare` → Dividend Gr 3Y
+   - `priceEarningsToGrowthRatio` → PEG
+   - Ensure fallback chain checks all possible field names
 
-FMP Endpoint: `https://financialmodelingprep.com/api/v3/balance-sheet-statement/{symbol}?period=annual&apikey=YOUR_KEY`
+2. **`get-all-financials.ts`** - Already queries financial_metrics, verify mappings
 
-#### Assets
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Cash & Short Term Investments | `cashAndShortTermInvestments` |
-| Short Term Receivables | `netReceivables` |
-| Inventories | `inventory` |
-| Other Current Assets | `otherCurrentAssets` |
-| Total Current Assets | `totalCurrentAssets` |
-| Net Property, Plant & Equipment | `propertyPlantEquipmentNet` |
-| Total Investments and Advances | `longTermInvestments` |
-| Long-Term Note Receivable | `longTermDebtNoncurrent` (or similar) |
-| Intangible Assets | `intangibleAssets` or `goodwillAndIntangibleAssets` |
-| Deferred Tax Assets | `deferredTaxAssetsNoncurrent` |
-| Other Assets | `otherNonCurrentAssets` |
+### Phase 2: Ingest New Data (Requires FMP API calls)
 
-#### Liabilities
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Short Term Debt Incl. Current Port. of LT Debt | `shortTermDebt` |
-| Accounts Payable | `accountPayables` |
-| Income Tax Payable | `taxPayables` |
-| Other Current Liabilities | `otherCurrentLiabilities` |
-| Total Current Liabilities | `totalCurrentLiabilities` |
-| Long Term Debt | `longTermDebt` |
-| Provision for Risks Charges | (may not be available) |
-| Deferred Tax Liabilities | `deferredTaxLiabilitiesNoncurrent` |
-| Other Liabilities | `otherNonCurrentLiabilities` |
+**Priority order:**
 
-#### Equity
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Non-Equity Reserves | (may need calculation) |
-| Preferred Stock - Carrying Value | `preferredStock` |
-| Common Equity | `commonStock` |
-| Accumulated Minority Interest | `minorityInterest` |
-| Total Equity | `totalEquity` or `totalStockholdersEquity` |
-| Total Liabilities & Stockholders Equity | `totalLiabilitiesAndStockholdersEquity` |
+1. **Company Profile** (employees, IPO date) - Simple, one-time per company
+2. **Stock Price Change** (performance metrics) - Single endpoint covers Week/Month/Quarter/Half/Year
+3. **Analyst Estimates** (forward EPS, target price, recommendations)
+4. **Earnings Calendar + Surprises**
+5. **Technical Indicators** (SMA, RSI, ATR) - Lower priority, complex to maintain
+6. **Insider/Institutional** - Lower priority, premium feel
 
-#### Other Data
-| Metric | Source |
-|--------|--------|
-| Full-Time Employees | FMP Company Profile endpoint (`fullTimeEmployees`) |
+### Phase 3: Balance Sheet & Cash Flow Details
+
+These are genuinely missing line-item details (not summary metrics):
+
+- Individual asset categories (cash, receivables, inventory, PP&E, etc.)
+- Individual liability categories (short-term debt, accounts payable, etc.)
+- Detailed cash flow line items (acquisitions, debt issuance/repayment, etc.)
 
 ---
 
-## Cash Flow Statement
+## Summary: What's Actually Missing vs. Already Available
 
-### Currently Available (from existing tables)
+| Category | Already in DB | Missing (needs ingestion) |
+|----------|--------------|---------------------------|
+| Valuation Ratios | 15+ metrics | Forward P/E |
+| Profitability | 10+ metrics | — |
+| Growth Rates | 20+ metrics (3Y, 5Y, 10Y) | — |
+| Per-Share | 10+ metrics | — |
+| Dividends | Yield, Payout, Growth | Ex-date, Estimate |
+| Analyst | — | Estimates, Target, Recom |
+| Technical | Beta | SMA, RSI, ATR, Volatility |
+| Performance | — | Week/Month/Quarter/Year changes |
+| Ownership | — | Insider, Institutional |
+| Company Info | — | Employees, IPO, Index |
+| Balance Sheet | Totals + ratios | Line-item details |
+| Cash Flow | Key items + ratios | Line-item details |
 
-| Metric | Database Field |
-|--------|----------------|
-| Net Income | `financials_std.net_income` |
-| Cash from Operating Activities | `financials_std.operating_cash_flow` |
-| Depreciation | `depreciationAndAmortization` (financial_metrics) |
-| Capital Expenditures | `capitalExpenditure` (financial_metrics) |
-| Free Cash Flow | `freeCashFlow` (financial_metrics) |
-| Cash Dividends Paid | `dividendsPaid` (financial_metrics) |
-| Repurchase of Common Pref Stock | `commonStockRepurchased` (financial_metrics) |
-| Price to Free Cash Flow | `priceToFreeCashFlowsRatio` (financial_metrics) |
+**Bottom line:** ~70% of N/A fields can be fixed by correcting query mappings. ~30% require new data ingestion.
 
-### Missing Data - Needs FMP Cash Flow API Ingestion
+---
 
-FMP Endpoint: `https://financialmodelingprep.com/api/v3/cash-flow-statement/{symbol}?period=annual&apikey=YOUR_KEY`
+## New Database Tables Schema
 
-#### Operating Activities
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Other Funds (Non Cash) | `otherNonCashItems` |
-| Funds from Operations | (calculated: net income + D&A + other non-cash) |
-| Extraordinary Item | `effectOfForexChangesOnCash` or similar |
-| Changes in Working Capital | `changeInWorkingCapital` |
-| Income Taxes Payable | `deferredIncomeTax` |
+We'll create 4 new tables to store the missing data. Each table is designed for a specific data category with appropriate update frequencies.
 
-#### Investing Activities
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Net Assets From Acquisitions | `acquisitionsNet` |
-| Sale of Fixed Assets and Businesses | `salesMaturitiesOfInvestments` (partial) |
-| Purchase or Sale of Investments | `investmentsInPropertyPlantAndEquipment` |
-| Purchase of Investments | `purchasesOfInvestments` |
-| Sale Or Maturity of Investments | `salesMaturitiesOfInvestments` |
-| Other Uses | `otherInvestingActivites` |
-| Other Sources | (may be combined with other uses) |
-| Cash from Investing Activities | `netCashUsedForInvestingActivites` |
+### 1. `company_profile` - Static company info (update: monthly)
 
-#### Financing Activities
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Change in Capital Stock | `commonStockIssued` - `commonStockRepurchased` |
-| Sale of Common Pref Stock | `commonStockIssued` |
-| Proceeds from Stock Options | (may be part of commonStockIssued) |
-| Issuance or Reduction of Debt, Net | `debtRepayment` + `netDebtProceeds` |
-| Change in Long Term Debt | `netDebtProceeds` |
-| Issuance of Long Term Debt | (part of debt issuance) |
-| Reduction of Long Term Debt | `debtRepayment` |
-| Net Financing Active Other Cash Flow | `otherFinancingActivites` |
-| Other Financing Activities Uses | (may be combined) |
-| Cash from Financing Activities | `netCashUsedProvidedByFinancingActivities` |
+```sql
+CREATE TABLE company_profile (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL UNIQUE,
 
-#### Summary
-| Metric | FMP Field (likely) |
-|--------|-------------------|
-| Exchange Rate Effect | `effectOfForexChangesOnCash` |
-| Net Change in Cash | `netChangeInCash` |
-| Preferred Dividends (Cash Flow) | `preferredDividendsPaid` or similar |
+  -- Basic Info
+  company_name TEXT,
+  exchange TEXT,                    -- NYSE, NASDAQ, etc.
+  sector TEXT,
+  industry TEXT,
+  description TEXT,
+
+  -- Company Details
+  ceo TEXT,
+  employees INTEGER,                -- Full-time employees
+  headquarters TEXT,                -- City, State
+  country TEXT,
+  website TEXT,
+
+  -- Dates
+  ipo_date DATE,
+  fiscal_year_end TEXT,             -- e.g., "September" for AAPL
+
+  -- Index Membership (derived/manual)
+  is_sp500 BOOLEAN DEFAULT FALSE,
+  is_nasdaq100 BOOLEAN DEFAULT FALSE,
+  is_dow30 BOOLEAN DEFAULT FALSE,
+
+  -- Metadata
+  last_updated TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_company_profile_symbol ON company_profile(symbol);
+```
+
+**FMP Endpoint:** `GET /api/v3/profile/{symbol}`
+
+**Sample Response Fields:**
+- `fullTimeEmployees`, `ipoDate`, `sector`, `industry`, `ceo`, `city`, `state`, `country`, `website`, `description`
+
+---
+
+### 2. `price_performance` - Performance metrics (update: daily)
+
+```sql
+CREATE TABLE price_performance (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  as_of_date DATE NOT NULL,         -- Date these metrics were calculated
+
+  -- Short-term Performance (%)
+  perf_1d NUMERIC,                  -- 1 day
+  perf_5d NUMERIC,                  -- 1 week (5 trading days)
+  perf_1m NUMERIC,                  -- 1 month
+  perf_3m NUMERIC,                  -- 3 months (quarter)
+  perf_6m NUMERIC,                  -- 6 months (half year)
+  perf_ytd NUMERIC,                 -- Year to date
+  perf_1y NUMERIC,                  -- 1 year
+  perf_3y NUMERIC,                  -- 3 years
+  perf_5y NUMERIC,                  -- 5 years
+  perf_10y NUMERIC,                 -- 10 years
+  perf_max NUMERIC,                 -- Max (all time)
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(symbol, as_of_date)
+);
+
+CREATE INDEX idx_price_performance_symbol_date ON price_performance(symbol, as_of_date DESC);
+```
+
+**FMP Endpoint:** `GET /api/v3/stock-price-change/{symbol}`
+
+**Sample Response:**
+```json
+{
+  "symbol": "AAPL",
+  "1D": 0.0234,
+  "5D": 0.0156,
+  "1M": 0.0523,
+  "3M": 0.1245,
+  "6M": 0.2156,
+  "ytd": 0.3245,
+  "1Y": 0.4523,
+  "3Y": 1.2345,
+  "5Y": 2.5678,
+  "10Y": 8.1234,
+  "max": 45.678
+}
+```
+
+---
+
+### 3. `analyst_estimates` - Forward estimates (update: weekly)
+
+```sql
+CREATE TABLE analyst_estimates (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  estimate_date DATE NOT NULL,      -- Date estimate was published
+  period TEXT NOT NULL,             -- 'annual' or 'quarter'
+  period_end DATE,                  -- End of the period being estimated
+
+  -- EPS Estimates
+  eps_estimated NUMERIC,            -- Consensus EPS estimate
+  eps_estimated_low NUMERIC,
+  eps_estimated_high NUMERIC,
+  eps_estimated_avg NUMERIC,
+  number_analysts_eps INTEGER,
+
+  -- Revenue Estimates
+  revenue_estimated NUMERIC,
+  revenue_estimated_low NUMERIC,
+  revenue_estimated_high NUMERIC,
+  revenue_estimated_avg NUMERIC,
+  number_analysts_revenue INTEGER,
+
+  -- Growth Estimates
+  eps_growth_estimated NUMERIC,     -- EPS growth % estimate
+  revenue_growth_estimated NUMERIC, -- Revenue growth % estimate
+
+  -- Target Price & Recommendations
+  target_price NUMERIC,             -- Consensus target price
+  target_price_low NUMERIC,
+  target_price_high NUMERIC,
+  analyst_rating_buy INTEGER,       -- # of buy ratings
+  analyst_rating_hold INTEGER,      -- # of hold ratings
+  analyst_rating_sell INTEGER,      -- # of sell ratings
+  analyst_rating_strong_buy INTEGER,
+  analyst_rating_strong_sell INTEGER,
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(symbol, period, period_end)
+);
+
+CREATE INDEX idx_analyst_estimates_symbol ON analyst_estimates(symbol, estimate_date DESC);
+```
+
+**FMP Endpoints:**
+- `GET /api/v3/analyst-estimates/{symbol}` - EPS/Revenue estimates
+- `GET /api/v3/analyst-stock-recommendations/{symbol}` - Buy/Hold/Sell ratings
+- `GET /api/v3/price-target/{symbol}` - Target prices
+
+---
+
+### 4. `earnings_history` - Historical earnings (update: after each earnings)
+
+```sql
+CREATE TABLE earnings_history (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  fiscal_year INTEGER NOT NULL,
+  fiscal_quarter INTEGER,           -- NULL for annual
+  period_end DATE NOT NULL,
+
+  -- Earnings Data
+  eps_actual NUMERIC,
+  eps_estimated NUMERIC,
+  eps_surprise NUMERIC,             -- Actual - Estimated
+  eps_surprise_pct NUMERIC,         -- (Actual - Estimated) / |Estimated| * 100
+
+  -- Revenue Data
+  revenue_actual NUMERIC,
+  revenue_estimated NUMERIC,
+  revenue_surprise NUMERIC,
+  revenue_surprise_pct NUMERIC,
+
+  -- Dates
+  earnings_date DATE,               -- When earnings were announced
+  earnings_time TEXT,               -- 'bmo' (before market open) or 'amc' (after market close)
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(symbol, fiscal_year, fiscal_quarter)
+);
+
+CREATE INDEX idx_earnings_history_symbol ON earnings_history(symbol, period_end DESC);
+```
+
+**FMP Endpoints:**
+- `GET /api/v3/earnings-surprises/{symbol}` - Historical EPS surprises
+- `GET /api/v3/earning_calendar?from=DATE&to=DATE` - Upcoming earnings dates
+
+---
+
+### 5. `technical_indicators` - Technical data (update: daily, optional)
+
+```sql
+CREATE TABLE technical_indicators (
+  id SERIAL PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  as_of_date DATE NOT NULL,
+
+  -- Moving Averages
+  sma_20 NUMERIC,
+  sma_50 NUMERIC,
+  sma_200 NUMERIC,
+  ema_20 NUMERIC,
+  ema_50 NUMERIC,
+
+  -- Oscillators
+  rsi_14 NUMERIC,                   -- Relative Strength Index (14-day)
+
+  -- Volatility
+  atr_14 NUMERIC,                   -- Average True Range (14-day)
+  volatility_week NUMERIC,          -- Weekly volatility
+  volatility_month NUMERIC,         -- Monthly volatility
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(symbol, as_of_date)
+);
+
+CREATE INDEX idx_technical_indicators_symbol_date ON technical_indicators(symbol, as_of_date DESC);
+```
+
+**FMP Endpoint:** `GET /api/v3/technical_indicator/daily/{symbol}?type=sma&period=20`
 
 ---
 
 ## Implementation Plan
 
-When building multi-ticker support for company pages:
+### Phase 1: Fix Query Mappings (Week 1)
+- [ ] Audit `stock-key-stats.ts` metric name lookups
+- [ ] Create mapping file for all `financial_metrics` field names
+- [ ] Test with AAPL, MSFT, GOOGL
 
-### 1. Create New Ingestion Scripts
+### Phase 2: Create New Tables (Week 2)
+- [ ] Create Supabase migration for all 5 tables
+- [ ] Add RLS policies
+- [ ] Update TypeScript types in `lib/database.types.ts`
+
+### Phase 3: Build Ingestion Scripts (Week 2-3)
 
 ```bash
-# Balance Sheet ingestion
-npx tsx scripts/ingest-balance-sheet.ts
-
-# Cash Flow Statement ingestion
-npx tsx scripts/ingest-cash-flow.ts
+# Scripts to create:
+scripts/ingest-company-profiles.ts    # One-time bulk, then monthly refresh
+scripts/ingest-price-performance.ts   # Daily cron job
+scripts/ingest-analyst-estimates.ts   # Weekly cron job
+scripts/ingest-earnings-history.ts    # After each earnings season
+scripts/ingest-technical-indicators.ts # Daily (optional, lower priority)
 ```
 
-### 2. Database Schema Changes
+**Ingestion Pattern:**
+```typescript
+// Example: scripts/ingest-company-profiles.ts
+async function ingestCompanyProfiles(symbols: string[]) {
+  const batchSize = 50; // FMP rate limit friendly
 
-#### Option A: Separate Tables (Recommended)
+  for (const batch of chunk(symbols, batchSize)) {
+    const profiles = await Promise.all(
+      batch.map(symbol => fetchFMPProfile(symbol))
+    );
 
-```sql
--- Balance Sheet Details Table
-CREATE TABLE balance_sheet_details (
-  id SERIAL PRIMARY KEY,
-  symbol TEXT NOT NULL,
-  year INTEGER NOT NULL,
-  period_type TEXT NOT NULL, -- 'annual' or 'quarterly'
-  fiscal_quarter INTEGER,
-  -- Assets
-  cash_and_short_term_investments NUMERIC,
-  net_receivables NUMERIC,
-  inventory NUMERIC,
-  other_current_assets NUMERIC,
-  total_current_assets NUMERIC,
-  property_plant_equipment_net NUMERIC,
-  long_term_investments NUMERIC,
-  intangible_assets NUMERIC,
-  deferred_tax_assets NUMERIC,
-  other_non_current_assets NUMERIC,
-  -- Liabilities
-  short_term_debt NUMERIC,
-  accounts_payable NUMERIC,
-  tax_payables NUMERIC,
-  other_current_liabilities NUMERIC,
-  total_current_liabilities NUMERIC,
-  long_term_debt NUMERIC,
-  deferred_tax_liabilities NUMERIC,
-  other_non_current_liabilities NUMERIC,
-  -- Equity
-  preferred_stock NUMERIC,
-  common_stock NUMERIC,
-  retained_earnings NUMERIC,
-  minority_interest NUMERIC,
-  total_stockholders_equity NUMERIC,
-  -- Timestamps
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(symbol, year, period_type, fiscal_quarter)
-);
+    await supabase
+      .from('company_profile')
+      .upsert(profiles.map(transformProfile), {
+        onConflict: 'symbol'
+      });
 
--- Cash Flow Details Table
-CREATE TABLE cash_flow_details (
-  id SERIAL PRIMARY KEY,
-  symbol TEXT NOT NULL,
-  year INTEGER NOT NULL,
-  period_type TEXT NOT NULL,
-  fiscal_quarter INTEGER,
-  -- Operating Activities
-  net_income NUMERIC,
-  depreciation_and_amortization NUMERIC,
-  stock_based_compensation NUMERIC,
-  change_in_working_capital NUMERIC,
-  other_non_cash_items NUMERIC,
-  net_cash_from_operating NUMERIC,
-  -- Investing Activities
-  capital_expenditure NUMERIC,
-  acquisitions_net NUMERIC,
-  purchases_of_investments NUMERIC,
-  sales_of_investments NUMERIC,
-  other_investing_activities NUMERIC,
-  net_cash_from_investing NUMERIC,
-  -- Financing Activities
-  dividends_paid NUMERIC,
-  common_stock_issued NUMERIC,
-  common_stock_repurchased NUMERIC,
-  debt_repayment NUMERIC,
-  debt_proceeds NUMERIC,
-  other_financing_activities NUMERIC,
-  net_cash_from_financing NUMERIC,
-  -- Summary
-  effect_of_forex NUMERIC,
-  net_change_in_cash NUMERIC,
-  -- Timestamps
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(symbol, year, period_type, fiscal_quarter)
-);
+    await sleep(1000); // Rate limit
+  }
+}
 ```
 
-#### Option B: Extend Existing `financials_std` Table
+### Phase 4: Update Server Actions (Week 3)
+- [ ] Update `stock-key-stats.ts` to read from new tables
+- [ ] Remove live FMP API calls where possible
+- [ ] Add fallback chain: DB → cached API → live API
 
-Add columns to the existing table (simpler but may get unwieldy).
-
-### 3. Update Server Action
-
-Update `get-all-financials.ts` to:
-- JOIN with new tables
-- Fall back to null for missing data
-- Keep backward compatibility
-
-### 4. Batch Ingestion for S&P 500
-
-Create batch ingestion similar to existing `batch-ingest-financials.ts`:
-- Rate limiting (FMP has limits)
-- Progress tracking
-- Error handling for missing tickers
+### Phase 5: Set Up Cron Jobs (Week 4)
+- [ ] Daily: `price_performance`, `technical_indicators`
+- [ ] Weekly: `analyst_estimates`
+- [ ] Monthly: `company_profile`
+- [ ] Post-earnings: `earnings_history`
 
 ---
 
 ## FMP API Endpoints Reference
 
-| Statement | Endpoint |
-|-----------|----------|
-| Balance Sheet | `GET /api/v3/balance-sheet-statement/{symbol}` |
-| Cash Flow Statement | `GET /api/v3/cash-flow-statement/{symbol}` |
-| Income Statement | `GET /api/v3/income-statement/{symbol}` |
-| Company Profile | `GET /api/v3/profile/{symbol}` |
+| Data Category | Endpoint | New Table | Update Frequency |
+|---------------|----------|-----------|------------------|
+| Company Profile | `GET /api/v3/profile/{symbol}` | `company_profile` | Monthly |
+| Stock Price Change | `GET /api/v3/stock-price-change/{symbol}` | `price_performance` | Daily |
+| Analyst Estimates | `GET /api/v3/analyst-estimates/{symbol}` | `analyst_estimates` | Weekly |
+| Price Target | `GET /api/v3/price-target/{symbol}` | `analyst_estimates` | Weekly |
+| Ratings | `GET /api/v3/analyst-stock-recommendations/{symbol}` | `analyst_estimates` | Weekly |
+| Earnings Surprises | `GET /api/v3/earnings-surprises/{symbol}` | `earnings_history` | Quarterly |
+| Earnings Calendar | `GET /api/v3/earning_calendar` | `earnings_history` | Weekly |
+| Technical Indicators | `GET /api/v3/technical_indicator/daily/{symbol}` | `technical_indicators` | Daily |
 
-Query parameters:
-- `period=annual` or `period=quarter`
-- `limit=10` (number of periods)
-- `apikey=YOUR_KEY`
+---
+
+## Data Freshness Strategy
+
+| Table | Update Frequency | Staleness Threshold | UI Behavior if Stale |
+|-------|------------------|---------------------|----------------------|
+| `company_profile` | Monthly | 60 days | Show data, no warning |
+| `price_performance` | Daily | 2 days | Show data + "as of" date |
+| `analyst_estimates` | Weekly | 14 days | Show data + "as of" date |
+| `earnings_history` | Quarterly | N/A (historical) | Always show |
+| `technical_indicators` | Daily | 2 days | Show "—" if stale |
 
 ---
 
 ## Notes
 
-- FMP provides both annual and quarterly data
-- Consider rate limiting when batch ingesting for 500+ tickers
-- Some fields may have different names across FMP API versions
-- Test with a few tickers first (AAPL, MSFT, GOOGL) before full S&P 500 ingestion
-- Some Finviz metrics may be calculated from multiple FMP fields
-- "Period End Date" and "Period Length" from Finviz can be derived from the date fields
+- Real-time quote data (price, volume, 52W high/low) should remain as live API calls
+- Batch ingestion scripts exist: `scripts/sp500/batch-ingest-metrics.ts`
+- Test fixes with AAPL first before rolling out to all S&P 500
+- Consider adding `last_updated` column checks in server actions to surface data staleness

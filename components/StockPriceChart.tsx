@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import TradingViewChart, { PriceRange } from './TradingViewChart';
-import { getPrices } from '@/app/actions/prices';
+import TradingViewChart, { Timeframe } from './TradingViewChart';
+import { getPricesByTimeframe } from '@/app/actions/prices';
 
 type PriceDataPoint = {
   date: string;
@@ -16,26 +16,26 @@ type PriceDataPoint = {
 type StockPriceChartProps = {
   symbol: string;
   initialData?: PriceDataPoint[];
-  initialRange?: PriceRange;
+  initialTimeframe?: Timeframe;
 };
 
 export default function StockPriceChart({
   symbol,
   initialData = [],
-  initialRange = '365d',
+  initialTimeframe = '1d',
 }: StockPriceChartProps) {
   const [data, setData] = useState<PriceDataPoint[]>(initialData);
-  const [selectedRange, setSelectedRange] = useState<PriceRange>(initialRange);
+  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>(initialTimeframe);
   const [loading, setLoading] = useState(initialData.length === 0);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data when range or symbol changes
+  // Fetch data when timeframe or symbol changes
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
-      const result = await getPrices({ symbol, range: selectedRange });
+      const result = await getPricesByTimeframe({ symbol, timeframe: selectedTimeframe });
 
       if (result.error) {
         setError(result.error);
@@ -48,10 +48,10 @@ export default function StockPriceChart({
     };
 
     fetchData();
-  }, [symbol, selectedRange]);
+  }, [symbol, selectedTimeframe]);
 
-  const handleRangeChange = (range: PriceRange) => {
-    setSelectedRange(range);
+  const handleTimeframeChange = (timeframe: Timeframe) => {
+    setSelectedTimeframe(timeframe);
   };
 
   if (error) {
@@ -60,7 +60,7 @@ export default function StockPriceChart({
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400">{error}</p>
           <button
-            onClick={() => handleRangeChange(selectedRange)}
+            onClick={() => handleTimeframeChange(selectedTimeframe)}
             className="mt-2 text-sm text-blue-600 hover:underline dark:text-blue-400"
           >
             Try again
@@ -73,10 +73,11 @@ export default function StockPriceChart({
   return (
     <TradingViewChart
       data={data}
-      selectedRange={selectedRange}
-      onRangeChange={handleRangeChange}
+      selectedTimeframe={selectedTimeframe}
+      onTimeframeChange={handleTimeframeChange}
       loading={loading}
       height={400}
+      symbol={symbol}
     />
   );
 }
