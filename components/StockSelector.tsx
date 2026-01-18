@@ -150,12 +150,22 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
               setIsOpen(true)
             }}
             onFocus={() => setIsOpen(true)}
-            className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-8 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
           />
+          {/* Down/Up arrow button */}
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-7 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 z-10"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -228,7 +238,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
           )}
 
           {/* Stock List */}
-          <div className="max-h-[500px] overflow-y-auto p-2">
+          <div className="max-h-[600px] overflow-y-auto p-2 stock-dropdown-scroll">
             {!searchQuery && popularStocks.length > 0 && (
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
                 Popular

@@ -813,7 +813,7 @@ export default function ChartsPage() {
                 onReset={handleReset}
               />
             ) : (
-              <div className="h-[650px] flex items-center justify-center">
+              <div className="h-[650px] flex items-start justify-center pt-24">
                 <div className="text-center max-w-lg">
                   {/* Guided steps */}
                   {addedStocks.length === 0 ? (
@@ -826,7 +826,7 @@ export default function ChartsPage() {
                       {/* Divider */}
                       <div className="flex items-center gap-4 mb-6">
                         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">or try a preset</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">try a preset</span>
                         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
                       </div>
 
