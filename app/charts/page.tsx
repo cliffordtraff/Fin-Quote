@@ -95,8 +95,12 @@ export default function ChartsPage() {
   const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string; stock?: string }[]>([])
   // Available stocks from database
   const [availableStocks, setAvailableStocks] = useState<Stock[]>([])
-  // Selected stock symbols (supports multi-select)
-  const [selectedStocks, setSelectedStocks] = useState<string[]>([])
+  // Stocks added to the page (from dropdown)
+  const [addedStocks, setAddedStocks] = useState<string[]>([])
+  // Stocks visible on chart (subset of addedStocks, controlled by checkboxes)
+  const [visibleStocks, setVisibleStocks] = useState<string[]>([])
+  // Selected stock symbols for backward compatibility (derived from visibleStocks)
+  const selectedStocks = visibleStocks
   // Helper to get primary stock for filtering segment metrics
   const selectedStock = selectedStocks[0] || ''
   // Metrics added to the page (from dropdown)
@@ -135,11 +139,12 @@ export default function ChartsPage() {
     loadData()
   }, [])
 
-  // Reset year bounds and initial range when period type or stocks change
+  // Reset year bounds and initial range when period type changes
+  // (Don't reset on stock changes to avoid slider flashing)
   useEffect(() => {
     setYearBounds(null)
     setInitialRangeSet(false)
-  }, [periodType, selectedStocks])
+  }, [periodType])
 
   // Remove segment metrics that don't match any selected stock when stocks change
   useEffect(() => {
@@ -326,6 +331,43 @@ export default function ChartsPage() {
     return COLOR_PALETTE[metricsInUse.length % COLOR_PALETTE.length]
   }
 
+  // Handle stock selection from dropdown (add to page)
+  const handleStockSelect = (symbols: string[]) => {
+    // Find newly added stocks (in symbols but not in addedStocks)
+    const newStocks = symbols.filter((s) => !addedStocks.includes(s))
+    // Find removed stocks (in addedStocks but not in symbols)
+    const removedStocks = addedStocks.filter((s) => !symbols.includes(s))
+
+    if (newStocks.length > 0) {
+      // Add new stocks to both added and visible
+      setAddedStocks((prev) => [...prev, ...newStocks])
+      setVisibleStocks((prev) => [...prev, ...newStocks])
+    }
+
+    if (removedStocks.length > 0) {
+      // Remove stocks from both added and visible
+      setAddedStocks((prev) => prev.filter((s) => !removedStocks.includes(s)))
+      setVisibleStocks((prev) => prev.filter((s) => !removedStocks.includes(s)))
+    }
+  }
+
+  // Toggle stock visibility on chart (checkbox)
+  const handleStockVisibilityToggle = (symbol: string) => {
+    setVisibleStocks((prev) => {
+      if (prev.includes(symbol)) {
+        return prev.filter((s) => s !== symbol)
+      } else {
+        return [...prev, symbol]
+      }
+    })
+  }
+
+  // Remove stock from page entirely (X button)
+  const handleRemoveStock = (symbol: string) => {
+    setAddedStocks((prev) => prev.filter((s) => s !== symbol))
+    setVisibleStocks((prev) => prev.filter((s) => s !== symbol))
+  }
+
   // Toggle metric from dropdown (add/remove from page)
   const handleMetricToggle = (metricId: string) => {
     const id = metricId as MetricId
@@ -435,8 +477,8 @@ export default function ChartsPage() {
             {/* Stock Selector */}
             <StockSelector
               availableStocks={availableStocks}
-              selectedStocks={selectedStocks}
-              onSelect={setSelectedStocks}
+              selectedStocks={addedStocks}
+              onSelect={handleStockSelect}
               allowMultiple={true}
               popularStocks={POPULAR_STOCKS}
             />
@@ -479,11 +521,48 @@ export default function ChartsPage() {
             </div>
           </div>
 
-          {/* Enabled metrics and Time Range Slider - same row */}
+          {/* Stock and metric checkboxes + Time Range Slider - same row */}
           <div className="flex items-start gap-6 mt-2">
-            {/* Metric checkboxes - left half */}
-            <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-4 gap-2 h-[32px]">
+            {/* Stock and Metric checkboxes - left half */}
+            <div className="flex-1 min-w-0 space-y-2">
+              {/* Stock checkboxes */}
+              {addedStocks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {addedStocks.map((symbol) => {
+                    const stock = availableStocks.find((s) => s.symbol === symbol)
+                    const isVisible = visibleStocks.includes(symbol)
+
+                    return (
+                      <div
+                        key={symbol}
+                        className="inline-flex items-center gap-2 bg-gray-100 dark:bg-[rgb(55,55,55)] px-2 py-1 rounded-md h-[32px]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isVisible}
+                          onChange={() => handleStockVisibilityToggle(symbol)}
+                          title={`Toggle ${symbol} visibility`}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0"
+                        />
+                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{symbol}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">{stock?.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStock(symbol)}
+                          className="ml-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Remove stock"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Metric checkboxes */}
+              <div className="grid grid-cols-4 gap-2 min-h-[32px]">
                 {addedMetrics.map((metricId) => {
                   const metric = availableMetrics.find((m) => m.id === metricId)
                   const isVisible = visibleMetrics.includes(metricId)
@@ -666,7 +745,13 @@ export default function ChartsPage() {
               />
             ) : (
               <div className="h-[650px] flex items-center justify-center">
-                <p className="text-gray-600 dark:text-gray-400">Select at least one metric to display</p>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {visibleStocks.length === 0 && visibleMetrics.length === 0
+                    ? 'Select a stock and metric to display'
+                    : visibleStocks.length === 0
+                    ? 'Enable at least one stock to display'
+                    : 'Select at least one metric to display'}
+                </p>
               </div>
             )}
             </div>

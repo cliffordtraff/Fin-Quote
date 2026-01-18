@@ -237,18 +237,9 @@ export default function StockSelector({
                             }`}
                           />
                         )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">{stock.symbol}</span>
-                            {stock.sector && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                                {stock.sector}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {stock.name}
-                          </div>
+                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                          <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{stock.symbol}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{stock.name}</span>
                         </div>
                         {!allowMultiple && isSelected && (
                           <svg
