@@ -174,10 +174,60 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
     const { data: financialsData } = await supabase
       .from('financials_std')
       .select('*')
+      .eq('symbol', symbol)
       .order('year', { ascending: false })
       .limit(1);
 
     const latestFinancials = financialsData?.[0] || {};
+
+    // Fetch company profile data (employees, IPO date, sector, etc.)
+    const { data: profileData } = await supabase
+      .from('company_profile')
+      .select('*')
+      .eq('symbol', symbol)
+      .single();
+
+    const companyProfile = profileData || {};
+
+    // Fetch price performance data (1D, 5D, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, 10Y returns)
+    const { data: perfData } = await supabase
+      .from('price_performance')
+      .select('*')
+      .eq('symbol', symbol)
+      .order('as_of_date', { ascending: false })
+      .limit(1);
+
+    const pricePerformance = perfData?.[0] || {};
+
+    // Fetch analyst estimates data (EPS estimates, target price)
+    const { data: estimatesData } = await supabase
+      .from('analyst_estimates')
+      .select('*')
+      .eq('symbol', symbol)
+      .order('period_end', { ascending: false })
+      .limit(1);
+
+    const analystEstimates = estimatesData?.[0] || {};
+
+    // Fetch earnings history data (EPS surprise)
+    const { data: earningsData } = await supabase
+      .from('earnings_history')
+      .select('*')
+      .eq('symbol', symbol)
+      .order('earnings_date', { ascending: false })
+      .limit(1);
+
+    const latestEarnings = earningsData?.[0] || {};
+
+    // Fetch technical indicators (SMA, RSI, ATR)
+    const { data: technicalData } = await supabase
+      .from('technical_indicators')
+      .select('*')
+      .eq('symbol', symbol)
+      .order('as_of_date', { ascending: false })
+      .limit(1);
+
+    const technicalIndicators = technicalData?.[0] || {};
 
     // Calculate some derived values
     const revenue = latestFinancials.revenue || 0;
@@ -188,97 +238,120 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
 
     return {
       // Column 1: Company Info
-      index: null, // Would need separate data source
+      index: null, // Would need separate data source (company_profile table)
       marketCap: quote.marketCap || latestMetrics.marketCap || latestMetrics.marketCapitalization || 0,
       enterpriseValue: keyMetrics.enterpriseValue || latestMetrics.enterpriseValue || 0,
       income: netIncome,
       sales: revenue,
       bookValuePerShare: keyMetrics.bookValuePerShare || latestMetrics.bookValuePerShare || null,
       cashPerShare: keyMetrics.cashPerShare || latestMetrics.cashPerShare || null,
-      dividendEst: null, // Forward dividend estimate
-      dividendTTM: latestMetrics.dividendPerShare || null,
-      dividendExDate: null, // Would need separate API call
-      dividendGrowth3Y5Y: null, // Need to calculate
+      dividendEst: null, // Forward dividend estimate (analyst_estimates table)
+      dividendTTM: latestMetrics.dividendPerShare || latestMetrics.dividendYield || null,
+      dividendExDate: null, // Would need separate API call (company_profile table)
+      // Use 3Y or 5Y dividend growth from financial_metrics
+      dividendGrowth3Y5Y: latestMetrics.threeYDividendperShareGrowthPerShare
+        ? latestMetrics.threeYDividendperShareGrowthPerShare * 100
+        : (latestMetrics.fiveYDividendperShareGrowthPerShare
+          ? latestMetrics.fiveYDividendperShareGrowthPerShare * 100
+          : null),
       payoutRatio: (latestMetrics.payoutRatio || latestMetrics.dividendPayoutRatio || 0) * 100,
-      employees: null, // From company profile
-      ipoDate: null, // From company profile
+      employees: companyProfile.employees || null,
+      ipoDate: companyProfile.ipo_date || null,
 
       // Column 2: Valuation Ratios
       peRatio: quote.pe || latestMetrics.peRatio || 0,
       forwardPE: keyMetrics.forwardPE || latestMetrics.forwardPE || null,
-      pegRatio: keyMetrics.pegRatio || latestMetrics.pegRatio || null,
+      // PEG ratio - check multiple possible field names
+      pegRatio: keyMetrics.pegRatio || latestMetrics.pegRatio || latestMetrics.priceEarningsToGrowthRatio || null,
       priceToSales: keyMetrics.priceToSalesRatio || latestMetrics.priceToSalesRatio || latestMetrics.priceSalesRatio || 0,
-      priceToBook: keyMetrics.pbRatio || latestMetrics.priceToBookRatio || latestMetrics.pbRatio || 0,
-      priceToCashFlow: keyMetrics.pfcfRatio || latestMetrics.priceCashFlowRatio || latestMetrics.pfcfRatio || 0,
-      priceToFreeCashFlow: latestMetrics.priceToFreeCashFlowsRatio || ratios.priceToFreeCashFlowsRatio || null,
-      evToEbitda: keyMetrics.enterpriseValueOverEBITDA || latestMetrics.enterpriseValueOverEBITDA || null,
+      priceToBook: keyMetrics.pbRatio || latestMetrics.pbRatio || latestMetrics.ptbRatio || latestMetrics.priceToBookRatio || 0,
+      priceToCashFlow: keyMetrics.pfcfRatio || latestMetrics.pfcfRatio || latestMetrics.priceCashFlowRatio || latestMetrics.pocfratio || 0,
+      priceToFreeCashFlow: latestMetrics.priceToFreeCashFlowsRatio || latestMetrics.pfcfRatio || ratios.priceToFreeCashFlowsRatio || null,
+      // EV/EBITDA - check enterpriseValueMultiple which is the same thing
+      evToEbitda: keyMetrics.enterpriseValueOverEBITDA || latestMetrics.enterpriseValueMultiple || latestMetrics.enterpriseValueOverEBITDA || null,
       evToSales: latestMetrics.evToSales || null,
-      quickRatio: latestMetrics.quickRatio || 0,
-      currentRatio: latestMetrics.currentRatio || 0,
-      debtToEquity: latestMetrics.debtToEquity || latestMetrics.debtEquityRatio || null,
+      quickRatio: latestMetrics.quickRatio || ratios.quickRatio || 0,
+      currentRatio: latestMetrics.currentRatio || ratios.currentRatio || 0,
+      debtToEquity: latestMetrics.debtEquityRatio || latestMetrics.debtToEquity || null,
+      // LT Debt/Eq uses longTermDebtToCapitalization
       ltDebtToEquity: latestMetrics.longTermDebtToCapitalization || null,
-      optionShort: null, // Options/short availability
+      optionShort: null, // Options/short availability (premium data)
 
       // Column 3: EPS & Sales
       eps: quote.eps || latestFinancials.eps || 0,
-      epsNextY: null, // Forward EPS estimate
-      epsNextQ: null, // Next quarter EPS estimate
-      epsThisYGrowth: latestMetrics.netIncomeGrowth ? latestMetrics.netIncomeGrowth * 100 : null,
-      epsNextYGrowth: null, // Forward EPS growth estimate
-      epsNext5Y: null, // 5-year EPS growth estimate
-      epsPast3Y5Y: latestMetrics.threeYNetIncomeGrowthPerShare ? latestMetrics.threeYNetIncomeGrowthPerShare * 100 : null,
-      salesPast3Y5Y: latestMetrics.threeYRevenueGrowthPerShare ? latestMetrics.threeYRevenueGrowthPerShare * 100 : null,
+      epsNextY: analystEstimates.eps_estimated_avg || null,
+      epsNextQ: null, // Next quarter EPS estimate (need quarterly estimates)
+      // EPS this year growth - use epsgrowth or netIncomeGrowth
+      epsThisYGrowth: latestMetrics.epsgrowth
+        ? latestMetrics.epsgrowth * 100
+        : (latestMetrics.netIncomeGrowth ? latestMetrics.netIncomeGrowth * 100 : null),
+      epsNextYGrowth: null, // Forward EPS growth estimate (analyst_estimates table)
+      epsNext5Y: null, // 5-year EPS growth estimate (analyst_estimates table)
+      // EPS past 3/5Y - use 3Y or 5Y growth metrics
+      epsPast3Y5Y: latestMetrics.threeYNetIncomeGrowthPerShare
+        ? latestMetrics.threeYNetIncomeGrowthPerShare * 100
+        : (latestMetrics.fiveYNetIncomeGrowthPerShare
+          ? latestMetrics.fiveYNetIncomeGrowthPerShare * 100
+          : null),
+      // Sales past 3/5Y - use 3Y or 5Y revenue growth metrics
+      salesPast3Y5Y: latestMetrics.threeYRevenueGrowthPerShare
+        ? latestMetrics.threeYRevenueGrowthPerShare * 100
+        : (latestMetrics.fiveYRevenueGrowthPerShare
+          ? latestMetrics.fiveYRevenueGrowthPerShare * 100
+          : null),
       salesYoYTTM: latestMetrics.revenueGrowth ? latestMetrics.revenueGrowth * 100 : null,
-      epsQoQ: null, // Quarter over quarter EPS
-      salesQoQ: null, // Quarter over quarter sales
-      earningsDate: null, // Next earnings date
-      epsSurprise: null, // Last EPS surprise %
-      salesSurprise: null, // Last sales surprise %
+      epsQoQ: null, // Quarter over quarter EPS (need quarterly data)
+      salesQoQ: null, // Quarter over quarter sales (need quarterly data)
+      earningsDate: latestEarnings.earnings_date || null,
+      epsSurprise: latestEarnings.eps_surprise_pct ?? null,
+      salesSurprise: latestEarnings.revenue_surprise_pct ?? null,
 
       // Column 4: Ownership & Returns
-      insiderOwn: null, // Insider ownership %
-      insiderTrans: null, // Insider transactions
-      instOwn: null, // Institutional ownership %
-      instTrans: null, // Institutional transactions
-      roa: (ratios.returnOnAssets || latestMetrics.returnOnAssets || latestMetrics.roa || 0) * 100,
-      roe: (ratios.returnOnEquity || latestMetrics.returnOnEquity || latestMetrics.roe || 0) * 100,
-      roic: (ratios.returnOnCapitalEmployed || latestMetrics.returnOnCapitalEmployed || latestMetrics.roic || 0) * 100,
-      grossMargin: (ratios.grossProfitMargin || latestMetrics.grossProfitMargin || 0) * 100,
-      operatingMargin: (ratios.operatingProfitMargin || latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || 0) * 100,
-      netMargin: (ratios.netProfitMargin || latestMetrics.netProfitMargin || 0) * 100,
-      sma20: null, // 20-day SMA vs price %
-      sma50: null, // 50-day SMA vs price %
-      sma200: null, // 200-day SMA vs price %
+      insiderOwn: null, // Insider ownership % (separate API)
+      insiderTrans: null, // Insider transactions (separate API)
+      instOwn: null, // Institutional ownership % (separate API)
+      instTrans: null, // Institutional transactions (separate API)
+      roa: (latestMetrics.returnOnAssets || ratios.returnOnAssets || 0) * 100,
+      roe: (latestMetrics.returnOnEquity || ratios.returnOnEquity || 0) * 100,
+      // ROIC - check roic and returnOnCapitalEmployed
+      roic: (latestMetrics.roic || latestMetrics.returnOnCapitalEmployed || ratios.returnOnCapitalEmployed || 0) * 100,
+      grossMargin: (latestMetrics.grossProfitMargin || ratios.grossProfitMargin || 0) * 100,
+      // Operating margin - check operatingProfitMargin and ebitPerRevenue
+      operatingMargin: (latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || ratios.operatingProfitMargin || 0) * 100,
+      netMargin: (latestMetrics.netProfitMargin || ratios.netProfitMargin || 0) * 100,
+      sma20: technicalIndicators.sma_20 || null,
+      sma50: technicalIndicators.sma_50 || null,
+      sma200: technicalIndicators.sma_200 || null,
 
       // Column 5: Shares & Volatility
       sharesOutstanding: quote.sharesOutstanding || latestMetrics.numberOfShares || null,
-      sharesFloat: null, // Shares float
-      shortFloat: null, // Short % of float
-      shortRatio: null, // Days to cover
-      shortInterest: null, // Short interest shares
+      sharesFloat: null, // Shares float (separate API)
+      shortFloat: null, // Short % of float (separate API)
+      shortRatio: null, // Days to cover (separate API)
+      shortInterest: null, // Short interest shares (separate API)
       fiftyTwoWeekHigh: quote.yearHigh || 0,
       fiftyTwoWeekLow: quote.yearLow || 0,
-      volatilityWeek: null, // Weekly volatility
-      volatilityMonth: null, // Monthly volatility
-      atr14: null, // Average True Range 14
-      rsi14: null, // RSI 14
-      beta: keyMetrics.beta || latestMetrics.beta || null,
+      volatilityWeek: technicalIndicators.volatility_week || null,
+      volatilityMonth: technicalIndicators.volatility_month || null,
+      atr14: technicalIndicators.atr_14 || null,
+      rsi14: technicalIndicators.rsi_14 || null,
+      beta: latestMetrics.beta || keyMetrics.beta || null,
       relVolume: quote.volume && quote.avgVolume ? quote.volume / quote.avgVolume : null,
       avgVolume: quote.avgVolume || 0,
       volume: quote.volume || null,
 
-      // Column 6: Performance
-      perfWeek: quote.priceChange1W || null,
-      perfMonth: quote.priceChange1M || null,
-      perfQuarter: quote.priceChange3M || null,
-      perfHalfY: quote.priceChange6M || null,
-      perfYTD: quote.ytdChange || null,
-      perfYear: quote.priceChange1Y || null,
-      perf3Y: null, // 3-year performance
-      perf5Y: null, // 5-year performance
-      perf10Y: null, // 10-year performance
-      analystRecom: null, // Analyst recommendation (1-5)
-      targetPrice: quote.targetPrice || null,
+      // Column 6: Performance (price_performance table provides 3Y, 5Y, 10Y)
+      perfWeek: pricePerformance.perf_5d ?? quote.priceChange1W ?? null,
+      perfMonth: pricePerformance.perf_1m ?? quote.priceChange1M ?? null,
+      perfQuarter: pricePerformance.perf_3m ?? quote.priceChange3M ?? null,
+      perfHalfY: pricePerformance.perf_6m ?? quote.priceChange6M ?? null,
+      perfYTD: pricePerformance.perf_ytd ?? quote.ytdChange ?? null,
+      perfYear: pricePerformance.perf_1y ?? quote.priceChange1Y ?? null,
+      perf3Y: pricePerformance.perf_3y ?? null,
+      perf5Y: pricePerformance.perf_5y ?? null,
+      perf10Y: pricePerformance.perf_10y ?? null,
+      analystRecom: null, // Analyst recommendation 1-5 (need consensus endpoint)
+      targetPrice: analystEstimates.target_price || quote.targetPrice || null,
       prevClose: quote.previousClose || null,
       price: quote.price || null,
       change: quote.changesPercentage || null,
@@ -292,7 +365,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       fiveYearCAGR: (latestMetrics.fiveYRevenueGrowthPerShare || latestMetrics.fiveYNetIncomeGrowthPerShare || 0) * 100,
       operatingCashFlow: latestFinancials.operating_cash_flow || 0,
       freeCashFlow,
-      dividendYield: (quote.dividendYield || latestMetrics.dividendYield || 0) * 100,
+      dividendYield: (latestMetrics.dividendYield || quote.dividendYield || 0) * 100,
     };
   } catch (error) {
     console.error('Error fetching stock key stats:', error);
