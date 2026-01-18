@@ -2,11 +2,11 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 
-// Safe, purpose-built tool for fetching recent SEC filings for AAPL only
+// Safe, purpose-built tool for fetching recent SEC filings
 // This is designed to be called by server code (e.g., an LLM routing step) and returns
 // a minimal, predictable shape for easy prompting and display.
 export async function getRecentFilings(params: {
-  ticker?: string // AAPL only for MVP
+  ticker: string // Stock ticker symbol (e.g., 'AAPL', 'MSFT')
   limit?: number // number of most recent filings to fetch
 }): Promise<{
   data: Array<{
@@ -19,13 +19,8 @@ export async function getRecentFilings(params: {
   }> | null
   error: string | null
 }> {
-  const ticker = params.ticker ?? 'AAPL'
+  const { ticker } = params
   const requestedLimit = params.limit ?? 5
-
-  // Enforce AAPL-only for MVP
-  if (ticker !== 'AAPL') {
-    return { data: null, error: 'Only AAPL ticker is supported in MVP' }
-  }
 
   // Limit rows to a small, safe window (1..10)
   const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)

@@ -114,10 +114,9 @@ interface StockKeyStats {
 /**
  * Get key statistics for stock detail page
  * Combines data from financial_metrics table and FMP API
- * Currently hardcoded to AAPL
+ * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
-export async function getStockKeyStats(): Promise<StockKeyStats> {
-  const symbol = 'AAPL';
+export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
   const apiKey = process.env.FMP_API_KEY;
 
   if (!apiKey) {
@@ -241,12 +240,12 @@ export async function getStockKeyStats(): Promise<StockKeyStats> {
       insiderTrans: null, // Insider transactions
       instOwn: null, // Institutional ownership %
       instTrans: null, // Institutional transactions
-      roa: (latestMetrics.returnOnAssets || latestMetrics.roa || 0) * 100,
-      roe: (latestMetrics.returnOnEquity || latestMetrics.roe || 0) * 100,
-      roic: (latestMetrics.returnOnCapitalEmployed || latestMetrics.roic || 0) * 100,
-      grossMargin: (latestMetrics.grossProfitMargin || 0) * 100,
-      operatingMargin: (latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || 0) * 100,
-      netMargin: (latestMetrics.netProfitMargin || 0) * 100,
+      roa: (ratios.returnOnAssets || latestMetrics.returnOnAssets || latestMetrics.roa || 0) * 100,
+      roe: (ratios.returnOnEquity || latestMetrics.returnOnEquity || latestMetrics.roe || 0) * 100,
+      roic: (ratios.returnOnCapitalEmployed || latestMetrics.returnOnCapitalEmployed || latestMetrics.roic || 0) * 100,
+      grossMargin: (ratios.grossProfitMargin || latestMetrics.grossProfitMargin || 0) * 100,
+      operatingMargin: (ratios.operatingProfitMargin || latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || 0) * 100,
+      netMargin: (ratios.netProfitMargin || latestMetrics.netProfitMargin || 0) * 100,
       sma20: null, // 20-day SMA vs price %
       sma50: null, // 50-day SMA vs price %
       sma200: null, // 200-day SMA vs price %

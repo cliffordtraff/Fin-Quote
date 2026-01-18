@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import TradingViewChart, { PriceRange } from './TradingViewChart';
-import { getAaplPrices } from '@/app/actions/prices';
+import { getPrices } from '@/app/actions/prices';
 
 type PriceDataPoint = {
   date: string;
@@ -14,11 +14,13 @@ type PriceDataPoint = {
 };
 
 type StockPriceChartProps = {
+  symbol: string;
   initialData?: PriceDataPoint[];
   initialRange?: PriceRange;
 };
 
 export default function StockPriceChart({
+  symbol,
   initialData = [],
   initialRange = '365d',
 }: StockPriceChartProps) {
@@ -27,13 +29,13 @@ export default function StockPriceChart({
   const [loading, setLoading] = useState(initialData.length === 0);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data when range changes
+  // Fetch data when range or symbol changes
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
-      const result = await getAaplPrices({ range: selectedRange });
+      const result = await getPrices({ symbol, range: selectedRange });
 
       if (result.error) {
         setError(result.error);
@@ -46,7 +48,7 @@ export default function StockPriceChart({
     };
 
     fetchData();
-  }, [selectedRange]);
+  }, [symbol, selectedRange]);
 
   const handleRangeChange = (range: PriceRange) => {
     setSelectedRange(range);

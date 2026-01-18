@@ -120,17 +120,17 @@ interface AllFinancials {
 /**
  * Get all financial statements for the last 8 years
  * Returns income statement, balance sheet, and cash flow data
- * Currently hardcoded to AAPL
+ * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
-export async function getAllFinancials(): Promise<AllFinancials> {
+export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
   try {
     const supabase = await createServerClient();
 
-    // Fetch last 8 years of annual financial data for AAPL from financials_std
+    // Fetch last 8 years of annual financial data from financials_std
     const { data: financialsData, error } = await supabase
       .from('financials_std')
       .select('*')
-      .eq('symbol', 'AAPL')
+      .eq('symbol', symbol)
       .eq('period_type', 'annual')
       .order('year', { ascending: false })
       .limit(8);
@@ -170,7 +170,7 @@ export async function getAllFinancials(): Promise<AllFinancials> {
     const { data: metricsData, error: metricsError } = await supabase
       .from('financial_metrics')
       .select('year, metric_name, metric_value')
-      .eq('symbol', 'AAPL')
+      .eq('symbol', symbol)
       .eq('period_type', 'annual')
       .in('metric_name', additionalMetrics)
       .order('year', { ascending: false });

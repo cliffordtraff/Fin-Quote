@@ -298,6 +298,61 @@ export async function getAllSymbols(): Promise<string[]> {
 }
 
 /**
+ * Search for stocks by symbol or company name
+ * Used for the stock search dropdown
+ *
+ * @param query - Search query (symbol or company name)
+ * @returns Array of matching stocks, sorted by relevance
+ *
+ * @example
+ * searchSymbols("AAPL") // [{ symbol: "AAPL", name: "Apple Inc." }]
+ * searchSymbols("Apple") // [{ symbol: "AAPL", name: "Apple Inc." }, ...]
+ */
+export async function searchSymbols(
+  query: string
+): Promise<Array<{ symbol: string; name: string }>> {
+  if (!query || query.length < 1) {
+    return []
+  }
+
+  const cache = await loadSymbolCache()
+  const normalizedQuery = query.toUpperCase()
+  const normalizedQueryLower = query.toLowerCase()
+
+  const results = Array.from(cache.values())
+    .filter(
+      (stock) =>
+        stock.symbol.includes(normalizedQuery) ||
+        stock.name.toLowerCase().includes(normalizedQueryLower)
+    )
+    .sort((a, b) => {
+      // Exact symbol match first
+      if (a.symbol === normalizedQuery) return -1
+      if (b.symbol === normalizedQuery) return 1
+
+      // Symbol starts-with second
+      if (a.symbol.startsWith(normalizedQuery) && !b.symbol.startsWith(normalizedQuery)) return -1
+      if (b.symbol.startsWith(normalizedQuery) && !a.symbol.startsWith(normalizedQuery)) return 1
+
+      // Name starts-with third
+      if (
+        a.name.toLowerCase().startsWith(normalizedQueryLower) &&
+        !b.name.toLowerCase().startsWith(normalizedQueryLower)
+      ) return -1
+      if (
+        b.name.toLowerCase().startsWith(normalizedQueryLower) &&
+        !a.name.toLowerCase().startsWith(normalizedQueryLower)
+      ) return 1
+
+      // Alphabetical by symbol
+      return a.symbol.localeCompare(b.symbol)
+    })
+    .slice(0, 10)
+
+  return results
+}
+
+/**
  * Find the most similar company using Levenshtein distance
  */
 function findMostSimilarCompany(

@@ -4,18 +4,26 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
 import UserMenu from './UserMenu'
+import StockSearch from './StockSearch'
 
 export default function Navigation() {
   const pathname = usePathname()
+
+  // Extract current stock symbol from path if on a stock page
+  const stockMatch = pathname?.match(/^\/stock\/([^/]+)/)
+  const currentSymbol = stockMatch ? stockMatch[1].toUpperCase() : null
 
   return (
     <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
       {/* Top Header Row */}
       <div className="w-full border-b border-gray-200 dark:border-gray-700">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
-          <Link href="/" className="text-lg font-bold text-gray-900 dark:text-white">
-            The Intraday
-          </Link>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
+          <div className="flex items-center gap-6">
+            <Link href="/" className="text-lg font-medium text-gray-900 dark:text-white">
+              The Intraday
+            </Link>
+            <StockSearch />
+          </div>
         </div>
       </div>
       {/* Navigation Tabs Row */}
@@ -26,7 +34,7 @@ export default function Navigation() {
             <div className="flex items-center space-x-1">
               <Link
                 href="/"
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/'
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -35,8 +43,8 @@ export default function Navigation() {
                 Market
               </Link>
               <Link
-                href="/stock/aapl"
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname?.startsWith('/stock')
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -46,7 +54,7 @@ export default function Navigation() {
               </Link>
               <Link
                 href="/charts"
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/charts'
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -56,7 +64,7 @@ export default function Navigation() {
               </Link>
               <Link
                 href="/chatbot"
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/chatbot'
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'

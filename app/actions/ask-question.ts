@@ -526,7 +526,8 @@ export async function askQuestion(
         return { answer: '', dataUsed: null, chartConfig: null, error: 'Invalid limit (must be 1-10)', queryLogId: null }
       }
 
-      const toolResult = await getRecentFilings({ limit })
+      // Note: Chatbot is AAPL-only for MVP
+      const toolResult = await getRecentFilings({ ticker: 'AAPL', limit })
 
       if (toolResult.error || !toolResult.data) {
         toolError = toolResult.error || 'Failed to fetch filings data'

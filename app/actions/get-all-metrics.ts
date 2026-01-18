@@ -111,9 +111,9 @@ const METRIC_CATEGORIES = {
 /**
  * Get all financial metrics grouped by category for the last 5 years
  * Returns data for current year, 1Y ago, 3Y ago, and 5Y ago
- * Currently hardcoded to AAPL
+ * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
-export async function getAllMetrics(): Promise<AllMetrics> {
+export async function getAllMetrics(symbol: string): Promise<AllMetrics> {
   try {
     const supabase = await createServerClient();
 
@@ -130,7 +130,7 @@ export async function getAllMetrics(): Promise<AllMetrics> {
     const { data: metricsData, error } = await supabase
       .from('financial_metrics')
       .select('metric_name, metric_value, year')
-      .eq('symbol', 'AAPL')
+      .eq('symbol', symbol)
       .order('year', { ascending: false });
 
     if (error) {

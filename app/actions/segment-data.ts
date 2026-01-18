@@ -52,6 +52,7 @@ const GEOGRAPHIC_SEGMENTS = [
 ]
 
 export async function getSegmentData(params: {
+  symbol: string // Stock symbol (e.g., 'AAPL', 'MSFT')
   segmentType: SegmentType
   periodType?: PeriodType // 'annual' (FY only), 'quarterly' (Q1-Q4), or 'all'
   segments?: string[] // Optional: specific segments to fetch
@@ -59,7 +60,7 @@ export async function getSegmentData(params: {
   minYear?: number
   maxYear?: number
 }): Promise<SegmentResult> {
-  const { segmentType, periodType = 'annual', segments, quarters, minYear, maxYear } = params
+  const { symbol, segmentType, periodType = 'annual', segments, quarters, minYear, maxYear } = params
 
   // Validate segment type
   if (segmentType !== 'product' && segmentType !== 'geographic') {
@@ -103,7 +104,7 @@ export async function getSegmentData(params: {
     let query = supabase
       .from('company_metrics')
       .select('year, period, dimension_value, metric_value')
-      .eq('symbol', 'AAPL' as never)
+      .eq('symbol', symbol as never)
       .eq('metric_name', 'segment_revenue' as never)
       .eq('dimension_type', segmentType as never)
       .in('dimension_value', requestedSegments as never)
@@ -203,7 +204,7 @@ export async function getAvailableSegments(segmentType: SegmentType): Promise<{
 }
 
 // Get available years with quarterly data
-export async function getQuarterlyDataYearRange(): Promise<{
+export async function getQuarterlyDataYearRange(symbol: string): Promise<{
   minYear: number
   maxYear: number
   error: string | null
@@ -214,7 +215,7 @@ export async function getQuarterlyDataYearRange(): Promise<{
     const { data: rawData, error } = await supabase
       .from('company_metrics')
       .select('year')
-      .eq('symbol', 'AAPL' as never)
+      .eq('symbol', symbol as never)
       .eq('metric_name', 'segment_revenue' as never)
       .in('period', ['Q1', 'Q2', 'Q3', 'Q4'] as never)
       .order('year', { ascending: true })

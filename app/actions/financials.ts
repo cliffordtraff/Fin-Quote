@@ -109,7 +109,7 @@ function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinanc
 }
 
 export async function getFinancialsByMetric(params: {
-  symbol?: string // Stock symbol (defaults to AAPL for backward compatibility)
+  symbol: string // Stock symbol (e.g., 'AAPL', 'MSFT')
   metric: FinancialMetric
   limit?: number // number of most recent periods to fetch
   period?: PeriodType // 'annual' (default) or 'quarterly'
@@ -118,8 +118,7 @@ export async function getFinancialsByMetric(params: {
   data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
-  const symbol = params.symbol ?? 'AAPL'
-  const { metric } = params
+  const { symbol, metric } = params
   const period = params.period ?? 'annual'
   const quarters = params.quarters
   const requestedLimit = params.limit ?? (period === 'quarterly' ? 12 : 4) // Default 12 quarters or 4 years

@@ -3,7 +3,7 @@
 export type PriceRange = '7d' | '30d' | '90d' | '365d' | 'ytd' | '3y' | '5y' | '10y' | '20y' | 'max'
 
 export type PriceParams = {
-  symbol?: string // Stock symbol (defaults to AAPL for backward compatibility)
+  symbol: string // Stock symbol (e.g., 'AAPL', 'MSFT')
   from?: string
   to?: string
   range?: PriceRange
@@ -65,7 +65,7 @@ export async function getPrices(params: PriceParams): Promise<{
   data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
   error: string | null
 }> {
-  const symbol = params.symbol ?? 'AAPL'
+  const { symbol } = params
   let { from, to } = params
   const { range } = params
 

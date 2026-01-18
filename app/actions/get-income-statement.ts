@@ -64,9 +64,11 @@ export interface ComprehensiveIncomeStatement {
 /**
  * Fetch comprehensive income statement from FMP API
  * Returns annual data for last 7 years plus TTM
+ * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
+ * @param limit - Number of years to fetch (default: 7)
  */
 export async function getComprehensiveIncomeStatement(
-  symbol: string = 'AAPL',
+  symbol: string,
   limit: number = 7
 ): Promise<ComprehensiveIncomeStatement> {
   try {

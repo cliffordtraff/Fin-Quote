@@ -12,10 +12,10 @@ export interface NewsItem {
 
 /**
  * Get latest news for a stock symbol
- * Currently hardcoded to AAPL
+ * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
+ * @param limit - Number of news items to fetch (default: 5)
  */
-export async function getStockNews(limit: number = 5): Promise<NewsItem[]> {
-  const symbol = 'AAPL';
+export async function getStockNews(symbol: string, limit: number = 5): Promise<NewsItem[]> {
   const apiKey = process.env.FMP_API_KEY;
 
   if (!apiKey) {
