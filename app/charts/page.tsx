@@ -7,7 +7,7 @@ import StockSelector, { type StockSelectorHandle } from '@/components/StockSelec
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
-import { getChartPriceData } from '@/app/actions/chart-price'
+import { getChartPriceData, getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -111,6 +111,8 @@ export default function ChartsPage() {
   const [visibleMetrics, setVisibleMetrics] = useState<MetricId[]>([])
   // Period type: annual or quarterly
   const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual')
+  // Stock price toggle (separate from metric dropdowns)
+  const [showStockPrice, setShowStockPrice] = useState(false)
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -203,7 +205,8 @@ export default function ChartsPage() {
 
   // Fetch data when visible metrics or year range changes
   const fetchData = useCallback(async () => {
-    if (visibleMetrics.length === 0 || selectedStocks.length === 0) {
+    // Need at least one metric OR stock price enabled, and at least one stock
+    if ((visibleMetrics.length === 0 && !showStockPrice) || selectedStocks.length === 0) {
       setMetricsData([])
       return
     }
@@ -234,8 +237,7 @@ export default function ChartsPage() {
     setError(null)
 
     try {
-      // Separate price metrics from other metrics
-      const priceMetrics = visibleMetrics.filter(isPriceMetric)
+      // All visible metrics (price is handled separately via showStockPrice toggle)
       const otherMetrics = visibleMetrics.filter(m => !isPriceMetric(m))
 
       // Fetch non-price data for all selected stocks
@@ -306,27 +308,52 @@ export default function ChartsPage() {
         }
       })
 
-      // Fetch price data if price metrics are selected
-      if (priceMetrics.length > 0) {
+      // Fetch price data if stock price toggle is enabled
+      // For annual mode, use monthly data for smooth line visualization
+      // For quarterly mode, use period-aligned data (quarterly granularity)
+      if (showStockPrice) {
         const priceFetchPromises = selectedStocks.map(async (symbol) => {
-          const periodEndDates = periodEndDatesByStock[symbol]
-          const priceResult = await getChartPriceData({
-            symbol,
-            periodEndDates,
-            periodType: periodType as PeriodType,
-            minYear: minYearParam,
-            maxYear: maxYearParam,
-          })
+          // For annual mode, use monthly price data for smooth line
+          // For quarterly mode, align with fiscal quarters
+          if (periodType === 'annual') {
+            const priceResult = await getMonthlyChartPriceData({
+              symbol,
+              minYear: minYearParam,
+              maxYear: maxYearParam,
+            })
 
-          if (priceResult.data) {
-            // For multi-stock, prefix metric ID and label with stock symbol
-            const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
+            if (priceResult.data) {
+              // For multi-stock, prefix metric ID and label with stock symbol
+              const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
+              const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
 
-            return {
-              ...priceResult.data,
-              metric: prefixedId as MetricId,
-              label: prefixedLabel,
+              return {
+                ...priceResult.data,
+                metric: prefixedId as MetricId,
+                label: prefixedLabel,
+              }
+            }
+          } else {
+            // Quarterly mode: use period-aligned data
+            const periodEndDates = periodEndDatesByStock[symbol]
+            const priceResult = await getChartPriceData({
+              symbol,
+              periodEndDates,
+              periodType: periodType as PeriodType,
+              minYear: minYearParam,
+              maxYear: maxYearParam,
+            })
+
+            if (priceResult.data) {
+              // For multi-stock, prefix metric ID and label with stock symbol
+              const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
+              const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
+
+              return {
+                ...priceResult.data,
+                metric: prefixedId as MetricId,
+                label: prefixedLabel,
+              }
             }
           }
           return null
@@ -349,6 +376,7 @@ export default function ChartsPage() {
         setMetricsData(mergedData)
       }
 
+      // Set up year bounds - either from financial data or use defaults for price-only
       if (combinedBounds) {
         setYearBounds((prev) => {
           if (prev && prev.min === combinedBounds!.min && prev.max === combinedBounds!.max) return prev
@@ -361,6 +389,14 @@ export default function ChartsPage() {
           setMaxYear(combinedBounds.max)
           setInitialRangeSet(true)
         }
+      } else if (showStockPrice && visibleMetrics.length === 0 && !initialRangeSet) {
+        // Price-only mode with no financial metrics - set default year bounds
+        const currentYear = new Date().getFullYear()
+        const defaultBounds = { min: 2006, max: currentYear }
+        setYearBounds(defaultBounds)
+        setMinYear(DEFAULT_MIN_YEAR)
+        setMaxYear(currentYear)
+        setInitialRangeSet(true)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
@@ -368,7 +404,7 @@ export default function ChartsPage() {
     } finally {
       setLoading(false)
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStocks])
+  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStocks, showStockPrice])
 
   useEffect(() => {
     fetchData()
@@ -730,7 +766,7 @@ export default function ChartsPage() {
               </div>
             </div>
 
-            {/* Period Toggle + Time Range Slider - right half */}
+            {/* Period Toggle + Stock Price + Time Range Slider - right half */}
             <div className="flex items-start gap-4 flex-shrink-0">
               {/* Period Toggle */}
               <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
@@ -757,6 +793,16 @@ export default function ChartsPage() {
                   Quarterly
                 </button>
               </div>
+              {/* Stock Price Toggle */}
+              <label className="flex items-center gap-2 cursor-pointer bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg px-3 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={showStockPrice}
+                  onChange={(e) => setShowStockPrice(e.target.checked)}
+                  className="w-4 h-4 text-green-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-green-500 focus:ring-2"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Price</span>
+              </label>
               {/* Time Range Slider */}
               <div className="w-[550px] space-y-2 range-slider-wrap">
               <div className="range-slider" ref={sliderRef}>

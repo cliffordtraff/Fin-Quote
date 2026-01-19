@@ -62,16 +62,18 @@ export default function Navigation() {
               >
                 Charting
               </Link>
-              <Link
-                href="/chatbot"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/chatbot'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                Chat
-              </Link>
+              {process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true' && (
+                <Link
+                  href="/chatbot"
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                    pathname === '/chatbot'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Chat
+                </Link>
+              )}
             </div>
           </div>
 

@@ -153,6 +153,18 @@ FMP_API_KEY=your-fmp-key
 
 ---
 
+## Feature Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `NEXT_PUBLIC_ENABLE_CHAT` | `false` | Enables the AI chatbot feature (Chat tab in navigation + `/chatbot` route) |
+
+To enable a feature: Set to `true` in `.env.local` and restart the dev server.
+
+**Note:** The chatbot backend code (server actions, tools, validators, database tables) remains in place even when disabled. Only the UI entry points are hidden.
+
+---
+
 ## Critical Implementation Details
 
 ### Tool Selection Prompt (`lib/tools.ts:buildToolSelectionPrompt`)

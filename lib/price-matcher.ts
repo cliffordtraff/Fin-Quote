@@ -168,3 +168,29 @@ export function generateCalendarDates(
 
   return dates
 }
+
+/**
+ * Generates month-end dates for smooth price line display.
+ * Creates ~12 data points per year for a smoother visualization.
+ *
+ * @param startYear - The starting year (earliest)
+ * @param endYear - The ending year (most recent)
+ * @returns Array of date strings in YYYY-MM-DD format (month-end dates)
+ */
+export function generateMonthlyDates(
+  startYear: number,
+  endYear: number
+): string[] {
+  const dates: string[] = []
+
+  for (let year = startYear; year <= endYear; year++) {
+    for (let month = 0; month < 12; month++) {
+      // Get last day of each month
+      const lastDay = new Date(year, month + 1, 0).getDate()
+      const monthStr = String(month + 1).padStart(2, '0')
+      dates.push(`${year}-${monthStr}-${lastDay}`)
+    }
+  }
+
+  return dates
+}

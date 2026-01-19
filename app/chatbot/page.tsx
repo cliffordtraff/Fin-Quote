@@ -1,6 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+
+// Feature flag check - redirect if chat is disabled
+const CHAT_ENABLED = process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { User } from '@supabase/supabase-js'
 import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
@@ -18,7 +22,6 @@ import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
 import type { Database } from '@/lib/database.types'
-import { useSearchParams, useRouter } from 'next/navigation'
 
 const stripMarkdown = (text: string): string => {
   return text
@@ -223,6 +226,13 @@ const EXTRA_SCROLL_UP = 50  // Extra pixels to scroll up to hide previous conten
 function AskPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+
+  // Redirect to home if chat feature is disabled
+  useEffect(() => {
+    if (!CHAT_ENABLED) {
+      router.replace('/')
+    }
+  }, [router])
 
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
@@ -1045,6 +1055,11 @@ function AskPageContent() {
 
   // Check if conversation is empty (center the input)
   const isEmptyConversation = conversationHistory.length === 0
+
+  // Don't render anything while redirecting (chat disabled)
+  if (!CHAT_ENABLED) {
+    return null
+  }
 
   return (
     <>

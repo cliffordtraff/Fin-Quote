@@ -126,6 +126,7 @@ export type MetricDataPoint = {
   fiscal_quarter?: number | null
   fiscal_label?: string | null
   date?: string | null  // period_end_date for price matching
+  timestamp?: number    // Unix timestamp in milliseconds for datetime X-axis
 }
 
 export type MetricData = {
@@ -188,6 +189,23 @@ function getDbMetricName(metricId: string): string | undefined {
 function getValueTransform(metricId: string): number {
   const config = METRIC_CONFIG[metricId as MetricId] as { valueTransform?: number }
   return config?.valueTransform ?? 1
+}
+
+// Convert date string or year to timestamp (milliseconds since epoch)
+// For annual data without a specific date, uses Dec 31 of that year
+function dateToTimestamp(date: string | null | undefined, year: number, fiscalQuarter?: number | null): number {
+  if (date) {
+    return new Date(date).getTime()
+  }
+  // For quarterly data, use quarter-end dates
+  if (fiscalQuarter) {
+    const quarterEndMonths = [2, 5, 8, 11] // Mar, Jun, Sep, Dec (0-indexed)
+    const month = quarterEndMonths[fiscalQuarter - 1] ?? 11
+    const lastDay = new Date(year, month + 1, 0).getDate() // Last day of month
+    return Date.UTC(year, month, lastDay)
+  }
+  // For annual data, use Dec 31
+  return Date.UTC(year, 11, 31)
 }
 
 export async function getMultipleMetrics(params: {
@@ -451,6 +469,7 @@ export async function getMultipleMetrics(params: {
                   value,
                   fiscal_quarter: q,
                   fiscal_label: `FY${year} ${label}`,
+                  timestamp: dateToTimestamp(null, year, q),
                 })
               }
             }
@@ -460,6 +479,7 @@ export async function getMultipleMetrics(params: {
           dataPoints = segmentYears.map((year) => ({
             year,
             value: metricYearData[`${year}`] ?? 0,
+            timestamp: dateToTimestamp(null, year, null),
           }))
         }
 
@@ -490,6 +510,7 @@ export async function getMultipleMetrics(params: {
               fiscal_quarter: row.fiscal_quarter,
               fiscal_label: row.fiscal_label,
               date: row.period_end_date,
+              timestamp: dateToTimestamp(row.period_end_date, row.year, row.fiscal_quarter),
             }
           }),
         }
@@ -507,6 +528,7 @@ export async function getMultipleMetrics(params: {
             fiscal_quarter: row.fiscal_quarter,
             fiscal_label: row.fiscal_label,
             date: row.period_end_date,
+            timestamp: dateToTimestamp(row.period_end_date, row.year, row.fiscal_quarter),
           })),
         }
       }

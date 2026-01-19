@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Navigation from '@/components/Navigation'
+import StockPriceHeader from '@/components/StockPriceHeader'
 import StockPriceChart from '@/components/StockPriceChart'
 import FinancialStatementsTabs from '@/components/FinancialStatementsTabs'
 import NewsFeed from '@/components/NewsFeed'
@@ -117,53 +118,16 @@ export default async function StockPage({ params }: PageProps) {
       {/* Navigation Header */}
       <Navigation />
 
-      {/* Stock Header Section - Sticky */}
-      <section className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-[rgb(45,45,45)]/90 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl h-full px-4 sm:px-6 lg:px-8 flex items-center">
-          <div className="flex items-center justify-between w-full">
-            {/* Company Info */}
-            <div className="flex items-end gap-3">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-none">
-                {overview.company.name}
-              </h1>
-              <span className="text-sm text-gray-500 dark:text-gray-400 leading-none">
-                {overview.company.symbol} · {overview.company.sector}
-              </span>
-            </div>
-
-            {/* Price Display */}
-            <div className="flex items-center gap-4">
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                ${overview.currentPrice.toFixed(2)}
-              </div>
-              <div
-                className={`text-sm font-semibold ${
-                  overview.priceChange >= 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}
-              >
-                {overview.priceChange >= 0 ? '+' : ''}${overview.priceChange.toFixed(2)} (
-                {overview.priceChangePercent.toFixed(2)}%)
-              </div>
-              <span
-                className={`rounded px-2 py-0.5 text-xs font-medium ${
-                  overview.marketStatus === 'open'
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    : overview.marketStatus === 'closed'
-                      ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                }`}
-              >
-                {overview.marketStatus === 'open' && 'Open'}
-                {overview.marketStatus === 'closed' && 'Closed'}
-                {overview.marketStatus === 'premarket' && 'Pre-Market'}
-                {overview.marketStatus === 'afterhours' && 'After Hours'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Stock Header Section - Sticky with Client-Side Polling */}
+      <StockPriceHeader
+        symbol={normalizedSymbol}
+        companyName={overview.company.name}
+        sector={overview.company.sector}
+        initialPrice={overview.currentPrice}
+        initialPriceChange={overview.priceChange}
+        initialPriceChangePercent={overview.priceChangePercent}
+        initialMarketStatus={overview.marketStatus}
+      />
 
       {/* Price Chart Section */}
       <section className="bg-white dark:bg-[rgb(45,45,45)]">

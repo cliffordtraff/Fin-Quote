@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "pkill -f 'next dev' 2>/dev/null; sleep 1; rm -rf .next; next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

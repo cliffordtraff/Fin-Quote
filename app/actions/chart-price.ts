@@ -1,7 +1,7 @@
 'use server'
 
 import { getPrices } from './prices'
-import { matchPricesToDates, generateCalendarDates, type PriceDataPoint } from '@/lib/price-matcher'
+import { matchPricesToDates, generateCalendarDates, generateMonthlyDates, type PriceDataPoint } from '@/lib/price-matcher'
 import type { MetricData, MetricDataPoint, PeriodType } from './chart-metrics'
 
 /**
@@ -144,6 +144,109 @@ export async function getChartPriceData(params: {
     return { data: result, error: null }
   } catch (err) {
     console.error(`Error fetching chart price data for ${symbol}:`, err)
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred',
+    }
+  }
+}
+
+/**
+ * Fetches monthly stock price data for smooth line display.
+ * Returns ~12 data points per year instead of 1, creating a smoother visualization.
+ *
+ * @param symbol - Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+ * @param minYear - Starting year (optional, defaults to current year - 9)
+ * @param maxYear - Ending year (optional, defaults to current year)
+ */
+export async function getMonthlyChartPriceData(params: {
+  symbol: string
+  minYear?: number
+  maxYear?: number
+}): Promise<{
+  data: MetricData | null
+  error: string | null
+}> {
+  const currentYear = new Date().getFullYear()
+  const { symbol, minYear = currentYear - 9, maxYear = currentYear } = params
+
+  try {
+    // Generate monthly dates for the year range
+    const monthlyDates = generateMonthlyDates(minYear, maxYear)
+
+    if (monthlyDates.length === 0) {
+      return { data: null, error: 'No dates to fetch prices for' }
+    }
+
+    // Determine the date range we need to fetch
+    const earliestDate = monthlyDates[0]
+    const latestDate = monthlyDates[monthlyDates.length - 1]
+
+    // Add buffer to ensure we have data for nearest trading day lookup
+    const fromDate = new Date(earliestDate)
+    fromDate.setDate(fromDate.getDate() - 10)  // 10 day buffer for weekend/holiday lookback
+    const from = fromDate.toISOString().split('T')[0]
+
+    // Fetch price data from FMP API
+    const priceResult = await getPrices({
+      symbol,
+      from,
+      to: latestDate,
+    })
+
+    if (priceResult.error) {
+      return { data: null, error: priceResult.error }
+    }
+
+    if (!priceResult.data || priceResult.data.length === 0) {
+      return { data: null, error: 'No price data available for the requested period' }
+    }
+
+    // Convert to PriceDataPoint format expected by price-matcher
+    const priceData: PriceDataPoint[] = priceResult.data.map(p => ({
+      date: p.date,
+      close: p.close,
+      open: p.open,
+      high: p.high,
+      low: p.low,
+      volume: p.volume,
+    }))
+
+    // Match prices to monthly dates
+    const matchedPrices = matchPricesToDates(priceData, monthlyDates)
+
+    // Build MetricDataPoint array with monthly granularity
+    const dataPoints: MetricDataPoint[] = matchedPrices
+      .filter(m => m.price !== null)  // Only include dates with valid prices
+      .map((matched) => {
+        const d = new Date(matched.targetDate)
+        const year = d.getFullYear()
+        const month = d.getMonth()  // 0-indexed
+
+        return {
+          year,
+          value: matched.price ?? 0,
+          fiscal_quarter: null,
+          fiscal_label: null,
+          date: matched.targetDate,
+          timestamp: d.getTime(),
+        }
+      })
+
+    // Sort by timestamp for chart display
+    dataPoints.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0))
+
+    // Return as MetricData
+    const result: MetricData = {
+      metric: 'stock_price',
+      label: 'Stock Price',
+      unit: 'price',
+      data: dataPoints,
+    }
+
+    return { data: result, error: null }
+  } catch (err) {
+    console.error(`Error fetching monthly chart price data for ${symbol}:`, err)
     return {
       data: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',

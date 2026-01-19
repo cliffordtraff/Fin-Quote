@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import Highcharts from 'highcharts'
 import { useTheme } from '@/components/ThemeProvider'
 import type { MetricData } from '@/app/actions/chart-metrics'
+import { isPriceMetric } from '@/lib/price-matcher'
 
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), {
   ssr: false,
@@ -387,21 +388,33 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     return `${sign}${value.toFixed(2)}%`
   }
 
+  // Check if we have any price data with timestamps (monthly data has many more data points)
+  const hasPriceWithTimestamps = filteredData.some(
+    (d) => isPriceMetric(d.metric) && d.data.some((p) => p.timestamp)
+  )
+
   // Build series data (use sortedFilteredData for bar order)
   const series: Highcharts.SeriesOptionsType[] = sortedFilteredData.map((metricData, index) => {
     const isCurrency = metricData.unit === 'currency'
     const isShares = metricData.unit === 'shares'
     const isPrice = metricData.unit === 'price'
-    // Price values are NOT scaled (displayed as raw dollar amounts)
-    let values = metricData.data.map((d) =>
-      isCurrency || isShares ? d.value / 1_000_000_000 : d.value
-    )
+    const isThisPriceMetric = isPriceMetric(metricData.metric)
+
+    // For datetime axis, build data as [[timestamp, value], ...] format
+    // For price metrics with timestamps, use full monthly data
+    // For financial metrics, use their period_end_date timestamps
+    let dataPoints: [number, number][] = metricData.data.map((d) => {
+      const rawValue = isCurrency || isShares ? d.value / 1_000_000_000 : d.value
+      // Use timestamp from data if available, fallback to Dec 31 of year
+      const timestamp = d.timestamp ?? Date.UTC(d.year, 11, 31)
+      return [timestamp, rawValue]
+    })
 
     // Apply "Index to 0" transformation if enabled
-    if (indexToZero && values.length > 0) {
-      const baseValue = values[0]
+    if (indexToZero && dataPoints.length > 0) {
+      const baseValue = dataPoints[0][1]
       if (baseValue !== 0) {
-        values = values.map((v) => ((v - baseValue) / Math.abs(baseValue)) * 100)
+        dataPoints = dataPoints.map(([ts, v]) => [ts, ((v - baseValue) / Math.abs(baseValue)) * 100])
       }
     }
 
@@ -411,13 +424,25 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     // Determine which Y-axis to use (not needed when indexed - all use same scale)
     const useSecondaryAxis = !indexToZero && needsDualAxis && metricData.unit !== primaryUnit
 
+    // Price metrics always display as lines, regardless of chart type setting
+    const seriesType = isThisPriceMetric
+      ? 'line'
+      : chartType === 'line' ? 'line' : chartType === 'area' ? 'area' : 'column'
+
+    // Reduce marker density for monthly price data (many points)
+    const markerOptions = isThisPriceMetric && dataPoints.length > 20
+      ? { enabled: false, states: { hover: { enabled: true, radius: 4 } } }
+      : seriesType === 'line' || chartType === 'area' ? { enabled: true, radius: 4 } : undefined
+
     return {
-      type: chartType === 'line' ? 'line' : chartType === 'area' ? 'area' : 'column',
+      type: seriesType,
       name: metricData.label,
-      data: values,
+      data: dataPoints,
       color,
       yAxis: useSecondaryAxis ? 1 : 0,
-      marker: chartType === 'line' || chartType === 'area' ? { enabled: true, radius: 4 } : undefined,
+      marker: markerOptions,
+      // Ensure price line renders on top of bars
+      zIndex: isThisPriceMetric ? 10 : 1,
     }
   })
 
@@ -498,6 +523,30 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     })
   }
 
+  // Calculate min/max timestamps from bar data (non-price metrics) to set explicit axis limits
+  // This prevents bars from being cut off at the edges
+  const barTimestamps: number[] = []
+  sortedFilteredData.forEach((metricData) => {
+    if (!isPriceMetric(metricData.metric)) {
+      metricData.data.forEach((d) => {
+        const timestamp = d.timestamp ?? Date.UTC(d.year, 11, 31)
+        barTimestamps.push(timestamp)
+      })
+    }
+  })
+
+  // Add buffer for bar width: half a year on each side for annual, ~45 days for quarterly
+  const halfBarWidth = isQuarterlyData
+    ? 45 * 24 * 3600 * 1000  // ~45 days for quarterly
+    : 183 * 24 * 3600 * 1000 // ~6 months for annual
+
+  const xAxisMin = barTimestamps.length > 0
+    ? Math.min(...barTimestamps) - halfBarWidth
+    : undefined
+  const xAxisMax = barTimestamps.length > 0
+    ? Math.max(...barTimestamps) + halfBarWidth
+    : undefined
+
   const options: Highcharts.Options = {
     chart: {
       type: 'column',
@@ -513,11 +562,16 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       text: undefined,
     },
     xAxis: {
-      categories,
+      type: 'datetime',
       title: {
         text: undefined,
       },
+      dateTimeLabelFormats: {
+        year: '%Y',
+      },
+      tickInterval: 365.25 * 24 * 3600 * 1000, // One year in milliseconds
       labels: {
+        format: isQuarterlyData ? '{value:%Y Q%q}' : '{value:%Y}',
         style: {
           fontSize: isQuarterlyData ? '10px' : '12px',
           color: isDark ? '#9ca3af' : '#6b7280',
@@ -527,6 +581,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       gridLineWidth: 0,
       lineWidth: 2,
       lineColor: isDark ? '#6b7280' : '#374151',
+      // Set explicit min/max to prevent bars from being cut off at edges
+      // Buffer accounts for bar width (bars are centered on their timestamp)
+      min: xAxisMin,
+      max: xAxisMax,
     },
     yAxis,
     legend: {
@@ -540,6 +598,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         groupPadding: isStacked ? 0.2 : 0.15,
         pointPadding: isStacked ? 0.1 : 0.05,
         stacking: (isStacked && chartType === 'bar') ? 'normal' : undefined,
+        pointPlacement: 'on', // Center columns on their timestamp for datetime axis
+        // Set pointRange to tell Highcharts each bar represents a year (annual) or quarter (quarterly)
+        // This ensures proper bar width when mixed with monthly price data
+        pointRange: isQuarterlyData
+          ? 90 * 24 * 3600 * 1000  // ~90 days for quarterly
+          : 365 * 24 * 3600 * 1000, // 1 year for annual
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           verticalAlign: isStacked ? 'middle' : 'bottom',
@@ -683,10 +747,22 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       formatter: function () {
         const points = this.points || []
-        // Get the category from the x-axis - this.x is the index, so use point.key or category
-        const category = points[0]?.key || this.x
-        // For quarterly data (e.g., "2024-Q2"), show as-is; for annual, prefix with "FY"
-        const periodLabel = isQuarterlyData ? category : `FY ${category}`
+        // With datetime axis, this.x is a timestamp - format it appropriately
+        const timestamp = this.x as number
+        const date = new Date(timestamp)
+        const year = date.getUTCFullYear()
+        const month = date.getUTCMonth()
+        // For price data with monthly granularity, show month; for financials show FY
+        const hasMonthlyPrice = points.some((p) => {
+          const metricInfo = filteredData.find((d) => d.label === p.series.name)
+          return metricInfo && isPriceMetric(metricInfo.metric) && metricInfo.data.length > 20
+        })
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const periodLabel = hasMonthlyPrice
+          ? `${monthNames[month]} ${year}`
+          : isQuarterlyData
+            ? `Q${Math.floor(month / 3) + 1} ${year}`
+            : `FY ${year}`
         let html = `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>`
 
         points.forEach((point) => {
@@ -1001,40 +1077,65 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredData.map((metricData) => (
-              <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
-                <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
-                  {metricData.label}
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
-                    {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : metricData.unit === 'price' ? '($)' : ''}
-                  </span>
-                </td>
-                {years.map((year, yearIndex) => {
-                  const value = metricData.data[yearIndex]?.value || 0
-                  let displayValue: string
-                  if (metricData.unit === 'currency') {
-                    displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
-                  } else if (metricData.unit === 'shares') {
-                    displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
-                  } else if (metricData.unit === 'percent') {
-                    displayValue = `${value.toFixed(1)}%`
-                  } else if (metricData.unit === 'price') {
-                    displayValue = `$${value.toFixed(2)}`
-                  } else {
-                    displayValue = value.toFixed(2)
-                  }
+            {filteredData.map((metricData) => {
+              // For price metrics with monthly data, extract year-end values for table display
+              const isMonthlyPriceData = isPriceMetric(metricData.metric) && metricData.data.length > years.length
 
-                  return (
-                    <td
-                      key={`${metricData.metric}-${year}`}
-                      className="px-1 py-2 text-sm text-gray-900 dark:text-gray-100 text-right"
-                    >
-                      {displayValue}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
+              // Build a map of year -> year-end value for price metrics
+              const yearEndValues: Record<string, number> = {}
+              if (isMonthlyPriceData) {
+                metricData.data.forEach((d) => {
+                  const yearKey = String(d.year)
+                  // For each year, keep the latest value (December)
+                  if (d.date) {
+                    const month = new Date(d.date).getMonth()
+                    if (month === 11 || !yearEndValues[yearKey]) { // December or first value for year
+                      yearEndValues[yearKey] = d.value
+                    }
+                  } else {
+                    yearEndValues[yearKey] = d.value
+                  }
+                })
+              }
+
+              return (
+                <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
+                  <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
+                    {metricData.label}
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
+                      {metricData.unit === 'currency' ? '($B)' : metricData.unit === 'shares' ? '(B shares)' : metricData.unit === 'percent' ? '(%)' : metricData.unit === 'price' ? '($)' : ''}
+                    </span>
+                  </td>
+                  {years.map((year, yearIndex) => {
+                    // For monthly price data, use year-end value; otherwise use index-based value
+                    const value = isMonthlyPriceData
+                      ? (yearEndValues[year] || 0)
+                      : (metricData.data[yearIndex]?.value || 0)
+                    let displayValue: string
+                    if (metricData.unit === 'currency') {
+                      displayValue = `$${(value / 1_000_000_000).toFixed(1)}B`
+                    } else if (metricData.unit === 'shares') {
+                      displayValue = `${(value / 1_000_000_000).toFixed(2)}B`
+                    } else if (metricData.unit === 'percent') {
+                      displayValue = `${value.toFixed(1)}%`
+                    } else if (metricData.unit === 'price') {
+                      displayValue = `$${value.toFixed(2)}`
+                    } else {
+                      displayValue = value.toFixed(2)
+                    }
+
+                    return (
+                      <td
+                        key={`${metricData.metric}-${yearIndex}`}
+                        className="px-1 py-2 text-sm text-gray-900 dark:text-gray-100 text-right"
+                      >
+                        {displayValue}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

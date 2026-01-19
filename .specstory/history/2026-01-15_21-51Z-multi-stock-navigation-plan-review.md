@@ -10991,7 +10991,6 @@ add a section to the markdown file with your feedback
 
 _**Agent (model default, mode Agent)**_
 
-
 Adding a feedback section to the plan document with critiques, improvements, and missing considerations.
 
 
@@ -11004,7 +11003,6 @@ Adding a feedback section to the plan document with critiques, improvements, and
 </tool-use>
 
 ---
-
 
 Adding a feedback section to the plan document:
 
@@ -11020,7 +11018,6 @@ Adding a feedback section to the plan document:
 </tool-use>
 
 ---
-
 
 Added a feedback section to the plan document. It includes:
 
@@ -11052,6 +11049,12 @@ Added a feedback section to the plan document. It includes:
 5. **Final recommendations** — Prioritized list of fixes
 
 The section is placed at the end of the document, after "Potential Issues", so it's easy to reference during implementation. Each issue includes code examples and specific fixes.
+
+---
+
+_**User**_
+
+We keep making changes and then in Claude code in the terminal and then I keep having to go to a separate terminal and restart the server in order to load the local host page. Why is this?
 
 ---
 
