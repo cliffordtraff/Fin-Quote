@@ -1,22 +1,17 @@
 'use server'
 
-import { getCurrentMarketSession } from '@/lib/market-utils'
-import { deriveLosers } from './scan-extended-hours'
-
 export interface LoserData {
   symbol: string
   name: string
   price: number
   change: number
   changesPercentage: number
-  volume: number // For extended hours: pre-market/after-hours volume; for regular hours: daily volume
-  floatShares?: number | null // Float shares (only available for extended hours scanner)
 }
 
 /**
- * Fetch losers from regular hours endpoint (FMP dedicated endpoint)
+ * Fetch top losers by percentage from US stock markets using FMP's stock_market/losers endpoint
  */
-async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?: string }> {
+export async function getLosersData(): Promise<{ losers: LoserData[] } | { error: string }> {
   const apiKey = process.env.FMP_API_KEY
 
   if (!apiKey) {
@@ -36,44 +31,22 @@ async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?
     const data = await response.json()
 
     if (Array.isArray(data) && data.length > 0) {
-      // Take top 35 losers (extra buffer for filtering bad data)
-      const topLosers = data.slice(0, 35)
-
-      // Fetch volume data for all losers in parallel using the quote endpoint
-      const symbols = topLosers.map((item: any) => item.symbol).join(',')
-      const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbols}?apikey=${apiKey}`
-
-      const quoteResponse = await fetch(quoteUrl, {
-        next: { revalidate: 60 }
-      })
-
-      const quoteData = await quoteResponse.json()
-
-      // Create a map of symbol to volume
-      const volumeMap = new Map()
-      if (Array.isArray(quoteData)) {
-        quoteData.forEach((quote: any) => {
-          volumeMap.set(quote.symbol, quote.volume)
-        })
-      }
-
-      // Map losers with volume data, filtering out bad data
-      const losers: LoserData[] = topLosers
+      // Filter out bad data and map to LoserData format
+      const losers: LoserData[] = data
         .filter((item: any) => {
-          // Filter out unrealistic percentage changes (likely bad data from API)
-          // Max realistic daily loss is ~99% (stock can't go below 0)
+          // Filter out unrealistic percentage changes (likely bad data)
+          // and stocks with no price
           const pctChange = Math.abs(item.changesPercentage || 0)
           return pctChange < 100 && item.price > 0
         })
+        .slice(0, 10) // Take top 10
         .map((item: any) => ({
           symbol: item.symbol,
           name: item.name,
           price: item.price,
           change: item.change,
           changesPercentage: item.changesPercentage,
-          volume: volumeMap.get(item.symbol) || 0
         }))
-        .slice(0, 16) // Always return exactly 16 losers
 
       return { losers }
     }
@@ -82,66 +55,5 @@ async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?
   } catch (error) {
     console.error('Error fetching losers data:', error)
     return { error: 'Failed to load losers data' }
-  }
-}
-
-/**
- * Main entry point with smart routing based on market session
- */
-export async function getLosersData() {
-  const session = getCurrentMarketSession()
-
-  console.log(`[Losers] Current session: ${session}`)
-
-  try {
-    if (session === 'premarket') {
-      // Use pre-market scanner (reads from shared cache)
-      console.log('[Losers] Using pre-market scanner')
-      const extendedLosers = await deriveLosers('premarket')
-      // Fallback to regular hours if no premarket data
-      if (extendedLosers.length === 0) {
-        console.log('[Losers] No premarket data, falling back to regular hours')
-        return await fetchRegularHoursLosers()
-      }
-      // Map to LoserData format, using extendedVolume as the volume
-      const losers: LoserData[] = extendedLosers.slice(0, 16).map(l => ({
-        symbol: l.symbol,
-        name: l.name,
-        price: l.price,
-        change: l.change,
-        changesPercentage: l.changesPercentage,
-        volume: l.extendedVolume, // Use pre-market volume
-        floatShares: l.floatShares,
-      }))
-      return { losers }
-    } else if (session === 'afterhours') {
-      // Use after-hours scanner (reads from shared cache)
-      console.log('[Losers] Using after-hours scanner')
-      const extendedLosers = await deriveLosers('afterhours')
-      // Fallback to regular hours if no afterhours data
-      if (extendedLosers.length === 0) {
-        console.log('[Losers] No afterhours data, falling back to regular hours')
-        return await fetchRegularHoursLosers()
-      }
-      // Map to LoserData format, using extendedVolume as the volume
-      const losers: LoserData[] = extendedLosers.slice(0, 16).map(l => ({
-        symbol: l.symbol,
-        name: l.name,
-        price: l.price,
-        change: l.change,
-        changesPercentage: l.changesPercentage,
-        volume: l.extendedVolume, // Use after-hours volume
-        floatShares: l.floatShares,
-      }))
-      return { losers }
-    } else {
-      // Regular hours or closed: use dedicated FMP endpoint
-      console.log('[Losers] Using regular hours endpoint')
-      return await fetchRegularHoursLosers()
-    }
-  } catch (error) {
-    console.error('[Losers] Error, falling back to regular hours:', error)
-    // Fallback to regular hours endpoint on error
-    return await fetchRegularHoursLosers()
   }
 }

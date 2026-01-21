@@ -155,43 +155,7 @@ function SparklineCard({ index }: SparklineCardProps) {
     }
 
     // Draw time labels with tick marks
-    if (timestamps.length > 0) {
-      const todayStartIdx = index.todayStartIndex
-
-      // Find previous day's open, noon, and 2pm
-      let prevOpenIndex = -1
-      let prevNoonIndex = -1
-      let prev2pmIndex = -1
-      if (todayStartIdx !== null && todayStartIdx > 0) {
-        for (let i = 0; i < todayStartIdx; i++) {
-          const timePart = timestamps[i].split(' ')[1]
-          if (timePart && timePart.startsWith('09:30') && prevOpenIndex === -1) {
-            prevOpenIndex = i
-          }
-          if (timePart && timePart.startsWith('12:') && prevNoonIndex === -1) {
-            prevNoonIndex = i
-          }
-          if (timePart && timePart.startsWith('14:') && prev2pmIndex === -1) {
-            prev2pmIndex = i
-          }
-        }
-      }
-
-      // Find today's open (9:30 AM)
-      let openIndex = -1
-      if (todayStartIdx !== null && todayStartIdx >= 0) {
-        for (let i = todayStartIdx; i < timestamps.length; i++) {
-          const timePart = timestamps[i].split(' ')[1]
-          if (timePart && timePart.startsWith('09:30')) {
-            openIndex = i
-            break
-          }
-        }
-        if (openIndex === -1) {
-          openIndex = todayStartIdx
-        }
-      }
-
+    if (timestamps.length > 0 && todayOHLC.length > 0) {
       ctx.font = '9px sans-serif'
       ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)'
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
@@ -200,58 +164,19 @@ function SparklineCard({ index }: SparklineCardProps) {
       const tickTop = chartHeight + padding
       const tickBottom = tickTop + 5
 
-      // Draw "Prev Open" tick and label (stacked on two lines)
-      if (prevOpenIndex >= 0 && prevOpenIndex < prices.length - 1) {
-        const x = padding + (prevOpenIndex / (prices.length - 1)) * chartWidth
+      // Draw "Open" tick and label for today (at first candle position)
+      const todayStartX = padding + (prices.length / (totalDataPoints - 1)) * chartWidth
+      const todayWidth = chartWidth - todayStartX + padding
+      const candleWidth = todayWidth / todayOHLC.length
+      const x = todayStartX + 0.5 * candleWidth
 
-        ctx.beginPath()
-        ctx.moveTo(x, tickTop)
-        ctx.lineTo(x, tickBottom)
-        ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(x, tickTop)
+      ctx.lineTo(x, tickBottom)
+      ctx.stroke()
 
-        ctx.textAlign = x < 20 ? 'left' : 'center'
-        ctx.fillText('Prev', x, rect.height - 12)
-        ctx.fillText('Open', x, rect.height - 3)
-      }
-
-      // Draw "Noon" tick and label for previous day
-      if (prevNoonIndex > 0 && prevNoonIndex < prices.length - 1) {
-        const x = padding + (prevNoonIndex / (prices.length - 1)) * chartWidth
-
-        ctx.beginPath()
-        ctx.moveTo(x, tickTop)
-        ctx.lineTo(x, tickBottom)
-        ctx.stroke()
-
-        ctx.textAlign = 'center'
-        ctx.fillText('Noon', x, rect.height - 4)
-      }
-
-      // Draw "2pm" tick and label for previous day
-      if (prev2pmIndex > 0 && prev2pmIndex < prices.length - 1) {
-        const x = padding + (prev2pmIndex / (prices.length - 1)) * chartWidth
-
-        ctx.beginPath()
-        ctx.moveTo(x, tickTop)
-        ctx.lineTo(x, tickBottom)
-        ctx.stroke()
-
-        ctx.textAlign = 'center'
-        ctx.fillText('2pm', x, rect.height - 4)
-      }
-
-      // Draw "Open" tick and label for today
-      if (openIndex > 0 && openIndex < prices.length - 1) {
-        const x = padding + (openIndex / (prices.length - 1)) * chartWidth
-
-        ctx.beginPath()
-        ctx.moveTo(x, tickTop)
-        ctx.lineTo(x, tickBottom)
-        ctx.stroke()
-
-        ctx.textAlign = 'center'
-        ctx.fillText('Open', x, rect.height - 4)
-      }
+      ctx.textAlign = 'center'
+      ctx.fillText('Open', x, rect.height - 4)
     }
   }, [index.priceHistory, index.priceTimestamps, index.todayOHLC, index.previousClose, isDark])
 
