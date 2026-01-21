@@ -263,7 +263,7 @@ function SparklineCard({ index }: SparklineCardProps) {
   return (
     <div className="flex flex-col items-center pt-1 pb-0 px-3 flex-1">
       <div className="flex items-baseline gap-14 mb-2">
-        <span className="text-sm font-semibold tracking-wide text-gray-500 dark:text-gray-400">
+        <span className="text-sm font-semibold tracking-wide text-gray-500 dark:text-gray-400 whitespace-nowrap">
           {index.name}
         </span>
         <span className={`text-xs font-medium whitespace-nowrap ${changeColor}`}>
@@ -281,7 +281,7 @@ function SparklineCard({ index }: SparklineCardProps) {
 
 export default function IndexSparklines({ indices }: IndexSparklinesProps) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-[rgb(28,28,28)] pt-2 pb-2 px-4" style={{ width: '1300px' }}>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-[rgb(28,28,28)] pt-2 pb-2 px-4" style={{ width: '1360px' }}>
       <div className="flex gap-4 justify-start">
         {indices.map((index) => (
           <SparklineCard

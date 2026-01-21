@@ -8,7 +8,7 @@ interface StocksTableProps {
 
 export default function StocksTable({ stocks }: StocksTableProps) {
   return (
-    <div className="w-full max-w-2xl">
+    <div style={{ width: '180px' }}>
       <div className="overflow-hidden rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)]">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-[rgb(26,26,26)]">

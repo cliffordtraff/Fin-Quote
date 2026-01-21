@@ -10,6 +10,9 @@ import { getVIXData } from '@/app/actions/vix'
 import { getEconomicEvents } from '@/app/actions/economic-calendar'
 import { getMarketNews } from '@/app/actions/get-market-news'
 import { getSparklineIndicesData } from '@/app/actions/sparkline-indices'
+import { getMostActiveData } from '@/app/actions/most-active'
+import { getTrendingStocksData } from '@/app/actions/trending-stocks'
+import { getSP500Gainers, getSP500Losers } from '@/app/actions/sp500-movers'
 import type { AllMarketData, MarketData, FutureData, FutureMarketData } from './market-types'
 
 /**
@@ -36,7 +39,11 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     vixResult,
     economicResult,
     newsResult,
-    commoditiesResult
+    commoditiesResult,
+    mostActiveResult,
+    trendingResult,
+    sp500GainersResult,
+    sp500LosersResult
   ] = await Promise.all([
     getAaplMarketData(),
     getNasdaqMarketData(),
@@ -52,7 +59,11 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getVIXData(),
     getEconomicEvents(),
     getMarketNews(6),
-    getSparklineIndicesData()
+    getSparklineIndicesData(),
+    getMostActiveData(),
+    getTrendingStocksData(),
+    getSP500Gainers(),
+    getSP500Losers()
   ])
 
   // Process results - gracefully handle failures per-section
@@ -71,6 +82,10 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
     economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events,
     marketNews: newsResult || [],
-    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices
+    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices,
+    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive,
+    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending,
+    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers,
+    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers
   }
 }

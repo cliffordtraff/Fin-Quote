@@ -35,6 +35,9 @@ export type { VIXData } from '@/app/actions/vix'
 export type { EconomicEvent } from '@/app/actions/economic-calendar'
 export type { MarketNewsItem } from '@/app/actions/get-market-news'
 export type { SparklineIndexData } from '@/app/actions/sparkline-indices'
+export type { MostActiveStock } from '@/app/actions/most-active'
+export type { TrendingStock } from '@/app/actions/trending-stocks'
+export type { SP500MoverData } from '@/app/actions/sp500-movers'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -53,4 +56,8 @@ export interface AllMarketData {
   economicEvents: import('@/app/actions/economic-calendar').EconomicEvent[]
   marketNews: import('@/app/actions/get-market-news').MarketNewsItem[]
   sparklineIndices: import('@/app/actions/sparkline-indices').SparklineIndexData[]
+  mostActive: import('@/app/actions/most-active').MostActiveStock[]
+  trending: import('@/app/actions/trending-stocks').TrendingStock[]
+  sp500Gainers: import('@/app/actions/sp500-movers').SP500MoverData[]
+  sp500Losers: import('@/app/actions/sp500-movers').SP500MoverData[]
 }

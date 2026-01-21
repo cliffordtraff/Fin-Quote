@@ -589,7 +589,7 @@ export default function SimpleCanvasChart({ data, yAxisInterval, labelIntervalMu
   // ====================
 
   return (
-    <div className="w-full rounded" style={{ height: '250px' }}>
+    <div className="w-full rounded" style={{ height: '180px' }}>
       <canvas
         ref={canvasRef}  // Connect React ref to this canvas element
         className="w-full h-full rounded"

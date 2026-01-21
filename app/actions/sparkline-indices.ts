@@ -26,7 +26,7 @@ const INDEX_SYMBOLS = [
   { symbol: '^GSPC', name: 'S&P 500' },
   { symbol: '^DJI', name: 'DOW' },
   { symbol: '^IXIC', name: 'NASDAQ' },
-  { symbol: '^RUT', name: 'RUSSELL' },
+  { symbol: '^RUT', name: 'Russell 2000' },
   { symbol: '^VIX', name: 'VIX' },
 ]
 
