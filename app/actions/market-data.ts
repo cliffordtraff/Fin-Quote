@@ -72,7 +72,78 @@ function aggregateTo10MinCandles(oneMinCandles: Array<{ date: string; open: numb
 }
 
 /**
+ * Aggregate 1-minute candles into 10-minute candles for a specific date
+ * with an optional slot offset (used for combining previous day + today)
+ */
+function aggregateTo10MinCandlesWithOffset(
+  oneMinCandles: Array<{ date: string; open: number; high: number; low: number; close: number }>,
+  slotOffset: number = 0
+) {
+  if (oneMinCandles.length === 0) return []
+
+  // Group candles by their 10-minute time slot
+  const slots: Map<number, Array<{ date: string; open: number; high: number; low: number; close: number }>> = new Map()
+
+  for (const candle of oneMinCandles) {
+    const date = new Date(candle.date)
+    const minutes = date.getHours() * 60 + date.getMinutes()
+
+    // Calculate which 10-minute slot this belongs to
+    const marketOpenMinutes = 9 * 60 + 30  // 9:30 AM
+    const minutesSinceOpen = minutes - marketOpenMinutes
+    const slotIndex = Math.floor(minutesSinceOpen / 10) + slotOffset
+
+    if (!slots.has(slotIndex)) {
+      slots.set(slotIndex, [])
+    }
+    slots.get(slotIndex)!.push(candle)
+  }
+
+  // Convert each slot to a 10-minute candle
+  const tenMinCandles: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
+
+  // Sort slot indices to process in order
+  const sortedSlots = Array.from(slots.keys()).sort((a, b) => a - b)
+
+  for (const slotIndex of sortedSlots) {
+    const slotCandles = slots.get(slotIndex)!
+
+    // Sort candles within slot by time (oldest first)
+    slotCandles.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    const oldestCandle = slotCandles[0]
+    const newestCandle = slotCandles[slotCandles.length - 1]
+
+    // Calculate the slot's start time for display
+    const marketOpenMinutes = 9 * 60 + 30
+    const actualSlot = slotIndex - slotOffset  // Remove offset to get actual time
+    const slotStartMinutes = marketOpenMinutes + (actualSlot * 10)
+    const slotHour = Math.floor(slotStartMinutes / 60)
+    const slotMinute = slotStartMinutes % 60
+
+    // Extract the date portion from the original candle
+    const datePart = oldestCandle.date.split(' ')[0]
+    const hourStr = slotHour.toString().padStart(2, '0')
+    const minuteStr = slotMinute.toString().padStart(2, '0')
+    const slotDate = `${datePart} ${hourStr}:${minuteStr}:00`
+
+    const tenMinCandle = {
+      date: slotDate,
+      open: oldestCandle.open,
+      high: Math.max(...slotCandles.map(c => c.high)),
+      low: Math.min(...slotCandles.map(c => c.low)),
+      close: newestCandle.close
+    }
+
+    tenMinCandles.push(tenMinCandle)
+  }
+
+  return tenMinCandles
+}
+
+/**
  * Fetch latest SPX index price and intraday data for homepage
+ * Includes previous day's last 2 hours (2pm-4pm) to show the opening gap
  */
 export async function getAaplMarketData() {
   try {
@@ -103,7 +174,7 @@ export async function getAaplMarketData() {
       next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)
     })
 
-    let priceHistory = []
+    let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
     if (intradayResponse.ok) {
       const intradayJson = await intradayResponse.json()
 
@@ -118,23 +189,55 @@ export async function getAaplMarketData() {
         })
 
         // FMP returns newest first. Get most recent trading day.
-        // Find the date of the most recent candle
-        const mostRecentDate = intradayJson[0].date.split(' ')[0] // "2024-11-08 15:55:00" -> "2024-11-08"
+        const mostRecentDate = intradayJson[0].date.split(' ')[0]
 
-        // Filter to only candles from that date (one trading day)
-        const todayCandles = intradayJson.filter(candle =>
+        // Find unique dates in the data (sorted newest to oldest)
+        const uniqueDates = [...new Set(intradayJson.map((c: { date: string }) => c.date.split(' ')[0]))] as string[]
+        const previousDate = uniqueDates.length > 1 ? uniqueDates[1] : null
+
+        console.log(`SPX: Most recent date: ${mostRecentDate}, Previous date: ${previousDate}`)
+
+        // Get previous day's last 2 hours (2pm-4pm = slots 27-38, which is 14:00-15:50)
+        // 2pm = 14:00 = (14*60 - 9*60 - 30) / 10 = 270/10 = 27
+        // 4pm = 16:00 = (16*60 - 9*60 - 30) / 10 = 390/10 = 39 (but last slot is 38 since 15:50-15:59)
+        let prevDayCandles: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
+        if (previousDate) {
+          const prevDayAllCandles = intradayJson.filter((candle: { date: string }) =>
+            candle.date.startsWith(previousDate)
+          )
+
+          // Filter to only 2pm-4pm (14:00-16:00)
+          prevDayCandles = prevDayAllCandles.filter((candle: { date: string }) => {
+            const time = candle.date.split(' ')[1]
+            const hour = parseInt(time.split(':')[0])
+            return hour >= 14 && hour < 16
+          })
+
+          console.log(`SPX: Previous day ${previousDate} has ${prevDayCandles.length} 1-min candles from 2pm-4pm`)
+        }
+
+        // Get today's candles
+        const todayCandles = intradayJson.filter((candle: { date: string }) =>
           candle.date.startsWith(mostRecentDate)
         )
 
         console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate}`)
 
-        // Aggregate 1-minute candles into 10-minute candles
-        const tenMinCandles = aggregateTo10MinCandles(todayCandles)
+        // Aggregate previous day's last 2 hours (use negative slot offset to position before today)
+        // Previous day slots 27-38 should appear before today's slot 0
+        // So offset them by a negative amount: if prev day slot is 27, we want it at position -12
+        // prevDaySlot 27 + offset = -12, so offset = -39
+        const prevDayTenMin = prevDayCandles.length > 0
+          ? aggregateTo10MinCandlesWithOffset(prevDayCandles, -39)
+          : []
 
-        console.log(`Aggregated into ${tenMinCandles.length} 10-min candles`)
+        // Aggregate today's candles (no offset)
+        const todayTenMin = aggregateTo10MinCandles(todayCandles)
 
-        // Reverse so oldest is first (chronological order for chart)
-        priceHistory = tenMinCandles
+        console.log(`SPX: Aggregated ${prevDayTenMin.length} prev day 10-min candles + ${todayTenMin.length} today 10-min candles`)
+
+        // Combine: previous day's last 2 hours + today
+        priceHistory = [...prevDayTenMin, ...todayTenMin]
       } else {
         console.log('FMP Intraday: No data available (possibly weekend/market closed)')
       }
@@ -536,6 +639,117 @@ export async function getRussellMarketData() {
     }
   } catch (error) {
     console.error('Error in getRussellMarketData:', error)
+    return { error: 'Failed to fetch market data' }
+  }
+}
+
+/**
+ * Fetch latest ES futures price and intraday data for homepage
+ * ES futures trade nearly 24 hours (Sunday 6pm - Friday 5pm ET)
+ */
+export async function getESFuturesMarketData() {
+  try {
+    const apiKey = process.env.FMP_API_KEY
+    if (!apiKey) {
+      return { error: 'API configuration error' }
+    }
+
+    // Fetch latest price quote for ES futures
+    const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/ES=F?apikey=${apiKey}`
+    const quoteResponse = await fetch(quoteUrl, {
+      next: { revalidate: 10 },
+    })
+
+    if (!quoteResponse.ok) {
+      console.error('FMP API error:', quoteResponse.status)
+      return { error: 'Failed to fetch price data' }
+    }
+
+    const quoteJson = await quoteResponse.json()
+    const priceData = quoteJson[0]
+
+    // Fetch 1-minute intraday data and aggregate into 10-minute candles
+    const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/1min/ES=F?apikey=${apiKey}`
+    const intradayResponse = await fetch(intradayUrl, {
+      next: { revalidate: 10 },
+    })
+
+    let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
+    if (intradayResponse.ok) {
+      const intradayJson = await intradayResponse.json()
+
+      if (intradayJson && 'Error Message' in intradayJson) {
+        console.log('FMP API Error (ES Futures):', intradayJson['Error Message'])
+      } else if (intradayJson && Array.isArray(intradayJson) && intradayJson.length > 0) {
+        console.log('FMP Intraday Response (1-min) ES Futures:', {
+          totalCandles: intradayJson.length,
+          firstCandle: intradayJson[0],
+          lastCandle: intradayJson[intradayJson.length - 1]
+        })
+
+        // Get most recent trading day
+        const mostRecentDate = intradayJson[0].date.split(' ')[0]
+
+        // Filter to only candles from that date
+        const todayCandles = intradayJson.filter((candle: { date: string }) =>
+          candle.date.startsWith(mostRecentDate)
+        )
+
+        console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (ES Futures)`)
+
+        // Aggregate 1-minute candles into 10-minute candles
+        const tenMinCandles = aggregateTo10MinCandles(todayCandles)
+
+        console.log(`Aggregated into ${tenMinCandles.length} 10-min candles (ES Futures)`)
+
+        priceHistory = tenMinCandles
+      } else {
+        console.log('FMP Intraday: No intraday data available (ES Futures), trying daily data')
+      }
+    } else {
+      console.error('Intraday API error (ES Futures):', intradayResponse.status, intradayResponse.statusText)
+    }
+
+    // Fallback to daily data if no intraday data available
+    if (priceHistory.length === 0) {
+      console.log('Fetching daily historical data for ES Futures')
+      const dailyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/ES=F?apikey=${apiKey}`
+      const dailyResponse = await fetch(dailyUrl, {
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      })
+
+      if (dailyResponse.ok) {
+        const dailyJson = await dailyResponse.json()
+        // Get last 30 trading days
+        priceHistory = dailyJson?.historical?.slice(0, 30).reverse() || []
+        console.log('Daily data fetched (ES Futures):', {
+          count: priceHistory.length,
+          first: priceHistory[0],
+          last: priceHistory[priceHistory.length - 1]
+        })
+      } else {
+        console.error('Daily API error (ES Futures):', dailyResponse.status)
+      }
+    }
+
+    // Get the date
+    const historyDate = priceHistory.length > 0
+      ? priceHistory[priceHistory.length - 1].date.split(' ')[0]
+      : null
+    const quoteDate = priceData?.timestamp
+      ? new Date(priceData.timestamp * 1000).toISOString().split('T')[0]
+      : null
+    const actualDate = historyDate || quoteDate || new Date().toISOString().split('T')[0]
+
+    return {
+      currentPrice: priceData?.price || 0,
+      priceChange: priceData?.change || 0,
+      priceChangePercent: priceData?.changesPercentage || 0,
+      date: actualDate,
+      priceHistory: priceHistory,
+    }
+  } catch (error) {
+    console.error('Error in getESFuturesMarketData:', error)
     return { error: 'Failed to fetch market data' }
   }
 }

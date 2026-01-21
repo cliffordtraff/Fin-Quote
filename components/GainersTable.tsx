@@ -89,9 +89,9 @@ export default function GainersTable({ gainers }: GainersTableProps) {
           <div className="text-right">Float</div>
         </div>
 
-        {/* Rows */}
-        <div className="divide-y divide-gray-700 max-h-[600px] overflow-y-auto">
-          {gainers.map((gainer) => {
+        {/* Rows - Always show exactly 16 */}
+        <div className="divide-y divide-gray-700">
+          {gainers.slice(0, 16).map((gainer) => {
             const isPositive = gainer.change >= 0
             const colorClass = isPositive
               ? 'text-green-500'

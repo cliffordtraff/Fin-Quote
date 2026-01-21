@@ -36,8 +36,8 @@ async function fetchRegularHoursGainers(): Promise<{ gainers?: GainerData[]; err
     const data = await response.json()
 
     if (Array.isArray(data) && data.length > 0) {
-      // Take top 20 gainers
-      const topGainers = data.slice(0, 20)
+      // Take top 35 gainers (extra buffer for filtering bad data)
+      const topGainers = data.slice(0, 35)
 
       // Fetch volume data for all gainers in parallel using the quote endpoint
       const symbols = topGainers.map((item: any) => item.symbol).join(',')
@@ -73,6 +73,7 @@ async function fetchRegularHoursGainers(): Promise<{ gainers?: GainerData[]; err
           changesPercentage: item.changesPercentage,
           volume: volumeMap.get(item.symbol) || 0
         }))
+        .slice(0, 16) // Always return exactly 16 gainers
 
       return { gainers }
     }
@@ -103,7 +104,7 @@ export async function getGainersData() {
         return await fetchRegularHoursGainers()
       }
       // Map to GainerData format, using extendedVolume as the volume
-      const gainers: GainerData[] = extendedGainers.map(g => ({
+      const gainers: GainerData[] = extendedGainers.slice(0, 16).map(g => ({
         symbol: g.symbol,
         name: g.name,
         price: g.price,
@@ -123,7 +124,7 @@ export async function getGainersData() {
         return await fetchRegularHoursGainers()
       }
       // Map to GainerData format, using extendedVolume as the volume
-      const gainers: GainerData[] = extendedGainers.map(g => ({
+      const gainers: GainerData[] = extendedGainers.slice(0, 16).map(g => ({
         symbol: g.symbol,
         name: g.name,
         price: g.price,

@@ -36,8 +36,8 @@ async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?
     const data = await response.json()
 
     if (Array.isArray(data) && data.length > 0) {
-      // Take top 20 losers
-      const topLosers = data.slice(0, 20)
+      // Take top 35 losers (extra buffer for filtering bad data)
+      const topLosers = data.slice(0, 35)
 
       // Fetch volume data for all losers in parallel using the quote endpoint
       const symbols = topLosers.map((item: any) => item.symbol).join(',')
@@ -73,6 +73,7 @@ async function fetchRegularHoursLosers(): Promise<{ losers?: LoserData[]; error?
           changesPercentage: item.changesPercentage,
           volume: volumeMap.get(item.symbol) || 0
         }))
+        .slice(0, 16) // Always return exactly 16 losers
 
       return { losers }
     }
@@ -103,7 +104,7 @@ export async function getLosersData() {
         return await fetchRegularHoursLosers()
       }
       // Map to LoserData format, using extendedVolume as the volume
-      const losers: LoserData[] = extendedLosers.map(l => ({
+      const losers: LoserData[] = extendedLosers.slice(0, 16).map(l => ({
         symbol: l.symbol,
         name: l.name,
         price: l.price,
@@ -123,7 +124,7 @@ export async function getLosersData() {
         return await fetchRegularHoursLosers()
       }
       // Map to LoserData format, using extendedVolume as the volume
-      const losers: LoserData[] = extendedLosers.map(l => ({
+      const losers: LoserData[] = extendedLosers.slice(0, 16).map(l => ({
         symbol: l.symbol,
         name: l.name,
         price: l.price,

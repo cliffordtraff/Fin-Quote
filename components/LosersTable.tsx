@@ -89,9 +89,9 @@ export default function LosersTable({ losers }: LosersTableProps) {
           <div className="text-right">Float</div>
         </div>
 
-        {/* Rows */}
-        <div className="divide-y divide-gray-700 max-h-[600px] overflow-y-auto">
-          {losers.map((loser) => {
+        {/* Rows - Always show exactly 16 */}
+        <div className="divide-y divide-gray-700">
+          {losers.slice(0, 16).map((loser) => {
             const isPositive = loser.change >= 0
             const colorClass = isPositive
               ? 'text-green-500'
