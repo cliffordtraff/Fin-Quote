@@ -14,6 +14,7 @@ export interface SparklineIndexData {
   currentPrice: number
   priceChange: number
   priceChangePercent: number
+  yesterdayChangePercent: number | null // Previous day's percentage change
   priceHistory: number[] // Simple array of closing prices for sparkline (yesterday)
   priceTimestamps: string[] // Timestamps corresponding to each price point
   todayOHLC: OHLCData[] // Full OHLC data for today's candlesticks
@@ -72,6 +73,7 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
         let todayOHLC: OHLCData[] = []
         let previousClose: number | null = null
         let todayStartIndex: number | null = null
+        let yesterdayChangePercent: number | null = null
 
         if (intradayResponse.ok) {
           const intradayData = await intradayResponse.json()
@@ -127,6 +129,15 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
                 previousClose = prevDayCandle.close
               }
             }
+
+            // Calculate yesterday's percentage change (from yesterday's open to yesterday's close)
+            if (yesterdayData.length > 0) {
+              const yesterdayOpen = yesterdayData[0].open
+              const yesterdayClose = yesterdayData[yesterdayData.length - 1].close
+              if (yesterdayOpen && yesterdayOpen !== 0) {
+                yesterdayChangePercent = ((yesterdayClose - yesterdayOpen) / yesterdayOpen) * 100
+              }
+            }
           }
         }
 
@@ -136,6 +147,7 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
           currentPrice: quote.price,
           priceChange: quote.change,
           priceChangePercent: quote.changesPercentage,
+          yesterdayChangePercent,
           priceHistory,
           priceTimestamps,
           todayOHLC,

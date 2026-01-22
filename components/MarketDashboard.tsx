@@ -69,7 +69,7 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
   const selectedConfig = INDEX_CONFIG.find(c => c.key === selectedIndex)!
 
   // Placeholder for LLM-generated market summary
-  const marketSummary = "Stocks are rebounding from a sharp sell-off on Tuesday, after President Trump stated the U.S. would not use force to acquire Greenland, easing geopolitical concerns."
+  const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
 
   return (
     <div className="w-fit mx-auto pl-4 pr-8">
