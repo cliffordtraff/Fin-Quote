@@ -33,7 +33,7 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
 
   if (events.length === 0) {
     return (
-      <div className="w-full">
+      <div style={{ width: '340px' }}>
         <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             Loading economic events...
@@ -54,13 +54,13 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
   }, {} as Record<string, EconomicEvent[]>)
 
   return (
-    <div className="w-full">
-      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-white mb-3">
-          Upcoming Economic Events (US)
-        </h3>
+    <div style={{ width: '340px' }}>
+      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Upcoming Economic Events (US)</h2>
+        </div>
 
-        <div className="space-y-4">
+        <div className="p-4 space-y-4">
           {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
             const { month, day } = formatDate(dateEvents[0].date)
 

@@ -55,10 +55,10 @@ export default function EarningsCalendar({ earnings }: EarningsCalendarProps) {
 
               {/* Company info */}
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-medium text-gray-900 dark:text-gray-100 truncate">
+                <p className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
                   {earning.name}
                 </p>
-                <p className="text-[9px] text-gray-500 dark:text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   {full}{timeLabel ? `, ${timeLabel}` : ''}
                 </p>
               </div>

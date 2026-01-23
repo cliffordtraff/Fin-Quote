@@ -89,8 +89,21 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
           gainers={gainers}
           losers={losers}
         />
-        <MarketInsights metaSparkline={metaSparkline || undefined} xlbSparkline={xlbSparkline || undefined} />
-        <AfterHours />
+        {/* Market Insights, After Hours, and Calendars stacked */}
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-4">
+            <MarketInsights />
+            <AfterHours />
+          </div>
+          <div className="flex gap-4">
+            {economicEvents.length > 0 && (
+              <EconomicCalendar events={economicEvents} />
+            )}
+            {earnings.length > 0 && (
+              <EarningsCalendar earnings={earnings} />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Content Grid */}
@@ -123,13 +136,8 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
           </div>
         )}
 
-        {/* Economic Calendar and Sector Column */}
+        {/* Sector Column */}
         <div className="flex flex-col gap-4 justify-self-end">
-          {economicEvents.length > 0 && (
-            <div style={{ width: '400px' }}>
-              <EconomicCalendar events={economicEvents} />
-            </div>
-          )}
           {sectors.length > 0 && (
             <div style={{ width: '400px' }}>
               <SectorHeatmap sectors={sectors} />
@@ -148,13 +156,6 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
           {losers.length > 0 && (
             <LosersTable losers={losers} />
           )}
-        </div>
-      )}
-
-      {/* Earnings Calendar */}
-      {earnings.length > 0 && (
-        <div className="mt-8">
-          <EarningsCalendar earnings={earnings} />
         </div>
       )}
     </div>
