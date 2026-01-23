@@ -20,13 +20,13 @@ import MarketSessions from '@/components/MarketSessions'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
-interface MarketDashboard2Props {
+interface MarketDashboard3Props {
   initialData: AllMarketData
 }
 
 const ENABLE_MOVERS = process.env.NEXT_PUBLIC_ENABLE_MOVERS === 'true'
 
-export default function MarketDashboard2({ initialData }: MarketDashboard2Props) {
+export default function MarketDashboard3({ initialData }: MarketDashboard3Props) {
   const [data, setData] = useState<AllMarketData>(initialData)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -75,13 +75,6 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
       {sparklineIndices.length > 0 && (
         <div className="mb-4 w-full">
           <IndexSparklines indices={sparklineIndices} />
-        </div>
-      )}
-
-      {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}
-      {(sp500GainerSparklines.length > 0 || sp500LoserSparklines.length > 0) && (
-        <div className="mb-4">
-          <TopGainerSparklines sparklines={sp500GainerSparklines} loserSparklines={sp500LoserSparklines} />
         </div>
       )}
 
@@ -168,6 +161,13 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
         )}
         <MarketSessions />
       </div>
+
+      {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}
+      {(sp500GainerSparklines.length > 0 || sp500LoserSparklines.length > 0) && (
+        <div className="mb-8">
+          <TopGainerSparklines sparklines={sp500GainerSparklines} loserSparklines={sp500LoserSparklines} />
+        </div>
+      )}
     </div>
   )
 }

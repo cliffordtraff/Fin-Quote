@@ -17,6 +17,7 @@ import { fetchEarningsCalendar } from '@/app/actions/earnings-calendar'
 import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
+import { getForexBondsData } from '@/app/actions/forex-bonds'
 import type { AllMarketData, MarketData, FutureData, FutureMarketData } from './market-types'
 
 /**
@@ -52,7 +53,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     sp500GainerSparklinesResult,
     sp500LoserSparklinesResult,
     metaSparklineResult,
-    xlbSparklineResult
+    xlbSparklineResult,
+    forexBondsResult
   ] = await Promise.all([
     getAaplMarketData(),
     getNasdaqMarketData(),
@@ -77,7 +79,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getSP500GainerSparklines(),
     getSP500LoserSparklines(),
     getStockSparkline('META'),
-    getStockSparkline('XLB')  // Materials sector ETF
+    getStockSparkline('XLB'),  // Materials sector ETF
+    getForexBondsData()
   ])
 
   // Process results - gracefully handle failures per-section
@@ -105,6 +108,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines,
     sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
     metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
-    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline
+    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
+    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds
   }
 }

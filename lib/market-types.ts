@@ -42,6 +42,7 @@ export type { EarningsData } from '@/app/actions/earnings-calendar'
 export type { SP500GainerSparklineData } from '@/app/actions/sp500-gainer-sparklines'
 export type { SP500LoserSparklineData } from '@/app/actions/sp500-loser-sparklines'
 export type { StockSparklineData } from '@/app/actions/stock-sparkline'
+export type { ForexBondData } from '@/app/actions/forex-bonds'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -69,4 +70,5 @@ export interface AllMarketData {
   sp500LoserSparklines: import('@/app/actions/sp500-loser-sparklines').SP500LoserSparklineData[]
   metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
+  forexBonds: import('@/app/actions/forex-bonds').ForexBondData[]
 }

@@ -53,6 +53,16 @@ export default function Navigation() {
                 Market 2
               </Link>
               <Link
+                href="/market3"
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  pathname === '/market3'
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                Market 3
+              </Link>
+              <Link
                 href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname?.startsWith('/stock')
@@ -91,6 +101,16 @@ export default function Navigation() {
                 }`}
               >
                 Calendar
+              </Link>
+              <Link
+                href="/insiders"
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  pathname === '/insiders'
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                Insiders
               </Link>
               {process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true' && (
                 <Link
