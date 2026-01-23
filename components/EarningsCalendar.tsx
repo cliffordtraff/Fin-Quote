@@ -4,6 +4,7 @@ import type { EarningsData } from '@/app/actions/earnings-calendar'
 
 interface EarningsCalendarProps {
   earnings: EarningsData[]
+  expanded?: boolean
 }
 
 function formatDate(dateStr: string): { month: string; day: number; full: string; time?: string } {
@@ -27,18 +28,30 @@ function getTimeLabel(time: 'bmo' | 'amc' | 'dmh' | null): string | null {
   }
 }
 
-export default function EarningsCalendar({ earnings }: EarningsCalendarProps) {
+export default function EarningsCalendar({ earnings, expanded = false }: EarningsCalendarProps) {
   if (earnings.length === 0) {
-    return null
+    return (
+      <div style={{ width: expanded ? '100%' : '340px' }}>
+        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
+          <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
+            No upcoming earnings...
+          </div>
+        </div>
+      </div>
+    )
   }
 
+  const displayCount = expanded ? 15 : 6
+
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden" style={{ width: '340px' }}>
-      <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Earnings calendar</h2>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden" style={{ width: expanded ? '100%' : '340px' }}>
+      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <h2 className={`font-semibold text-gray-700 dark:text-gray-300 ${expanded ? 'text-sm' : 'text-[10px]'}`}>
+          Earnings Calendar
+        </h2>
       </div>
       <div className="divide-y divide-gray-100 dark:divide-gray-800">
-        {earnings.slice(0, 6).map((earning, index) => {
+        {earnings.slice(0, displayCount).map((earning, index) => {
           const { month, day, full } = formatDate(earning.date)
           const timeLabel = getTimeLabel(earning.time)
 

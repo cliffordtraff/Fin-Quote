@@ -14,9 +14,10 @@ interface EconomicEvent {
 
 interface EconomicCalendarProps {
   events: EconomicEvent[]
+  expanded?: boolean
 }
 
-export default function EconomicCalendar({ events }: EconomicCalendarProps) {
+export default function EconomicCalendar({ events, expanded = false }: EconomicCalendarProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     const month = date.toLocaleDateString('en-US', { month: 'short' })
@@ -33,7 +34,7 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
 
   if (events.length === 0) {
     return (
-      <div style={{ width: '340px' }}>
+      <div style={{ width: expanded ? '100%' : '340px' }}>
         <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             Loading economic events...
@@ -54,13 +55,15 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
   }, {} as Record<string, EconomicEvent[]>)
 
   return (
-    <div style={{ width: '340px' }}>
+    <div style={{ width: expanded ? '100%' : '340px' }}>
       <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Upcoming Economic Events (US)</h2>
+        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <h2 className={`font-semibold text-gray-700 dark:text-gray-300 ${expanded ? 'text-sm' : 'text-[10px]'}`}>
+            Economic Calendar (US)
+          </h2>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className={`space-y-4 ${expanded ? 'p-5' : 'p-4'}`}>
           {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
             const { month, day } = formatDate(dateEvents[0].date)
 

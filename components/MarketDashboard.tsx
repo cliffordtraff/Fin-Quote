@@ -50,7 +50,7 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
 
   return (
-    <div className="w-fit mx-auto pl-4 pr-8">
+    <div className="mx-auto px-4" style={{ width: '1360px' }}>
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -73,7 +73,7 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
       )}
 
       {/* Market Trends Table and S&P 500 Movers */}
-      <div className="flex gap-4 mb-8" style={{ width: '1360px' }}>
+      <div className="flex gap-4 mb-8">
         {mostActive.length > 0 && (
           <MarketTrends
             mostActive={mostActive}

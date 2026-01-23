@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**The Intraday** (formerly Fin Quote) is a Next.js-based financial data platform featuring:
+**The Intraday** (formerly Fin Quote) is a Next.js 15-based financial data platform featuring:
 1. **Market Dashboard** - Real-time market data with index charts (S&P 500, NASDAQ, DOW, Russell 2000), sector heatmaps, VIX, gainers/losers, futures, and economic calendar
-2. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation
-3. **Multi-Stock Charts** - Stock-specific pages with price charts and financial metrics (currently AAPL, expanding to S&P 500)
+2. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation (feature-flagged)
+3. **Multi-Stock Charts** - Stock-specific pages with price charts and financial metrics
+4. **Insider Trading** - SEC Form 4 filings with trade data (in development at `/insiders`)
 
 **Core Design Philosophy:**
 - **Safety First**: LLMs cannot execute arbitrary database queries. Instead, they select from a whitelist of pre-built "tools" (server actions) with validated inputs.
@@ -26,6 +27,7 @@ cp .env.local.example .env.local    # Configure environment variables
 
 # Development
 npm run dev                         # Start dev server (localhost:3000)
+npm run dev:clean                   # Kill existing, clear .next cache, restart
 npm run build                       # Production build
 npm run lint                        # Run ESLint
 
@@ -36,8 +38,10 @@ npm run test -- lib/__tests__/validators.test.ts  # Run single test file
 npm run test:ui                     # Run Vitest with interactive UI
 npm run test:coverage               # Run tests with coverage report
 
-# Evaluation
+# Chatbot Evaluation
 npx tsx scripts/evaluate.ts         # Run evaluation on golden test set
+npx tsx scripts/evaluate.ts --mode fast    # Routing-only (2-3 min)
+npx tsx scripts/evaluate.ts --limit 10     # First N questions only
 
 # Data Management
 npx tsx scripts/fetch-aapl-data.ts  # Fetch core financials from FMP API
@@ -121,6 +125,16 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 
 ## Key Files
 
+### Market Dashboard
+| Path | Purpose |
+|------|---------|
+| `app/page.tsx` | Homepage with market dashboard (indexes, sectors, gainers/losers, VIX, calendar) |
+| `app/market2/page.tsx` | Alternative market layout |
+| `components/MarketDashboard.tsx` | Main dashboard component |
+| `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
+| `components/SectorHeatmap.tsx` | Sector performance visualization |
+
+### Chatbot (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
 | Path | Purpose |
 |------|---------|
 | `app/actions/ask-question.ts` | Main Q&A orchestration: tool selection → execution → answer → validation |
@@ -129,13 +143,20 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 | `lib/regeneration.ts` | Auto-correction on validation failures |
 | `lib/metric-resolver.ts` | Alias resolution ("P/E" → `peRatio`, "profit" → `net_income`) |
 | `lib/chart-helpers.ts` | Chart generation for financial/price data |
+| `components/Sidebar.tsx` | Chatbot UI with conversation history |
+
+### Stock Pages
+| Path | Purpose |
+|------|---------|
+| `app/stock/aapl/page.tsx` | AAPL stock detail page with price chart and financials |
+| `app/insiders/page.tsx` | Insider trading page (in development) |
+| `components/InsiderTradesTable.tsx` | Insider trades table component |
+
+### TTM Calculations
+| Path | Purpose |
+|------|---------|
 | `lib/ttm-calculator.ts` | TTM value calculation from quarterly data |
 | `lib/ttm-config.ts` | TTM calculation type config per metric |
-| `app/page.tsx` | Homepage with market dashboard (indexes, sectors, gainers/losers, VIX, calendar) |
-| `app/stock/aapl/page.tsx` | AAPL stock detail page with price chart and financials |
-| `components/Sidebar.tsx` | Chatbot UI with conversation history |
-| `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
-| `components/SectorHeatmap.tsx` | Sector performance visualization |
 
 ---
 
@@ -292,13 +313,14 @@ The homepage fetches data from these server actions in `app/actions/`:
 |--------|---------|
 | `market-data.ts` | Index data (S&P 500, NASDAQ, DOW, Russell 2000) with price history |
 | `futures.ts` | Futures quotes (ES, NQ, YM, etc.) |
-| `gainers.ts` / `losers.ts` | Top gainers and losers |
+| `gainers.ts` / `losers.ts` | Top gainers and losers with sparkline data |
 | `sectors.ts` | Sector performance for heatmap |
 | `vix.ts` | VIX volatility index data |
 | `economic-calendar.ts` | Upcoming economic events |
+| `insider-trading.ts` | SEC Form 4 insider trades (FMP API) |
 
 ---
 
 ## Tech Stack
 
-Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · Tailwind CSS · TypeScript · Vitest · FMP API
+Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · lightweight-charts · Tailwind CSS · TypeScript · Vitest · FMP API

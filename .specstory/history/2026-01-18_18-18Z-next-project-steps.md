@@ -12,7 +12,6 @@ thoughts on what to work on next with this project?
 
 _**Agent (model default, mode Agent)**_
 
-
 Reviewing the project to understand its current state and suggest next steps.
 
 
@@ -5847,7 +5846,6 @@ Status: **completed**
 
 ---
 
-
 Reviewing a few more docs to understand priorities:
 
 
@@ -11541,7 +11539,6 @@ Status: **completed**
 
 ---
 
-
 Here are focused next steps, ordered by impact and effort:
 
 ## High-impact, medium effort
@@ -11592,7 +11589,13972 @@ Estimated effort: 1–2 weeks
 Status: Planning, large effort
 
 Why:
-- Scales from 2 to 50
+- Scales from 2 to 500 stocks
+- Requires data pipeline, multi-stock chatbot, and infrastructure
+
+Considerations:
+- Significant engineering effort
+- Data ingestion pipeline needed
+- Chatbot needs multi-stock support
+- May be better after the detail page
+
+Estimated effort: 8–12 weeks
+
+---
+
+## Quick wins
+
+### 4. Chart enhancements
+- Technical indicators (SMA, EMA, RSI)
+- Better tooltips and interactions
+- Export to PNG/CSV
+- Timeframe presets
+
+Estimated effort: 1 week
+
+### 5. Watchlist integration
+Status: Planning
+
+Why:
+- User-requested feature
+- Adds personalization
+- Can be built incrementally
+
+Considerations:
+- Requires auth (Supabase Auth)
+- Can start simple (add/remove stocks)
+- Charts can come later
+
+Estimated effort: 2–3 weeks
+
+---
+
+## Recommendation
+
+Start with the Stock Detail Page because:
+1. High user value
+2. Reuses existing infrastructure
+3. Differentiates the product
+4. Manageable scope (AAPL-only)
+5. Natural next step after charts
+
+Then consider:
+- Multi-stock chart improvements (quick follow-up)
+- Watchlist (if users request it)
+- S&P 500 expansion (after core features are solid)
+
+Should I create a detailed implementation plan for the Stock Detail Page, or focus on something else?
+
+---
+
+_**User**_
+
+@node @docs/INSIDERS-FEATURE-PLAN.md thoughts on this plan? critiques?
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+Reviewing the insiders feature plan and providing feedback.
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/cliffordtraff/Desktop/Coding/Fin Quote/docs/INSIDERS-FEATURE-PLAN.md</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="semantic_search_full">
+<details>
+<summary>Tool use: **semantic_search_full**</summary>
+
+
+Parameters:
+
+```json
+{
+  "query": "How does the application currently fetch data from FMP API and what rate limits or API patterns are used?",
+  "topK": 10,
+  "explanation": ""
+}
+```
+Result:
+
+```json
+{
+  "codeResults": [
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./docs/SP500_EXPANSION_PLAN.md",
+        "range": {
+          "startPosition": {
+            "line": 915
+          },
+          "endPosition": {
+            "line": 982
+          }
+        },
+        "contents": "# Income Statement (Quarterly)\nGET /api/v3/income-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}\n\n# Balance Sheet (Annual)\nGET /api/v3/balance-sheet-statement/{symbol}?limit=10&amp;apikey={key}\n\n# Balance Sheet (Quarterly)\nGET /api/v3/balance-sheet-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}\n\n# Cash Flow Statement (Annual)\nGET /api/v3/cash-flow-statement/{symbol}?limit=10&amp;apikey={key}\n\n# Cash Flow Statement (Quarterly)\nGET /api/v3/cash-flow-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}\n\n# Key Metrics (Annual)\nGET /api/v3/key-metrics/{symbol}?limit=10&amp;apikey={key}\n\n# Key Metrics (Quarterly)\nGET /api/v3/key-metrics/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}\n&#96;&#96;&#96;\n\n### API Call Estimation: Per-Symbol vs Bulk\n\n#### Option A: Per-Symbol Fetching (Current Approach)\n\n| Endpoint | Calls per Stock | Total Calls (500 stocks) |\n|----------|-----------------|--------------------------|\n| Income Statement (A) | 1 | 500 |\n| Income Statement (Q) | 1 | 500 |\n| Balance Sheet (A) | 1 | 500 |\n| Balance Sheet (Q) | 1 | 500 |\n| Cash Flow (A) | 1 | 500 |\n| Cash Flow (Q) | 1 | 500 |\n| Key Metrics (A) | 1 | 500 |\n| Key Metrics (Q) | 1 | 500 |\n| **Total** | **8** | **4,000** |\n\nAt 250 requests/minute (safe margin below 300 limit): **~16 minutes** total\n\n**Problems with per-symbol approach:**\n- 4,000 API calls for initial load\n- Easy to hit daily rate limits on lower FMP tiers\n- Fragile: partial failures require tracking which symbols succeeded/failed\n- Slow: network overhead of 4,000 HTTP requests\n\n#### Option B: FMP Bulk API (Recommended)\n\nFMP provides bulk endpoints that return data for **ALL companies in a single request**:\n\n&#96;&#96;&#96;\n# Bulk Income Statement (all companies for one year)\nGET /api/v3/income-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}\n\n# Bulk Balance Sheet\nGET /api/v3/balance-sheet-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}\n\n# Bulk Cash Flow\nGET /api/v3/cash-flow-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}\n\n# Bulk Key Metrics\nGET /api/v3/key-metrics-bulk?year=2023&amp;period=annual&amp;apikey={key}\n&#96;&#96;&#96;\n\n**Bulk API Call Estimation:**\n\n| Data Type | Years | Periods | API Calls |",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "# Income Statement (Quarterly)",
+            "lineNumber": 916
+          },
+          {
+            "text": "GET /api/v3/income-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}",
+            "lineNumber": 917
+          },
+          {
+            "lineNumber": 918
+          },
+          {
+            "text": "# Balance Sheet (Annual)",
+            "lineNumber": 919
+          },
+          {
+            "text": "GET /api/v3/balance-sheet-statement/{symbol}?limit=10&amp;apikey={key}",
+            "lineNumber": 920
+          },
+          {
+            "lineNumber": 921
+          },
+          {
+            "text": "# Balance Sheet (Quarterly)",
+            "lineNumber": 922
+          },
+          {
+            "text": "GET /api/v3/balance-sheet-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}",
+            "lineNumber": 923
+          },
+          {
+            "lineNumber": 924
+          },
+          {
+            "text": "# Cash Flow Statement (Annual)",
+            "lineNumber": 925
+          },
+          {
+            "text": "GET /api/v3/cash-flow-statement/{symbol}?limit=10&amp;apikey={key}",
+            "lineNumber": 926
+          },
+          {
+            "lineNumber": 927
+          },
+          {
+            "text": "# Cash Flow Statement (Quarterly)",
+            "lineNumber": 928
+          },
+          {
+            "text": "GET /api/v3/cash-flow-statement/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}",
+            "lineNumber": 929
+          },
+          {
+            "lineNumber": 930
+          },
+          {
+            "text": "# Key Metrics (Annual)",
+            "lineNumber": 931
+          },
+          {
+            "text": "GET /api/v3/key-metrics/{symbol}?limit=10&amp;apikey={key}",
+            "lineNumber": 932
+          },
+          {
+            "lineNumber": 933
+          },
+          {
+            "text": "# Key Metrics (Quarterly)",
+            "lineNumber": 934
+          },
+          {
+            "text": "GET /api/v3/key-metrics/{symbol}?period=quarter&amp;limit=40&amp;apikey={key}",
+            "lineNumber": 935
+          },
+          {
+            "text": "&#96;&#96;&#96;",
+            "lineNumber": 936
+          },
+          {
+            "lineNumber": 937
+          },
+          {
+            "text": "### API Call Estimation: Per-Symbol vs Bulk",
+            "lineNumber": 938
+          },
+          {
+            "lineNumber": 939
+          },
+          {
+            "text": "#### Option A: Per-Symbol Fetching (Current Approach)",
+            "lineNumber": 940
+          },
+          {
+            "lineNumber": 941
+          },
+          {
+            "text": "| Endpoint | Calls per Stock | Total Calls (500 stocks) |",
+            "lineNumber": 942
+          },
+          {
+            "text": "|----------|-----------------|--------------------------|",
+            "lineNumber": 943
+          },
+          {
+            "text": "| Income Statement (A) | 1 | 500 |",
+            "lineNumber": 944
+          },
+          {
+            "text": "| Income Statement (Q) | 1 | 500 |",
+            "lineNumber": 945
+          },
+          {
+            "text": "| Balance Sheet (A) | 1 | 500 |",
+            "lineNumber": 946
+          },
+          {
+            "text": "| Balance Sheet (Q) | 1 | 500 |",
+            "lineNumber": 947
+          },
+          {
+            "text": "| Cash Flow (A) | 1 | 500 |",
+            "lineNumber": 948
+          },
+          {
+            "text": "| Cash Flow (Q) | 1 | 500 |",
+            "lineNumber": 949
+          },
+          {
+            "text": "| Key Metrics (A) | 1 | 500 |",
+            "lineNumber": 950
+          },
+          {
+            "text": "| Key Metrics (Q) | 1 | 500 |",
+            "lineNumber": 951
+          },
+          {
+            "text": "| **Total** | **8** | **4,000** |",
+            "lineNumber": 952
+          },
+          {
+            "lineNumber": 953
+          },
+          {
+            "text": "At 250 requests/minute (safe margin below 300 limit): **~16 minutes** total",
+            "lineNumber": 954
+          },
+          {
+            "lineNumber": 955
+          },
+          {
+            "text": "**Problems with per-symbol approach:**",
+            "lineNumber": 956
+          },
+          {
+            "text": "- 4,000 API calls for initial load",
+            "lineNumber": 957
+          },
+          {
+            "text": "- Easy to hit daily rate limits on lower FMP tiers",
+            "lineNumber": 958
+          },
+          {
+            "text": "- Fragile: partial failures require tracking which symbols succeeded/failed",
+            "lineNumber": 959
+          },
+          {
+            "text": "- Slow: network overhead of 4,000 HTTP requests",
+            "lineNumber": 960
+          },
+          {
+            "lineNumber": 961
+          },
+          {
+            "text": "#### Option B: FMP Bulk API (Recommended)",
+            "lineNumber": 962
+          },
+          {
+            "lineNumber": 963
+          },
+          {
+            "text": "FMP provides bulk endpoints that return data for **ALL companies in a single request**:",
+            "lineNumber": 964
+          },
+          {
+            "lineNumber": 965
+          },
+          {
+            "text": "&#96;&#96;&#96;",
+            "lineNumber": 966
+          },
+          {
+            "text": "# Bulk Income Statement (all companies for one year)",
+            "lineNumber": 967
+          },
+          {
+            "text": "GET /api/v3/income-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}",
+            "lineNumber": 968
+          },
+          {
+            "lineNumber": 969
+          },
+          {
+            "text": "# Bulk Balance Sheet",
+            "lineNumber": 970
+          },
+          {
+            "text": "GET /api/v3/balance-sheet-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}",
+            "lineNumber": 971
+          },
+          {
+            "lineNumber": 972
+          },
+          {
+            "text": "# Bulk Cash Flow",
+            "lineNumber": 973
+          },
+          {
+            "text": "GET /api/v3/cash-flow-statement-bulk?year=2023&amp;period=annual&amp;apikey={key}",
+            "lineNumber": 974
+          },
+          {
+            "lineNumber": 975
+          },
+          {
+            "text": "# Bulk Key Metrics",
+            "lineNumber": 976
+          },
+          {
+            "text": "GET /api/v3/key-metrics-bulk?year=2023&amp;period=annual&amp;apikey={key}",
+            "lineNumber": 977
+          },
+          {
+            "text": "&#96;&#96;&#96;",
+            "lineNumber": 978
+          },
+          {
+            "lineNumber": 979
+          },
+          {
+            "text": "**Bulk API Call Estimation:**",
+            "lineNumber": 980
+          },
+          {
+            "lineNumber": 981
+          },
+          {
+            "text": "| Data Type | Years | Periods | API Calls |",
+            "lineNumber": 982
+          }
+        ]
+      },
+      "score": 0.488680362701416
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/sp500/batch-ingest-segments.ts",
+        "range": {
+          "startPosition": {
+            "line": 51,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 86,
+            "column": 1
+          }
+        },
+        "contents": "// Rate limiter\nlet lastRequestTime = 0\nasync function rateLimitedFetch(url: string): Promise&lt;any&gt; {\n  const now = Date.now()\n  const timeSinceLastRequest = now - lastRequestTime\n  if (timeSinceLastRequest &lt; RATE_LIMIT_DELAY_MS) {\n    await sleep(RATE_LIMIT_DELAY_MS - timeSinceLastRequest)\n  }\n  lastRequestTime = Date.now()\n\n  const response = await fetch(url)\n\n  // Check for restricted endpoint\n  if (response.status === 402) {\n    throw new Error('Restricted endpoint - requires higher FMP tier')\n  }\n\n  const text = await response.text()\n\n  // Handle non-JSON responses\n  if (text.startsWith('Restricted')) {\n    throw new Error('Restricted endpoint - requires higher FMP tier')\n  }\n\n  try {\n    return JSON.parse(text)\n  } catch {\n    throw new Error(&#96;Invalid JSON response: ${text.slice(0, 100)}&#96;)\n  }\n}\n\nfunction sleep(ms: number): Promise&lt;void&gt; {\n  return new Promise((resolve) =&gt; setTimeout(resolve, ms))\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "// Rate limiter",
+            "lineNumber": 54
+          },
+          {
+            "text": "let lastRequestTime = 0",
+            "lineNumber": 55
+          },
+          {
+            "text": "async function rateLimitedFetch(url: string): Promise&lt;any&gt; {",
+            "lineNumber": 56,
+            "isSignature": true
+          },
+          {
+            "text": "  const now = Date.now()",
+            "lineNumber": 57
+          },
+          {
+            "text": "  const timeSinceLastRequest = now - lastRequestTime",
+            "lineNumber": 58
+          },
+          {
+            "text": "  if (timeSinceLastRequest &lt; RATE_LIMIT_DELAY_MS) {",
+            "lineNumber": 59
+          },
+          {
+            "text": "    await sleep(RATE_LIMIT_DELAY_MS - timeSinceLastRequest)",
+            "lineNumber": 60
+          },
+          {
+            "text": "  }",
+            "lineNumber": 61
+          },
+          {
+            "text": "  lastRequestTime = Date.now()",
+            "lineNumber": 62
+          },
+          {
+            "lineNumber": 63
+          },
+          {
+            "text": "  const response = await fetch(url)",
+            "lineNumber": 64
+          },
+          {
+            "lineNumber": 65
+          },
+          {
+            "text": "  // Check for restricted endpoint",
+            "lineNumber": 66
+          },
+          {
+            "text": "  if (response.status === 402) {",
+            "lineNumber": 67
+          },
+          {
+            "text": "    throw new Error('Restricted endpoint - requires higher FMP tier')",
+            "lineNumber": 68
+          },
+          {
+            "text": "  }",
+            "lineNumber": 69
+          },
+          {
+            "lineNumber": 70
+          },
+          {
+            "text": "  const text = await response.text()",
+            "lineNumber": 71
+          },
+          {
+            "lineNumber": 72
+          },
+          {
+            "text": "  // Handle non-JSON responses",
+            "lineNumber": 73
+          },
+          {
+            "text": "  if (text.startsWith('Restricted')) {",
+            "lineNumber": 74
+          },
+          {
+            "text": "    throw new Error('Restricted endpoint - requires higher FMP tier')",
+            "lineNumber": 75
+          },
+          {
+            "text": "  }",
+            "lineNumber": 76
+          },
+          {
+            "lineNumber": 77
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 78
+          },
+          {
+            "text": "    return JSON.parse(text)",
+            "lineNumber": 79
+          },
+          {
+            "text": "  } catch {",
+            "lineNumber": 80
+          },
+          {
+            "text": "    throw new Error(&#96;Invalid JSON response: ${text.slice(0, 100)}&#96;)",
+            "lineNumber": 81
+          },
+          {
+            "text": "  }",
+            "lineNumber": 82
+          },
+          {
+            "text": "}",
+            "lineNumber": 83,
+            "isSignature": true
+          },
+          {
+            "lineNumber": 84
+          },
+          {
+            "text": "function sleep(ms: number): Promise&lt;void&gt; {",
+            "lineNumber": 85,
+            "isSignature": true
+          },
+          {
+            "text": "  return new Promise((resolve) =&gt; setTimeout(resolve, ms))",
+            "lineNumber": 86
+          },
+          {
+            "text": "}",
+            "lineNumber": 87,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.47981691360473633
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/sp500/batch-ingest-financials.ts",
+        "range": {
+          "startPosition": {},
+          "endPosition": {
+            "line": 62,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Phase 2: Batch ingestion of financial data for S&amp;P 500 stocks\n *\n * Fetches and ingests financial data (income, balance sheet, cash flow) for\n * all S&amp;P 500 constituents using the per-symbol FMP API approach.\n *\n * Uses UPSERT with conflict target (symbol, period_type, period_end_date).\n * Records without period_end_date are skipped to maintain data integrity.\n *\n * IMPORTANT: This script fetches all three statements (income, balance, cash flow)\n * in parallel and combines them before upserting. This makes naive UPSERT safe.\n * If you ever need to ingest statements separately, use the COALESCE-based SQL\n * approach documented in docs/FINANCIALS_STD_GUARDRAILS_DESIGN.md Section 5.\n *\n * Features:\n * - Rate limiting (250 requests/min to stay under 300 limit)\n * - Progress tracking in sp500_constituents.data_status\n * - Error recovery and resume support\n * - Both annual and quarterly data\n * - Validates period_end_date before upsert\n *\n * Usage:\n *   npx tsx scripts/sp500/batch-ingest-financials.ts              # All pending stocks\n *   npx tsx scripts/sp500/batch-ingest-financials.ts --limit 10   # First 10 pending stocks\n *   npx tsx scripts/sp500/batch-ingest-financials.ts --symbol MSFT # Single stock\n *   npx tsx scripts/sp500/batch-ingest-financials.ts --resume     # Resume from last position\n */\n\nimport { createClient } from '@supabase/supabase-js'\nimport * as fs from 'fs/promises'\nimport * as path from 'path'\n\n// Configuration\nconst FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'\nconst RATE_LIMIT_DELAY_MS = 250 // 4 requests per second = 240/min (safe margin)\nconst BATCH_SIZE = 10 // Process 10 stocks before reporting progress\nconst ANNUAL_LIMIT = 10 // Years of annual data\nconst QUARTERLY_LIMIT = 40 // ~10 years of quarterly data\n\ninterface SP500Constituent {\n  symbol: string\n  name: string\n  alternate_symbols: { fmp?: string } | null\n  data_status: Record&lt;string, any&gt;\n}\n\ninterface FinancialRecord {\n  symbol: string\n  year: number\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 1
+          },
+          {
+            "text": " * Phase 2: Batch ingestion of financial data for S&amp;P 500 stocks",
+            "lineNumber": 2
+          },
+          {
+            "text": " *",
+            "lineNumber": 3
+          },
+          {
+            "text": " * Fetches and ingests financial data (income, balance sheet, cash flow) for",
+            "lineNumber": 4
+          },
+          {
+            "text": " * all S&amp;P 500 constituents using the per-symbol FMP API approach.",
+            "lineNumber": 5
+          },
+          {
+            "text": " *",
+            "lineNumber": 6
+          },
+          {
+            "text": " * Uses UPSERT with conflict target (symbol, period_type, period_end_date).",
+            "lineNumber": 7
+          },
+          {
+            "text": " * Records without period_end_date are skipped to maintain data integrity.",
+            "lineNumber": 8
+          },
+          {
+            "text": " *",
+            "lineNumber": 9
+          },
+          {
+            "text": " * IMPORTANT: This script fetches all three statements (income, balance, cash flow)",
+            "lineNumber": 10
+          },
+          {
+            "text": " * in parallel and combines them before upserting. This makes naive UPSERT safe.",
+            "lineNumber": 11
+          },
+          {
+            "text": " * If you ever need to ingest statements separately, use the COALESCE-based SQL",
+            "lineNumber": 12
+          },
+          {
+            "text": " * approach documented in docs/FINANCIALS_STD_GUARDRAILS_DESIGN.md Section 5.",
+            "lineNumber": 13
+          },
+          {
+            "text": " *",
+            "lineNumber": 14
+          },
+          {
+            "text": " * Features:",
+            "lineNumber": 15
+          },
+          {
+            "text": " * - Rate limiting (250 requests/min to stay under 300 limit)",
+            "lineNumber": 16
+          },
+          {
+            "text": " * - Progress tracking in sp500_constituents.data_status",
+            "lineNumber": 17
+          },
+          {
+            "text": " * - Error recovery and resume support",
+            "lineNumber": 18
+          },
+          {
+            "text": " * - Both annual and quarterly data",
+            "lineNumber": 19
+          },
+          {
+            "text": " * - Validates period_end_date before upsert",
+            "lineNumber": 20
+          },
+          {
+            "text": " *",
+            "lineNumber": 21
+          },
+          {
+            "text": " * Usage:",
+            "lineNumber": 22
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-financials.ts              # All pending stocks",
+            "lineNumber": 23
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-financials.ts --limit 10   # First 10 pending stocks",
+            "lineNumber": 24
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-financials.ts --symbol MSFT # Single stock",
+            "lineNumber": 25
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-financials.ts --resume     # Resume from last position",
+            "lineNumber": 26
+          },
+          {
+            "text": " */",
+            "lineNumber": 27
+          },
+          {
+            "lineNumber": 28
+          },
+          {
+            "text": "import { createClient } from '@supabase/supabase-js'",
+            "lineNumber": 29
+          },
+          {
+            "text": "import * as fs from 'fs/promises'",
+            "lineNumber": 30
+          },
+          {
+            "text": "import * as path from 'path'",
+            "lineNumber": 31
+          },
+          {
+            "lineNumber": 32
+          },
+          {
+            "text": "// Configuration",
+            "lineNumber": 33
+          },
+          {
+            "text": "const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'",
+            "lineNumber": 34
+          },
+          {
+            "text": "const RATE_LIMIT_DELAY_MS = 250 // 4 requests per second = 240/min (safe margin)",
+            "lineNumber": 35
+          },
+          {
+            "text": "const BATCH_SIZE = 10 // Process 10 stocks before reporting progress",
+            "lineNumber": 36
+          },
+          {
+            "text": "const ANNUAL_LIMIT = 10 // Years of annual data",
+            "lineNumber": 37
+          },
+          {
+            "text": "const QUARTERLY_LIMIT = 40 // ~10 years of quarterly data",
+            "lineNumber": 38
+          },
+          {
+            "lineNumber": 39
+          },
+          {
+            "text": "interface SP500Constituent {",
+            "lineNumber": 40,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string",
+            "lineNumber": 41
+          },
+          {
+            "text": "  name: string",
+            "lineNumber": 42
+          },
+          {
+            "text": "  alternate_symbols: { fmp?: string } | null",
+            "lineNumber": 43
+          },
+          {
+            "text": "  data_status: Record&lt;string, any&gt;",
+            "lineNumber": 44
+          },
+          {
+            "text": "}",
+            "lineNumber": 45,
+            "isSignature": true
+          },
+          {
+            "lineNumber": 46
+          },
+          {
+            "text": "interface FinancialRecord {",
+            "lineNumber": 47,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string",
+            "lineNumber": 48
+          },
+          {
+            "text": "  year: number",
+            "lineNumber": 49
+          },
+          {
+            "text": "}",
+            "lineNumber": 63,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.46110329031944275
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/stock-key-stats.ts",
+        "range": {
+          "startPosition": {
+            "line": 111,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 469,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Get key statistics for stock detail page\n * Combines data from financial_metrics table and FMP API\n * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')\n */\nexport async function getStockKeyStats(symbol: string): Promise&lt;StockKeyStats&gt; {\n  const apiKey = process.env.FMP_API_KEY;\n\n  if (!apiKey) {\n    throw new Error('FMP_API_KEY is not set');\n  }\n\n  try {\n    const supabase = await createServerClient();\n\n    // Fetch latest metrics from financial_metrics table (key-value format)\n    const { data: metricsData, error: metricsError } = await supabase\n      .from('financial_metrics')\n      .select('metric_name, metric_value, year')\n      .eq('symbol', symbol)\n      .order('year', { ascending: false })\n      .limit(200);\n\n    if (metricsError) {\n      console.error('Error fetching financial metrics:', metricsError);\n    }\n\n    // Transform key-value rows into an object with metric names as keys\n    const latestMetrics: Record&lt;string, number&gt; = {};\n    metricsData?.forEach((row) =&gt; {\n      if (!latestMetrics[row.metric_name]) {\n        latestMetrics[row.metric_name] = row.metric_value;\n      }\n    });\n\n    // Fetch key metrics from FMP API for real-time data\n    const [quoteRes, keyMetricsRes, ratiosRes] = await Promise.all([\n      fetch(\n        &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;,\n        { next: { revalidate: 60 } }\n      ),\n      fetch(\n        &#96;https://financialmodelingprep.com/api/v3/key-metrics/${symbol}?limit=1&amp;apikey=${apiKey}&#96;,\n        { next: { revalidate: 3600 } }\n      ),\n      fetch(\n        &#96;https://financialmodelingprep.com/api/v3/ratios/${symbol}?limit=1&amp;apikey=${apiKey}&#96;,\n        { next: { revalidate: 3600 } }\n      ),\n    ]);\n\n    const quoteData = await quoteRes.json();\n    const keyMetricsData = await keyMetricsRes.json();\n    const ratiosData = await ratiosRes.json();\n\n    const quote = quoteData?.[0] || {};\n    const keyMetrics = keyMetricsData?.[0] || {};\n    const ratios = ratiosData?.[0] || {};\n\n    // Fetch latest financials for TTM data\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 114
+          },
+          {
+            "text": " * Get key statistics for stock detail page",
+            "lineNumber": 115
+          },
+          {
+            "text": " * Combines data from financial_metrics table and FMP API",
+            "lineNumber": 116
+          },
+          {
+            "text": " * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')",
+            "lineNumber": 117
+          },
+          {
+            "text": " */",
+            "lineNumber": 118
+          },
+          {
+            "text": "export async function getStockKeyStats(symbol: string): Promise&lt;StockKeyStats&gt; {",
+            "lineNumber": 119,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY;",
+            "lineNumber": 120
+          },
+          {
+            "lineNumber": 121
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 122
+          },
+          {
+            "text": "    throw new Error('FMP_API_KEY is not set');",
+            "lineNumber": 123
+          },
+          {
+            "text": "  }",
+            "lineNumber": 124
+          },
+          {
+            "lineNumber": 125
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 126
+          },
+          {
+            "text": "    const supabase = await createServerClient();",
+            "lineNumber": 127
+          },
+          {
+            "lineNumber": 128
+          },
+          {
+            "text": "    // Fetch latest metrics from financial_metrics table (key-value format)",
+            "lineNumber": 129
+          },
+          {
+            "text": "    const { data: metricsData, error: metricsError } = await supabase",
+            "lineNumber": 130
+          },
+          {
+            "text": "      .from('financial_metrics')",
+            "lineNumber": 131
+          },
+          {
+            "text": "      .select('metric_name, metric_value, year')",
+            "lineNumber": 132
+          },
+          {
+            "text": "      .eq('symbol', symbol)",
+            "lineNumber": 133
+          },
+          {
+            "text": "      .order('year', { ascending: false })",
+            "lineNumber": 134
+          },
+          {
+            "text": "      .limit(200);",
+            "lineNumber": 135
+          },
+          {
+            "lineNumber": 136
+          },
+          {
+            "text": "    if (metricsError) {",
+            "lineNumber": 137
+          },
+          {
+            "text": "      console.error('Error fetching financial metrics:', metricsError);",
+            "lineNumber": 138
+          },
+          {
+            "text": "    }",
+            "lineNumber": 139
+          },
+          {
+            "lineNumber": 140
+          },
+          {
+            "text": "    // Transform key-value rows into an object with metric names as keys",
+            "lineNumber": 141
+          },
+          {
+            "text": "    const latestMetrics: Record&lt;string, number&gt; = {};",
+            "lineNumber": 142
+          },
+          {
+            "text": "    metricsData?.forEach((row) =&gt; {",
+            "lineNumber": 143
+          },
+          {
+            "text": "      if (!latestMetrics[row.metric_name]) {",
+            "lineNumber": 144
+          },
+          {
+            "text": "        latestMetrics[row.metric_name] = row.metric_value;",
+            "lineNumber": 145
+          },
+          {
+            "text": "      }",
+            "lineNumber": 146
+          },
+          {
+            "text": "    });",
+            "lineNumber": 147
+          },
+          {
+            "lineNumber": 148
+          },
+          {
+            "text": "    // Fetch key metrics from FMP API for real-time data",
+            "lineNumber": 149
+          },
+          {
+            "text": "    const [quoteRes, keyMetricsRes, ratiosRes] = await Promise.all([",
+            "lineNumber": 150
+          },
+          {
+            "text": "      fetch(",
+            "lineNumber": 151
+          },
+          {
+            "text": "        &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;,",
+            "lineNumber": 152
+          },
+          {
+            "text": "        { next: { revalidate: 60 } }",
+            "lineNumber": 153
+          },
+          {
+            "text": "      ),",
+            "lineNumber": 154
+          },
+          {
+            "text": "      fetch(",
+            "lineNumber": 155
+          },
+          {
+            "text": "        &#96;https://financialmodelingprep.com/api/v3/key-metrics/${symbol}?limit=1&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 156
+          },
+          {
+            "text": "        { next: { revalidate: 3600 } }",
+            "lineNumber": 157
+          },
+          {
+            "text": "      ),",
+            "lineNumber": 158
+          },
+          {
+            "text": "      fetch(",
+            "lineNumber": 159
+          },
+          {
+            "text": "        &#96;https://financialmodelingprep.com/api/v3/ratios/${symbol}?limit=1&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 160
+          },
+          {
+            "text": "        { next: { revalidate: 3600 } }",
+            "lineNumber": 161
+          },
+          {
+            "text": "      ),",
+            "lineNumber": 162
+          },
+          {
+            "text": "    ]);",
+            "lineNumber": 163
+          },
+          {
+            "lineNumber": 164
+          },
+          {
+            "text": "    const quoteData = await quoteRes.json();",
+            "lineNumber": 165
+          },
+          {
+            "text": "    const keyMetricsData = await keyMetricsRes.json();",
+            "lineNumber": 166
+          },
+          {
+            "text": "    const ratiosData = await ratiosRes.json();",
+            "lineNumber": 167
+          },
+          {
+            "lineNumber": 168
+          },
+          {
+            "text": "    const quote = quoteData?.[0] || {};",
+            "lineNumber": 169
+          },
+          {
+            "text": "    const keyMetrics = keyMetricsData?.[0] || {};",
+            "lineNumber": 170
+          },
+          {
+            "text": "    const ratios = ratiosData?.[0] || {};",
+            "lineNumber": 171
+          },
+          {
+            "lineNumber": 172
+          },
+          {
+            "text": "    // Fetch latest financials for TTM data",
+            "lineNumber": 173
+          },
+          {
+            "text": "}",
+            "lineNumber": 470,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.46002984046936035
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/scan-extended-hours.ts",
+        "range": {
+          "startPosition": {
+            "line": 18,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 75,
+            "column": 3
+          }
+        },
+        "contents": "// Shared cache (in-memory) with 2-minute TTL for full market scan\nlet cachedSnapshot: ExtendedHoursSnapshot | null = null\nconst CACHE_TTL = 2 * 60 * 1000 // 2 minutes in milliseconds\n\n// Float data cache (longer TTL since float doesn't change often)\nlet cachedFloatData: Map&lt;string, number&gt; | null = null\nlet floatCacheTimestamp: number = 0\nconst FLOAT_CACHE_TTL = 60 * 60 * 1000 // 1 hour in milliseconds\n\n// Filters to match Finviz-quality results\nconst MIN_PRICE = 1.00 // Minimum stock price\nconst MIN_EXTENDED_VOLUME = 10000 // Minimum pre-market/after-hours volume (10K shares)\n\n// Suffixes that indicate non-common stock securities\nconst EXCLUDED_SUFFIXES = ['W', 'U', 'R', 'WS'] // Warrants, Units, Rights\n\n/**\n * Fetch all stocks from NASDAQ and NYSE using bulk endpoints\n * Returns ~18,000 stocks with previousClose for filtering\n */\nasync function fetchBulkQuotes(): Promise&lt;any[]&gt; {\n  const FMP_API_KEY = process.env.FMP_API_KEY\n  if (!FMP_API_KEY) {\n    throw new Error('FMP_API_KEY environment variable is not set')\n  }\n\n  console.log('Fetching bulk quotes from NASDAQ and NYSE...')\n\n  const [nasdaqResp, nyseResp] = await Promise.all([\n    fetch(&#96;https://financialmodelingprep.com/api/v3/quotes/nasdaq?apikey=${FMP_API_KEY}&#96;, {\n      next: { revalidate: 60 }, // 1 minute cache for bulk data\n    }),\n    fetch(&#96;https://financialmodelingprep.com/api/v3/quotes/nyse?apikey=${FMP_API_KEY}&#96;, {\n      next: { revalidate: 60 },\n    }),\n  ])\n\n  const [nasdaqData, nyseData] = await Promise.all([\n    nasdaqResp.json(),\n    nyseResp.json(),\n  ])\n\n  const allStocks = [\n    ...(Array.isArray(nasdaqData) ? nasdaqData : []),\n    ...(Array.isArray(nyseData) ? nyseData : []),\n  ]\n\n  console.log(&#96;Bulk quotes: ${nasdaqData?.length || 0} NASDAQ + ${nyseData?.length || 0} NYSE = ${allStocks.length} total&#96;)\n  return allStocks\n}\n\n/**\n * Fetch float data for all stocks\n * Returns a Map of symbol -&gt; floatShares\n * Cached for 1 hour since float data doesn't change frequently\n */",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "// Shared cache (in-memory) with 2-minute TTL for full market scan",
+            "lineNumber": 21
+          },
+          {
+            "text": "let cachedSnapshot: ExtendedHoursSnapshot | null = null",
+            "lineNumber": 22
+          },
+          {
+            "text": "const CACHE_TTL = 2 * 60 * 1000 // 2 minutes in milliseconds",
+            "lineNumber": 23
+          },
+          {
+            "lineNumber": 24
+          },
+          {
+            "text": "// Float data cache (longer TTL since float doesn't change often)",
+            "lineNumber": 25
+          },
+          {
+            "text": "let cachedFloatData: Map&lt;string, number&gt; | null = null",
+            "lineNumber": 26
+          },
+          {
+            "text": "let floatCacheTimestamp: number = 0",
+            "lineNumber": 27
+          },
+          {
+            "text": "const FLOAT_CACHE_TTL = 60 * 60 * 1000 // 1 hour in milliseconds",
+            "lineNumber": 28
+          },
+          {
+            "lineNumber": 29
+          },
+          {
+            "text": "// Filters to match Finviz-quality results",
+            "lineNumber": 30
+          },
+          {
+            "text": "const MIN_PRICE = 1.00 // Minimum stock price",
+            "lineNumber": 31
+          },
+          {
+            "text": "const MIN_EXTENDED_VOLUME = 10000 // Minimum pre-market/after-hours volume (10K shares)",
+            "lineNumber": 32
+          },
+          {
+            "lineNumber": 33
+          },
+          {
+            "text": "// Suffixes that indicate non-common stock securities",
+            "lineNumber": 34
+          },
+          {
+            "text": "const EXCLUDED_SUFFIXES = ['W', 'U', 'R', 'WS'] // Warrants, Units, Rights",
+            "lineNumber": 35
+          },
+          {
+            "lineNumber": 36
+          },
+          {
+            "text": "/**",
+            "lineNumber": 37
+          },
+          {
+            "text": " * Fetch all stocks from NASDAQ and NYSE using bulk endpoints",
+            "lineNumber": 38
+          },
+          {
+            "text": " * Returns ~18,000 stocks with previousClose for filtering",
+            "lineNumber": 39
+          },
+          {
+            "text": " */",
+            "lineNumber": 40
+          },
+          {
+            "text": "async function fetchBulkQuotes(): Promise&lt;any[]&gt; {",
+            "lineNumber": 41,
+            "isSignature": true
+          },
+          {
+            "text": "  const FMP_API_KEY = process.env.FMP_API_KEY",
+            "lineNumber": 42
+          },
+          {
+            "text": "  if (!FMP_API_KEY) {",
+            "lineNumber": 43
+          },
+          {
+            "text": "    throw new Error('FMP_API_KEY environment variable is not set')",
+            "lineNumber": 44
+          },
+          {
+            "text": "  }",
+            "lineNumber": 45
+          },
+          {
+            "lineNumber": 46
+          },
+          {
+            "text": "  console.log('Fetching bulk quotes from NASDAQ and NYSE...')",
+            "lineNumber": 47
+          },
+          {
+            "lineNumber": 48
+          },
+          {
+            "text": "  const [nasdaqResp, nyseResp] = await Promise.all([",
+            "lineNumber": 49
+          },
+          {
+            "text": "    fetch(&#96;https://financialmodelingprep.com/api/v3/quotes/nasdaq?apikey=${FMP_API_KEY}&#96;, {",
+            "lineNumber": 50
+          },
+          {
+            "text": "      next: { revalidate: 60 }, // 1 minute cache for bulk data",
+            "lineNumber": 51
+          },
+          {
+            "text": "    }),",
+            "lineNumber": 52
+          },
+          {
+            "text": "    fetch(&#96;https://financialmodelingprep.com/api/v3/quotes/nyse?apikey=${FMP_API_KEY}&#96;, {",
+            "lineNumber": 53
+          },
+          {
+            "text": "      next: { revalidate: 60 },",
+            "lineNumber": 54
+          },
+          {
+            "text": "    }),",
+            "lineNumber": 55
+          },
+          {
+            "text": "  ])",
+            "lineNumber": 56
+          },
+          {
+            "lineNumber": 57
+          },
+          {
+            "text": "  const [nasdaqData, nyseData] = await Promise.all([",
+            "lineNumber": 58
+          },
+          {
+            "text": "    nasdaqResp.json(),",
+            "lineNumber": 59
+          },
+          {
+            "text": "    nyseResp.json(),",
+            "lineNumber": 60
+          },
+          {
+            "text": "  ])",
+            "lineNumber": 61
+          },
+          {
+            "lineNumber": 62
+          },
+          {
+            "text": "  const allStocks = [",
+            "lineNumber": 63
+          },
+          {
+            "text": "    ...(Array.isArray(nasdaqData) ? nasdaqData : []),",
+            "lineNumber": 64
+          },
+          {
+            "text": "    ...(Array.isArray(nyseData) ? nyseData : []),",
+            "lineNumber": 65
+          },
+          {
+            "text": "  ]",
+            "lineNumber": 66
+          },
+          {
+            "lineNumber": 67
+          },
+          {
+            "text": "  console.log(&#96;Bulk quotes: ${nasdaqData?.length || 0} NASDAQ + ${nyseData?.length || 0} NYSE = ${allStocks.length} total&#96;)",
+            "lineNumber": 68
+          },
+          {
+            "text": "  return allStocks",
+            "lineNumber": 69
+          },
+          {
+            "text": "}",
+            "lineNumber": 70,
+            "isSignature": true
+          },
+          {
+            "lineNumber": 71
+          },
+          {
+            "text": "/**",
+            "lineNumber": 72
+          },
+          {
+            "text": " * Fetch float data for all stocks",
+            "lineNumber": 73
+          },
+          {
+            "text": " * Returns a Map of symbol -&gt; floatShares",
+            "lineNumber": 74
+          },
+          {
+            "text": " * Cached for 1 hour since float data doesn't change frequently",
+            "lineNumber": 75
+          },
+          {
+            "text": " */",
+            "lineNumber": 76
+          }
+        ]
+      },
+      "score": 0.4599582552909851
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/fetch-fmp-metrics.ts",
+        "range": {
+          "startPosition": {
+            "line": 374,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 407,
+            "column": 1
+          }
+        },
+        "contents": "// Fetch data for a specific period type\nasync function fetchForPeriod(periodType: 'annual' | 'quarterly'): Promise&lt;{\n  keyMetrics: FMPKeyMetrics[]\n  ratios: FMPRatios[]\n  growth: FMPGrowth[]\n  enterpriseValues: FMPEnterpriseValue[]\n  incomeStatements: FMPIncomeStatement[]\n  cashFlowStatements: FMPCashFlowStatement[]\n}&gt; {\n  const periodParam = periodType === 'quarterly' ? 'quarter' : 'annual'\n  const limit = periodType === 'quarterly' ? 40 : 20\n\n  const endpoints = {\n    keyMetrics: &#96;https://financialmodelingprep.com/api/v3/key-metrics/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n    ratios: &#96;https://financialmodelingprep.com/api/v3/ratios/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n    growth: &#96;https://financialmodelingprep.com/api/v3/financial-growth/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n    enterpriseValue: &#96;https://financialmodelingprep.com/api/v3/enterprise-values/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n    incomeStatement: &#96;https://financialmodelingprep.com/api/v3/income-statement/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n    cashFlowStatement: &#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,\n  }\n\n  const [keyMetrics, ratios, growth, enterpriseValues, incomeStatements, cashFlowStatements] = await Promise.all([\n    fetch(endpoints.keyMetrics).then((r) =&gt; r.json()) as Promise&lt;FMPKeyMetrics[]&gt;,\n    fetch(endpoints.ratios).then((r) =&gt; r.json()) as Promise&lt;FMPRatios[]&gt;,\n    fetch(endpoints.growth).then((r) =&gt; r.json()) as Promise&lt;FMPGrowth[]&gt;,\n    fetch(endpoints.enterpriseValue).then((r) =&gt; r.json()) as Promise&lt;FMPEnterpriseValue[]&gt;,\n    fetch(endpoints.incomeStatement).then((r) =&gt; r.json()) as Promise&lt;FMPIncomeStatement[]&gt;,\n    fetch(endpoints.cashFlowStatement).then((r) =&gt; r.json()) as Promise&lt;FMPCashFlowStatement[]&gt;,\n  ])\n\n  return\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "// Fetch data for a specific period type",
+            "lineNumber": 377
+          },
+          {
+            "text": "async function fetchForPeriod(periodType: 'annual' | 'quarterly'): Promise&lt;{",
+            "lineNumber": 378,
+            "isSignature": true
+          },
+          {
+            "text": "  keyMetrics: FMPKeyMetrics[]",
+            "lineNumber": 379,
+            "isSignature": true
+          },
+          {
+            "text": "  ratios: FMPRatios[]",
+            "lineNumber": 380,
+            "isSignature": true
+          },
+          {
+            "text": "  growth: FMPGrowth[]",
+            "lineNumber": 381,
+            "isSignature": true
+          },
+          {
+            "text": "  enterpriseValues: FMPEnterpriseValue[]",
+            "lineNumber": 382,
+            "isSignature": true
+          },
+          {
+            "text": "  incomeStatements: FMPIncomeStatement[]",
+            "lineNumber": 383,
+            "isSignature": true
+          },
+          {
+            "text": "  cashFlowStatements: FMPCashFlowStatement[]",
+            "lineNumber": 384,
+            "isSignature": true
+          },
+          {
+            "text": "}&gt; {",
+            "lineNumber": 385,
+            "isSignature": true
+          },
+          {
+            "text": "  const periodParam = periodType === 'quarterly' ? 'quarter' : 'annual'",
+            "lineNumber": 386
+          },
+          {
+            "text": "  const limit = periodType === 'quarterly' ? 40 : 20",
+            "lineNumber": 387
+          },
+          {
+            "lineNumber": 388
+          },
+          {
+            "text": "  const endpoints = {",
+            "lineNumber": 389
+          },
+          {
+            "text": "    keyMetrics: &#96;https://financialmodelingprep.com/api/v3/key-metrics/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 390
+          },
+          {
+            "text": "    ratios: &#96;https://financialmodelingprep.com/api/v3/ratios/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 391
+          },
+          {
+            "text": "    growth: &#96;https://financialmodelingprep.com/api/v3/financial-growth/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 392
+          },
+          {
+            "text": "    enterpriseValue: &#96;https://financialmodelingprep.com/api/v3/enterprise-values/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 393
+          },
+          {
+            "text": "    incomeStatement: &#96;https://financialmodelingprep.com/api/v3/income-statement/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 394
+          },
+          {
+            "text": "    cashFlowStatement: &#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${SYMBOL}?period=${periodParam}&amp;limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 395
+          },
+          {
+            "text": "  }",
+            "lineNumber": 396
+          },
+          {
+            "lineNumber": 397
+          },
+          {
+            "text": "  const [keyMetrics, ratios, growth, enterpriseValues, incomeStatements, cashFlowStatements] = await Promise.all([",
+            "lineNumber": 398
+          },
+          {
+            "text": "    fetch(endpoints.keyMetrics).then((r) =&gt; r.json()) as Promise&lt;FMPKeyMetrics[]&gt;,",
+            "lineNumber": 399
+          },
+          {
+            "text": "    fetch(endpoints.ratios).then((r) =&gt; r.json()) as Promise&lt;FMPRatios[]&gt;,",
+            "lineNumber": 400
+          },
+          {
+            "text": "    fetch(endpoints.growth).then((r) =&gt; r.json()) as Promise&lt;FMPGrowth[]&gt;,",
+            "lineNumber": 401
+          },
+          {
+            "text": "    fetch(endpoints.enterpriseValue).then((r) =&gt; r.json()) as Promise&lt;FMPEnterpriseValue[]&gt;,",
+            "lineNumber": 402
+          },
+          {
+            "text": "    fetch(endpoints.incomeStatement).then((r) =&gt; r.json()) as Promise&lt;FMPIncomeStatement[]&gt;,",
+            "lineNumber": 403
+          },
+          {
+            "text": "    fetch(endpoints.cashFlowStatement).then((r) =&gt; r.json()) as Promise&lt;FMPCashFlowStatement[]&gt;,",
+            "lineNumber": 404
+          },
+          {
+            "text": "  ])",
+            "lineNumber": 405
+          },
+          {
+            "lineNumber": 406
+          },
+          {
+            "text": "  return",
+            "lineNumber": 407
+          },
+          {
+            "text": "}",
+            "lineNumber": 408,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4550224542617798
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/sp500/batch-ingest-financials.ts",
+        "range": {
+          "startPosition": {
+            "line": 93,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 181,
+            "column": 1
+          }
+        },
+        "contents": "async function fetchFinancialsForSymbol(\n  symbol: string,\n  fmpSymbol: string,\n  apiKey: string,\n  periodType: 'annual' | 'quarterly'\n): Promise&lt;FinancialRecord[]&gt; {\n  const periodParam = periodType === 'quarterly' ? '&amp;period=quarter' : ''\n  const limit = periodType === 'quarterly' ? QUARTERLY_LIMIT : ANNUAL_LIMIT\n\n  const [incomeData, balanceData, cashFlowData] = await Promise.all([\n    rateLimitedFetch(\n      &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;\n    ),\n    rateLimitedFetch(\n      &#96;${FMP_BASE_URL}/balance-sheet-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;\n    ),\n    rateLimitedFetch(\n      &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;\n    ),\n  ])\n\n  // Check for errors\n  if (incomeData?.['Error Message'] || !Array.isArray(incomeData)) {\n    throw new Error(&#96;FMP API error for ${fmpSymbol}: ${incomeData?.['Error Message'] || 'Invalid response'}&#96;)\n  }\n\n  // Create unique key for each period\n  const getKey = (date: string, period: string) =&gt; {\n    const dateObj = new Date(date)\n    const calendarYear = dateObj.getFullYear()\n    const fiscalQuarter = parseFiscalQuarter(period)\n    return fiscalQuarter ? &#96;${calendarYear}-Q${fiscalQuarter}&#96; : &#96;${calendarYear}-FY&#96;\n  }\n\n  // Combine by period key\n  const combinedByPeriod: Record&lt;string, FinancialRecord&gt; = {}\n\n  incomeData.forEach((item: any) =&gt; {\n    const period = item.period || 'FY'\n  }\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "async function fetchFinancialsForSymbol(",
+            "lineNumber": 96,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string,",
+            "lineNumber": 97,
+            "isSignature": true
+          },
+          {
+            "text": "  fmpSymbol: string,",
+            "lineNumber": 98,
+            "isSignature": true
+          },
+          {
+            "text": "  apiKey: string,",
+            "lineNumber": 99,
+            "isSignature": true
+          },
+          {
+            "text": "  periodType: 'annual' | 'quarterly'",
+            "lineNumber": 100,
+            "isSignature": true
+          },
+          {
+            "text": "): Promise&lt;FinancialRecord[]&gt; {",
+            "lineNumber": 101,
+            "isSignature": true
+          },
+          {
+            "text": "  const periodParam = periodType === 'quarterly' ? '&amp;period=quarter' : ''",
+            "lineNumber": 102
+          },
+          {
+            "text": "  const limit = periodType === 'quarterly' ? QUARTERLY_LIMIT : ANNUAL_LIMIT",
+            "lineNumber": 103
+          },
+          {
+            "lineNumber": 104
+          },
+          {
+            "text": "  const [incomeData, balanceData, cashFlowData] = await Promise.all([",
+            "lineNumber": 105
+          },
+          {
+            "text": "    rateLimitedFetch(",
+            "lineNumber": 106
+          },
+          {
+            "text": "      &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;",
+            "lineNumber": 107
+          },
+          {
+            "text": "    ),",
+            "lineNumber": 108
+          },
+          {
+            "text": "    rateLimitedFetch(",
+            "lineNumber": 109
+          },
+          {
+            "text": "      &#96;${FMP_BASE_URL}/balance-sheet-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;",
+            "lineNumber": 110
+          },
+          {
+            "text": "    ),",
+            "lineNumber": 111
+          },
+          {
+            "text": "    rateLimitedFetch(",
+            "lineNumber": 112
+          },
+          {
+            "text": "      &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;",
+            "lineNumber": 113
+          },
+          {
+            "text": "    ),",
+            "lineNumber": 114
+          },
+          {
+            "text": "  ])",
+            "lineNumber": 115
+          },
+          {
+            "lineNumber": 116
+          },
+          {
+            "text": "  // Check for errors",
+            "lineNumber": 117
+          },
+          {
+            "text": "  if (incomeData?.['Error Message'] || !Array.isArray(incomeData)) {",
+            "lineNumber": 118
+          },
+          {
+            "text": "    throw new Error(&#96;FMP API error for ${fmpSymbol}: ${incomeData?.['Error Message'] || 'Invalid response'}&#96;)",
+            "lineNumber": 119
+          },
+          {
+            "text": "  }",
+            "lineNumber": 120
+          },
+          {
+            "lineNumber": 121
+          },
+          {
+            "text": "  // Create unique key for each period",
+            "lineNumber": 122
+          },
+          {
+            "text": "  const getKey = (date: string, period: string) =&gt; {",
+            "lineNumber": 123
+          },
+          {
+            "text": "    const dateObj = new Date(date)",
+            "lineNumber": 124
+          },
+          {
+            "text": "    const calendarYear = dateObj.getFullYear()",
+            "lineNumber": 125
+          },
+          {
+            "text": "    const fiscalQuarter = parseFiscalQuarter(period)",
+            "lineNumber": 126
+          },
+          {
+            "text": "    return fiscalQuarter ? &#96;${calendarYear}-Q${fiscalQuarter}&#96; : &#96;${calendarYear}-FY&#96;",
+            "lineNumber": 127
+          },
+          {
+            "text": "  }",
+            "lineNumber": 128
+          },
+          {
+            "lineNumber": 129
+          },
+          {
+            "text": "  // Combine by period key",
+            "lineNumber": 130
+          },
+          {
+            "text": "  const combinedByPeriod: Record&lt;string, FinancialRecord&gt; = {}",
+            "lineNumber": 131
+          },
+          {
+            "lineNumber": 132
+          },
+          {
+            "text": "  incomeData.forEach((item: any) =&gt; {",
+            "lineNumber": 133
+          },
+          {
+            "text": "    const period = item.period || 'FY'",
+            "lineNumber": 134
+          },
+          {
+            "text": "  }",
+            "lineNumber": 157
+          },
+          {
+            "text": "}",
+            "lineNumber": 182,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4522995054721832
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/prices.ts",
+        "range": {
+          "startPosition": {
+            "line": 205
+          },
+          "endPosition": {
+            "line": 334,
+            "column": 1
+          }
+        },
+        "contents": "export async function getPrices(params: PriceParams): Promise&lt;{\n  data: Array&lt;{ date: string; open: number; high: number; low: number; close: number; volume: number }&gt; | null\n  error: string | null\n}&gt; {\n\n  }\n\n  try {\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      console.error('FMP_API_KEY not found in environment')\n      return { data: null, error: 'API configuration error' }\n    }\n\n    // Build API URL with date parameters\n    const fromDate = from\n    const toDate = to || new Date().toISOString().split('T')[0]\n\n    // Check if we're asking for ONLY today's data (both from and to are today)\n    const today = new Date().toISOString().split('T')[0]\n    const isAskingForTodayOnly = fromDate === today &amp;&amp; toDate === today\n\n    let url = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&amp;from=${fromDate}&amp;to=${toDate}&#96;\n\n    // Only use fallback if asking for today's data specifically (not for ranges that include today)\n    if (isAskingForTodayOnly) {\n      // Get last 5 trading days to ensure we have data\n      const fiveDaysAgo = new Date()\n      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)\n      const fallbackFrom = fiveDaysAgo.toISOString().split('T')[0]\n      url = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&amp;from=${fallbackFrom}&#96;\n    }\n\n    const response = await fetch(url, {\n      next: { revalidate: 3600 }, // Cache for 1 hour\n    })\n\n    if (!response.ok) {\n      console.error('FMP API error:', response.status, response.statusText)\n      return {\n        data: null,\n        error: &#96;API request failed: ${response.status}&#96;,\n      }\n    }\n\n    const json = await response.json()\n\n    // FMP returns: { symbol: \"AAPL\", historical: [{date, open, high, low, close, volume}, ...] }\n}",
+        "signatures": {
+          "ranges": [
+            {
+              "startPosition": {
+                "line": 206,
+                "column": 1
+              },
+              "endPosition": {
+                "line": 206,
+                "column": 8
+              }
+            },
+            {
+              "startPosition": {
+                "line": 206,
+                "column": 8
+              },
+              "endPosition": {
+                "line": 210,
+                "column": 3
+              }
+            }
+          ]
+        },
+        "detailedLines": [
+          {
+            "text": "export async function getPrices(params: PriceParams): Promise&lt;{",
+            "lineNumber": 206,
+            "isSignature": true
+          },
+          {
+            "text": "  data: Array&lt;{ date: string; open: number; high: number; low: number; close: number; volume: number }&gt; | null",
+            "lineNumber": 207,
+            "isSignature": true
+          },
+          {
+            "text": "  error: string | null",
+            "lineNumber": 208,
+            "isSignature": true
+          },
+          {
+            "text": "}&gt; {",
+            "lineNumber": 209,
+            "isSignature": true
+          },
+          {
+            "lineNumber": 232
+          },
+          {
+            "text": "  }",
+            "lineNumber": 233
+          },
+          {
+            "lineNumber": 234
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 235
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 236
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 237
+          },
+          {
+            "text": "      console.error('FMP_API_KEY not found in environment')",
+            "lineNumber": 238
+          },
+          {
+            "text": "      return { data: null, error: 'API configuration error' }",
+            "lineNumber": 239
+          },
+          {
+            "text": "    }",
+            "lineNumber": 240
+          },
+          {
+            "lineNumber": 241
+          },
+          {
+            "text": "    // Build API URL with date parameters",
+            "lineNumber": 242
+          },
+          {
+            "text": "    const fromDate = from",
+            "lineNumber": 243
+          },
+          {
+            "text": "    const toDate = to || new Date().toISOString().split('T')[0]",
+            "lineNumber": 244
+          },
+          {
+            "lineNumber": 245
+          },
+          {
+            "text": "    // Check if we're asking for ONLY today's data (both from and to are today)",
+            "lineNumber": 246
+          },
+          {
+            "text": "    const today = new Date().toISOString().split('T')[0]",
+            "lineNumber": 247
+          },
+          {
+            "text": "    const isAskingForTodayOnly = fromDate === today &amp;&amp; toDate === today",
+            "lineNumber": 248
+          },
+          {
+            "lineNumber": 249
+          },
+          {
+            "text": "    let url = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&amp;from=${fromDate}&amp;to=${toDate}&#96;",
+            "lineNumber": 250
+          },
+          {
+            "lineNumber": 251
+          },
+          {
+            "text": "    // Only use fallback if asking for today's data specifically (not for ranges that include today)",
+            "lineNumber": 252
+          },
+          {
+            "text": "    if (isAskingForTodayOnly) {",
+            "lineNumber": 253
+          },
+          {
+            "text": "      // Get last 5 trading days to ensure we have data",
+            "lineNumber": 254
+          },
+          {
+            "text": "      const fiveDaysAgo = new Date()",
+            "lineNumber": 255
+          },
+          {
+            "text": "      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)",
+            "lineNumber": 256
+          },
+          {
+            "text": "      const fallbackFrom = fiveDaysAgo.toISOString().split('T')[0]",
+            "lineNumber": 257
+          },
+          {
+            "text": "      url = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&amp;from=${fallbackFrom}&#96;",
+            "lineNumber": 258
+          },
+          {
+            "text": "    }",
+            "lineNumber": 259
+          },
+          {
+            "lineNumber": 260
+          },
+          {
+            "text": "    const response = await fetch(url, {",
+            "lineNumber": 261
+          },
+          {
+            "text": "      next: { revalidate: 3600 }, // Cache for 1 hour",
+            "lineNumber": 262
+          },
+          {
+            "text": "    })",
+            "lineNumber": 263
+          },
+          {
+            "lineNumber": 264
+          },
+          {
+            "text": "    if (!response.ok) {",
+            "lineNumber": 265
+          },
+          {
+            "text": "      console.error('FMP API error:', response.status, response.statusText)",
+            "lineNumber": 266
+          },
+          {
+            "text": "      return {",
+            "lineNumber": 267
+          },
+          {
+            "text": "        data: null,",
+            "lineNumber": 268
+          },
+          {
+            "text": "        error: &#96;API request failed: ${response.status}&#96;,",
+            "lineNumber": 269
+          },
+          {
+            "text": "      }",
+            "lineNumber": 270
+          },
+          {
+            "text": "    }",
+            "lineNumber": 271
+          },
+          {
+            "lineNumber": 272
+          },
+          {
+            "text": "    const json = await response.json()",
+            "lineNumber": 273
+          },
+          {
+            "lineNumber": 274
+          },
+          {
+            "text": "    // FMP returns: { symbol: \"AAPL\", historical: [{date, open, high, low, close, volume}, ...] }",
+            "lineNumber": 275
+          },
+          {
+            "text": "}",
+            "lineNumber": 335,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.44823646545410156
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/prices.ts",
+        "range": {
+          "startPosition": {
+            "line": 342,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 453,
+            "column": 1
+          }
+        },
+        "contents": "// New function for timeframe-based price fetching\nexport async function getPricesByTimeframe(params: {\n  symbol: string\n  timeframe: Timeframe\n}): Promise&lt;{\n  data: PriceDataPoint[] | null\n  error: string | null\n}&gt; {\n  const { symbol, timeframe } = params\n\n  try {\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      console.error('FMP_API_KEY not found in environment')\n      return { data: null, error: 'API configuration error' }\n    }\n\n    const endpoint = getEndpointForTimeframe(timeframe)\n    const { from, to } = getDefaultDateRangeForTimeframe(timeframe)\n\n    let url: string\n    let isIntradayEndpoint = timeframe === '1h' || timeframe === '4h'\n\n    if (isIntradayEndpoint) {\n      // Intraday endpoints have a different format\n      url = &#96;https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&amp;from=${from}&amp;to=${to}&#96;\n    } else {\n      // Daily endpoint\n      url = &#96;https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&amp;from=${from}&amp;to=${to}&#96;\n    }\n\n    const response = await fetch(url, {\n      next: { revalidate: timeframe === '1h' ? 300 : 3600 }, // Cache 5 min for hourly, 1 hour otherwise\n    })\n\n    if (!response.ok) {\n      console.error('FMP API error:', response.status, response.statusText)\n      return {\n        data: null,\n        error: &#96;API request failed: ${response.status}&#96;,\n      }\n    }\n\n    const json = await response.json()\n\n    // Handle different response formats\n    let rawData: any[]\n\n    if (isIntradayEndpoint) {\n      // Intraday endpoints return array directly\n      if\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "// New function for timeframe-based price fetching",
+            "lineNumber": 345
+          },
+          {
+            "text": "export async function getPricesByTimeframe(params: {",
+            "lineNumber": 346,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string",
+            "lineNumber": 347,
+            "isSignature": true
+          },
+          {
+            "text": "  timeframe: Timeframe",
+            "lineNumber": 348,
+            "isSignature": true
+          },
+          {
+            "text": "}): Promise&lt;{",
+            "lineNumber": 349,
+            "isSignature": true
+          },
+          {
+            "text": "  data: PriceDataPoint[] | null",
+            "lineNumber": 350,
+            "isSignature": true
+          },
+          {
+            "text": "  error: string | null",
+            "lineNumber": 351,
+            "isSignature": true
+          },
+          {
+            "text": "}&gt; {",
+            "lineNumber": 352,
+            "isSignature": true
+          },
+          {
+            "text": "  const { symbol, timeframe } = params",
+            "lineNumber": 353
+          },
+          {
+            "lineNumber": 354
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 355
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 356
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 357
+          },
+          {
+            "text": "      console.error('FMP_API_KEY not found in environment')",
+            "lineNumber": 358
+          },
+          {
+            "text": "      return { data: null, error: 'API configuration error' }",
+            "lineNumber": 359
+          },
+          {
+            "text": "    }",
+            "lineNumber": 360
+          },
+          {
+            "lineNumber": 361
+          },
+          {
+            "text": "    const endpoint = getEndpointForTimeframe(timeframe)",
+            "lineNumber": 362
+          },
+          {
+            "text": "    const { from, to } = getDefaultDateRangeForTimeframe(timeframe)",
+            "lineNumber": 363
+          },
+          {
+            "lineNumber": 364
+          },
+          {
+            "text": "    let url: string",
+            "lineNumber": 365
+          },
+          {
+            "text": "    let isIntradayEndpoint = timeframe === '1h' || timeframe === '4h'",
+            "lineNumber": 366
+          },
+          {
+            "lineNumber": 367
+          },
+          {
+            "text": "    if (isIntradayEndpoint) {",
+            "lineNumber": 368
+          },
+          {
+            "text": "      // Intraday endpoints have a different format",
+            "lineNumber": 369
+          },
+          {
+            "text": "      url = &#96;https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&amp;from=${from}&amp;to=${to}&#96;",
+            "lineNumber": 370
+          },
+          {
+            "text": "    } else {",
+            "lineNumber": 371
+          },
+          {
+            "text": "      // Daily endpoint",
+            "lineNumber": 372
+          },
+          {
+            "text": "      url = &#96;https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&amp;from=${from}&amp;to=${to}&#96;",
+            "lineNumber": 373
+          },
+          {
+            "text": "    }",
+            "lineNumber": 374
+          },
+          {
+            "lineNumber": 375
+          },
+          {
+            "text": "    const response = await fetch(url, {",
+            "lineNumber": 376
+          },
+          {
+            "text": "      next: { revalidate: timeframe === '1h' ? 300 : 3600 }, // Cache 5 min for hourly, 1 hour otherwise",
+            "lineNumber": 377
+          },
+          {
+            "text": "    })",
+            "lineNumber": 378
+          },
+          {
+            "lineNumber": 379
+          },
+          {
+            "text": "    if (!response.ok) {",
+            "lineNumber": 380
+          },
+          {
+            "text": "      console.error('FMP API error:', response.status, response.statusText)",
+            "lineNumber": 381
+          },
+          {
+            "text": "      return {",
+            "lineNumber": 382
+          },
+          {
+            "text": "        data: null,",
+            "lineNumber": 383
+          },
+          {
+            "text": "        error: &#96;API request failed: ${response.status}&#96;,",
+            "lineNumber": 384
+          },
+          {
+            "text": "      }",
+            "lineNumber": 385
+          },
+          {
+            "text": "    }",
+            "lineNumber": 386
+          },
+          {
+            "lineNumber": 387
+          },
+          {
+            "text": "    const json = await response.json()",
+            "lineNumber": 388
+          },
+          {
+            "lineNumber": 389
+          },
+          {
+            "text": "    // Handle different response formats",
+            "lineNumber": 390
+          },
+          {
+            "text": "    let rawData: any[]",
+            "lineNumber": 391
+          },
+          {
+            "lineNumber": 392
+          },
+          {
+            "text": "    if (isIntradayEndpoint) {",
+            "lineNumber": 393
+          },
+          {
+            "text": "      // Intraday endpoints return array directly",
+            "lineNumber": 394
+          },
+          {
+            "text": "      if",
+            "lineNumber": 395
+          },
+          {
+            "text": "}",
+            "lineNumber": 454,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.44675830006599426
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/sp500-distribution.ts",
+        "range": {
+          "startPosition": {
+            "line": 45,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 187,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch daily returns for all S&amp;P 500 constituents\n * Uses FMP batch quote endpoint to get current day's return data\n */\nexport async function getSP500Distribution(): Promise&lt;{ data: SP500DistributionData } | { error: string }&gt; {\n  const apiKey = process.env.FMP_API_KEY\n\n  if (!apiKey) {\n    return { error: 'API configuration error' }\n  }\n\n  try {\n    const constituents = await getSP500Constituents()\n\n    if (constituents.length === 0) {\n      return { error: 'Could not load S&amp;P 500 constituents' }\n    }\n\n    // Get all symbols - use FMP variant if available\n    const symbols = constituents.map(c =&gt; {\n      if (c.alternate_symbols?.fmp) {\n        return c.alternate_symbols.fmp\n      }\n      return c.symbol\n    })\n\n    // FMP supports batch quotes - fetch in chunks of 100 to avoid URL length limits\n    const chunkSize = 100\n    const allQuotes: any[] = []\n\n    for (let i = 0; i &lt; symbols.length; i += chunkSize) {\n      const chunk = symbols.slice(i, i + chunkSize)\n      const symbolsParam = chunk.join(',')\n      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;\n\n      const response = await fetch(url, {\n        next: { revalidate: 60 } // Cache for 1 minute\n      })\n\n      if (!response.ok) {\n        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)\n        continue\n      }\n\n      const data = await response.json()\n      if (Array.isArray(data)) {\n        allQuotes.push(...data)\n      }\n    }\n\n    if (allQuotes.length === 0) {\n      return { error: 'Could not fetch stock quotes' }\n    }\n\n    // Also fetch SPX (S&amp;P 500 index) return\n    const spxUrl = &#96;https://financialmodelingprep.com/api/v3/quote/%5EGSPC?apikey=${apiKey}&#96;\n    let spxReturnPct = 0\n    let tradingDate = new Date().toISOString().split('T')[0]\n\n    try {\n      const spxResponse = await fetch(spxUrl, { next: { revalidate: 60 } })\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 48
+          },
+          {
+            "text": " * Fetch daily returns for all S&amp;P 500 constituents",
+            "lineNumber": 49
+          },
+          {
+            "text": " * Uses FMP batch quote endpoint to get current day's return data",
+            "lineNumber": 50
+          },
+          {
+            "text": " */",
+            "lineNumber": 51
+          },
+          {
+            "text": "export async function getSP500Distribution(): Promise&lt;{ data: SP500DistributionData } | { error: string }&gt; {",
+            "lineNumber": 52,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 53
+          },
+          {
+            "lineNumber": 54
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 55
+          },
+          {
+            "text": "    return { error: 'API configuration error' }",
+            "lineNumber": 56
+          },
+          {
+            "text": "  }",
+            "lineNumber": 57
+          },
+          {
+            "lineNumber": 58
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 59
+          },
+          {
+            "text": "    const constituents = await getSP500Constituents()",
+            "lineNumber": 60
+          },
+          {
+            "lineNumber": 61
+          },
+          {
+            "text": "    if (constituents.length === 0) {",
+            "lineNumber": 62
+          },
+          {
+            "text": "      return { error: 'Could not load S&amp;P 500 constituents' }",
+            "lineNumber": 63
+          },
+          {
+            "text": "    }",
+            "lineNumber": 64
+          },
+          {
+            "lineNumber": 65
+          },
+          {
+            "text": "    // Get all symbols - use FMP variant if available",
+            "lineNumber": 66
+          },
+          {
+            "text": "    const symbols = constituents.map(c =&gt; {",
+            "lineNumber": 67
+          },
+          {
+            "text": "      if (c.alternate_symbols?.fmp) {",
+            "lineNumber": 68
+          },
+          {
+            "text": "        return c.alternate_symbols.fmp",
+            "lineNumber": 69
+          },
+          {
+            "text": "      }",
+            "lineNumber": 70
+          },
+          {
+            "text": "      return c.symbol",
+            "lineNumber": 71
+          },
+          {
+            "text": "    })",
+            "lineNumber": 72
+          },
+          {
+            "lineNumber": 73
+          },
+          {
+            "text": "    // FMP supports batch quotes - fetch in chunks of 100 to avoid URL length limits",
+            "lineNumber": 74
+          },
+          {
+            "text": "    const chunkSize = 100",
+            "lineNumber": 75
+          },
+          {
+            "text": "    const allQuotes: any[] = []",
+            "lineNumber": 76
+          },
+          {
+            "lineNumber": 77
+          },
+          {
+            "text": "    for (let i = 0; i &lt; symbols.length; i += chunkSize) {",
+            "lineNumber": 78
+          },
+          {
+            "text": "      const chunk = symbols.slice(i, i + chunkSize)",
+            "lineNumber": 79
+          },
+          {
+            "text": "      const symbolsParam = chunk.join(',')",
+            "lineNumber": 80
+          },
+          {
+            "text": "      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;",
+            "lineNumber": 81
+          },
+          {
+            "lineNumber": 82
+          },
+          {
+            "text": "      const response = await fetch(url, {",
+            "lineNumber": 83
+          },
+          {
+            "text": "        next: { revalidate: 60 } // Cache for 1 minute",
+            "lineNumber": 84
+          },
+          {
+            "text": "      })",
+            "lineNumber": 85
+          },
+          {
+            "lineNumber": 86
+          },
+          {
+            "text": "      if (!response.ok) {",
+            "lineNumber": 87
+          },
+          {
+            "text": "        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)",
+            "lineNumber": 88
+          },
+          {
+            "text": "        continue",
+            "lineNumber": 89
+          },
+          {
+            "text": "      }",
+            "lineNumber": 90
+          },
+          {
+            "lineNumber": 91
+          },
+          {
+            "text": "      const data = await response.json()",
+            "lineNumber": 92
+          },
+          {
+            "text": "      if (Array.isArray(data)) {",
+            "lineNumber": 93
+          },
+          {
+            "text": "        allQuotes.push(...data)",
+            "lineNumber": 94
+          },
+          {
+            "text": "      }",
+            "lineNumber": 95
+          },
+          {
+            "text": "    }",
+            "lineNumber": 96
+          },
+          {
+            "lineNumber": 97
+          },
+          {
+            "text": "    if (allQuotes.length === 0) {",
+            "lineNumber": 98
+          },
+          {
+            "text": "      return { error: 'Could not fetch stock quotes' }",
+            "lineNumber": 99
+          },
+          {
+            "text": "    }",
+            "lineNumber": 100
+          },
+          {
+            "lineNumber": 101
+          },
+          {
+            "text": "    // Also fetch SPX (S&amp;P 500 index) return",
+            "lineNumber": 102
+          },
+          {
+            "text": "    const spxUrl = &#96;https://financialmodelingprep.com/api/v3/quote/%5EGSPC?apikey=${apiKey}&#96;",
+            "lineNumber": 103
+          },
+          {
+            "text": "    let spxReturnPct = 0",
+            "lineNumber": 104
+          },
+          {
+            "text": "    let tradingDate = new Date().toISOString().split('T')[0]",
+            "lineNumber": 105
+          },
+          {
+            "lineNumber": 106
+          },
+          {
+            "text": "    try {",
+            "lineNumber": 107
+          },
+          {
+            "text": "      const spxResponse = await fetch(spxUrl, { next: { revalidate: 60 } })",
+            "lineNumber": 108
+          },
+          {
+            "text": "}",
+            "lineNumber": 188,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4460945129394531
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/get-income-statement.ts",
+        "range": {
+          "startPosition": {
+            "line": 61,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 154,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch comprehensive income statement from FMP API\n * Returns annual data for last 7 years plus TTM\n * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')\n * @param limit - Number of years to fetch (default: 7)\n */\nexport async function getComprehensiveIncomeStatement(\n  symbol: string,\n  limit: number = 7\n): Promise&lt;ComprehensiveIncomeStatement&gt; {\n  try {\n    if (!FMP_API_KEY) {\n      throw new Error('FMP_API_KEY not configured')\n    }\n\n    // Fetch annual income statements\n    const annualUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;\n    const annualResponse = await fetch(annualUrl, { next: { revalidate: 3600 } }) // Cache for 1 hour\n\n    if (!annualResponse.ok) {\n      throw new Error(&#96;FMP API error: ${annualResponse.statusText}&#96;)\n    }\n\n    const annualData: IncomeStatementData[] = await annualResponse.json()\n\n    // Fetch TTM (quarterly, period=\"FY\" for trailing twelve months)\n    const ttmUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?period=quarter&amp;limit=4&amp;apikey=${FMP_API_KEY}&#96;\n    const ttmResponse = await fetch(ttmUrl, { next: { revalidate: 3600 } })\n\n    let ttmData: IncomeStatementData | null = null\n    if (ttmResponse.ok) {\n      const quarterlyData: IncomeStatementData[] = await ttmResponse.json()\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 64
+          },
+          {
+            "text": " * Fetch comprehensive income statement from FMP API",
+            "lineNumber": 65
+          },
+          {
+            "text": " * Returns annual data for last 7 years plus TTM",
+            "lineNumber": 66
+          },
+          {
+            "text": " * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')",
+            "lineNumber": 67
+          },
+          {
+            "text": " * @param limit - Number of years to fetch (default: 7)",
+            "lineNumber": 68
+          },
+          {
+            "text": " */",
+            "lineNumber": 69
+          },
+          {
+            "text": "export async function getComprehensiveIncomeStatement(",
+            "lineNumber": 70,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string,",
+            "lineNumber": 71,
+            "isSignature": true
+          },
+          {
+            "text": "  limit: number = 7",
+            "lineNumber": 72,
+            "isSignature": true
+          },
+          {
+            "text": "): Promise&lt;ComprehensiveIncomeStatement&gt; {",
+            "lineNumber": 73,
+            "isSignature": true
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 74
+          },
+          {
+            "text": "    if (!FMP_API_KEY) {",
+            "lineNumber": 75
+          },
+          {
+            "text": "      throw new Error('FMP_API_KEY not configured')",
+            "lineNumber": 76
+          },
+          {
+            "text": "    }",
+            "lineNumber": 77
+          },
+          {
+            "lineNumber": 78
+          },
+          {
+            "text": "    // Fetch annual income statements",
+            "lineNumber": 79
+          },
+          {
+            "text": "    const annualUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;",
+            "lineNumber": 80
+          },
+          {
+            "text": "    const annualResponse = await fetch(annualUrl, { next: { revalidate: 3600 } }) // Cache for 1 hour",
+            "lineNumber": 81
+          },
+          {
+            "lineNumber": 82
+          },
+          {
+            "text": "    if (!annualResponse.ok) {",
+            "lineNumber": 83
+          },
+          {
+            "text": "      throw new Error(&#96;FMP API error: ${annualResponse.statusText}&#96;)",
+            "lineNumber": 84
+          },
+          {
+            "text": "    }",
+            "lineNumber": 85
+          },
+          {
+            "lineNumber": 86
+          },
+          {
+            "text": "    const annualData: IncomeStatementData[] = await annualResponse.json()",
+            "lineNumber": 87
+          },
+          {
+            "lineNumber": 88
+          },
+          {
+            "text": "    // Fetch TTM (quarterly, period=\"FY\" for trailing twelve months)",
+            "lineNumber": 89
+          },
+          {
+            "text": "    const ttmUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?period=quarter&amp;limit=4&amp;apikey=${FMP_API_KEY}&#96;",
+            "lineNumber": 90
+          },
+          {
+            "text": "    const ttmResponse = await fetch(ttmUrl, { next: { revalidate: 3600 } })",
+            "lineNumber": 91
+          },
+          {
+            "lineNumber": 92
+          },
+          {
+            "text": "    let ttmData: IncomeStatementData | null = null",
+            "lineNumber": 93
+          },
+          {
+            "text": "    if (ttmResponse.ok) {",
+            "lineNumber": 94
+          },
+          {
+            "text": "      const quarterlyData: IncomeStatementData[] = await ttmResponse.json()",
+            "lineNumber": 95
+          },
+          {
+            "text": "}",
+            "lineNumber": 155,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.43171703815460205
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/advance-decline.ts",
+        "range": {
+          "startPosition": {
+            "line": 37,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 133,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Get a single snapshot of advance-decline data for the S&amp;P 500\n * Returns the current count of advancing vs declining stocks\n */\nexport async function getAdvanceDeclineSnapshot(): Promise&lt;{ data: AdvanceDeclineSnapshot } | { error: string }&gt; {\n  const apiKey = process.env.FMP_API_KEY\n\n  if (!apiKey) {\n    return { error: 'API configuration error' }\n  }\n\n  try {\n    const constituents = await getSP500Constituents()\n\n    if (constituents.length === 0) {\n      return { error: 'Could not load S&amp;P 500 constituents' }\n    }\n\n    // Get all symbols\n    const symbols = constituents.map(c =&gt; {\n      if (c.alternate_symbols?.fmp) {\n        return c.alternate_symbols.fmp\n      }\n      return c.symbol\n    })\n\n    // Fetch quotes in batches of 100\n    const chunkSize = 100\n    const allQuotes: any[] = []\n\n    for (let i = 0; i &lt; symbols.length; i += chunkSize) {\n      const chunk = symbols.slice(i, i + chunkSize)\n      const symbolsParam = chunk.join(',')\n      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;\n\n      const response = await fetch(url, {\n        cache: 'no-store' // Always fetch fresh data for snapshots\n      })\n\n      if (!response.ok) {\n        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)\n        continue\n      }\n\n      const data = await response.json()\n      if (Array.isArray(data)) {\n        allQuotes.push(...data)\n      }\n    }\n\n    if (allQuotes.length === 0) {\n      return { error: 'Could not fetch stock quotes' }\n    }\n\n    // Count advances, declines, unchanged\n    let advances = 0\n    let declines = 0\n    let unchanged = 0\n\n    for (const quote of allQuotes) {\n      if (quote.change !== undefined &amp;&amp; quote.change !== null) {\n        if (quote.change &gt; 0) {\n          advances++\n        } else if (quote.change &lt; 0) {\n          declines++\n        } else {\n          unchanged++\n        }\n      }\n    }\n\n    const now = new Date()\n    const timestamp = now.toISOString()\n    const time = now.toLocaleTimeString('en-US', {\n      hour: '2-digit',\n      minute: '2-digit',\n      hour12: false\n\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 40
+          },
+          {
+            "text": " * Get a single snapshot of advance-decline data for the S&amp;P 500",
+            "lineNumber": 41
+          },
+          {
+            "text": " * Returns the current count of advancing vs declining stocks",
+            "lineNumber": 42
+          },
+          {
+            "text": " */",
+            "lineNumber": 43
+          },
+          {
+            "text": "export async function getAdvanceDeclineSnapshot(): Promise&lt;{ data: AdvanceDeclineSnapshot } | { error: string }&gt; {",
+            "lineNumber": 44,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 45
+          },
+          {
+            "lineNumber": 46
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 47
+          },
+          {
+            "text": "    return { error: 'API configuration error' }",
+            "lineNumber": 48
+          },
+          {
+            "text": "  }",
+            "lineNumber": 49
+          },
+          {
+            "lineNumber": 50
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 51
+          },
+          {
+            "text": "    const constituents = await getSP500Constituents()",
+            "lineNumber": 52
+          },
+          {
+            "lineNumber": 53
+          },
+          {
+            "text": "    if (constituents.length === 0) {",
+            "lineNumber": 54
+          },
+          {
+            "text": "      return { error: 'Could not load S&amp;P 500 constituents' }",
+            "lineNumber": 55
+          },
+          {
+            "text": "    }",
+            "lineNumber": 56
+          },
+          {
+            "lineNumber": 57
+          },
+          {
+            "text": "    // Get all symbols",
+            "lineNumber": 58
+          },
+          {
+            "text": "    const symbols = constituents.map(c =&gt; {",
+            "lineNumber": 59
+          },
+          {
+            "text": "      if (c.alternate_symbols?.fmp) {",
+            "lineNumber": 60
+          },
+          {
+            "text": "        return c.alternate_symbols.fmp",
+            "lineNumber": 61
+          },
+          {
+            "text": "      }",
+            "lineNumber": 62
+          },
+          {
+            "text": "      return c.symbol",
+            "lineNumber": 63
+          },
+          {
+            "text": "    })",
+            "lineNumber": 64
+          },
+          {
+            "lineNumber": 65
+          },
+          {
+            "text": "    // Fetch quotes in batches of 100",
+            "lineNumber": 66
+          },
+          {
+            "text": "    const chunkSize = 100",
+            "lineNumber": 67
+          },
+          {
+            "text": "    const allQuotes: any[] = []",
+            "lineNumber": 68
+          },
+          {
+            "lineNumber": 69
+          },
+          {
+            "text": "    for (let i = 0; i &lt; symbols.length; i += chunkSize) {",
+            "lineNumber": 70
+          },
+          {
+            "text": "      const chunk = symbols.slice(i, i + chunkSize)",
+            "lineNumber": 71
+          },
+          {
+            "text": "      const symbolsParam = chunk.join(',')",
+            "lineNumber": 72
+          },
+          {
+            "text": "      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;",
+            "lineNumber": 73
+          },
+          {
+            "lineNumber": 74
+          },
+          {
+            "text": "      const response = await fetch(url, {",
+            "lineNumber": 75
+          },
+          {
+            "text": "        cache: 'no-store' // Always fetch fresh data for snapshots",
+            "lineNumber": 76
+          },
+          {
+            "text": "      })",
+            "lineNumber": 77
+          },
+          {
+            "lineNumber": 78
+          },
+          {
+            "text": "      if (!response.ok) {",
+            "lineNumber": 79
+          },
+          {
+            "text": "        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)",
+            "lineNumber": 80
+          },
+          {
+            "text": "        continue",
+            "lineNumber": 81
+          },
+          {
+            "text": "      }",
+            "lineNumber": 82
+          },
+          {
+            "lineNumber": 83
+          },
+          {
+            "text": "      const data = await response.json()",
+            "lineNumber": 84
+          },
+          {
+            "text": "      if (Array.isArray(data)) {",
+            "lineNumber": 85
+          },
+          {
+            "text": "        allQuotes.push(...data)",
+            "lineNumber": 86
+          },
+          {
+            "text": "      }",
+            "lineNumber": 87
+          },
+          {
+            "text": "    }",
+            "lineNumber": 88
+          },
+          {
+            "lineNumber": 89
+          },
+          {
+            "text": "    if (allQuotes.length === 0) {",
+            "lineNumber": 90
+          },
+          {
+            "text": "      return { error: 'Could not fetch stock quotes' }",
+            "lineNumber": 91
+          },
+          {
+            "text": "    }",
+            "lineNumber": 92
+          },
+          {
+            "lineNumber": 93
+          },
+          {
+            "text": "    // Count advances, declines, unchanged",
+            "lineNumber": 94
+          },
+          {
+            "text": "    let advances = 0",
+            "lineNumber": 95
+          },
+          {
+            "text": "    let declines = 0",
+            "lineNumber": 96
+          },
+          {
+            "text": "    let unchanged = 0",
+            "lineNumber": 97
+          },
+          {
+            "lineNumber": 98
+          },
+          {
+            "text": "    for (const quote of allQuotes) {",
+            "lineNumber": 99
+          },
+          {
+            "text": "      if (quote.change !== undefined &amp;&amp; quote.change !== null) {",
+            "lineNumber": 100
+          },
+          {
+            "text": "        if (quote.change &gt; 0) {",
+            "lineNumber": 101
+          },
+          {
+            "text": "          advances++",
+            "lineNumber": 102
+          },
+          {
+            "text": "        } else if (quote.change &lt; 0) {",
+            "lineNumber": 103
+          },
+          {
+            "text": "          declines++",
+            "lineNumber": 104
+          },
+          {
+            "text": "        } else {",
+            "lineNumber": 105
+          },
+          {
+            "text": "          unchanged++",
+            "lineNumber": 106
+          },
+          {
+            "text": "        }",
+            "lineNumber": 107
+          },
+          {
+            "text": "      }",
+            "lineNumber": 108
+          },
+          {
+            "text": "    }",
+            "lineNumber": 109
+          },
+          {
+            "lineNumber": 110
+          },
+          {
+            "text": "    const now = new Date()",
+            "lineNumber": 111
+          },
+          {
+            "text": "    const timestamp = now.toISOString()",
+            "lineNumber": 112
+          },
+          {
+            "text": "    const time = now.toLocaleTimeString('en-US', {",
+            "lineNumber": 113
+          },
+          {
+            "text": "      hour: '2-digit',",
+            "lineNumber": 114
+          },
+          {
+            "text": "      minute: '2-digit',",
+            "lineNumber": 115
+          },
+          {
+            "text": "      hour12: false",
+            "lineNumber": 116
+          },
+          {
+            "lineNumber": 117
+          },
+          {
+            "text": "}",
+            "lineNumber": 134,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.42647624015808105
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/futures.ts",
+        "range": {
+          "startPosition": {
+            "line": 84,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 154,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch futures data with historical price data for charting\n */\nexport async function getFuturesWithHistory(): Promise&lt;{ futuresWithHistory: FutureMarketData[] } | { error: string }&gt; {\n  const apiKey = process.env.FMP_API_KEY\n\n  if (!apiKey) {\n    return { error: 'API configuration error' }\n  }\n\n  try {\n    const futuresData = await Promise.all(\n      FUTURES_SYMBOLS.map(async ({ symbol, name }) =&gt; {\n        // Fetch quote data\n        const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;\n        const quoteResponse = await fetch(quoteUrl, {\n          next: { revalidate: 60 }\n        })\n\n        if (!quoteResponse.ok) {\n          console.error(&#96;Failed to fetch quote for ${symbol}&#96;)\n          return null\n        }\n\n        const quoteData = await quoteResponse.json()\n        const quote = quoteData[0]\n\n        if (!quote) {\n          return null\n        }\n\n        // Fetch daily historical data\n        const historyUrl = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&#96;\n        const historyResponse = await fetch(historyUrl, {\n          next: { revalidate: 3600 } // Cache for 1 hour\n        })\n\n        let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []\n\n        if (historyResponse.ok) {\n          const historyData = await historyResponse.json()\n          // Get last 30 trading days, reverse for chronological order\n          priceHistory = historyData?.historical?.slice(0, 30).reverse() || []\n        }\n\n        const date = priceHistory.length &gt; 0\n          ? priceHistory[priceHistory.length - 1].date\n          : new Date().toISOString().split('T')[0]\n\n        return {\n          symbol,\n          name,\n          currentPrice: quote.price,\n          priceChange: quote.change,\n          priceChangePercent: quote.changesPercentage,\n          date,\n          priceHistory\n        }\n      })\n    )\n\n    const validFutures = futuresData.filter((f): f is FutureMarketData =&gt; f !== null)\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 87
+          },
+          {
+            "text": " * Fetch futures data with historical price data for charting",
+            "lineNumber": 88
+          },
+          {
+            "text": " */",
+            "lineNumber": 89
+          },
+          {
+            "text": "export async function getFuturesWithHistory(): Promise&lt;{ futuresWithHistory: FutureMarketData[] } | { error: string }&gt; {",
+            "lineNumber": 90,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 91
+          },
+          {
+            "lineNumber": 92
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 93
+          },
+          {
+            "text": "    return { error: 'API configuration error' }",
+            "lineNumber": 94
+          },
+          {
+            "text": "  }",
+            "lineNumber": 95
+          },
+          {
+            "lineNumber": 96
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 97
+          },
+          {
+            "text": "    const futuresData = await Promise.all(",
+            "lineNumber": 98
+          },
+          {
+            "text": "      FUTURES_SYMBOLS.map(async ({ symbol, name }) =&gt; {",
+            "lineNumber": 99
+          },
+          {
+            "text": "        // Fetch quote data",
+            "lineNumber": 100
+          },
+          {
+            "text": "        const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;",
+            "lineNumber": 101
+          },
+          {
+            "text": "        const quoteResponse = await fetch(quoteUrl, {",
+            "lineNumber": 102
+          },
+          {
+            "text": "          next: { revalidate: 60 }",
+            "lineNumber": 103
+          },
+          {
+            "text": "        })",
+            "lineNumber": 104
+          },
+          {
+            "lineNumber": 105
+          },
+          {
+            "text": "        if (!quoteResponse.ok) {",
+            "lineNumber": 106
+          },
+          {
+            "text": "          console.error(&#96;Failed to fetch quote for ${symbol}&#96;)",
+            "lineNumber": 107
+          },
+          {
+            "text": "          return null",
+            "lineNumber": 108
+          },
+          {
+            "text": "        }",
+            "lineNumber": 109
+          },
+          {
+            "lineNumber": 110
+          },
+          {
+            "text": "        const quoteData = await quoteResponse.json()",
+            "lineNumber": 111
+          },
+          {
+            "text": "        const quote = quoteData[0]",
+            "lineNumber": 112
+          },
+          {
+            "lineNumber": 113
+          },
+          {
+            "text": "        if (!quote) {",
+            "lineNumber": 114
+          },
+          {
+            "text": "          return null",
+            "lineNumber": 115
+          },
+          {
+            "text": "        }",
+            "lineNumber": 116
+          },
+          {
+            "lineNumber": 117
+          },
+          {
+            "text": "        // Fetch daily historical data",
+            "lineNumber": 118
+          },
+          {
+            "text": "        const historyUrl = &#96;https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&#96;",
+            "lineNumber": 119
+          },
+          {
+            "text": "        const historyResponse = await fetch(historyUrl, {",
+            "lineNumber": 120
+          },
+          {
+            "text": "          next: { revalidate: 3600 } // Cache for 1 hour",
+            "lineNumber": 121
+          },
+          {
+            "text": "        })",
+            "lineNumber": 122
+          },
+          {
+            "lineNumber": 123
+          },
+          {
+            "text": "        let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []",
+            "lineNumber": 124
+          },
+          {
+            "lineNumber": 125
+          },
+          {
+            "text": "        if (historyResponse.ok) {",
+            "lineNumber": 126
+          },
+          {
+            "text": "          const historyData = await historyResponse.json()",
+            "lineNumber": 127
+          },
+          {
+            "text": "          // Get last 30 trading days, reverse for chronological order",
+            "lineNumber": 128
+          },
+          {
+            "text": "          priceHistory = historyData?.historical?.slice(0, 30).reverse() || []",
+            "lineNumber": 129
+          },
+          {
+            "text": "        }",
+            "lineNumber": 130
+          },
+          {
+            "lineNumber": 131
+          },
+          {
+            "text": "        const date = priceHistory.length &gt; 0",
+            "lineNumber": 132
+          },
+          {
+            "text": "          ? priceHistory[priceHistory.length - 1].date",
+            "lineNumber": 133
+          },
+          {
+            "text": "          : new Date().toISOString().split('T')[0]",
+            "lineNumber": 134
+          },
+          {
+            "lineNumber": 135
+          },
+          {
+            "text": "        return {",
+            "lineNumber": 136
+          },
+          {
+            "text": "          symbol,",
+            "lineNumber": 137
+          },
+          {
+            "text": "          name,",
+            "lineNumber": 138
+          },
+          {
+            "text": "          currentPrice: quote.price,",
+            "lineNumber": 139
+          },
+          {
+            "text": "          priceChange: quote.change,",
+            "lineNumber": 140
+          },
+          {
+            "text": "          priceChangePercent: quote.changesPercentage,",
+            "lineNumber": 141
+          },
+          {
+            "text": "          date,",
+            "lineNumber": 142
+          },
+          {
+            "text": "          priceHistory",
+            "lineNumber": 143
+          },
+          {
+            "text": "        }",
+            "lineNumber": 144
+          },
+          {
+            "text": "      })",
+            "lineNumber": 145
+          },
+          {
+            "text": "    )",
+            "lineNumber": 146
+          },
+          {
+            "lineNumber": 147
+          },
+          {
+            "text": "    const validFutures = futuresData.filter((f): f is FutureMarketData =&gt; f !== null)",
+            "lineNumber": 148
+          },
+          {
+            "text": "}",
+            "lineNumber": 155,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.42278099060058594
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/market-data.ts",
+        "range": {
+          "startPosition": {
+            "line": 141,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 288,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch latest SPX index price and intraday data for homepage\n * Includes previous day's last 2 hours (2pm-4pm) to show the opening gap\n */\nexport async function getAaplMarketData() {\n  try {\n    // Get latest index price from FMP API\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      return { error: 'API configuration error' }\n    }\n\n    // Fetch latest price quote for S&amp;P 500 index\n    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^GSPC?apikey=${apiKey}&#96;\n    const quoteResponse = await fetch(quoteUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    if (!quoteResponse.ok) {\n      console.error('FMP API error:', quoteResponse.status)\n      return { error: 'Failed to fetch price data' }\n    }\n\n    const quoteJson = await quoteResponse.json()\n    const priceData = quoteJson[0] // FMP returns array with one item\n\n    // Fetch 1-minute intraday data and aggregate into 10-minute candles\n    // FMP Premium tier includes 1-minute data for last 3 trading days\n    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^GSPC?apikey=${apiKey}&#96;\n    const intradayResponse = await fetch(intradayUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []\n    if (intradayResponse.ok) {\n      const intradayJson = await intradayResponse.json()\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 144
+          },
+          {
+            "text": " * Fetch latest SPX index price and intraday data for homepage",
+            "lineNumber": 145
+          },
+          {
+            "text": " * Includes previous day's last 2 hours (2pm-4pm) to show the opening gap",
+            "lineNumber": 146
+          },
+          {
+            "text": " */",
+            "lineNumber": 147
+          },
+          {
+            "text": "export async function getAaplMarketData() {",
+            "lineNumber": 148,
+            "isSignature": true
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 149
+          },
+          {
+            "text": "    // Get latest index price from FMP API",
+            "lineNumber": 150
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 151
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 152
+          },
+          {
+            "text": "      return { error: 'API configuration error' }",
+            "lineNumber": 153
+          },
+          {
+            "text": "    }",
+            "lineNumber": 154
+          },
+          {
+            "lineNumber": 155
+          },
+          {
+            "text": "    // Fetch latest price quote for S&amp;P 500 index",
+            "lineNumber": 156
+          },
+          {
+            "text": "    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^GSPC?apikey=${apiKey}&#96;",
+            "lineNumber": 157
+          },
+          {
+            "text": "    const quoteResponse = await fetch(quoteUrl, {",
+            "lineNumber": 158
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 159
+          },
+          {
+            "text": "    })",
+            "lineNumber": 160
+          },
+          {
+            "lineNumber": 161
+          },
+          {
+            "text": "    if (!quoteResponse.ok) {",
+            "lineNumber": 162
+          },
+          {
+            "text": "      console.error('FMP API error:', quoteResponse.status)",
+            "lineNumber": 163
+          },
+          {
+            "text": "      return { error: 'Failed to fetch price data' }",
+            "lineNumber": 164
+          },
+          {
+            "text": "    }",
+            "lineNumber": 165
+          },
+          {
+            "lineNumber": 166
+          },
+          {
+            "text": "    const quoteJson = await quoteResponse.json()",
+            "lineNumber": 167
+          },
+          {
+            "text": "    const priceData = quoteJson[0] // FMP returns array with one item",
+            "lineNumber": 168
+          },
+          {
+            "lineNumber": 169
+          },
+          {
+            "text": "    // Fetch 1-minute intraday data and aggregate into 10-minute candles",
+            "lineNumber": 170
+          },
+          {
+            "text": "    // FMP Premium tier includes 1-minute data for last 3 trading days",
+            "lineNumber": 171
+          },
+          {
+            "text": "    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^GSPC?apikey=${apiKey}&#96;",
+            "lineNumber": 172
+          },
+          {
+            "text": "    const intradayResponse = await fetch(intradayUrl, {",
+            "lineNumber": 173
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 174
+          },
+          {
+            "text": "    })",
+            "lineNumber": 175
+          },
+          {
+            "lineNumber": 176
+          },
+          {
+            "text": "    let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []",
+            "lineNumber": 177
+          },
+          {
+            "text": "    if (intradayResponse.ok) {",
+            "lineNumber": 178
+          },
+          {
+            "text": "      const intradayJson = await intradayResponse.json()",
+            "lineNumber": 179
+          },
+          {
+            "text": "}",
+            "lineNumber": 289,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.42158079147338867
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/fetch-aapl-data.ts",
+        "range": {
+          "startPosition": {
+            "line": 77,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 159,
+            "column": 1
+          }
+        },
+        "contents": "async function fetchFinancials(periodType: PeriodType, symbol: string): Promise&lt;FinancialRecord[]&gt; {\n  const periodParam = periodType === 'quarterly' ? '&amp;period=quarter' : ''\n  const limit = periodType === 'quarterly' ? 40 : 20 // ~10 years of quarters\n\n  const endpoints = {\n    incomeStatement: &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,\n    balanceSheet: &#96;https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,\n    cashFlow: &#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,\n  }\n\n  console.log(&#96;Fetching ${symbol} ${periodType} financial data from FMP API...\\n&#96;)\n\n  const [incomeData, balanceData, cashFlowData] = await Promise.all([\n    fetch(endpoints.incomeStatement).then((r) =&gt; r.json()),\n    fetch(endpoints.balanceSheet).then((r) =&gt; r.json()),\n    fetch(endpoints.cashFlow).then((r) =&gt; r.json()),\n  ])\n\n  console.log(&#96;✓ Fetched ${incomeData.length} ${periodType} income statements&#96;)\n  console.log(&#96;✓ Fetched ${balanceData.length} ${periodType} balance sheets&#96;)\n  console.log(&#96;✓ Fetched ${cashFlowData.length} ${periodType} cash flow statements\\n&#96;)\n\n  // Create unique key for each period\n  const getKey = (date: string, period: string) =&gt; {\n    const fiscalYear = getFiscalYear(date, period, symbol)\n    const fiscalQuarter = parseFiscalQuarter(period)\n    return fiscalQuarter ? &#96;${fiscalYear}-Q${fiscalQuarter}&#96; : &#96;${fiscalYear}-FY&#96;\n  }\n\n  // Combine by period key\n  const combinedByPeriod: Record&lt;string, FinancialRecord&gt; = {}\n\n  incomeData.forEach((item: any) =&gt; {\n    const period = item.period || 'FY'\n  }\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "async function fetchFinancials(periodType: PeriodType, symbol: string): Promise&lt;FinancialRecord[]&gt; {",
+            "lineNumber": 80,
+            "isSignature": true
+          },
+          {
+            "text": "  const periodParam = periodType === 'quarterly' ? '&amp;period=quarter' : ''",
+            "lineNumber": 81
+          },
+          {
+            "text": "  const limit = periodType === 'quarterly' ? 40 : 20 // ~10 years of quarters",
+            "lineNumber": 82
+          },
+          {
+            "lineNumber": 83
+          },
+          {
+            "text": "  const endpoints = {",
+            "lineNumber": 84
+          },
+          {
+            "text": "    incomeStatement: &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 85
+          },
+          {
+            "text": "    balanceSheet: &#96;https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 86
+          },
+          {
+            "text": "    cashFlow: &#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}${periodParam}&amp;apikey=${FMP_API_KEY}&#96;,",
+            "lineNumber": 87
+          },
+          {
+            "text": "  }",
+            "lineNumber": 88
+          },
+          {
+            "lineNumber": 89
+          },
+          {
+            "text": "  console.log(&#96;Fetching ${symbol} ${periodType} financial data from FMP API...\\n&#96;)",
+            "lineNumber": 90
+          },
+          {
+            "lineNumber": 91
+          },
+          {
+            "text": "  const [incomeData, balanceData, cashFlowData] = await Promise.all([",
+            "lineNumber": 92
+          },
+          {
+            "text": "    fetch(endpoints.incomeStatement).then((r) =&gt; r.json()),",
+            "lineNumber": 93
+          },
+          {
+            "text": "    fetch(endpoints.balanceSheet).then((r) =&gt; r.json()),",
+            "lineNumber": 94
+          },
+          {
+            "text": "    fetch(endpoints.cashFlow).then((r) =&gt; r.json()),",
+            "lineNumber": 95
+          },
+          {
+            "text": "  ])",
+            "lineNumber": 96
+          },
+          {
+            "lineNumber": 97
+          },
+          {
+            "text": "  console.log(&#96;✓ Fetched ${incomeData.length} ${periodType} income statements&#96;)",
+            "lineNumber": 98
+          },
+          {
+            "text": "  console.log(&#96;✓ Fetched ${balanceData.length} ${periodType} balance sheets&#96;)",
+            "lineNumber": 99
+          },
+          {
+            "text": "  console.log(&#96;✓ Fetched ${cashFlowData.length} ${periodType} cash flow statements\\n&#96;)",
+            "lineNumber": 100
+          },
+          {
+            "lineNumber": 101
+          },
+          {
+            "text": "  // Create unique key for each period",
+            "lineNumber": 102
+          },
+          {
+            "text": "  const getKey = (date: string, period: string) =&gt; {",
+            "lineNumber": 103
+          },
+          {
+            "text": "    const fiscalYear = getFiscalYear(date, period, symbol)",
+            "lineNumber": 104
+          },
+          {
+            "text": "    const fiscalQuarter = parseFiscalQuarter(period)",
+            "lineNumber": 105
+          },
+          {
+            "text": "    return fiscalQuarter ? &#96;${fiscalYear}-Q${fiscalQuarter}&#96; : &#96;${fiscalYear}-FY&#96;",
+            "lineNumber": 106
+          },
+          {
+            "text": "  }",
+            "lineNumber": 107
+          },
+          {
+            "lineNumber": 108
+          },
+          {
+            "text": "  // Combine by period key",
+            "lineNumber": 109
+          },
+          {
+            "text": "  const combinedByPeriod: Record&lt;string, FinancialRecord&gt; = {}",
+            "lineNumber": 110
+          },
+          {
+            "lineNumber": 111
+          },
+          {
+            "text": "  incomeData.forEach((item: any) =&gt; {",
+            "lineNumber": 112
+          },
+          {
+            "text": "    const period = item.period || 'FY'",
+            "lineNumber": 113
+          },
+          {
+            "text": "  }",
+            "lineNumber": 135
+          },
+          {
+            "text": "}",
+            "lineNumber": 160,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4188961982727051
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/sp500/batch-ingest-metrics.ts",
+        "range": {
+          "startPosition": {},
+          "endPosition": {
+            "line": 100,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Phase 2b: Batch ingestion of extended financial metrics for S&amp;P 500 stocks\n *\n * Fetches and ingests 100+ financial metrics (P/E, ROE, margins, growth rates, etc.)\n * for all S&amp;P 500 constituents using the per-symbol FMP API approach.\n *\n * Data sources:\n * - key-metrics: valuation, per-share metrics\n * - ratios: profitability, leverage, efficiency\n * - financial-growth: growth rates\n * - enterprise-values: market data\n *\n * Usage:\n *   npx tsx scripts/sp500/batch-ingest-metrics.ts              # All pending stocks\n *   npx tsx scripts/sp500/batch-ingest-metrics.ts --limit 10   # First 10 pending stocks\n *   npx tsx scripts/sp500/batch-ingest-metrics.ts --symbol MSFT # Single stock\n *   npx tsx scripts/sp500/batch-ingest-metrics.ts --resume     # Resume from errors\n */\n\nimport { createClient } from '@supabase/supabase-js'\nimport * as fs from 'fs/promises'\nimport * as path from 'path'\n\n// Configuration\nconst FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'\nconst RATE_LIMIT_DELAY_MS = 200 // 5 requests per second\nconst BATCH_SIZE = 10\nconst ANNUAL_LIMIT = 10\nconst QUARTERLY_LIMIT = 40\n\n// Metrics to skip (duplicates across endpoints)\nconst SKIP_METRICS = new Set([\n  'daysOfInventoryOutstanding',\n  'daysPayablesOutstanding',\n  'daysSalesOutstanding',\n  'debtToAssets',\n  'debtToEquity',\n  'enterpriseValueOverEBITDA',\n  'operatingProfitMargin',\n  'priceEarningsRatio',\n  'priceBookValueRatio',\n  'priceToBookRatio',\n  'priceToFreeCashFlowsRatio',\n  'priceToOperatingCashFlowsRatio',\n  'priceToSalesRatio',\n  'roe',\n  'shareholdersEquityPerShare',\n])\n\n// Category mapping\nconst CATEGORY_MAP: Record&lt;string, string&gt; = {\n  marketCap: 'Valuation'\n,\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 1
+          },
+          {
+            "text": " * Phase 2b: Batch ingestion of extended financial metrics for S&amp;P 500 stocks",
+            "lineNumber": 2
+          },
+          {
+            "text": " *",
+            "lineNumber": 3
+          },
+          {
+            "text": " * Fetches and ingests 100+ financial metrics (P/E, ROE, margins, growth rates, etc.)",
+            "lineNumber": 4
+          },
+          {
+            "text": " * for all S&amp;P 500 constituents using the per-symbol FMP API approach.",
+            "lineNumber": 5
+          },
+          {
+            "text": " *",
+            "lineNumber": 6
+          },
+          {
+            "text": " * Data sources:",
+            "lineNumber": 7
+          },
+          {
+            "text": " * - key-metrics: valuation, per-share metrics",
+            "lineNumber": 8
+          },
+          {
+            "text": " * - ratios: profitability, leverage, efficiency",
+            "lineNumber": 9
+          },
+          {
+            "text": " * - financial-growth: growth rates",
+            "lineNumber": 10
+          },
+          {
+            "text": " * - enterprise-values: market data",
+            "lineNumber": 11
+          },
+          {
+            "text": " *",
+            "lineNumber": 12
+          },
+          {
+            "text": " * Usage:",
+            "lineNumber": 13
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-metrics.ts              # All pending stocks",
+            "lineNumber": 14
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-metrics.ts --limit 10   # First 10 pending stocks",
+            "lineNumber": 15
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-metrics.ts --symbol MSFT # Single stock",
+            "lineNumber": 16
+          },
+          {
+            "text": " *   npx tsx scripts/sp500/batch-ingest-metrics.ts --resume     # Resume from errors",
+            "lineNumber": 17
+          },
+          {
+            "text": " */",
+            "lineNumber": 18
+          },
+          {
+            "lineNumber": 19
+          },
+          {
+            "text": "import { createClient } from '@supabase/supabase-js'",
+            "lineNumber": 20
+          },
+          {
+            "text": "import * as fs from 'fs/promises'",
+            "lineNumber": 21
+          },
+          {
+            "text": "import * as path from 'path'",
+            "lineNumber": 22
+          },
+          {
+            "lineNumber": 23
+          },
+          {
+            "text": "// Configuration",
+            "lineNumber": 24
+          },
+          {
+            "text": "const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'",
+            "lineNumber": 25
+          },
+          {
+            "text": "const RATE_LIMIT_DELAY_MS = 200 // 5 requests per second",
+            "lineNumber": 26
+          },
+          {
+            "text": "const BATCH_SIZE = 10",
+            "lineNumber": 27
+          },
+          {
+            "text": "const ANNUAL_LIMIT = 10",
+            "lineNumber": 28
+          },
+          {
+            "text": "const QUARTERLY_LIMIT = 40",
+            "lineNumber": 29
+          },
+          {
+            "lineNumber": 30
+          },
+          {
+            "text": "// Metrics to skip (duplicates across endpoints)",
+            "lineNumber": 31
+          },
+          {
+            "text": "const SKIP_METRICS = new Set([",
+            "lineNumber": 32
+          },
+          {
+            "text": "  'daysOfInventoryOutstanding',",
+            "lineNumber": 33
+          },
+          {
+            "text": "  'daysPayablesOutstanding',",
+            "lineNumber": 34
+          },
+          {
+            "text": "  'daysSalesOutstanding',",
+            "lineNumber": 35
+          },
+          {
+            "text": "  'debtToAssets',",
+            "lineNumber": 36
+          },
+          {
+            "text": "  'debtToEquity',",
+            "lineNumber": 37
+          },
+          {
+            "text": "  'enterpriseValueOverEBITDA',",
+            "lineNumber": 38
+          },
+          {
+            "text": "  'operatingProfitMargin',",
+            "lineNumber": 39
+          },
+          {
+            "text": "  'priceEarningsRatio',",
+            "lineNumber": 40
+          },
+          {
+            "text": "  'priceBookValueRatio',",
+            "lineNumber": 41
+          },
+          {
+            "text": "  'priceToBookRatio',",
+            "lineNumber": 42
+          },
+          {
+            "text": "  'priceToFreeCashFlowsRatio',",
+            "lineNumber": 43
+          },
+          {
+            "text": "  'priceToOperatingCashFlowsRatio',",
+            "lineNumber": 44
+          },
+          {
+            "text": "  'priceToSalesRatio',",
+            "lineNumber": 45
+          },
+          {
+            "text": "  'roe',",
+            "lineNumber": 46
+          },
+          {
+            "text": "  'shareholdersEquityPerShare',",
+            "lineNumber": 47
+          },
+          {
+            "text": "])",
+            "lineNumber": 48
+          },
+          {
+            "lineNumber": 49
+          },
+          {
+            "text": "// Category mapping",
+            "lineNumber": 50
+          },
+          {
+            "text": "const CATEGORY_MAP: Record&lt;string, string&gt; = {",
+            "lineNumber": 51
+          },
+          {
+            "text": "  marketCap: 'Valuation'",
+            "lineNumber": 52
+          },
+          {
+            "text": ",",
+            "lineNumber": 100
+          },
+          {
+            "text": "}",
+            "lineNumber": 101
+          }
+        ]
+      },
+      "score": 0.41520845890045166
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/scan-extended-hours.ts",
+        "range": {
+          "startPosition": {
+            "line": 117,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 182,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch extended hours prices for given symbols\n * Uses batch-aftermarket-trade endpoint which returns real-time extended session prices\n * FMP supports up to 1000 symbols per request\n *\n * Returns: Map of symbol -&gt; { price, volume (extended hours volume) }\n */\nasync function fetchExtendedHoursPrices(symbols: string[]): Promise&lt;Map&lt;string, { price: number; volume: number }&gt;&gt; {\n  const FMP_API_KEY = process.env.FMP_API_KEY\n  if (!FMP_API_KEY) {\n    throw new Error('FMP_API_KEY environment variable is not set')\n  }\n\n  const BATCH_SIZE = 1000 // FMP supports up to 1000 symbols per request\n  const priceMap = new Map&lt;string, { price: number; volume: number }&gt;()\n\n  // Split symbols into batches\n  const batches: string[][] = []\n  for (let i = 0; i &lt; symbols.length; i += BATCH_SIZE) {\n    batches.push(symbols.slice(i, i + BATCH_SIZE))\n  }\n\n  console.log(&#96;Fetching extended hours prices for ${symbols.length} stocks in ${batches.length} batches...&#96;)\n\n  // Fetch batches in parallel (limit to 10 concurrent for faster scanning)\n  const CONCURRENT_LIMIT = 10\n  for (let i = 0; i &lt; batches.length; i += CONCURRENT_LIMIT) {\n    \n  }\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 120
+          },
+          {
+            "text": " * Fetch extended hours prices for given symbols",
+            "lineNumber": 121
+          },
+          {
+            "text": " * Uses batch-aftermarket-trade endpoint which returns real-time extended session prices",
+            "lineNumber": 122
+          },
+          {
+            "text": " * FMP supports up to 1000 symbols per request",
+            "lineNumber": 123
+          },
+          {
+            "text": " *",
+            "lineNumber": 124
+          },
+          {
+            "text": " * Returns: Map of symbol -&gt; { price, volume (extended hours volume) }",
+            "lineNumber": 125
+          },
+          {
+            "text": " */",
+            "lineNumber": 126
+          },
+          {
+            "text": "async function fetchExtendedHoursPrices(symbols: string[]): Promise&lt;Map&lt;string, { price: number; volume: number }&gt;&gt; {",
+            "lineNumber": 127,
+            "isSignature": true
+          },
+          {
+            "text": "  const FMP_API_KEY = process.env.FMP_API_KEY",
+            "lineNumber": 128
+          },
+          {
+            "text": "  if (!FMP_API_KEY) {",
+            "lineNumber": 129
+          },
+          {
+            "text": "    throw new Error('FMP_API_KEY environment variable is not set')",
+            "lineNumber": 130
+          },
+          {
+            "text": "  }",
+            "lineNumber": 131
+          },
+          {
+            "lineNumber": 132
+          },
+          {
+            "text": "  const BATCH_SIZE = 1000 // FMP supports up to 1000 symbols per request",
+            "lineNumber": 133
+          },
+          {
+            "text": "  const priceMap = new Map&lt;string, { price: number; volume: number }&gt;()",
+            "lineNumber": 134
+          },
+          {
+            "lineNumber": 135
+          },
+          {
+            "text": "  // Split symbols into batches",
+            "lineNumber": 136
+          },
+          {
+            "text": "  const batches: string[][] = []",
+            "lineNumber": 137
+          },
+          {
+            "text": "  for (let i = 0; i &lt; symbols.length; i += BATCH_SIZE) {",
+            "lineNumber": 138
+          },
+          {
+            "text": "    batches.push(symbols.slice(i, i + BATCH_SIZE))",
+            "lineNumber": 139
+          },
+          {
+            "text": "  }",
+            "lineNumber": 140
+          },
+          {
+            "lineNumber": 141
+          },
+          {
+            "text": "  console.log(&#96;Fetching extended hours prices for ${symbols.length} stocks in ${batches.length} batches...&#96;)",
+            "lineNumber": 142
+          },
+          {
+            "lineNumber": 143
+          },
+          {
+            "text": "  // Fetch batches in parallel (limit to 10 concurrent for faster scanning)",
+            "lineNumber": 144
+          },
+          {
+            "text": "  const CONCURRENT_LIMIT = 10",
+            "lineNumber": 145
+          },
+          {
+            "text": "  for (let i = 0; i &lt; batches.length; i += CONCURRENT_LIMIT) {",
+            "lineNumber": 146
+          },
+          {
+            "text": "    ",
+            "lineNumber": 147
+          },
+          {
+            "text": "  }",
+            "lineNumber": 179
+          },
+          {
+            "text": "}",
+            "lineNumber": 183,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4140135943889618
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/market-data.ts",
+        "range": {
+          "startPosition": {
+            "line": 415,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 529,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch latest Dow Jones index price and intraday data for homepage\n */\nexport async function getDowMarketData() {\n  try {\n    // Get latest index price from FMP API\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      return { error: 'API configuration error' }\n    }\n\n    // Fetch latest price quote for Dow Jones index\n    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^DJI?apikey=${apiKey}&#96;\n    const quoteResponse = await fetch(quoteUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    if (!quoteResponse.ok) {\n      console.error('FMP API error:', quoteResponse.status)\n      return { error: 'Failed to fetch price data' }\n    }\n\n    const quoteJson = await quoteResponse.json()\n    const priceData = quoteJson[0] // FMP returns array with one item\n\n    // Fetch 1-minute intraday data and aggregate into 10-minute candles\n    // FMP Premium tier includes 1-minute data for last 3 trading days\n    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^DJI?apikey=${apiKey}&#96;\n    const intradayResponse = await fetch(intradayUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    let priceHistory = []\n    if (intradayResponse.ok) {\n      const intradayJson = await intradayResponse.json()\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 418
+          },
+          {
+            "text": " * Fetch latest Dow Jones index price and intraday data for homepage",
+            "lineNumber": 419
+          },
+          {
+            "text": " */",
+            "lineNumber": 420
+          },
+          {
+            "text": "export async function getDowMarketData() {",
+            "lineNumber": 421,
+            "isSignature": true
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 422
+          },
+          {
+            "text": "    // Get latest index price from FMP API",
+            "lineNumber": 423
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 424
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 425
+          },
+          {
+            "text": "      return { error: 'API configuration error' }",
+            "lineNumber": 426
+          },
+          {
+            "text": "    }",
+            "lineNumber": 427
+          },
+          {
+            "lineNumber": 428
+          },
+          {
+            "text": "    // Fetch latest price quote for Dow Jones index",
+            "lineNumber": 429
+          },
+          {
+            "text": "    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^DJI?apikey=${apiKey}&#96;",
+            "lineNumber": 430
+          },
+          {
+            "text": "    const quoteResponse = await fetch(quoteUrl, {",
+            "lineNumber": 431
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 432
+          },
+          {
+            "text": "    })",
+            "lineNumber": 433
+          },
+          {
+            "lineNumber": 434
+          },
+          {
+            "text": "    if (!quoteResponse.ok) {",
+            "lineNumber": 435
+          },
+          {
+            "text": "      console.error('FMP API error:', quoteResponse.status)",
+            "lineNumber": 436
+          },
+          {
+            "text": "      return { error: 'Failed to fetch price data' }",
+            "lineNumber": 437
+          },
+          {
+            "text": "    }",
+            "lineNumber": 438
+          },
+          {
+            "lineNumber": 439
+          },
+          {
+            "text": "    const quoteJson = await quoteResponse.json()",
+            "lineNumber": 440
+          },
+          {
+            "text": "    const priceData = quoteJson[0] // FMP returns array with one item",
+            "lineNumber": 441
+          },
+          {
+            "lineNumber": 442
+          },
+          {
+            "text": "    // Fetch 1-minute intraday data and aggregate into 10-minute candles",
+            "lineNumber": 443
+          },
+          {
+            "text": "    // FMP Premium tier includes 1-minute data for last 3 trading days",
+            "lineNumber": 444
+          },
+          {
+            "text": "    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^DJI?apikey=${apiKey}&#96;",
+            "lineNumber": 445
+          },
+          {
+            "text": "    const intradayResponse = await fetch(intradayUrl, {",
+            "lineNumber": 446
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 447
+          },
+          {
+            "text": "    })",
+            "lineNumber": 448
+          },
+          {
+            "lineNumber": 449
+          },
+          {
+            "text": "    let priceHistory = []",
+            "lineNumber": 450
+          },
+          {
+            "text": "    if (intradayResponse.ok) {",
+            "lineNumber": 451
+          },
+          {
+            "text": "      const intradayJson = await intradayResponse.json()",
+            "lineNumber": 452
+          },
+          {
+            "text": "}",
+            "lineNumber": 530,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4112074375152588
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/stock-overview.ts",
+        "range": {
+          "startPosition": {
+            "line": 15,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 86,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Get stock overview data including current price and company info\n * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')\n */\nexport async function getStockOverview(symbol: string): Promise&lt;StockOverview&gt; {\n  const apiKey = process.env.FMP_API_KEY;\n\n  if (!apiKey) {\n    throw new Error('FMP_API_KEY is not set');\n  }\n\n  try {\n    // Fetch current quote from FMP API\n    const quoteResponse = await fetch(\n      &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;,\n      { next: { revalidate: 60 } } // Cache for 60 seconds\n    );\n\n    if (!quoteResponse.ok) {\n      throw new Error(&#96;FMP API error: ${quoteResponse.status}&#96;);\n    }\n\n    const quoteData = await quoteResponse.json();\n\n    if (!quoteData || quoteData.length === 0) {\n      throw new Error('No quote data returned from FMP API');\n    }\n\n    const quote = quoteData[0];\n\n    // Get market session status\n    const marketSession = getCurrentMarketSession();\n\n    // Map session to status format expected by the page\n    const marketStatus = marketSession === 'regular' ? 'open' :\n                        marketSession === 'premarket' ? 'premarket' :\n                        marketSession === 'afterhours' ? 'afterhours' : 'closed';\n\n    return {\n      company: {\n        name: quote.name || symbol,\n        symbol: quote.symbol || symbol,\n        sector: quote.sector || 'N/A',\n        industry: quote.industry || 'N/A',\n      },\n      currentPrice: quote.price || 0,\n      priceChange: quote.change || 0,\n      priceChangePercent: quote.changesPercentage || 0,\n      marketStatus,\n    };\n  } catch (error) {\n    console.error('Error fetching stock overview:', error);\n\n    // Return fallback data on error\n    return\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 18
+          },
+          {
+            "text": " * Get stock overview data including current price and company info",
+            "lineNumber": 19
+          },
+          {
+            "text": " * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')",
+            "lineNumber": 20
+          },
+          {
+            "text": " */",
+            "lineNumber": 21
+          },
+          {
+            "text": "export async function getStockOverview(symbol: string): Promise&lt;StockOverview&gt; {",
+            "lineNumber": 22,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY;",
+            "lineNumber": 23
+          },
+          {
+            "lineNumber": 24
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 25
+          },
+          {
+            "text": "    throw new Error('FMP_API_KEY is not set');",
+            "lineNumber": 26
+          },
+          {
+            "text": "  }",
+            "lineNumber": 27
+          },
+          {
+            "lineNumber": 28
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 29
+          },
+          {
+            "text": "    // Fetch current quote from FMP API",
+            "lineNumber": 30
+          },
+          {
+            "text": "    const quoteResponse = await fetch(",
+            "lineNumber": 31
+          },
+          {
+            "text": "      &#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&#96;,",
+            "lineNumber": 32
+          },
+          {
+            "text": "      { next: { revalidate: 60 } } // Cache for 60 seconds",
+            "lineNumber": 33
+          },
+          {
+            "text": "    );",
+            "lineNumber": 34
+          },
+          {
+            "lineNumber": 35
+          },
+          {
+            "text": "    if (!quoteResponse.ok) {",
+            "lineNumber": 36
+          },
+          {
+            "text": "      throw new Error(&#96;FMP API error: ${quoteResponse.status}&#96;);",
+            "lineNumber": 37
+          },
+          {
+            "text": "    }",
+            "lineNumber": 38
+          },
+          {
+            "lineNumber": 39
+          },
+          {
+            "text": "    const quoteData = await quoteResponse.json();",
+            "lineNumber": 40
+          },
+          {
+            "lineNumber": 41
+          },
+          {
+            "text": "    if (!quoteData || quoteData.length === 0) {",
+            "lineNumber": 42
+          },
+          {
+            "text": "      throw new Error('No quote data returned from FMP API');",
+            "lineNumber": 43
+          },
+          {
+            "text": "    }",
+            "lineNumber": 44
+          },
+          {
+            "lineNumber": 45
+          },
+          {
+            "text": "    const quote = quoteData[0];",
+            "lineNumber": 46
+          },
+          {
+            "lineNumber": 47
+          },
+          {
+            "text": "    // Get market session status",
+            "lineNumber": 48
+          },
+          {
+            "text": "    const marketSession = getCurrentMarketSession();",
+            "lineNumber": 49
+          },
+          {
+            "lineNumber": 50
+          },
+          {
+            "text": "    // Map session to status format expected by the page",
+            "lineNumber": 51
+          },
+          {
+            "text": "    const marketStatus = marketSession === 'regular' ? 'open' :",
+            "lineNumber": 52
+          },
+          {
+            "text": "                        marketSession === 'premarket' ? 'premarket' :",
+            "lineNumber": 53
+          },
+          {
+            "text": "                        marketSession === 'afterhours' ? 'afterhours' : 'closed';",
+            "lineNumber": 54
+          },
+          {
+            "lineNumber": 55
+          },
+          {
+            "text": "    return {",
+            "lineNumber": 56
+          },
+          {
+            "text": "      company: {",
+            "lineNumber": 57
+          },
+          {
+            "text": "        name: quote.name || symbol,",
+            "lineNumber": 58
+          },
+          {
+            "text": "        symbol: quote.symbol || symbol,",
+            "lineNumber": 59
+          },
+          {
+            "text": "        sector: quote.sector || 'N/A',",
+            "lineNumber": 60
+          },
+          {
+            "text": "        industry: quote.industry || 'N/A',",
+            "lineNumber": 61
+          },
+          {
+            "text": "      },",
+            "lineNumber": 62
+          },
+          {
+            "text": "      currentPrice: quote.price || 0,",
+            "lineNumber": 63
+          },
+          {
+            "text": "      priceChange: quote.change || 0,",
+            "lineNumber": 64
+          },
+          {
+            "text": "      priceChangePercent: quote.changesPercentage || 0,",
+            "lineNumber": 65
+          },
+          {
+            "text": "      marketStatus,",
+            "lineNumber": 66
+          },
+          {
+            "text": "    };",
+            "lineNumber": 67
+          },
+          {
+            "text": "  } catch (error) {",
+            "lineNumber": 68
+          },
+          {
+            "text": "    console.error('Error fetching stock overview:', error);",
+            "lineNumber": 69
+          },
+          {
+            "lineNumber": 70
+          },
+          {
+            "text": "    // Return fallback data on error",
+            "lineNumber": 71
+          },
+          {
+            "text": "    return",
+            "lineNumber": 72
+          },
+          {
+            "text": "}",
+            "lineNumber": 87,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4110391139984131
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/nyse-advance-decline.ts",
+        "range": {
+          "startPosition": {
+            "line": 39,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 142,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Get a single snapshot of advance-decline data for the NYSE\n * Returns the current count of advancing vs declining stocks\n */\nexport async function getNYSEAdvanceDeclineSnapshot(): Promise&lt;{ data: NYSEAdvanceDeclineSnapshot } | { error: string }&gt; {\n  const apiKey = process.env.FMP_API_KEY\n\n  if (!apiKey) {\n    return { error: 'API configuration error' }\n  }\n\n  try {\n    const constituents = await getNYSEConstituents()\n\n    if (constituents.length === 0) {\n      return { error: 'Could not load NYSE constituents' }\n    }\n\n    // Get all symbols\n    const symbols = constituents.map(c =&gt; {\n      if (c.alternate_symbols?.fmp) {\n        return c.alternate_symbols.fmp\n      }\n      return c.symbol\n    })\n\n    console.log(&#96;Fetching quotes for ${symbols.length} NYSE stocks...&#96;)\n\n    // Fetch quotes in batches of 100\n    const chunkSize = 100\n    const allQuotes: any[] = []\n\n    for (let i = 0; i &lt; symbols.length; i += chunkSize) {\n      const chunk = symbols.slice(i, i + chunkSize)\n      const symbolsParam = chunk.join(',')\n      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;\n\n      const response = await fetch(url, {\n        cache: 'no-store' // Always fetch fresh data for snapshots\n      })\n\n      if (!response.ok) {\n        console.error(&#96;FMP batch quote error for NYSE chunk ${i}: ${response.status}&#96;)\n        continue\n      }\n\n      const data = await response.json()\n      if (Array.isArray(data)) {\n        allQuotes.push(...data)\n      }\n    }\n\n    console.log(&#96;Received quotes for ${allQuotes.length} NYSE stocks&#96;)\n\n    if (allQuotes.length === 0) {\n      return { error: 'Could not fetch NYSE stock quotes' }\n    }\n\n    // Count advances, declines, unchanged\n    let advances = 0\n    let declines = 0\n    let unchanged = 0\n\n    for (const quote of allQuotes) {\n      if\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 42
+          },
+          {
+            "text": " * Get a single snapshot of advance-decline data for the NYSE",
+            "lineNumber": 43
+          },
+          {
+            "text": " * Returns the current count of advancing vs declining stocks",
+            "lineNumber": 44
+          },
+          {
+            "text": " */",
+            "lineNumber": 45
+          },
+          {
+            "text": "export async function getNYSEAdvanceDeclineSnapshot(): Promise&lt;{ data: NYSEAdvanceDeclineSnapshot } | { error: string }&gt; {",
+            "lineNumber": 46,
+            "isSignature": true
+          },
+          {
+            "text": "  const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 47
+          },
+          {
+            "lineNumber": 48
+          },
+          {
+            "text": "  if (!apiKey) {",
+            "lineNumber": 49
+          },
+          {
+            "text": "    return { error: 'API configuration error' }",
+            "lineNumber": 50
+          },
+          {
+            "text": "  }",
+            "lineNumber": 51
+          },
+          {
+            "lineNumber": 52
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 53
+          },
+          {
+            "text": "    const constituents = await getNYSEConstituents()",
+            "lineNumber": 54
+          },
+          {
+            "lineNumber": 55
+          },
+          {
+            "text": "    if (constituents.length === 0) {",
+            "lineNumber": 56
+          },
+          {
+            "text": "      return { error: 'Could not load NYSE constituents' }",
+            "lineNumber": 57
+          },
+          {
+            "text": "    }",
+            "lineNumber": 58
+          },
+          {
+            "lineNumber": 59
+          },
+          {
+            "text": "    // Get all symbols",
+            "lineNumber": 60
+          },
+          {
+            "text": "    const symbols = constituents.map(c =&gt; {",
+            "lineNumber": 61
+          },
+          {
+            "text": "      if (c.alternate_symbols?.fmp) {",
+            "lineNumber": 62
+          },
+          {
+            "text": "        return c.alternate_symbols.fmp",
+            "lineNumber": 63
+          },
+          {
+            "text": "      }",
+            "lineNumber": 64
+          },
+          {
+            "text": "      return c.symbol",
+            "lineNumber": 65
+          },
+          {
+            "text": "    })",
+            "lineNumber": 66
+          },
+          {
+            "lineNumber": 67
+          },
+          {
+            "text": "    console.log(&#96;Fetching quotes for ${symbols.length} NYSE stocks...&#96;)",
+            "lineNumber": 68
+          },
+          {
+            "lineNumber": 69
+          },
+          {
+            "text": "    // Fetch quotes in batches of 100",
+            "lineNumber": 70
+          },
+          {
+            "text": "    const chunkSize = 100",
+            "lineNumber": 71
+          },
+          {
+            "text": "    const allQuotes: any[] = []",
+            "lineNumber": 72
+          },
+          {
+            "lineNumber": 73
+          },
+          {
+            "text": "    for (let i = 0; i &lt; symbols.length; i += chunkSize) {",
+            "lineNumber": 74
+          },
+          {
+            "text": "      const chunk = symbols.slice(i, i + chunkSize)",
+            "lineNumber": 75
+          },
+          {
+            "text": "      const symbolsParam = chunk.join(',')",
+            "lineNumber": 76
+          },
+          {
+            "text": "      const url = &#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&#96;",
+            "lineNumber": 77
+          },
+          {
+            "lineNumber": 78
+          },
+          {
+            "text": "      const response = await fetch(url, {",
+            "lineNumber": 79
+          },
+          {
+            "text": "        cache: 'no-store' // Always fetch fresh data for snapshots",
+            "lineNumber": 80
+          },
+          {
+            "text": "      })",
+            "lineNumber": 81
+          },
+          {
+            "lineNumber": 82
+          },
+          {
+            "text": "      if (!response.ok) {",
+            "lineNumber": 83
+          },
+          {
+            "text": "        console.error(&#96;FMP batch quote error for NYSE chunk ${i}: ${response.status}&#96;)",
+            "lineNumber": 84
+          },
+          {
+            "text": "        continue",
+            "lineNumber": 85
+          },
+          {
+            "text": "      }",
+            "lineNumber": 86
+          },
+          {
+            "lineNumber": 87
+          },
+          {
+            "text": "      const data = await response.json()",
+            "lineNumber": 88
+          },
+          {
+            "text": "      if (Array.isArray(data)) {",
+            "lineNumber": 89
+          },
+          {
+            "text": "        allQuotes.push(...data)",
+            "lineNumber": 90
+          },
+          {
+            "text": "      }",
+            "lineNumber": 91
+          },
+          {
+            "text": "    }",
+            "lineNumber": 92
+          },
+          {
+            "lineNumber": 93
+          },
+          {
+            "text": "    console.log(&#96;Received quotes for ${allQuotes.length} NYSE stocks&#96;)",
+            "lineNumber": 94
+          },
+          {
+            "lineNumber": 95
+          },
+          {
+            "text": "    if (allQuotes.length === 0) {",
+            "lineNumber": 96
+          },
+          {
+            "text": "      return { error: 'Could not fetch NYSE stock quotes' }",
+            "lineNumber": 97
+          },
+          {
+            "text": "    }",
+            "lineNumber": 98
+          },
+          {
+            "lineNumber": 99
+          },
+          {
+            "text": "    // Count advances, declines, unchanged",
+            "lineNumber": 100
+          },
+          {
+            "text": "    let advances = 0",
+            "lineNumber": 101
+          },
+          {
+            "text": "    let declines = 0",
+            "lineNumber": 102
+          },
+          {
+            "text": "    let unchanged = 0",
+            "lineNumber": 103
+          },
+          {
+            "lineNumber": 104
+          },
+          {
+            "text": "    for (const quote of allQuotes) {",
+            "lineNumber": 105
+          },
+          {
+            "text": "      if",
+            "lineNumber": 106
+          },
+          {
+            "text": "}",
+            "lineNumber": 143,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4101085662841797
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/market-data.ts",
+        "range": {
+          "startPosition": {
+            "line": 529,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 643,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch latest Russell 2000 index price and intraday data for homepage\n */\nexport async function getRussellMarketData() {\n  try {\n    // Get latest index price from FMP API\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      return { error: 'API configuration error' }\n    }\n\n    // Fetch latest price quote for Russell 2000 index\n    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^RUT?apikey=${apiKey}&#96;\n    const quoteResponse = await fetch(quoteUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    if (!quoteResponse.ok) {\n      console.error('FMP API error:', quoteResponse.status)\n      return { error: 'Failed to fetch price data' }\n    }\n\n    const quoteJson = await quoteResponse.json()\n    const priceData = quoteJson[0] // FMP returns array with one item\n\n    // Fetch 1-minute intraday data and aggregate into 10-minute candles\n    // FMP Premium tier includes 1-minute data for last 3 trading days\n    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^RUT?apikey=${apiKey}&#96;\n    const intradayResponse = await fetch(intradayUrl, {\n      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)\n    })\n\n    let priceHistory = []\n    if (intradayResponse.ok) {\n      const intradayJson = await intradayResponse.json()\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 532
+          },
+          {
+            "text": " * Fetch latest Russell 2000 index price and intraday data for homepage",
+            "lineNumber": 533
+          },
+          {
+            "text": " */",
+            "lineNumber": 534
+          },
+          {
+            "text": "export async function getRussellMarketData() {",
+            "lineNumber": 535,
+            "isSignature": true
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 536
+          },
+          {
+            "text": "    // Get latest index price from FMP API",
+            "lineNumber": 537
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 538
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 539
+          },
+          {
+            "text": "      return { error: 'API configuration error' }",
+            "lineNumber": 540
+          },
+          {
+            "text": "    }",
+            "lineNumber": 541
+          },
+          {
+            "lineNumber": 542
+          },
+          {
+            "text": "    // Fetch latest price quote for Russell 2000 index",
+            "lineNumber": 543
+          },
+          {
+            "text": "    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/^RUT?apikey=${apiKey}&#96;",
+            "lineNumber": 544
+          },
+          {
+            "text": "    const quoteResponse = await fetch(quoteUrl, {",
+            "lineNumber": 545
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 546
+          },
+          {
+            "text": "    })",
+            "lineNumber": 547
+          },
+          {
+            "lineNumber": 548
+          },
+          {
+            "text": "    if (!quoteResponse.ok) {",
+            "lineNumber": 549
+          },
+          {
+            "text": "      console.error('FMP API error:', quoteResponse.status)",
+            "lineNumber": 550
+          },
+          {
+            "text": "      return { error: 'Failed to fetch price data' }",
+            "lineNumber": 551
+          },
+          {
+            "text": "    }",
+            "lineNumber": 552
+          },
+          {
+            "lineNumber": 553
+          },
+          {
+            "text": "    const quoteJson = await quoteResponse.json()",
+            "lineNumber": 554
+          },
+          {
+            "text": "    const priceData = quoteJson[0] // FMP returns array with one item",
+            "lineNumber": 555
+          },
+          {
+            "lineNumber": 556
+          },
+          {
+            "text": "    // Fetch 1-minute intraday data and aggregate into 10-minute candles",
+            "lineNumber": 557
+          },
+          {
+            "text": "    // FMP Premium tier includes 1-minute data for last 3 trading days",
+            "lineNumber": 558
+          },
+          {
+            "text": "    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/^RUT?apikey=${apiKey}&#96;",
+            "lineNumber": 559
+          },
+          {
+            "text": "    const intradayResponse = await fetch(intradayUrl, {",
+            "lineNumber": 560
+          },
+          {
+            "text": "      next: { revalidate: 10 }, // Cache for 10 seconds (real-time data)",
+            "lineNumber": 561
+          },
+          {
+            "text": "    })",
+            "lineNumber": 562
+          },
+          {
+            "lineNumber": 563
+          },
+          {
+            "text": "    let priceHistory = []",
+            "lineNumber": 564
+          },
+          {
+            "text": "    if (intradayResponse.ok) {",
+            "lineNumber": 565
+          },
+          {
+            "text": "      const intradayJson = await intradayResponse.json()",
+            "lineNumber": 566
+          },
+          {
+            "text": "}",
+            "lineNumber": 644,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4100356101989746
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./app/actions/market-data.ts",
+        "range": {
+          "startPosition": {
+            "line": 643,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 754,
+            "column": 1
+          }
+        },
+        "contents": "/**\n * Fetch latest ES futures price and intraday data for homepage\n * ES futures trade nearly 24 hours (Sunday 6pm - Friday 5pm ET)\n */\nexport async function getESFuturesMarketData() {\n  try {\n    const apiKey = process.env.FMP_API_KEY\n    if (!apiKey) {\n      return { error: 'API configuration error' }\n    }\n\n    // Fetch latest price quote for ES futures\n    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/ES=F?apikey=${apiKey}&#96;\n    const quoteResponse = await fetch(quoteUrl, {\n      next: { revalidate: 10 },\n    })\n\n    if (!quoteResponse.ok) {\n      console.error('FMP API error:', quoteResponse.status)\n      return { error: 'Failed to fetch price data' }\n    }\n\n    const quoteJson = await quoteResponse.json()\n    const priceData = quoteJson[0]\n\n    // Fetch 1-minute intraday data and aggregate into 10-minute candles\n    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/ES=F?apikey=${apiKey}&#96;\n    const intradayResponse = await fetch(intradayUrl, {\n      next: { revalidate: 10 },\n    })\n\n    let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []\n    if (intradayResponse.ok) {\n      const intradayJson = await intradayResponse.json()\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "/**",
+            "lineNumber": 646
+          },
+          {
+            "text": " * Fetch latest ES futures price and intraday data for homepage",
+            "lineNumber": 647
+          },
+          {
+            "text": " * ES futures trade nearly 24 hours (Sunday 6pm - Friday 5pm ET)",
+            "lineNumber": 648
+          },
+          {
+            "text": " */",
+            "lineNumber": 649
+          },
+          {
+            "text": "export async function getESFuturesMarketData() {",
+            "lineNumber": 650,
+            "isSignature": true
+          },
+          {
+            "text": "  try {",
+            "lineNumber": 651
+          },
+          {
+            "text": "    const apiKey = process.env.FMP_API_KEY",
+            "lineNumber": 652
+          },
+          {
+            "text": "    if (!apiKey) {",
+            "lineNumber": 653
+          },
+          {
+            "text": "      return { error: 'API configuration error' }",
+            "lineNumber": 654
+          },
+          {
+            "text": "    }",
+            "lineNumber": 655
+          },
+          {
+            "lineNumber": 656
+          },
+          {
+            "text": "    // Fetch latest price quote for ES futures",
+            "lineNumber": 657
+          },
+          {
+            "text": "    const quoteUrl = &#96;https://financialmodelingprep.com/api/v3/quote/ES=F?apikey=${apiKey}&#96;",
+            "lineNumber": 658
+          },
+          {
+            "text": "    const quoteResponse = await fetch(quoteUrl, {",
+            "lineNumber": 659
+          },
+          {
+            "text": "      next: { revalidate: 10 },",
+            "lineNumber": 660
+          },
+          {
+            "text": "    })",
+            "lineNumber": 661
+          },
+          {
+            "lineNumber": 662
+          },
+          {
+            "text": "    if (!quoteResponse.ok) {",
+            "lineNumber": 663
+          },
+          {
+            "text": "      console.error('FMP API error:', quoteResponse.status)",
+            "lineNumber": 664
+          },
+          {
+            "text": "      return { error: 'Failed to fetch price data' }",
+            "lineNumber": 665
+          },
+          {
+            "text": "    }",
+            "lineNumber": 666
+          },
+          {
+            "lineNumber": 667
+          },
+          {
+            "text": "    const quoteJson = await quoteResponse.json()",
+            "lineNumber": 668
+          },
+          {
+            "text": "    const priceData = quoteJson[0]",
+            "lineNumber": 669
+          },
+          {
+            "lineNumber": 670
+          },
+          {
+            "text": "    // Fetch 1-minute intraday data and aggregate into 10-minute candles",
+            "lineNumber": 671
+          },
+          {
+            "text": "    const intradayUrl = &#96;https://financialmodelingprep.com/api/v3/historical-chart/1min/ES=F?apikey=${apiKey}&#96;",
+            "lineNumber": 672
+          },
+          {
+            "text": "    const intradayResponse = await fetch(intradayUrl, {",
+            "lineNumber": 673
+          },
+          {
+            "text": "      next: { revalidate: 10 },",
+            "lineNumber": 674
+          },
+          {
+            "text": "    })",
+            "lineNumber": 675
+          },
+          {
+            "lineNumber": 676
+          },
+          {
+            "text": "    let priceHistory: Array&lt;{ date: string; open: number; high: number; low: number; close: number }&gt; = []",
+            "lineNumber": 677
+          },
+          {
+            "text": "    if (intradayResponse.ok) {",
+            "lineNumber": 678
+          },
+          {
+            "text": "      const intradayJson = await intradayResponse.json()",
+            "lineNumber": 679
+          },
+          {
+            "text": "}",
+            "lineNumber": 755,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.40967923402786255
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/filter-ticker-universe.ts",
+        "range": {
+          "startPosition": {
+            "line": 17,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 111,
+            "column": 1
+          }
+        },
+        "contents": "const FMP_API_KEY = process.env.FMP_API_KEY\n\nconst FILTERS = {\n  exchanges: ['NYSE', 'NASDAQ'],\n  minPrice: 5,\n  minAvgVolume: 1_000_000, // 1M+ average daily volume\n  minMarketCap: 500_000_000, // $500M minimum market cap\n  excludeTypes: ['ETF', 'TRUST', 'REIT'], // Exclude non-common stocks\n  maxSymbolLength: 5, // Exclude exotic tickers (e.g., ABCDE-WT)\n  targetCount: 300, // Target 300 stocks\n}\n\nasync function fetchAllUSStocks(): Promise&lt;StockQuote[]&gt; {\n  console.log('Fetching all US stocks from FMP...')\n\n  // Use stock screener with basic filters first\n  const url = &#96;https://financialmodelingprep.com/api/v3/stock-screener?marketCapMoreThan=${FILTERS.minMarketCap}&amp;priceMoreThan=${FILTERS.minPrice}&amp;limit=2000&amp;apikey=${FMP_API_KEY}&#96;\n\n  const response = await fetch(url)\n  const data = await response.json()\n\n  console.log(&#96;Fetched ${data.length} stocks from FMP&#96;)\n\n  // Map to our StockQuote interface and add avgVolume from volume field\n  const stocks: StockQuote[] = data.map((stock: any) =&gt; ({\n    symbol: stock.symbol,\n    name: stock.companyName || stock.name,\n    price: stock.price,\n    exchange: stock.exchange,\n    exchangeShortName: stock.exchangeShortName,\n    type: stock.type || 'stock',\n    volume: stock.volume || 0,\n    avgVolume: stock.volume || 0, // Use current volume as proxy for avg volume\n    marketCap: stock.marketCap,\n  }))\n\n  return stocks\n}\n\nfunction filterStocks(stocks: StockQuote[]): StockQuote[] {\n  console.log('\\nApplying filters...')\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "const FMP_API_KEY = process.env.FMP_API_KEY",
+            "lineNumber": 20
+          },
+          {
+            "lineNumber": 21
+          },
+          {
+            "text": "const FILTERS = {",
+            "lineNumber": 22
+          },
+          {
+            "text": "  exchanges: ['NYSE', 'NASDAQ'],",
+            "lineNumber": 23
+          },
+          {
+            "text": "  minPrice: 5,",
+            "lineNumber": 24
+          },
+          {
+            "text": "  minAvgVolume: 1_000_000, // 1M+ average daily volume",
+            "lineNumber": 25
+          },
+          {
+            "text": "  minMarketCap: 500_000_000, // $500M minimum market cap",
+            "lineNumber": 26
+          },
+          {
+            "text": "  excludeTypes: ['ETF', 'TRUST', 'REIT'], // Exclude non-common stocks",
+            "lineNumber": 27
+          },
+          {
+            "text": "  maxSymbolLength: 5, // Exclude exotic tickers (e.g., ABCDE-WT)",
+            "lineNumber": 28
+          },
+          {
+            "text": "  targetCount: 300, // Target 300 stocks",
+            "lineNumber": 29
+          },
+          {
+            "text": "}",
+            "lineNumber": 30
+          },
+          {
+            "lineNumber": 31
+          },
+          {
+            "text": "async function fetchAllUSStocks(): Promise&lt;StockQuote[]&gt; {",
+            "lineNumber": 32,
+            "isSignature": true
+          },
+          {
+            "text": "  console.log('Fetching all US stocks from FMP...')",
+            "lineNumber": 33
+          },
+          {
+            "lineNumber": 34
+          },
+          {
+            "text": "  // Use stock screener with basic filters first",
+            "lineNumber": 35
+          },
+          {
+            "text": "  const url = &#96;https://financialmodelingprep.com/api/v3/stock-screener?marketCapMoreThan=${FILTERS.minMarketCap}&amp;priceMoreThan=${FILTERS.minPrice}&amp;limit=2000&amp;apikey=${FMP_API_KEY}&#96;",
+            "lineNumber": 36
+          },
+          {
+            "lineNumber": 37
+          },
+          {
+            "text": "  const response = await fetch(url)",
+            "lineNumber": 38
+          },
+          {
+            "text": "  const data = await response.json()",
+            "lineNumber": 39
+          },
+          {
+            "lineNumber": 40
+          },
+          {
+            "text": "  console.log(&#96;Fetched ${data.length} stocks from FMP&#96;)",
+            "lineNumber": 41
+          },
+          {
+            "lineNumber": 42
+          },
+          {
+            "text": "  // Map to our StockQuote interface and add avgVolume from volume field",
+            "lineNumber": 43
+          },
+          {
+            "text": "  const stocks: StockQuote[] = data.map((stock: any) =&gt; ({",
+            "lineNumber": 44
+          },
+          {
+            "text": "    symbol: stock.symbol,",
+            "lineNumber": 45
+          },
+          {
+            "text": "    name: stock.companyName || stock.name,",
+            "lineNumber": 46
+          },
+          {
+            "text": "    price: stock.price,",
+            "lineNumber": 47
+          },
+          {
+            "text": "    exchange: stock.exchange,",
+            "lineNumber": 48
+          },
+          {
+            "text": "    exchangeShortName: stock.exchangeShortName,",
+            "lineNumber": 49
+          },
+          {
+            "text": "    type: stock.type || 'stock',",
+            "lineNumber": 50
+          },
+          {
+            "text": "    volume: stock.volume || 0,",
+            "lineNumber": 51
+          },
+          {
+            "text": "    avgVolume: stock.volume || 0, // Use current volume as proxy for avg volume",
+            "lineNumber": 52
+          },
+          {
+            "text": "    marketCap: stock.marketCap,",
+            "lineNumber": 53
+          },
+          {
+            "text": "  }))",
+            "lineNumber": 54
+          },
+          {
+            "lineNumber": 55
+          },
+          {
+            "text": "  return stocks",
+            "lineNumber": 56
+          },
+          {
+            "text": "}",
+            "lineNumber": 57,
+            "isSignature": true
+          },
+          {
+            "lineNumber": 58
+          },
+          {
+            "text": "function filterStocks(stocks: StockQuote[]): StockQuote[] {",
+            "lineNumber": 59,
+            "isSignature": true
+          },
+          {
+            "text": "  console.log('\\nApplying filters...')",
+            "lineNumber": 60
+          },
+          {
+            "text": "}",
+            "lineNumber": 112,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4094600975513458
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./scripts/sp500/batch-ingest-metrics.ts",
+        "range": {
+          "startPosition": {
+            "line": 151,
+            "column": 1
+          },
+          "endPosition": {
+            "line": 246,
+            "column": 1
+          }
+        },
+        "contents": "async function fetchMetricsForSymbol(\n  symbol: string,\n  fmpSymbol: string,\n  apiKey: string\n): Promise&lt;MetricRecord[]&gt; {\n  const metrics: MetricRecord[] = []\n\n  // Fetch annual data (key-metrics, ratios, financial-growth, cash-flow-statement, income-statement)\n  const annualEndpoints = [\n    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,\n  ]\n\n  // Fetch quarterly data\n  const quarterlyEndpoints = [\n    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,\n    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,\n  ]\n\n  const allEndpoints = [...annualEndpoints, ...quarterlyEndpoints]\n  const sources = ['key-metrics', 'ratios', 'financial-growth', 'cash-flow-statement', 'income-statement', 'key-metrics', 'ratios', 'financial-growth', 'cash-flow-statement', 'income-statement']\n\n  // Cash flow metrics to extract (these are the specific fields we want from cash-flow-statement)\n  const CASH_FLOW_METRICS = new Set(['freeCashFlow', 'capitalExpenditure', 'commonStockRepurchased', 'dividendsPaid', 'stockBasedCompensation'])\n\n  // Income statement metrics to extract (we only need a few, the rest is in financials_std)\n}",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "async function fetchMetricsForSymbol(",
+            "lineNumber": 154,
+            "isSignature": true
+          },
+          {
+            "text": "  symbol: string,",
+            "lineNumber": 155,
+            "isSignature": true
+          },
+          {
+            "text": "  fmpSymbol: string,",
+            "lineNumber": 156,
+            "isSignature": true
+          },
+          {
+            "text": "  apiKey: string",
+            "lineNumber": 157,
+            "isSignature": true
+          },
+          {
+            "text": "): Promise&lt;MetricRecord[]&gt; {",
+            "lineNumber": 158,
+            "isSignature": true
+          },
+          {
+            "text": "  const metrics: MetricRecord[] = []",
+            "lineNumber": 159
+          },
+          {
+            "lineNumber": 160
+          },
+          {
+            "text": "  // Fetch annual data (key-metrics, ratios, financial-growth, cash-flow-statement, income-statement)",
+            "lineNumber": 161
+          },
+          {
+            "text": "  const annualEndpoints = [",
+            "lineNumber": 162
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 163
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 164
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 165
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 166
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 167
+          },
+          {
+            "text": "  ]",
+            "lineNumber": 168
+          },
+          {
+            "lineNumber": 169
+          },
+          {
+            "text": "  // Fetch quarterly data",
+            "lineNumber": 170
+          },
+          {
+            "text": "  const quarterlyEndpoints = [",
+            "lineNumber": 171
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 172
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 173
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 174
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 175
+          },
+          {
+            "text": "    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,",
+            "lineNumber": 176
+          },
+          {
+            "text": "  ]",
+            "lineNumber": 177
+          },
+          {
+            "lineNumber": 178
+          },
+          {
+            "text": "  const allEndpoints = [...annualEndpoints, ...quarterlyEndpoints]",
+            "lineNumber": 179
+          },
+          {
+            "text": "  const sources = ['key-metrics', 'ratios', 'financial-growth', 'cash-flow-statement', 'income-statement', 'key-metrics', 'ratios', 'financial-growth', 'cash-flow-statement', 'income-statement']",
+            "lineNumber": 180
+          },
+          {
+            "lineNumber": 181
+          },
+          {
+            "text": "  // Cash flow metrics to extract (these are the specific fields we want from cash-flow-statement)",
+            "lineNumber": 182
+          },
+          {
+            "text": "  const CASH_FLOW_METRICS = new Set(['freeCashFlow', 'capitalExpenditure', 'commonStockRepurchased', 'dividendsPaid', 'stockBasedCompensation'])",
+            "lineNumber": 183
+          },
+          {
+            "lineNumber": 184
+          },
+          {
+            "text": "  // Income statement metrics to extract (we only need a few, the rest is in financials_std)",
+            "lineNumber": 185
+          },
+          {
+            "text": "}",
+            "lineNumber": 247,
+            "isSignature": true
+          }
+        ]
+      },
+      "score": 0.4073522984981537
+    },
+    {
+      "codeBlock": {
+        "relativeWorkspacePath": "./docs/SP500_EXPANSION_PLAN.md",
+        "range": {
+          "startPosition": {
+            "line": 373
+          },
+          "endPosition": {
+            "line": 427
+          }
+        },
+        "contents": "└──────────────────────────────────────────────────────────────────┘\n&#96;&#96;&#96;\n\n### Rate Limiting Strategy\n\n| API | Rate Limit | Our Strategy |\n|-----|------------|--------------|\n| FMP API | 300/min (paid) | 250/min with backoff |\n| SEC EDGAR | 10/sec | 8/sec with retry |\n| Supabase | 1,000/sec | No concern |\n\n---\n\n## Phase 0: Migration of Existing Data\n\n### Objective\n\nEnsure existing AAPL and GOOGL data is preserved and compatible with the new multi-stock architecture before adding 498 more stocks.\n\n### Current Data Inventory\n\n**Apple (AAPL):**\n| Data Type | Table | Records | Status |\n|-----------|-------|---------|--------|\n| Annual financials | &#96;financials_std&#96; | ~20 years | ✅ Complete |\n| Quarterly financials | &#96;financials_std&#96; | ~28 quarters | ✅ Complete |\n| Extended metrics | &#96;financial_metrics&#96; | ~139 metrics × 10 years | ✅ Complete |\n| Product segments | &#96;company_metrics&#96; | 5 segments × 7 years | ✅ Complete |\n| Geographic segments | &#96;company_metrics&#96; | 5 regions × 7 years | ✅ Complete |\n| SEC filings | &#96;filings&#96; | ~20 filings | ✅ Complete |\n| Filing chunks | &#96;filing_chunks&#96; | ~2,000 chunks | ✅ Complete |\n\n**Google (GOOGL):**\n| Data Type | Table | Records | Status |\n|-----------|-------|---------|--------|\n| Annual financials | &#96;financials_std&#96; | ~10 years | ✅ Complete |\n| Quarterly financials | &#96;financials_std&#96; | ~28 quarters | ✅ Complete |\n| Extended metrics | &#96;financial_metrics&#96; | ~139 metrics × 10 years | ✅ Complete |\n| Business segments | &#96;company_metrics&#96; | 3 segments × 5 years | ✅ Complete |\n| Geographic segments | &#96;company_metrics&#96; | 4 regions × 5 years | ✅ Complete |\n| SEC filings | &#96;filings&#96; | 0 | ❌ Not started |\n| Filing chunks | &#96;filing_chunks&#96; | 0 | ❌ Not started |\n\n### Migration Steps\n\n#### Step 0.1: Backup Existing Data\n\nBefore any schema changes, create backups:\n\n&#96;&#96;&#96;bash\n# Export existing data to JSON files\nnpx tsx scripts/migration/backup-existing-data.ts\n&#96;&#96;&#96;",
+        "signatures": {},
+        "detailedLines": [
+          {
+            "text": "└──────────────────────────────────────────────────────────────────┘",
+            "lineNumber": 374
+          },
+          {
+            "text": "&#96;&#96;&#96;",
+            "lineNumber": 375
+          },
+          {
+            "lineNumber": 376
+          },
+          {
+            "text": "### Rate Limiting Strategy",
+            "lineNumber": 377
+          },
+          {
+            "lineNumber": 378
+          },
+          {
+            "text": "| API | Rate Limit | Our Strategy |",
+            "lineNumber": 379
+          },
+          {
+            "text": "|-----|------------|--------------|",
+            "lineNumber": 380
+          },
+          {
+            "text": "| FMP API | 300/min (paid) | 250/min with backoff |",
+            "lineNumber": 381
+          },
+          {
+            "text": "| SEC EDGAR | 10/sec | 8/sec with retry |",
+            "lineNumber": 382
+          },
+          {
+            "text": "| Supabase | 1,000/sec | No concern |",
+            "lineNumber": 383
+          },
+          {
+            "lineNumber": 384
+          },
+          {
+            "text": "---",
+            "lineNumber": 385
+          },
+          {
+            "lineNumber": 386
+          },
+          {
+            "text": "## Phase 0: Migration of Existing Data",
+            "lineNumber": 387
+          },
+          {
+            "lineNumber": 388
+          },
+          {
+            "text": "### Objective",
+            "lineNumber": 389
+          },
+          {
+            "lineNumber": 390
+          },
+          {
+            "text": "Ensure existing AAPL and GOOGL data is preserved and compatible with the new multi-stock architecture before adding 498 more stocks.",
+            "lineNumber": 391
+          },
+          {
+            "lineNumber": 392
+          },
+          {
+            "text": "### Current Data Inventory",
+            "lineNumber": 393
+          },
+          {
+            "lineNumber": 394
+          },
+          {
+            "text": "**Apple (AAPL):**",
+            "lineNumber": 395
+          },
+          {
+            "text": "| Data Type | Table | Records | Status |",
+            "lineNumber": 396
+          },
+          {
+            "text": "|-----------|-------|---------|--------|",
+            "lineNumber": 397
+          },
+          {
+            "text": "| Annual financials | &#96;financials_std&#96; | ~20 years | ✅ Complete |",
+            "lineNumber": 398
+          },
+          {
+            "text": "| Quarterly financials | &#96;financials_std&#96; | ~28 quarters | ✅ Complete |",
+            "lineNumber": 399
+          },
+          {
+            "text": "| Extended metrics | &#96;financial_metrics&#96; | ~139 metrics × 10 years | ✅ Complete |",
+            "lineNumber": 400
+          },
+          {
+            "text": "| Product segments | &#96;company_metrics&#96; | 5 segments × 7 years | ✅ Complete |",
+            "lineNumber": 401
+          },
+          {
+            "text": "| Geographic segments | &#96;company_metrics&#96; | 5 regions × 7 years | ✅ Complete |",
+            "lineNumber": 402
+          },
+          {
+            "text": "| SEC filings | &#96;filings&#96; | ~20 filings | ✅ Complete |",
+            "lineNumber": 403
+          },
+          {
+            "text": "| Filing chunks | &#96;filing_chunks&#96; | ~2,000 chunks | ✅ Complete |",
+            "lineNumber": 404
+          },
+          {
+            "lineNumber": 405
+          },
+          {
+            "text": "**Google (GOOGL):**",
+            "lineNumber": 406
+          },
+          {
+            "text": "| Data Type | Table | Records | Status |",
+            "lineNumber": 407
+          },
+          {
+            "text": "|-----------|-------|---------|--------|",
+            "lineNumber": 408
+          },
+          {
+            "text": "| Annual financials | &#96;financials_std&#96; | ~10 years | ✅ Complete |",
+            "lineNumber": 409
+          },
+          {
+            "text": "| Quarterly financials | &#96;financials_std&#96; | ~28 quarters | ✅ Complete |",
+            "lineNumber": 410
+          },
+          {
+            "text": "| Extended metrics | &#96;financial_metrics&#96; | ~139 metrics × 10 years | ✅ Complete |",
+            "lineNumber": 411
+          },
+          {
+            "text": "| Business segments | &#96;company_metrics&#96; | 3 segments × 5 years | ✅ Complete |",
+            "lineNumber": 412
+          },
+          {
+            "text": "| Geographic segments | &#96;company_metrics&#96; | 4 regions × 5 years | ✅ Complete |",
+            "lineNumber": 413
+          },
+          {
+            "text": "| SEC filings | &#96;filings&#96; | 0 | ❌ Not started |",
+            "lineNumber": 414
+          },
+          {
+            "text": "| Filing chunks | &#96;filing_chunks&#96; | 0 | ❌ Not started |",
+            "lineNumber": 415
+          },
+          {
+            "lineNumber": 416
+          },
+          {
+            "text": "### Migration Steps",
+            "lineNumber": 417
+          },
+          {
+            "lineNumber": 418
+          },
+          {
+            "text": "#### Step 0.1: Backup Existing Data",
+            "lineNumber": 419
+          },
+          {
+            "lineNumber": 420
+          },
+          {
+            "text": "Before any schema changes, create backups:",
+            "lineNumber": 421
+          },
+          {
+            "lineNumber": 422
+          },
+          {
+            "text": "&#96;&#96;&#96;bash",
+            "lineNumber": 423
+          },
+          {
+            "text": "# Export existing data to JSON files",
+            "lineNumber": 424
+          },
+          {
+            "text": "npx tsx scripts/migration/backup-existing-data.ts",
+            "lineNumber": 425
+          },
+          {
+            "text": "&#96;&#96;&#96;",
+            "lineNumber": 426
+          }
+        ]
+      },
+      "score": 0.4072227478027344
+    }
+  ]
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ripgrep_raw_search">
+<details>
+<summary>Tool use: **ripgrep_raw_search**</summary>
+
+
+Parameters:
+
+```json
+{
+  "pattern": "FMP_API_KEY|fmp|Financial Modeling Prep",
+  "caseInsensitive": true
+}
+```
+Result:
+
+```json
+{
+  "success": {
+    "pattern": "FMP_API_KEY|fmp|Financial Modeling Prep",
+    "outputMode": "content",
+    "workspaceResults": {
+      "/Users/cliffordtraff/Desktop/Coding/Fin Quote": {
+        "content": {
+          "matches": [
+            {
+              "file": "./docs/INSIDERS-FEATURE-PLAN.md",
+              "matches": [
+                {
+                  "lineNumber": 5,
+                  "content": "Add a new **Insiders** page (&#96;/insiders&#96;) to \"The Intraday\" that displays SEC Form 4 insider trading data from the FMP API. Users can view latest trades across all stocks, search by ticker symbol, or search by insider name, with filtering by transaction type and date range."
+                },
+                {
+                  "lineNumber": 26,
+                  "content": "### FMP Insider Trading API"
+                },
+                {
+                  "lineNumber": 33,
+                  "content": "- &#96;apikey&#96; - FMP API key"
+                },
+                {
+                  "lineNumber": 64,
+                  "content": "    insider-trading.ts          # Server actions for FMP API"
+                },
+                {
+                  "lineNumber": 311,
+                  "content": "| FMP API rate limits | Use 5-minute caching with &#96;revalidate: 300&#96; |"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/sp500-loser-sparklines.ts",
+              "matches": [
+                {
+                  "lineNumber": 15,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/stock-sparkline.ts",
+              "matches": [
+                {
+                  "lineNumber": 13,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/sp500-gainer-sparklines.ts",
+              "matches": [
+                {
+                  "lineNumber": 15,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/earnings-calendar.ts",
+              "matches": [
+                {
+                  "lineNumber": 16,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 18,
+                  "content": "    console.error('FMP_API_KEY not set')"
+                },
+                {
+                  "lineNumber": 44,
+                  "content": "    // FMP returns many small caps, so we'll filter to larger companies"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/most-active.ts",
+              "matches": [
+                {
+                  "lineNumber": 13,
+                  "content": " * Fetch most actively traded stocks from FMP API"
+                },
+                {
+                  "lineNumber": 16,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/losers.ts",
+              "matches": [
+                {
+                  "lineNumber": 12,
+                  "content": " * Fetch top losers by percentage from US stock markets using FMP's stock_market/losers endpoint"
+                },
+                {
+                  "lineNumber": 15,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/gainers.ts",
+              "matches": [
+                {
+                  "lineNumber": 12,
+                  "content": " * Fetch top gainers by percentage from US stock markets using FMP's stock_market/gainers endpoint"
+                },
+                {
+                  "lineNumber": 15,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/sparkline-indices.ts",
+              "matches": [
+                {
+                  "lineNumber": 39,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/nyse-advance-decline.ts",
+              "matches": [
+                {
+                  "lineNumber": 47,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 62,
+                  "content": "      if (c.alternate_symbols?.fmp) {"
+                },
+                {
+                  "lineNumber": 63,
+                  "content": "        return c.alternate_symbols.fmp"
+                },
+                {
+                  "lineNumber": 84,
+                  "content": "        console.error(&#96;FMP batch quote error for NYSE chunk ${i}: ${response.status}&#96;)"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/fetch-nyse-symbols.ts",
+              "matches": [
+                {
+                  "lineNumber": 8,
+                  "content": "interface FMPStock {"
+                },
+                {
+                  "lineNumber": 27,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 30,
+                  "content": "    console.error('FMP_API_KEY not found in environment variables')"
+                },
+                {
+                  "lineNumber": 34,
+                  "content": "  console.log('Fetching stock list from FMP...')"
+                },
+                {
+                  "lineNumber": 45,
+                  "content": "  const allStocks: FMPStock[] = await response.json()"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/advance-decline.ts",
+              "matches": [
+                {
+                  "lineNumber": 45,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 60,
+                  "content": "      if (c.alternate_symbols?.fmp) {"
+                },
+                {
+                  "lineNumber": 61,
+                  "content": "        return c.alternate_symbols.fmp"
+                },
+                {
+                  "lineNumber": 80,
+                  "content": "        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/sp500-distribution.ts",
+              "matches": [
+                {
+                  "lineNumber": 50,
+                  "content": " * Uses FMP batch quote endpoint to get current day's return data"
+                },
+                {
+                  "lineNumber": 53,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 66,
+                  "content": "    // Get all symbols - use FMP variant if available"
+                },
+                {
+                  "lineNumber": 68,
+                  "content": "      if (c.alternate_symbols?.fmp) {"
+                },
+                {
+                  "lineNumber": 69,
+                  "content": "        return c.alternate_symbols.fmp"
+                },
+                {
+                  "lineNumber": 74,
+                  "content": "    // FMP supports batch quotes - fetch in chunks of 100 to avoid URL length limits"
+                },
+                {
+                  "lineNumber": 88,
+                  "content": "        console.error(&#96;FMP batch quote error for chunk ${i}: ${response.status}&#96;)"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/mag7-returns.ts",
+              "matches": [
+                {
+                  "lineNumber": 27,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/trending-stocks.ts",
+              "matches": [
+                {
+                  "lineNumber": 19,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/sp500-movers.ts",
+              "matches": [
+                {
+                  "lineNumber": 61,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 113,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/market-data.ts",
+              "matches": [
+                {
+                  "lineNumber": 150,
+                  "content": "    // Get latest index price from FMP API"
+                },
+                {
+                  "lineNumber": 151,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 163,
+                  "content": "      console.error('FMP API error:', quoteResponse.status)"
+                },
+                {
+                  "lineNumber": 168,
+                  "content": "    const priceData = quoteJson[0] // FMP returns array with one item"
+                },
+                {
+                  "lineNumber": 171,
+                  "content": "    // FMP Premium tier includes 1-minute data for last 3 trading days"
+                },
+                {
+                  "lineNumber": 183,
+                  "content": "        console.log('FMP API Error:', intradayJson['Error Message'])"
+                },
+                {
+                  "lineNumber": 185,
+                  "content": "        console.log('FMP Intraday Response (1-min):', {"
+                },
+                {
+                  "lineNumber": 191,
+                  "content": "        // FMP returns newest first. Get most recent trading day."
+                },
+                {
+                  "lineNumber": 242,
+                  "content": "        console.log('FMP Intraday: No data available (possibly weekend/market closed)')"
+                },
+                {
+                  "lineNumber": 296,
+                  "content": "    // Get latest index price from FMP API"
+                },
+                {
+                  "lineNumber": 297,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 309,
+                  "content": "      console.error('FMP API error:', quoteResponse.status)"
+                },
+                {
+                  "lineNumber": 314,
+                  "content": "    const priceData = quoteJson[0] // FMP returns array with one item"
+                },
+                {
+                  "lineNumber": 317,
+                  "content": "    // FMP Premium tier includes 1-minute data for last 3 trading days"
+                },
+                {
+                  "lineNumber": 329,
+                  "content": "        console.log('FMP API Error:', intradayJson['Error Message'])"
+                },
+                {
+                  "lineNumber": 331,
+                  "content": "        console.log('FMP Intraday Response (1-min) Nasdaq:', {"
+                },
+                {
+                  "lineNumber": 337,
+                  "content": "        // FMP returns newest first. Get most recent trading day."
+                },
+                {
+                  "lineNumber": 369,
+                  "content": "        console.log('FMP Intraday: No data available (possibly weekend/market closed)')"
+                },
+                {
+                  "lineNumber": 423,
+                  "content": "    // Get latest index price from FMP API"
+                },
+                {
+                  "lineNumber": 424,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 436,
+                  "content": "      console.error('FMP API error:', quoteResponse.status)"
+                },
+                {
+                  "lineNumber": 441,
+                  "content": "    const priceData = quoteJson[0] // FMP returns array with one item"
+                },
+                {
+                  "lineNumber": 444,
+                  "content": "    // FMP Premium tier includes 1-minute data for last 3 trading days"
+                },
+                {
+                  "lineNumber": 456,
+                  "content": "        console.log('FMP API Error:', intradayJson['Error Message'])"
+                },
+                {
+                  "lineNumber": 458,
+                  "content": "        console.log('FMP Intraday Response (1-min) Dow:', {"
+                },
+                {
+                  "lineNumber": 464,
+                  "content": "        // FMP returns newest first. Get most recent trading day."
+                },
+                {
+                  "lineNumber": 483,
+                  "content": "        console.log('FMP Intraday: No data available (possibly weekend/market closed)')"
+                },
+                {
+                  "lineNumber": 537,
+                  "content": "    // Get latest index price from FMP API"
+                },
+                {
+                  "lineNumber": 538,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 550,
+                  "content": "      console.error('FMP API error:', quoteResponse.status)"
+                },
+                {
+                  "lineNumber": 555,
+                  "content": "    const priceData = quoteJson[0] // FMP returns array with one item"
+                },
+                {
+                  "lineNumber": 558,
+                  "content": "    // FMP Premium tier includes 1-minute data for last 3 trading days"
+                },
+                {
+                  "lineNumber": 570,
+                  "content": "        console.log('FMP API Error:', intradayJson['Error Message'])"
+                },
+                {
+                  "lineNumber": 572,
+                  "content": "        console.log('FMP Intraday Response (1-min) Russell:', {"
+                },
+                {
+                  "lineNumber": 578,
+                  "content": "        // FMP returns newest first. Get most recent trading day."
+                },
+                {
+                  "lineNumber": 597,
+                  "content": "        console.log('FMP Intraday: No data available (possibly weekend/market closed)')"
+                },
+                {
+                  "lineNumber": 652,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 664,
+                  "content": "      console.error('FMP API error:', quoteResponse.status)"
+                },
+                {
+                  "lineNumber": 682,
+                  "content": "        console.log('FMP API Error (ES Futures):', intradayJson['Error Message'])"
+                },
+                {
+                  "lineNumber": 684,
+                  "content": "        console.log('FMP Intraday Response (1-min) ES Futures:', {"
+                },
+                {
+                  "lineNumber": 707,
+                  "content": "        console.log('FMP Intraday: No intraday data available (ES Futures), trying daily data')"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/get-market-news.ts",
+              "matches": [
+                {
+                  "lineNumber": 16,
+                  "content": "  const apiKey = process.env.FMP_API_KEY;"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "    console.error('FMP_API_KEY is not set');"
+                },
+                {
+                  "lineNumber": 30,
+                  "content": "      console.error(&#96;FMP General News API error: ${response.status}&#96;);"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/futures.ts",
+              "matches": [
+                {
+                  "lineNumber": 30,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 91,
+                  "content": "  const apiKey = process.env.FMP_API_KEY"
+                }
+              ]
+            },
+            {
+              "file": "./supabase/migrations/20260118000002_create_company_data_tables.sql",
+              "matches": [
+                {
+                  "lineNumber": 241,
+                  "content": "COMMENT ON TABLE company_profile IS 'Static company information from FMP profile endpoint. Update monthly.';"
+                },
+                {
+                  "lineNumber": 242,
+                  "content": "COMMENT ON TABLE price_performance IS 'Stock price performance metrics from FMP stock-price-change endpoint. Update daily.';"
+                },
+                {
+                  "lineNumber": 243,
+                  "content": "COMMENT ON TABLE analyst_estimates IS 'Forward-looking analyst estimates from FMP analyst-estimates endpoint. Update weekly.';"
+                },
+                {
+                  "lineNumber": 244,
+                  "content": "COMMENT ON TABLE earnings_history IS 'Historical earnings data and surprises from FMP earnings-surprises endpoint. Update quarterly.';"
+                },
+                {
+                  "lineNumber": 245,
+                  "content": "COMMENT ON TABLE technical_indicators IS 'Technical analysis indicators from FMP technical_indicator endpoint. Update daily (optional).';"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-technical-indicators.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest technical indicators from FMP API into technical_indicators table"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 23,
+                  "content": "if (!FMP_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {"
+                },
+                {
+                  "lineNumber": 51,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol}?period=${period}&amp;type=${type}&amp;apikey=${FMP_API_KEY}&#96;"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-price-performance.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest price performance data from FMP API into price_performance table"
+                },
+                {
+                  "lineNumber": 18,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "if (!FMP_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {"
+                },
+                {
+                  "lineNumber": 32,
+                  "content": "interface FMPPriceChange {"
+                },
+                {
+                  "lineNumber": 51,
+                  "content": "async function fetchPricePerformance(symbol: string): Promise&lt;FMPPriceChange | null&gt; {"
+                },
+                {
+                  "lineNumber": 53,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/stock-price-change/${symbol}?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 69,
+                  "content": "function transformPriceChange(priceChange: FMPPriceChange, asOfDate: string) {"
+                },
+                {
+                  "lineNumber": 70,
+                  "content": "  // FMP returns percentages as decimals (e.g., 0.05 for 5%)"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-earnings-history.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest earnings surprises data from FMP API into earnings_history table"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 23,
+                  "content": "if (!FMP_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {"
+                },
+                {
+                  "lineNumber": 33,
+                  "content": "interface FMPEarningsSurprise {"
+                },
+                {
+                  "lineNumber": 44,
+                  "content": "async function fetchEarningsSurprises(symbol: string): Promise&lt;FMPEarningsSurprise[] | null&gt; {"
+                },
+                {
+                  "lineNumber": 46,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/earnings-surprises/${symbol}?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 62,
+                  "content": "function transformEarnings(surprise: FMPEarningsSurprise) {"
+                },
+                {
+                  "lineNumber": 95,
+                  "content": "    revenue_actual: null, // FMP earnings-surprises doesn't include revenue"
+                },
+                {
+                  "lineNumber": 100,
+                  "content": "    earnings_time: null, // FMP doesn't provide BMO/AMC in this endpoint"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-company-profiles.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest company profile data from FMP API into company_profile table"
+                },
+                {
+                  "lineNumber": 18,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "if (!FMP_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {"
+                },
+                {
+                  "lineNumber": 32,
+                  "content": "interface FMPProfile {"
+                },
+                {
+                  "lineNumber": 66,
+                  "content": "async function fetchCompanyProfile(symbol: string): Promise&lt;FMPProfile | null&gt; {"
+                },
+                {
+                  "lineNumber": 68,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 84,
+                  "content": "function transformProfile(profile: FMPProfile) {"
+                },
+                {
+                  "lineNumber": 85,
+                  "content": "  // Parse employees - FMP returns it as a string sometimes"
+                },
+                {
+                  "lineNumber": 110,
+                  "content": "    fiscal_year_end: null, // FMP doesn't provide this in profile endpoint"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-analyst-estimates.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest analyst estimates data from FMP API into analyst_estimates table"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 23,
+                  "content": "if (!FMP_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {"
+                },
+                {
+                  "lineNumber": 33,
+                  "content": "interface FMPAnalystEstimate {"
+                },
+                {
+                  "lineNumber": 58,
+                  "content": "interface FMPPriceTarget {"
+                },
+                {
+                  "lineNumber": 66,
+                  "content": "interface FMPAnalystRating {"
+                },
+                {
+                  "lineNumber": 80,
+                  "content": "async function fetchAnalystEstimates(symbol: string): Promise&lt;FMPAnalystEstimate[] | null&gt; {"
+                },
+                {
+                  "lineNumber": 82,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/analyst-estimates/${symbol}?apikey=${FMP_API_KEY}&amp;limit=5&#96;"
+                },
+                {
+                  "lineNumber": 98,
+                  "content": "async function fetchPriceTarget(symbol: string): Promise&lt;FMPPriceTarget | null&gt; {"
+                },
+                {
+                  "lineNumber": 100,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/price-target-consensus/${symbol}?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 114,
+                  "content": "async function fetchAnalystRatings(symbol: string): Promise&lt;FMPAnalystRating | null&gt; {"
+                },
+                {
+                  "lineNumber": 116,
+                  "content": "    const url = &#96;https://financialmodelingprep.com/api/v3/grade/${symbol}?apikey=${FMP_API_KEY}&amp;limit=1&#96;"
+                },
+                {
+                  "lineNumber": 125,
+                  "content": "    const summaryUrl = &#96;https://financialmodelingprep.com/api/v3/rating/${symbol}?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 136,
+                  "content": "  estimate: FMPAnalystEstimate,"
+                },
+                {
+                  "lineNumber": 137,
+                  "content": "  priceTarget: FMPPriceTarget | null"
+                }
+              ]
+            },
+            {
+              "file": "./package.json",
+              "matches": [
+                {
+                  "lineNumber": 18,
+                  "content": "    \"fetch:metrics\": \"npx tsx scripts/fetch-fmp-metrics.ts\","
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "    \"ingest:metrics\": \"npx tsx scripts/ingest-fmp-metrics.ts\","
+                }
+              ]
+            },
+            {
+              "file": "./docs/STOCK_PRICE_CHART_IMPLEMENTATION.md",
+              "matches": [
+                {
+                  "lineNumber": 13,
+                  "content": "- **Source**: FMP API via existing &#96;getPrices&#96; action in &#96;app/actions/prices.ts&#96;"
+                },
+                {
+                  "lineNumber": 125,
+                  "content": "- Fetch daily prices from FMP API for symbol and date range"
+                },
+                {
+                  "lineNumber": 161,
+                  "content": "Fetch daily prices from FMP API for date range"
+                },
+                {
+                  "lineNumber": 196,
+                  "content": "1. **No price data for old years**: FMP may not have price history for all years in range"
+                },
+                {
+                  "lineNumber": 197,
+                  "content": "2. **Stock splits**: Historical prices should be split-adjusted (FMP provides this)"
+                }
+              ]
+            },
+            {
+              "file": "./app/stock/[symbol]/page.tsx",
+              "matches": [
+                {
+                  "lineNumber": 776,
+                  "content": "              &lt;span&gt;Data provided by FMP&lt;/span&gt;"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/stock-key-stats.ts",
+              "matches": [
+                {
+                  "lineNumber": 116,
+                  "content": " * Combines data from financial_metrics table and FMP API"
+                },
+                {
+                  "lineNumber": 120,
+                  "content": "  const apiKey = process.env.FMP_API_KEY;"
+                },
+                {
+                  "lineNumber": 123,
+                  "content": "    throw new Error('FMP_API_KEY is not set');"
+                },
+                {
+                  "lineNumber": 149,
+                  "content": "    // Fetch key metrics from FMP API for real-time data"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/chart-price.ts",
+              "matches": [
+                {
+                  "lineNumber": 12,
+                  "content": " * 2. Fetching price data from FMP API for the required date range"
+                },
+                {
+                  "lineNumber": 88,
+                  "content": "    // Fetch price data from FMP API"
+                },
+                {
+                  "lineNumber": 190,
+                  "content": "    // Fetch price data from FMP API"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/chart-metrics.ts",
+              "matches": [
+                {
+                  "lineNumber": 106,
+                  "content": "  // === PRICE (special handling - fetched from FMP API) ==="
+                }
+              ]
+            },
+            {
+              "file": "./CLAUDE.md",
+              "matches": [
+                {
+                  "lineNumber": 43,
+                  "content": "npx tsx scripts/fetch-aapl-data.ts  # Fetch core financials from FMP API"
+                },
+                {
+                  "lineNumber": 50,
+                  "content": "# - Fetches AAPL financial data from FMP API"
+                },
+                {
+                  "lineNumber": 52,
+                  "content": "# - Requires secrets: SUPABASE_URL, SUPABASE_ANON_KEY, FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 87,
+                  "content": "4. **getPrices** - Stock price history from FMP API"
+                },
+                {
+                  "lineNumber": 106,
+                  "content": "- &#96;financial_metrics&#96; - Extended metrics (139 metrics from FMP, 2006-2025)"
+                },
+                {
+                  "lineNumber": 109,
+                  "content": "- &#96;price_history&#96; - Historical daily stock prices (not currently used; prices fetched from FMP API)"
+                },
+                {
+                  "lineNumber": 151,
+                  "content": "FMP_API_KEY=your-fmp-key"
+                },
+                {
+                  "lineNumber": 203,
+                  "content": "**Extended metrics** (&#96;financial_metrics&#96; table, 139 metrics from FMP):"
+                },
+                {
+                  "lineNumber": 283,
+                  "content": "- **Metric coverage**: Extended metrics available 2006-2025 (FMP API limits)"
+                },
+                {
+                  "lineNumber": 304,
+                  "content": "Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · Tailwind CSS · TypeScript · Vitest · FMP API"
+                }
+              ]
+            },
+            {
+              "file": "./.specstory/history/2026-01-18_18-18Z-next-project-steps.md",
+              "matches": [
+                {
+                  "lineNumber": 73,
+                  "content": "        \"contents\": \"# Integration Request: Sunday Trading Dashboard → Fin Quote\\n\\n## Purpose of This Document\\n\\nThis document is for an LLM assistant working in the **Sunday (refreshed monday) 2** codebase. We are integrating selected features from Sunday into the **Fin Quote** platform to create a unified financial research and tracking experience.\\n\\n---\\n\\n## About Fin Quote (Target Codebase)\\n\\n**Fin Quote** is a Next.js-based financial platform with the following architecture:\\n\\n- **Framework**: Next.js 14 (App Router)\\n- **Auth &amp;amp; Database**: Supabase (PostgreSQL + Auth)\\n- **API Provider**: Financial Modeling Prep (FMP) - REST API only (no WebSocket yet)\\n- **LLM**: OpenAI for AI-powered Q&amp;amp;A chatbot\\n- **UI**: React 18, Tailwind CSS, dark mode support\\n- **Charts**: Currently Highcharts (basic financial charts)\\n- **Current Features**:\\n  - AI chatbot for stock questions (ask about financials, ratios, SEC filings)\\n  - Stock detail pages with 139 financial metrics\\n   [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 127,
+                  "content": "            \"text\": \"- **API Provider**: Financial Modeling Prep (FMP) - REST API only (no WebSocket yet)\","
+                },
+                {
+                  "lineNumber": 244,
+                  "content": "            \"text\": \"   - Real-time price updates via FMP WebSocket\","
+                },
+                {
+                  "lineNumber": 1030,
+                  "content": "        \"contents\": \"# Watchlist Integration Plan\\n## Sunday Trading Dashboard → Fin Quote\\n\\n**Status:** Planning Phase\\n**Created:** 2025-11-16\\n**Integration Approach:** Full Integration (Watchlist First, Charts Second)\\n**Next.js Version:** Stay on 14 (adapt Sunday code)\\n\\n---\\n\\n## Executive Summary\\n\\nIntegrating Sunday's watchlist functionality into Fin Quote as a unified financial platform. This plan focuses on **watchlist first**, then charts in Phase 2. We'll migrate from Firebase to Supabase, adapt to Next.js 14, and maintain Fin Quote's theme.\\n\\n---\\n\\n## Integration Decisions\\n\\n| Decision Point | Choice | Rationale |\\n|---|---|---|\\n| **Integration Depth** | Full integration, keep &amp;#96;/Watchlist&amp;#96; as reference | Complete when done, reference for verification |\\n| **Feature Priority** | Watchlist first, charts second | Lower complexity, delivers core value first |\\n| **Database** | Create Supabase tables first | Schema-driven approach prevents rework |\\n| **Navigatio [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1131,
+                  "content": "            \"text\": \"| **Live Quotes** | Skip WebSocket for now | Use FMP REST API (60s cache), add later if needed |\","
+                },
+                {
+                  "lineNumber": 1241,
+                  "content": "        \"contents\": \"### Trading Dashboard — Integration Brief for LLMs\\n\\nThis document gives another large language model the minimum-but-sufficient context to integrate this project into a different codebase or a monorepo. It focuses on architecture, dependencies, API boundaries, environment variables, build/runtime assumptions, and common pitfalls.\\n\\n---\\n\\n## 1) High-level Overview\\n\\n- App type: Next.js 15 (App Router) + optional PWA service worker + Electron 38 desktop wrapper.\\n- Language: TypeScript for app code and scripts; CommonJS module type at root.\\n- Frontend: React 19; Tailwind stack (tailwindcss, postcss, autoprefixer).\\n- Packaging: &amp;#96;electron-builder&amp;#96; creates macOS DMG/ZIP, Windows NSIS/portable, Linux AppImage/DEB.\\n- Primary domains:\\n  - Stock data and charting via Financial Modeling Prep (FMP) REST and WebSocket.\\n  - News ingestion and topic classification; optional OpenAI-powered summaries/classification.\\n  - Watchlist, quotes, dividends, and app sett [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1293,
+                  "content": "            \"text\": \"  - Stock data and charting via Financial Modeling Prep (FMP) REST and WebSocket.\","
+                },
+                {
+                  "lineNumber": 1365,
+                  "content": "            \"text\": \"- &amp;#96;services/fmp/**&amp;#96;: FMP REST client, WebSocket manager, and a &amp;#96;getFMPService()&amp;#96; singleton.\","
+                },
+                {
+                  "lineNumber": 1569,
+                  "content": "        \"contents\": \"| Phase 1 | S&amp;amp;P 500 Ticker Management | 6-8 hours |\\n| Phase 2 | Financial Data Ingestion | 8-12 hours |\\n| Phase 3 | SEC Filing Infrastructure | **DEFERRED** |\\n| Phase 4 | Segment Data (FMP API) | 6-8 hours |\\n| Phase 5 | Chatbot Multi-Stock | 10-15 hours |\\n| Phase 6 | Charts Multi-Stock | 8-12 hours |\\n| **Total** | | **~42-61 hours** |\\n\\n&amp;gt; **Time Savings:** By deferring SEC filing infrastructure and using FMP API for segment data, we save approximately **17-33 hours** of implementation time (Phase 3 would have been 7-11 hours, and Phase 4 with iXBRL would have been 16-22 hours vs 6-8 hours with FMP API).\\n\\n---\\n\\n## Project Context\\n\\n### What is Fin Quote?\\n\\nFin Quote is a **Next.js-based financial data platform** that combines:\\n\\n1. **AI-Powered Chatbot**: Users ask natural language questions like \\\"What was Apple's revenue in 2023?\\\" or \\\"How has iPhone revenue changed over time?\\\" The system uses a two-step LLM architecture:\\n   - Step 1: An LLM [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1585,
+                  "content": "            \"text\": \"| Phase 4 | Segment Data (FMP API) | 6-8 hours |\","
+                },
+                {
+                  "lineNumber": 1604,
+                  "content": "            \"text\": \"&amp;gt; **Time Savings:** By deferring SEC filing infrastructure and using FMP API for segment data, we save approximately **17-33 hours** of implementation time (Phase 3 would have been 7-11 hours, and Phase 4 with iXBRL would have been 16-22 hours vs 6-8 hours with FMP API).\","
+                },
+                {
+                  "lineNumber": 1724,
+                  "content": "            \"text\": \"| Financial Data API | Financial Modeling Prep (FMP) |\","
+                },
+                {
+                  "lineNumber": 1783,
+                  "content": "        \"contents\": \"## Success Criteria\\n\\n**Phase 1 (Watchlist) is complete when:**\\n- [ ] User can add/remove symbols to watchlist\\n- [ ] Watchlist persists in Supabase\\n- [ ] Multiple tabs work\\n- [ ] Real-time quotes display\\n- [ ] Auto-refresh works\\n- [ ] Dark mode functional\\n- [ ] No critical bugs\\n- [ ] Documentation updated\\n\\n**Phase 2 (Charts) is complete when:**\\n- [ ] Clicking symbol opens chart modal\\n- [ ] All timeframes work\\n- [ ] Drawing tools functional\\n- [ ] Extended hours overlay works\\n- [ ] Performance acceptable\\n- [ ] No critical bugs\\n\\n**Integration is complete when:**\\n- [ ] All Fin Quote features still work\\n- [ ] Watchlist fully functional\\n- [ ] Charts fully functional\\n- [ ] Styling consistent enough\\n- [ ] Auth seamless\\n- [ ] Documentation complete\\n- [ ] &amp;#96;/Watchlist&amp;#96; folder can be deleted\\n\\n---\\n\\n## Timeline Summary\\n\\n| Phase | Duration | Milestones |\\n|---|---|---|\\n| **Phase 1: Watchlist** | 2 weeks | Database, Server Actions, Hooks, U [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1973,
+                  "content": "            \"text\": \"4. **Symbol search** - Use Sunday's symbol search or build new one with FMP?\","
+                },
+                {
+                  "lineNumber": 2890,
+                  "content": "        \"contents\": \"# Upwork Job Posting\\n\\n## Job Title\\n\\n**Full Stack Next.js Developer for AI-Powered Financial Data Platform (Supabase, OpenAI)**\\n\\n---\\n\\n## Job Description\\n\\nWe're building **Fin Quote**, a financial data platform that combines AI-powered stock analysis with real-time market tracking. We're looking for an experienced full-stack developer to help extend features, improve performance, and build new functionality.\\n\\n### What We've Built\\n\\n**1. AI-Powered Stock Q&amp;amp;A Chatbot**\\n- Natural language questions about stock data (\\\"What was Apple's revenue in 2023?\\\")\\n- Two-step LLM architecture: tool selection → data fetching → answer generation → validation\\n- Semantic search over SEC filings using RAG (vector embeddings)\\n- Auto-regeneration when answers fail validation\\n- Cost tracking and query logging\\n\\n**2. Real-Time Stock Watchlist**\\n- Live stock quotes with 10-second polling\\n- Multi-source news aggregation (WSJ, NYT, Bloomberg, Yahoo)\\n- TradingView-sty [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 3036,
+                  "content": "            \"text\": \"| **Data APIs** | Financial Modeling Prep (FMP), SEC EDGAR |\","
+                },
+                {
+                  "lineNumber": 3385,
+                  "content": "        \"contents\": \"**Key Functions:**\\n- &amp;#96;search_filing_chunks()&amp;#96; - PostgreSQL RPC for vector similarity search using pgvector\\n\\n---\\n\\n## Key Files\\n\\n| Path | Purpose |\\n|------|---------|\\n| &amp;#96;app/actions/ask-question.ts&amp;#96; | Main Q&amp;amp;A orchestration: tool selection → execution → answer → validation |\\n| &amp;#96;lib/tools.ts&amp;#96; | Tool definitions + prompt templates (buildToolSelectionPrompt, buildFinalAnswerPrompt) |\\n| &amp;#96;lib/validators.ts&amp;#96; | Answer validation (number accuracy ±2%, year correctness, filing citations) |\\n| &amp;#96;lib/regeneration.ts&amp;#96; | Auto-correction on validation failures |\\n| &amp;#96;lib/metric-resolver.ts&amp;#96; | Alias resolution (\\\"P/E\\\" → &amp;#96;peRatio&amp;#96;, \\\"profit\\\" → &amp;#96;net_income&amp;#96;) |\\n| &amp;#96;lib/chart-helpers.ts&amp;#96; | Chart generation for financial/price data |\\n| &amp;#96;lib/ttm-calculator.ts&amp;#96; | TTM value calculation from quarterly data |\\n| &amp;#96;lib/ttm-config.ts&amp;#96; | TTM calculation type config per metric |\\n| &amp;#96;app/pag [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 3518,
+                  "content": "            \"text\": \"FMP_API_KEY=your-fmp-key\","
+                },
+                {
+                  "lineNumber": 3581,
+                  "content": "        \"contents\": \"# S&amp;amp;P 500 Expansion Plan\\n\\n## Complete Implementation Guide for Scaling Fin Quote to 500+ Stocks\\n\\n**Version:** 1.0\\n**Created:** January 2026\\n**Status:** Planning\\n\\n---\\n\\n## Table of Contents\\n\\n1. [Executive Summary](#executive-summary)\\n2. [Project Context](#project-context)\\n3. [Current State Analysis](#current-state-analysis)\\n4. [Target State](#target-state)\\n5. [Technical Architecture](#technical-architecture)\\n6. [Phase 0: Migration of Existing Data](#phase-0-migration-of-existing-data)\\n7. [Phase 1: S&amp;amp;P 500 Ticker Management](#phase-1-sp-500-ticker-management)\\n8. [Phase 2: Financial Data Ingestion](#phase-2-financial-data-ingestion)\\n9. [Phase 3: SEC Filing Infrastructure (DEFERRED)](#phase-3-sec-filing-infrastructure-deferred)\\n10. [Phase 4: Segment Data Ingestion (FMP API)](#phase-4-segment-data-ingestion-fmp-api)\\n11. [Phase 5: Chatbot Multi-Stock Support](#phase-5-chatbot-multi-stock-support)\\n12. [Phase 6: Charts Multi-Stock Expansion](# [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 3664,
+                  "content": "            \"text\": \"10. [Phase 4: Segment Data Ingestion (FMP API)](#phase-4-segment-data-ingestion-fmp-api)\","
+                },
+                {
+                  "lineNumber": 3962,
+                  "content": "        \"contents\": \"---\\n\\n## Executive Summary\\n\\n### What We're Building\\n\\nWe are expanding **Fin Quote**, a financial data platform with an AI-powered chatbot, from supporting 2 stocks (Apple and Google) to supporting all **500 S&amp;amp;P 500 companies**. This expansion includes:\\n\\n- **Complete financial data** for all 500 stocks (10 years annual, 7 years quarterly)\\n- **Business segment data** (product &amp;amp; geographic revenue) via FMP API for all companies\\n- **AI chatbot** capable of answering questions about any S&amp;amp;P 500 stock\\n- **Interactive charts** comparing financial metrics across any combination of stocks\\n\\n&amp;gt; **Key Simplification:** SEC filing downloads and iXBRL parsing have been **deferred**. FMP's Segment API provides product and geographic revenue breakdowns directly, eliminating the need to download 17,500 filings or build custom XBRL parsers. This reduces implementation time significantly while still providing segment data for all S&amp;amp;P 500 companies.\\n\\n## [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 3998,
+                  "content": "            \"text\": \"- **Business segment data** (product &amp;amp; geographic revenue) via FMP API for all companies\","
+                },
+                {
+                  "lineNumber": 4013,
+                  "content": "            \"text\": \"&amp;gt; **Key Simplification:** SEC filing downloads and iXBRL parsing have been **deferred**. FMP's Segment API provides product and geographic revenue breakdowns directly, eliminating the need to download 17,500 filings or build custom XBRL parsers. This reduces implementation time significantly while still providing segment data for all S&amp;amp;P 500 companies.\","
+                },
+                {
+                  "lineNumber": 4072,
+                  "content": "            \"text\": \"| SEC filings | ~20 (AAPL only) | DEFERRED (using FMP API for segments) |\","
+                },
+                {
+                  "lineNumber": 4076,
+                  "content": "            \"text\": \"| Segment data | AAPL + GOOGL | All 500 stocks (via FMP API) |\","
+                },
+                {
+                  "lineNumber": 4130,
+                  "content": "        \"contents\": \"# Segment Data Research Prompt for ChatGPT\\n\\n## Project Overview\\n\\n**Fin Quote** is a Next.js-based financial data platform that provides interactive financial analysis and visualization for publicly traded companies. The platform currently focuses on Apple Inc. (AAPL) as the MVP, with plans to expand to other companies.\\n\\n### Current Status\\n- **Phase 1**: ✅ Complete - Core financial metrics visualization (revenue, net income, etc.)\\n- **Phase 2**: 🔄 Planning - Segment data visualization (product categories and geographic segments)\\n\\n### Primary Goal\\nWe need to acquire and visualize **segment-level financial data** for AAPL, specifically:\\n1. **Product Segment Revenue**: iPhone, Mac, iPad, Wearables/Home/Accessories, Services\\n2. **Geographic Segment Revenue**: Americas, Europe, Greater China, Japan, Rest of Asia Pacific\\n\\nThis data is typically found in SEC 10-K filings in tables titled \\\"Net sales by product category\\\" and \\\"Net sales by reportable segment [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 4264,
+                  "content": "            \"text\": \"- **Financial Modeling Prep (FMP) API**: Primary source for financial metrics\","
+                },
+                {
+                  "lineNumber": 5712,
+                  "content": "        \"name\": \"MISSING_FMP_DATA.md\""
+                },
+                {
+                  "lineNumber": 5910,
+                  "content": "        \"contents\": \"**For Chatbot Questions:**\\n&amp;#96;&amp;#96;&amp;#96;\\nUser Question → Tool Selection LLM → Tool Execution → Data Fetch → Answer Generation LLM → Validation → Response\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n**For Charts:**\\n&amp;#96;&amp;#96;&amp;#96;\\nUser Selects Metrics → Server Action → Database Query → Transform Data → Highcharts Render\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n---\\n\\n## Current State Analysis\\n\\n### What We Have (Working)\\n\\n**Apple (AAPL):**\\n- ✅ 20 years of annual financial data (2005-2024)\\n- ✅ 7 years of quarterly financial data (2018-2024)\\n- ✅ 139 extended metrics (P/E ratio, ROE, etc.)\\n- ✅ Business segments (iPhone, Services, Mac, iPad, Wearables)\\n- ✅ Geographic segments (Americas, Europe, China, Japan, Asia Pacific)\\n- ✅ ~20 SEC filings downloaded and chunked\\n- ✅ Chatbot fully functional\\n- ✅ Charts fully functional\\n\\n**Google/Alphabet (GOOGL):**\\n- ✅ Annual financial data\\n- ✅ Extended metrics\\n- ✅ Business segments (Google Services, Google Cloud, Other Bets)\\n- ✅ Product breakdown (Search,  [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6081,
+                  "content": "            \"text\": \"&amp;gt; **Note:** CIK mappings and filing queue systems are no longer needed since we're using FMP API for segment data instead of downloading SEC filings.\","
+                },
+                {
+                  "lineNumber": 6432,
+                  "content": "        \"contents\": \"- [ ] **2.2** Run fetch for GOOGL filings: &amp;#96;npx tsx scripts/fetch-sec-filings.ts GOOGL&amp;#96;\\n- [ ] **2.3** Update &amp;#96;ingest-filings.ts&amp;#96; with symbol parameter\\n- [ ] **2.4** Run ingest for GOOGL filings\\n- [ ] **2.5** Update &amp;#96;download-filings.ts&amp;#96; with symbol parameter\\n- [ ] **2.6** Run download for GOOGL filings\\n- [ ] **2.7** Run chunking for GOOGL filings\\n- [ ] **2.8** (Deferred) Embeddings/RAG search — do not execute in this phase\\n- [ ] **2.9** Mark &amp;#96;search-filings.ts&amp;#96; as disabled/deferred\\n- [ ] **2.10** Commit and deploy\\n\\n### Phase 3: Segment Metrics\\n\\n- [ ] **3.1** Download GOOGL 10-K and analyze iXBRL structure\\n- [ ] **3.2** Document GOOGL XBRL axes and members\\n- [ ] **3.3** Create &amp;#96;lib/ixbrl-mappings/googl.ts&amp;#96;\\n- [ ] **3.4** Update &amp;#96;lib/ixbrl-mappings/index.ts&amp;#96;\\n- [ ] **3.5** Test parsing: &amp;#96;npx tsx scripts/parse-ixbrl-segments.ts --ticker GOOGL&amp;#96;\\n- [ ] **3.6** Verify extracted values against earnings  [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6581,
+                  "content": "            \"text\": \"| FMP API rate limits | Medium | Medium | Add delays, cache responses |\","
+                },
+                {
+                  "lineNumber": 6636,
+                  "content": "        \"contents\": \"## Success Criteria\\n\\n**Phase 1 (Watchlist) is complete when:**\\n- [ ] User can add/remove symbols to watchlist\\n- [ ] Watchlist persists in Supabase\\n- [ ] Multiple tabs work\\n- [ ] Real-time quotes display\\n- [ ] Auto-refresh works\\n- [ ] Dark mode functional\\n- [ ] No critical bugs\\n- [ ] Documentation updated\\n\\n**Phase 2 (Charts) is complete when:**\\n- [ ] Clicking symbol opens chart modal\\n- [ ] All timeframes work\\n- [ ] Drawing tools functional\\n- [ ] Extended hours overlay works\\n- [ ] Performance acceptable\\n- [ ] No critical bugs\\n\\n**Integration is complete when:**\\n- [ ] All Fin Quote features still work\\n- [ ] Watchlist fully functional\\n- [ ] Charts fully functional\\n- [ ] Styling consistent enough\\n- [ ] Auth seamless\\n- [ ] Documentation complete\\n- [ ] &amp;#96;/Watchlist&amp;#96; folder can be deleted\\n\\n---\\n\\n## Timeline Summary\\n\\n| Phase | Duration | Milestones |\\n|---|---|---|\\n| **Phase 1: Watchlist** | 2 weeks | Database, Server Actions, Hooks, U [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6826,
+                  "content": "            \"text\": \"4. **Symbol search** - Use Sunday's symbol search or build new one with FMP?\","
+                },
+                {
+                  "lineNumber": 7103,
+                  "content": "        \"contents\": \"# S&amp;amp;P 500 Expansion Plan\\n\\n## Complete Implementation Guide for Scaling Fin Quote to 500+ Stocks\\n\\n**Version:** 1.0\\n**Created:** January 2026\\n**Status:** Planning\\n\\n---\\n\\n## Table of Contents\\n\\n1. [Executive Summary](#executive-summary)\\n2. [Project Context](#project-context)\\n3. [Current State Analysis](#current-state-analysis)\\n4. [Target State](#target-state)\\n5. [Technical Architecture](#technical-architecture)\\n6. [Phase 0: Migration of Existing Data](#phase-0-migration-of-existing-data)\\n7. [Phase 1: S&amp;amp;P 500 Ticker Management](#phase-1-sp-500-ticker-management)\\n8. [Phase 2: Financial Data Ingestion](#phase-2-financial-data-ingestion)\\n9. [Phase 3: SEC Filing Infrastructure (DEFERRED)](#phase-3-sec-filing-infrastructure-deferred)\\n10. [Phase 4: Segment Data Ingestion (FMP API)](#phase-4-segment-data-ingestion-fmp-api)\\n11. [Phase 5: Chatbot Multi-Stock Support](#phase-5-chatbot-multi-stock-support)\\n12. [Phase 6: Charts Multi-Stock Expansion](# [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 7186,
+                  "content": "            \"text\": \"10. [Phase 4: Segment Data Ingestion (FMP API)](#phase-4-segment-data-ingestion-fmp-api)\","
+                },
+                {
+                  "lineNumber": 7289,
+                  "content": "        \"contents\": \"# Integration Request: Sunday Trading Dashboard → Fin Quote\\n\\n## Purpose of This Document\\n\\nThis document is for an LLM assistant working in the **Sunday (refreshed monday) 2** codebase. We are integrating selected features from Sunday into the **Fin Quote** platform to create a unified financial research and tracking experience.\\n\\n---\\n\\n## About Fin Quote (Target Codebase)\\n\\n**Fin Quote** is a Next.js-based financial platform with the following architecture:\\n\\n- **Framework**: Next.js 14 (App Router)\\n- **Auth &amp;amp; Database**: Supabase (PostgreSQL + Auth)\\n- **API Provider**: Financial Modeling Prep (FMP) - REST API only (no WebSocket yet)\\n- **LLM**: OpenAI for AI-powered Q&amp;amp;A chatbot\\n- **UI**: React 18, Tailwind CSS, dark mode support\\n- **Charts**: Currently Highcharts (basic financial charts)\\n- **Current Features**:\\n  - AI chatbot for stock questions (ask about financials, ratios, SEC filings)\\n  - Stock detail pages with 139 financial metrics\\n   [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 7343,
+                  "content": "            \"text\": \"- **API Provider**: Financial Modeling Prep (FMP) - REST API only (no WebSocket yet)\","
+                },
+                {
+                  "lineNumber": 7460,
+                  "content": "            \"text\": \"   - Real-time price updates via FMP WebSocket\","
+                },
+                {
+                  "lineNumber": 7873,
+                  "content": "        \"contents\": \"# Watchlist Integration Plan\\n## Sunday Trading Dashboard → Fin Quote\\n\\n**Status:** Planning Phase\\n**Created:** 2025-11-16\\n**Integration Approach:** Full Integration (Watchlist First, Charts Second)\\n**Next.js Version:** Stay on 14 (adapt Sunday code)\\n\\n---\\n\\n## Executive Summary\\n\\nIntegrating Sunday's watchlist functionality into Fin Quote as a unified financial platform. This plan focuses on **watchlist first**, then charts in Phase 2. We'll migrate from Firebase to Supabase, adapt to Next.js 14, and maintain Fin Quote's theme.\\n\\n---\\n\\n## Integration Decisions\\n\\n| Decision Point | Choice | Rationale |\\n|---|---|---|\\n| **Integration Depth** | Full integration, keep &amp;#96;/Watchlist&amp;#96; as reference | Complete when done, reference for verification |\\n| **Feature Priority** | Watchlist first, charts second | Lower complexity, delivers core value first |\\n| **Database** | Create Supabase tables first | Schema-driven approach prevents rework |\\n| **Navigatio [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 7974,
+                  "content": "            \"text\": \"| **Live Quotes** | Skip WebSocket for now | Use FMP REST API (60s cache), add later if needed |\","
+                },
+                {
+                  "lineNumber": 8086,
+                  "content": "        \"contents\": \"|-------|--------------|\\n| &amp;#96;operation&amp;#96; | &amp;#96;ingest&amp;#96;, &amp;#96;ingest_incremental&amp;#96;, &amp;#96;rollback&amp;#96;, &amp;#96;restore&amp;#96;, &amp;#96;delete&amp;#96; |\\n| &amp;#96;data_type&amp;#96; | &amp;#96;financials_std&amp;#96;, &amp;#96;financial_metrics&amp;#96;, &amp;#96;filings&amp;#96;, &amp;#96;filing_chunks&amp;#96;, &amp;#96;company_metrics&amp;#96;, &amp;#96;sp500_constituents&amp;#96; |\\n| &amp;#96;status&amp;#96; | &amp;#96;running&amp;#96;, &amp;#96;completed&amp;#96;, &amp;#96;failed&amp;#96;, &amp;#96;cancelled&amp;#96; |\\n\\n**Key Principles:**\\n- Always backup before bulk operations\\n- Use dry-run mode to preview changes\\n- Log all modifications for audit trail\\n- Test rollback procedures before needing them\\n\\n### Estimated Duration\\n\\n- Development: 8-10 hours\\n- Execution: ~30 minutes (with rate limiting)\\n- Validation: 1-2 hours\\n\\n---\\n\\n## Phase 3: SEC Filing Infrastructure (DEFERRED)\\n\\n&amp;gt; **STATUS: DEFERRED** - This phase is no longer required for the S&amp;amp;P 500 expansion.\\n&amp;gt;\\n&amp;gt; **Reason:** FMP's Segment API (&amp;#96;/stable/revenue-pro [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 8176,
+                  "content": "            \"text\": \"&amp;gt; **Reason:** FMP's Segment API (&amp;#96;/stable/revenue-product-segmentation&amp;#96; and &amp;#96;/stable/revenue-geographic-segmentation&amp;#96;) provides product and geographic revenue breakdowns directly, eliminating the need to:\","
+                },
+                {
+                  "lineNumber": 8224,
+                  "content": "            \"text\": \"&amp;gt; - Operating income by segment (not available via FMP)\","
+                },
+                {
+                  "lineNumber": 8311,
+                  "content": "        \"contents\": \"## Potential Issues\\n\\n1. **Data availability** - Not all stocks may have complete financial data in the database. FMP API will return data, but Supabase tables may only have AAPL data ingested.\\n\\n2. **Filing content** - Only AAPL filings are ingested. Other stocks will show empty filings until data is ingested.\\n\\n3. **API rate limits** - FMP API has rate limits. Consider caching strategy for frequently accessed stocks.\\n\\n4. **Chatbot** - The chatbot already supports multi-stock queries via symbol extraction in &amp;#96;lib/tools.ts&amp;#96;. No changes needed for this feature.\\n\\n---\\n\\n## Future Enhancements (Phase 2+)\\n\\nThese are nice-to-have improvements for after the core implementation:\\n\\n- **SEO**: Structured data (JSON-LD), Open Graph tags, sitemap generation\\n- **Performance**: ISR for popular stocks, caching, prefetching on hover\\n- **Accessibility**: ARIA labels, screen reader support, focus management\\n- **Mobile**: Full-screen search modal, touch-friendly [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 8322,
+                  "content": "            \"text\": \"1. **Data availability** - Not all stocks may have complete financial data in the database. FMP API will return data, but Supabase tables may only have AAPL data ingested.\","
+                },
+                {
+                  "lineNumber": 8336,
+                  "content": "            \"text\": \"3. **API rate limits** - FMP API has rate limits. Consider caching strategy for frequently accessed stocks.\","
+                },
+                {
+                  "lineNumber": 9057,
+                  "content": "        \"contents\": \"- Cons: Slightly more complex queries\\n- Unit tests comparing against FMP's TTM values for validation\\n\\n### Edge Cases\\n\\n- Incomplete quarters (current quarter in progress) — use most recent 4 complete quarters\\n- Missing historical quarters — return error or partial data with warning\\n- Metrics that don't sum (ratios, averages) — recalculate from components\\n\\n---\\n\\n## 6. Implementation Order\\n\\n### Phase 1: Database &amp;amp; Core Ingestion\\n1. Run migration to add new columns to both tables (including CHECK constraints)\\n2. Update &amp;#96;fetch-aapl-data.ts&amp;#96; to pull quarterly data for core metrics\\n3. Update &amp;#96;ingest-financials.ts&amp;#96; to handle period metadata and completeness logging\\n4. Backfill quarterly data for 9 core metrics (&amp;#96;financials_std&amp;#96;)\\n\\n### Phase 2: Backend Tools (Core Metrics)\\n1. Update &amp;#96;getAaplFinancialsByMetric&amp;#96; with period parameter\\n2. Add parameter validation (reject invalid combinations)\\n3. Update tool selection promp [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 9065,
+                  "content": "            \"text\": \"- Unit tests comparing against FMP's TTM values for validation\","
+                },
+                {
+                  "lineNumber": 9231,
+                  "content": "            \"text\": \"4. Unit tests comparing against FMP TTM values\","
+                },
+                {
+                  "lineNumber": 9716,
+                  "content": "        \"contents\": \"| Performance degradation | Medium | Medium | Indexes, caching, monitoring |\\n\\n### Business Risks\\n\\n| Risk | Probability | Impact | Mitigation |\\n|------|-------------|--------|------------|\\n| API pricing changes | Medium | Medium | Budget buffer, alternative sources |\\n| S&amp;amp;P 500 composition changes | Certain | Low | Quarterly update process |\\n| User confusion with more stocks | Low | Low | Good UX, data availability indicators |\\n\\n---\\n\\n## Success Criteria\\n\\n### Phase 0: Migration\\n- [ ] Backup files created for all existing data\\n- [ ] No duplicate rows in any table\\n- [ ] AAPL/GOOGL data verified intact\\n- [ ] Unique constraints added to prevent duplicates\\n\\n### Phase 1: Ticker Management\\n- [ ] 500 S&amp;amp;P 500 tickers in database\\n- [ ] 100% have valid CIK numbers\\n- [ ] All have sector classification\\n- [ ] Update script works for quarterly changes\\n\\n### Phase 2: Financial Data\\n- [ ] 500 stocks with 10 years annual data\\n- [ ] 500 stocks with 7 y [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 9847,
+                  "content": "            \"text\": \"&amp;gt; **SKIPPED** - Phase 3 deferred. Segment data obtained via FMP API instead.\","
+                },
+                {
+                  "lineNumber": 9858,
+                  "content": "            \"text\": \"### Phase 4: Segment Data (FMP API)\","
+                },
+                {
+                  "lineNumber": 9862,
+                  "content": "            \"text\": \"- [ ] 400+ stocks have segment data from FMP\","
+                },
+                {
+                  "lineNumber": 10591,
+                  "content": "        \"contents\": \"- Building RAG/semantic search over filing content\\n- FMP segment API data proves insufficient or unreliable\\n\\n---\\n\\n### Rejected: Real-Time Data Streaming\\n\\n**What was suggested:** Implement WebSocket connections for real-time price updates and live data feeds.\\n\\n**Why rejected:**\\n- **Scope creep**: MVP focuses on historical financial data analysis, not real-time trading\\n- **Cost**: Real-time data feeds are expensive ($500+/month for professional-grade)\\n- **Complexity**: Requires different architecture (WebSockets, streaming infrastructure)\\n\\n**Current approach:** Daily price data fetched on-demand from FMP API with caching.\\n\\n**Reconsider when:** Building trading-oriented features or real-time alerting.\\n\\n---\\n\\n### Rejected: Multi-Tenant Architecture\\n\\n**What was suggested:** Design for multiple organizations/teams with data isolation and separate billing.\\n\\n**Why rejected:**\\n- **Consumer MVP**: Current product is a single-tenant consumer app\\n- **P [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 10599,
+                  "content": "            \"text\": \"- FMP segment API data proves insufficient or unreliable\","
+                },
+                {
+                  "lineNumber": 10646,
+                  "content": "            \"text\": \"**Current approach:** Daily price data fetched on-demand from FMP API with caching.\","
+                },
+                {
+                  "lineNumber": 10808,
+                  "content": "        \"contents\": \"---\\n\\n## Executive Summary\\n\\n### What We're Building\\n\\nWe are expanding **Fin Quote**, a financial data platform with an AI-powered chatbot, from supporting 2 stocks (Apple and Google) to supporting all **500 S&amp;amp;P 500 companies**. This expansion includes:\\n\\n- **Complete financial data** for all 500 stocks (10 years annual, 7 years quarterly)\\n- **Business segment data** (product &amp;amp; geographic revenue) via FMP API for all companies\\n- **AI chatbot** capable of answering questions about any S&amp;amp;P 500 stock\\n- **Interactive charts** comparing financial metrics across any combination of stocks\\n\\n&amp;gt; **Key Simplification:** SEC filing downloads and iXBRL parsing have been **deferred**. FMP's Segment API provides product and geographic revenue breakdowns directly, eliminating the need to download 17,500 filings or build custom XBRL parsers. This reduces implementation time significantly while still providing segment data for all S&amp;amp;P 500 companies.\\n\\n## [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 10844,
+                  "content": "            \"text\": \"- **Business segment data** (product &amp;amp; geographic revenue) via FMP API for all companies\","
+                },
+                {
+                  "lineNumber": 10859,
+                  "content": "            \"text\": \"&amp;gt; **Key Simplification:** SEC filing downloads and iXBRL parsing have been **deferred**. FMP's Segment API provides product and geographic revenue breakdowns directly, eliminating the need to download 17,500 filings or build custom XBRL parsers. This reduces implementation time significantly while still providing segment data for all S&amp;amp;P 500 companies.\","
+                },
+                {
+                  "lineNumber": 10918,
+                  "content": "            \"text\": \"| SEC filings | ~20 (AAPL only) | DEFERRED (using FMP API for segments) |\","
+                },
+                {
+                  "lineNumber": 10922,
+                  "content": "            \"text\": \"| Segment data | AAPL + GOOGL | All 500 stocks (via FMP API) |\","
+                },
+                {
+                  "lineNumber": 10978,
+                  "content": "        \"contents\": \"✅ **RESOLVED:** Use automated script with the following filters:\\n- Exchanges: NYSE, NASDAQ only\\n- Min price: $5 (exclude penny stocks)\\n- Min avg volume: 1M shares/day\\n- Exclude: ETFs, preferreds, warrants, ADRs, OTC\\n- Max symbol length: 5 characters\\n- Target size: **300 stocks** (S&amp;amp;P 400 Mid-Cap or equivalent)\\n\\n**2. Budget for higher FMP tier:**\\n✅ **RESOLVED:** Stay in free tier using **Option 3 (Combined Approach)**:\\n- 300 stocks (2 API calls per scan)\\n- 10-minute cache TTL for extended hours\\n- Total: ~214 calls/day (well within 250 limit)\\n\\n**3. Shared extended-hours snapshot location:**\\n✅ **RESOLVED:** Use in-memory cache with 5-10 minute TTL:\\n&amp;#96;&amp;#96;&amp;#96;typescript\\nlet cachedSnapshot: ExtendedHoursSnapshot | null = null\\n// Stored in server memory (Next.js server action context)\\n// Shared between getGainersData() and getLosersData()\\n// Invalidated after TTL expires\\n&amp;#96;&amp;#96;&amp;#96;\\nAlternative (for scale): Redis or Next.js unstable_cac [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 11013,
+                  "content": "            \"text\": \"**2. Budget for higher FMP tier:**\","
+                },
+                {
+                  "lineNumber": 11229,
+                  "content": "            \"text\": \"This implementation plan adds pre-market and after-hours scanning capabilities to the Fin Quote dashboard using a time-based routing architecture. By leveraging FMP's batch quote endpoint and a curated ticker universe from GitHub, we can efficiently scan ~2,000 liquid stocks with only 10 API calls per scan.\","
+                },
+                {
+                  "lineNumber": 11259,
+                  "content": "        \"contents\": \"## Future Enhancements\\n\\n### Short Term\\n1. **Complete Metadata Coverage**\\n   - Add metadata for remaining 89 metrics (139 total - 50 current = 89)\\n   - Clean up alias conflicts\\n   - Regenerate catalog\\n\\n2. **Telemetry Dashboard**\\n   - Create &amp;#96;metric_resolutions&amp;#96; table\\n   - Build admin dashboard at &amp;#96;/admin/metrics-telemetry&amp;#96;\\n   - Show unresolved phrases for alias map expansion\\n\\n3. **Chart Support**\\n   - Add chart generation for single advanced metrics\\n   - Support multi-metric comparison charts\\n\\n### Medium Term\\n1. **Semantic Metric Search**\\n   - Embed metric descriptions\\n   - Support natural language metric discovery\\n   - Example: \\\"metrics related to profitability\\\" → ROE, ROA, profit margins\\n\\n2. **Smart Suggestions**\\n   - When user asks for unavailable metric, suggest similar ones\\n   - Example: \\\"ROIC not found. Did you mean ROE or ROA?\\\"\\n\\n3. **Historical Coverage Display**\\n   - Show data coverage per metric in catalog\\n   [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 11451,
+                  "content": "            \"text\": \"npm run fetch:metrics          # Fetch metrics from FMP API\","
+                }
+              ]
+            },
+            {
+              "file": "./.specstory/history/2026-01-18_14-36Z-next-js-syntax-and-webpack-cache-error.md",
+              "matches": [
+                {
+                  "lineNumber": 96,
+                  "content": "        \"contents\": \"/**\\n * Get fiscal year based on company's fiscal calendar\\n * @param date - The date string from FMP\\n * @param period - The period string (FY, Q1, Q2, Q3, Q4)\\n * @param symbol - The stock symbol to determine fiscal year end\\n */\\nfunction getFiscalYear(date: string, period: string, symbol: string): number {\\n  const dateObj = new Date(date)\\n  const calendarYear = dateObj.getFullYear()\\n  const month = dateObj.getMonth() + 1 // 1-12\\n  const fiscalYearEndMonth = FISCAL_YEAR_END_MONTH[symbol] || 12 // Default to December\\n\\n  // For annual data, use the calendar year from FMP\\n  if (period === 'FY') {\\n    return calendarYear\\n  }\\n\\n  // For quarterly data:\\n  // If fiscal year ends in December (12), FY = calendar year (no adjustment needed)\\n  // If fiscal year ends in September (AAPL), months Oct-Dec belong to next FY\\n  // General rule: if current month &amp;gt; fiscal year end month, it's next fiscal year\\n  if (fiscalYearEndMonth !== 12 &amp;amp;&amp;amp; month &amp;gt; fi [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 108,
+                  "content": "            \"text\": \" * @param date - The date string from FMP\","
+                },
+                {
+                  "lineNumber": 148,
+                  "content": "            \"text\": \"  // For annual data, use the calendar year from FMP\","
+                },
+                {
+                  "lineNumber": 226,
+                  "content": "        \"relativeWorkspacePath\": \"./scripts/fetch-fmp-metrics.ts\","
+                },
+                {
+                  "lineNumber": 236,
+                  "content": "        \"contents\": \"async function fetchFMPData() {\\n(item) =&amp;gt; {\\n([key, value]) =&amp;gt; {\\n\\n)\\n    })\\n  })\\n\\n  // Process Enterprise Values\\n  // Note: Enterprise values don't have a period field from FMP, so we determine it based on the data pattern\\n  // When fetching quarterly, FMP returns quarterly snapshots\\n  enterpriseValues.forEach((item) =&amp;gt; {\\n    const year = new Date(item.date).getFullYear()\\n    // Infer period type based on how many records exist for this year\\n    // If multiple records for same year in enterpriseValues, it's quarterly\\n    const sameYearCount = enterpriseValues.filter(e =&amp;gt; new Date(e.date).getFullYear() === year).length\\n    const isQuarterly = sameYearCount &amp;gt; 1\\n\\n    // For quarterly, try to determine quarter from date based on the company's fiscal year\\n    const date = new Date(item.date)\\n    const month = date.getMonth() + 1 // 1-indexed\\n    const fiscalYearEndMonth = FISCAL_YEAR_END_MONTH[SYMBOL] || 12\\n\\n    let fiscalQuarter: num [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 253,
+                  "content": "            \"text\": \"async function fetchFMPData() {\","
+                },
+                {
+                  "lineNumber": 288,
+                  "content": "            \"text\": \"  // Note: Enterprise values don't have a period field from FMP, so we determine it based on the data pattern\","
+                },
+                {
+                  "lineNumber": 292,
+                  "content": "            \"text\": \"  // When fetching quarterly, FMP returns quarterly snapshots\","
+                },
+                {
+                  "lineNumber": 917,
+                  "content": "        \"contents\": \"| &amp;#96;scripts/sp500/batch-ingest-financials.ts:203-206&amp;#96; | &amp;#96;ingestSingleStock()&amp;#96; | True UPSERT via &amp;#96;supabase.upsert(..., { onConflict: 'symbol,year,period_type,fiscal_quarter' })&amp;#96; |\\n\\n### How Data Arrives from FMP\\n\\nThe FMP API provides three separate endpoints:\\n- &amp;#96;/income-statement/{symbol}&amp;#96; → revenue, gross_profit, net_income, operating_income, eps\\n- &amp;#96;/balance-sheet-statement/{symbol}&amp;#96; → total_assets, total_liabilities, shareholders_equity\\n- &amp;#96;/cash-flow-statement/{symbol}&amp;#96; → operating_cash_flow\\n\\n**Current behavior in both scripts:** All three endpoints are fetched, then combined in memory by matching on &amp;#96;(date, period)&amp;#96; before writing to the database.\\n\\n### Period Representation\\n\\nFrom FMP API responses:\\n- &amp;#96;date&amp;#96;: e.g., &amp;#96;\\\"2024-09-28\\\"&amp;#96; — the period end date (always present)\\n- &amp;#96;period&amp;#96;: &amp;#96;\\\"FY\\\"&amp;#96; for annual, &amp;#96;\\\"Q1\\\"&amp;#96;/&amp;#96;\\\"Q2\\\"&amp;#96;/&amp;#96;\\\"Q3\\\"&amp;#96;/&amp;#96;\\\"Q4\\\"&amp; [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 928,
+                  "content": "            \"text\": \"### How Data Arrives from FMP\","
+                },
+                {
+                  "lineNumber": 935,
+                  "content": "            \"text\": \"The FMP API provides three separate endpoints:\","
+                },
+                {
+                  "lineNumber": 968,
+                  "content": "            \"text\": \"From FMP API responses:\","
+                },
+                {
+                  "lineNumber": 998,
+                  "content": "            \"text\": \"| &amp;#96;period_end_date&amp;#96; | Direct from FMP &amp;#96;date&amp;#96; field |\","
+                },
+                {
+                  "lineNumber": 1010,
+                  "content": "            \"text\": \"| &amp;#96;fiscal_quarter&amp;#96; | Parsed from FMP &amp;#96;period&amp;#96; field: &amp;#96;\\\"Q1\\\"&amp;#96; → &amp;#96;1&amp;#96;, &amp;#96;\\\"FY\\\"&amp;#96; → &amp;#96;null&amp;#96; |\","
+                },
+                {
+                  "lineNumber": 1107,
+                  "content": "        \"contents\": \"INSERT INTO financials_std (symbol, year, period_type, fiscal_quarter, revenue)\\nVALUES ('AAPL', 2024, 'annual', NULL, 391000000000);\\n\\nINSERT INTO financials_std (symbol, year, period_type, fiscal_quarter, revenue)\\nVALUES ('AAPL', 2024, 'annual', NULL, 391000000000);\\n-- ✓ No error! NULL ≠ NULL in UNIQUE constraints\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n**Result:** Every time you re-run annual ingestion, you create duplicate rows.\\n\\n### Secondary Issue: Inconsistent &amp;#96;year&amp;#96; Derivation\\n\\n- &amp;#96;fetch-aapl-data.ts&amp;#96; uses fiscal year logic (AAPL's FY2024 ends in September 2024)\\n- &amp;#96;batch-ingest-financials.ts&amp;#96; uses calendar year from the &amp;#96;date&amp;#96; field\\n\\nThis inconsistency can cause the same period to be stored with different &amp;#96;year&amp;#96; values depending on which script ran.\\n\\n**Recommendation:** Now that &amp;#96;period_end_date&amp;#96; is the authoritative key, treat &amp;#96;year&amp;#96; as a convenience/display field only. Standardize derivation as &amp;#96;EXTRACT(Y [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1187,
+                  "content": "            \"text\": \"The FMP API identifies each financial statement by:\","
+                },
+                {
+                  "lineNumber": 1210,
+                  "content": "            \"text\": \"- &amp;#96;period_end_date&amp;#96; is **never NULL** — FMP always provides the &amp;#96;date&amp;#96; field\","
+                },
+                {
+                  "lineNumber": 1550,
+                  "content": "        \"contents\": \"# Ingestion Spec: &amp;#96;public.financials_std&amp;#96;\\n\\n## Endpoints Found\\n\\n| File | Function | FMP Endpoints (v3) |\\n|------|----------|-------------------|\\n| &amp;#96;scripts/fetch-aapl-data.ts:84-88&amp;#96; | &amp;#96;fetchFinancials()&amp;#96; | &amp;#96;/income-statement/{symbol}&amp;#96;, &amp;#96;/balance-sheet-statement/{symbol}&amp;#96;, &amp;#96;/cash-flow-statement/{symbol}&amp;#96; |\\n| &amp;#96;scripts/sp500/batch-ingest-financials.ts:96-105&amp;#96; | &amp;#96;fetchFinancialsForSymbol()&amp;#96; | Same 3 endpoints |\\n\\n**Period modes:**\\n- Annual: no &amp;#96;period&amp;#96; param (default)\\n- Quarterly: &amp;#96;&amp;amp;period=quarter&amp;#96;\\n- Both: fetched in parallel\\n\\n---\\n\\n## Mapping to financials_std\\n\\n| FMP Field | financials_std Column | Source Statement |\\n|-----------|----------------------|------------------|\\n| &amp;#96;symbol&amp;#96; (param) | &amp;#96;symbol&amp;#96; | — |\\n| &amp;#96;date&amp;#96; (derived) | &amp;#96;year&amp;#96; | Calendar year from &amp;#96;getFiscalYear()&amp;#96; (quarterly), or direct year (annual) |\\n| — | &amp;#96;perio [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1568,
+                  "content": "            \"text\": \"| File | Function | FMP Endpoints (v3) |\","
+                },
+                {
+                  "lineNumber": 1620,
+                  "content": "            \"text\": \"| FMP Field | financials_std Column | Source Statement |\","
+                },
+                {
+                  "lineNumber": 1648,
+                  "content": "            \"text\": \"| &amp;#96;date&amp;#96; | &amp;#96;period_end_date&amp;#96; | Direct from FMP (e.g., &amp;#96;2024-09-30&amp;#96;) |\","
+                },
+                {
+                  "lineNumber": 1720,
+                  "content": "            \"text\": \"| **Currency** | USD only (FMP returns USD for US stocks) |\","
+                },
+                {
+                  "lineNumber": 1724,
+                  "content": "            \"text\": \"| **Scale** | Raw dollars (not thousands/millions). FMP returns absolute values. |\","
+                },
+                {
+                  "lineNumber": 1752,
+                  "content": "        \"contents\": \"function transformEarnings(surprise: FMPEarningsSurprise) {\\n  const date = new Date(surprise.date)\\n  const month = date.getMonth() + 1 // 0-indexed\\n\\n  // Estimate fiscal quarter based on earnings date\\n  // Most companies report ~45 days after quarter end\\n  let fiscalQuarter: number\\n  if (month &amp;gt;= 1 &amp;amp;&amp;amp; month &amp;lt;= 3) fiscalQuarter = 4 // Q4 reported in Jan-Mar\\n  else if (month &amp;gt;= 4 &amp;amp;&amp;amp; month &amp;lt;= 6) fiscalQuarter = 1 // Q1 reported in Apr-Jun\\n  else if (month &amp;gt;= 7 &amp;amp;&amp;amp; month &amp;lt;= 9) fiscalQuarter = 2 // Q2 reported in Jul-Sep\\n  else fiscalQuarter = 3 // Q3 reported in Oct-Dec\\n\\n  // Estimate fiscal year\\n  let fiscalYear = date.getFullYear()\\n  if (fiscalQuarter === 4 &amp;amp;&amp;amp; month &amp;lt;= 3) {\\n    fiscalYear = fiscalYear - 1 // Q4 of previous fiscal year\\n  }\\n\\n  // Calculate surprise\\n  const actual = surprise.actualEarningResult\\n  const estimated = surprise.estimatedEarning\\n  const epsSurprise = actual - estimated\\n [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 1756,
+                  "content": "            \"text\": \"function transformEarnings(surprise: FMPEarningsSurprise) {\","
+                },
+                {
+                  "lineNumber": 1885,
+                  "content": "            \"text\": \"    revenue_actual: null, // FMP earnings-surprises doesn't include revenue\","
+                },
+                {
+                  "lineNumber": 1905,
+                  "content": "            \"text\": \"    earnings_time: null, // FMP doesn't provide BMO/AMC in this endpoint\","
+                },
+                {
+                  "lineNumber": 2262,
+                  "content": "        \"contents\": \"# Quarterly Data Implementation Plan\\n\\nThis document outlines the plan to add quarterly financial data alongside existing annual data.\\n\\n---\\n\\n## 1. Database Schema Changes\\n\\n### Modify &amp;#96;financials_std&amp;#96; table\\n\\nAdd columns:\\n- &amp;#96;period_type&amp;#96; (text, not null, default 'annual') — 'annual' | 'quarterly'\\n- &amp;#96;fiscal_quarter&amp;#96; (integer, nullable) — 1, 2, 3, or 4 (null for annual)\\n- &amp;#96;fiscal_label&amp;#96; (text, nullable) — e.g., \\\"2024-Q2\\\" for quarterly, null for annual (simplifies chart x-axis)\\n- &amp;#96;period_end_date&amp;#96; (date, nullable) — actual date the period ended\\n\\nAdd constraint:\\n&amp;#96;&amp;#96;&amp;#96;sql\\nALTER TABLE financials_std\\nADD CONSTRAINT chk_period_type CHECK (period_type IN ('annual', 'quarterly'));\\n&amp;#96;&amp;#96;&amp;#96;\\n\\nAdd index:\\n&amp;#96;&amp;#96;&amp;#96;sql\\nCREATE INDEX idx_financials_std_period\\nON financials_std (symbol, period_type, fiscal_year, fiscal_quarter);\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n### Modify &amp;#96;financial_metrics&amp;#96; table\\n\\nS [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 2482,
+                  "content": "            \"text\": \"### FMP API\","
+                },
+                {
+                  "lineNumber": 2566,
+                  "content": "        \"contents\": \"async function fetchFinancialsForSymbol(symbol: string): Promise&amp;lt;FinancialRecord[]&amp;gt; {\\n  const limit = 20 // 20 years of annual data\\n\\n  const endpoints = {\\n    incomeStatement: &amp;#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\\n    balanceSheet: &amp;#96;https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\\n    cashFlow: &amp;#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\\n  }\\n\\n  try {\\n    const [incomeData, balanceData, cashFlowData] = await Promise.all([\\n      fetch(endpoints.incomeStatement).then((r) =&amp;gt; r.json()),\\n      fetch(endpoints.balanceSheet).then((r) =&amp;gt; r.json()),\\n      fetch(endpoints.cashFlow).then((r) =&amp;gt; r.json()),\\n    ])\\n\\n    // Handle API errors\\n    if (!Array.isArray(incomeData)) {\\n      console.error(&amp;#96;  ✗ ${symbo [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 2586,
+                  "content": "            \"text\": \"    incomeStatement: &amp;#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\","
+                },
+                {
+                  "lineNumber": 2590,
+                  "content": "            \"text\": \"    balanceSheet: &amp;#96;https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\","
+                },
+                {
+                  "lineNumber": 2594,
+                  "content": "            \"text\": \"    cashFlow: &amp;#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}&amp;amp;apikey=${FMP_API_KEY}&amp;#96;,\","
+                },
+                {
+                  "lineNumber": 4174,
+                  "content": "        \"contents\": \"# Review Request: financials_std Database Guardrails Design\\n\\nPlease review the following design for correctness, safety, and completeness. Identify any gaps, risks, or improvements.\\n\\n---\\n\\n## Context\\n\\nWe have a PostgreSQL table &amp;#96;financials_std&amp;#96; that stores financial statement data (income, balance sheet, cash flow) fetched from the FMP API. We need to:\\n\\n1. Prevent duplicate rows when re-running ingestion\\n2. Enable safe UPSERT operations\\n3. Avoid overwriting valid data with NULLs during partial ingestion\\n\\n---\\n\\n## Current State (Problems)\\n\\n**Table schema:**\\n&amp;#96;&amp;#96;&amp;#96;sql\\nCREATE TABLE financials_std (\\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\\n  created_at timestamptz NOT NULL DEFAULT now(),\\n  symbol text,                    -- Currently nullable\\n  year integer,\\n  period_type text NOT NULL DEFAULT 'annual',\\n  fiscal_quarter integer,         -- NULL for annual data\\n  fiscal_label text,\\n  period_end_date date,           -- C [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 4206,
+                  "content": "            \"text\": \"We have a PostgreSQL table &amp;#96;financials_std&amp;#96; that stores financial statement data (income, balance sheet, cash flow) fetched from the FMP API. We need to:\","
+                },
+                {
+                  "lineNumber": 4413,
+                  "content": "            \"text\": \"- &amp;#96;period_end_date&amp;#96; comes directly from FMP's &amp;#96;date&amp;#96; field and is never NULL\","
+                },
+                {
+                  "lineNumber": 4685,
+                  "content": "        \"contents\": \"async function fetchFinancialsForSymbol(\\n  symbol: string,\\n  fmpSymbol: string,\\n  apiKey: string,\\n  periodType: 'annual' | 'quarterly'\\n): Promise&amp;lt;FinancialRecord[]&amp;gt; {\\n\\n\\n  incomeData.forEach((item: any) =&amp;gt; {\\n    const period = item.period || 'FY'\\n    const key = getKey(item.date, period)\\n    const dateObj = new Date(item.date)\\n    const calendarYear = dateObj.getFullYear()\\n    const fiscalQuarter = parseFiscalQuarter(period)\\n\\n    combinedByPeriod[key] = {\\n      symbol: symbol, // Use canonical symbol, not FMP symbol\\n      year: calendarYear,\\n      period_type: periodType,\\n      fiscal_quarter: fiscalQuarter,\\n      fiscal_label: fiscalQuarter ? &amp;#96;${calendarYear}-Q${fiscalQuarter}&amp;#96; : null,\\n      period_end_date: item.date,\\n      revenue: item.revenue || 0,\\n      gross_profit: item.grossProfit || 0,\\n      net_income: item.netIncome || 0,\\n      operating_income: item.operatingIncome || 0,\\n      total_assets: 0,\\n      total_liab [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 4712,
+                  "content": "            \"text\": \"  fmpSymbol: string,\","
+                },
+                {
+                  "lineNumber": 4769,
+                  "content": "            \"text\": \"      symbol: symbol, // Use canonical symbol, not FMP symbol\","
+                },
+                {
+                  "lineNumber": 5295,
+                  "content": "        \"relativeWorkspacePath\": \"./scripts/fetch-fmp-metrics.ts\","
+                },
+                {
+                  "lineNumber": 5306,
+                  "content": "        \"contents\": \"const mode: FetchMode = (args[1] as FetchMode) || 'annual'\\n\\n// Fiscal year end month by symbol (1-12)\\nconst FISCAL_YEAR_END_MONTH: Record&amp;lt;string, number&amp;gt; = {\\n  'AAPL': 9,   // September\\n  'GOOGL': 12, // December\\n  'MSFT': 6,   // June\\n  'AMZN': 12,  // December\\n  'META': 12,  // December\\n}\\n\\n/**\\n * Metrics to skip during ingestion (duplicates from different FMP endpoints)\\n * We prefer the shorter/cleaner names:\\n * - peRatio (not priceEarningsRatio)\\n * - pbRatio (not priceBookValueRatio or priceToBookRatio)\\n * - etc.\\n */\\nconst SKIP_METRICS = new Set([\\n  'daysOfInventoryOutstanding', // Duplicate of daysOfInventoryOnHand\\n  'daysPayablesOutstanding', // Duplicate of daysOfPayablesOutstanding\\n  'daysSalesOutstanding', // Duplicate of daysOfSalesOutstanding\\n  'debtToAssets', // Duplicate of debtRatio\\n  'debtToEquity', // Duplicate of debtEquityRatio\\n  'enterpriseValueOverEBITDA', // Duplicate of enterpriseValueMultiple\\n  'operatingProfitMa [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 5356,
+                  "content": "            \"text\": \" * Metrics to skip during ingestion (duplicates from different FMP endpoints)\","
+                },
+                {
+                  "lineNumber": 5468,
+                  "content": "        \"contents\": \"/**\\n * Script to fetch financial data from FMP API for any stock symbol\\n * Supports both annual and quarterly data\\n * Saves to data/{symbol}-financials.json for ingestion\\n *\\n * Usage:\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL           # Fetch annual data (default)\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL annual   # Fetch annual data for GOOGL\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL quarterly # Fetch quarterly data\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly\\n */\\n\\nconst FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'\\n\\n// Fiscal year end month by symbol (1-12)\\nconst FISCAL_YEAR_END_MONTH: Record&amp;lt;string, number&amp;gt; = {\\n  'AAPL': 9,   // September\\n  'GOOGL': 12, // December\\n  'MSFT': 6,   // June\\n  'AMZN': 12,  // December\\n  'META': 12,  // December\\n}\\n\\ntype PeriodType = 'annual' | 'quarterly'\\n\\ninterface FinancialRecord {\\n  symbol: string\\n  year: number\\n}\","
+                },
+                {
+                  "lineNumber": 5476,
+                  "content": "            \"text\": \" * Script to fetch financial data from FMP API for any stock symbol\","
+                },
+                {
+                  "lineNumber": 5519,
+                  "content": "            \"text\": \"const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'\","
+                },
+                {
+                  "lineNumber": 6667,
+                  "content": "        \"contents\": \"# Stock Price on Charts - Implementation Plan\\n\\n## Overview\\n\\nAdd stock price as a selectable metric on the charting page, allowing users to visualize price alongside fundamental metrics like revenue, net income, and profitability ratios.\\n\\n---\\n\\n## Key Design Decisions\\n\\n### 1. Data Source\\n\\n- **Source**: FMP API via existing &amp;#96;getPrices&amp;#96; action in &amp;#96;app/actions/prices.ts&amp;#96;\\n- **Data format**: Daily OHLCV (Open, High, Low, Close, Volume)\\n- **Display value**: Closing price (simplest, most commonly used)\\n\\n### 2. Time Granularity\\n\\n**Problem**: Financials have one data point per year/quarter, while prices are daily (250+ points per year).\\n\\n**Solution**: Aggregate prices to match the current period type:\\n- **Annual mode**: Use fiscal year-end closing price (or Dec 31 if calendar year)\\n- **Quarterly mode**: Use quarter-end closing price\\n\\nThis keeps the chart clean and allows direct comparison with financial metrics at the same time points.\\ [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6713,
+                  "content": "            \"text\": \"- **Source**: FMP API via existing &amp;#96;getPrices&amp;#96; action in &amp;#96;app/actions/prices.ts&amp;#96;\","
+                },
+                {
+                  "lineNumber": 7898,
+                  "content": "        \"contents\": \"## Implementation Steps\\n\\n### Step 1: Create Price Aggregation Utility\\n\\nCreate &amp;#96;lib/price-aggregator.ts&amp;#96;:\\n- Function to aggregate daily prices to annual (year-end close)\\n- Function to aggregate daily prices to quarterly (quarter-end close)\\n- Handle edge cases (missing data, partial periods)\\n\\n&amp;#96;&amp;#96;&amp;#96;\\nInput: Daily price data array\\nOutput: { year: number, period?: string, value: number }[]\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n### Step 2: Add Price Metric to Available Metrics\\n\\nUpdate &amp;#96;app/actions/chart-metrics.ts&amp;#96;:\\n- Add &amp;#96;stock_price&amp;#96; to the metrics catalog\\n- Set &amp;#96;statement: 'price'&amp;#96; for categorization\\n- Define unit as &amp;#96;'$'&amp;#96; (currency)\\n\\n### Step 3: Create Price Data Fetcher\\n\\nCreate &amp;#96;app/actions/chart-price.ts&amp;#96; (or extend existing):\\n- Fetch price data from FMP API for given symbol and date range\\n- Aggregate based on period type (annual/quarterly)\\n- Return in same format as other metrics: &amp;#96;MetricData&amp;#96;\\n [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 7991,
+                  "content": "            \"text\": \"- Fetch price data from FMP API for given symbol and date range\","
+                },
+                {
+                  "lineNumber": 8122,
+                  "content": "            \"text\": \"Calls getPrices() from FMP API for each selected stock\","
+                },
+                {
+                  "lineNumber": 8171,
+                  "content": "            \"text\": \"1. **No price data for old years**: FMP may not have price history for all years in range\","
+                },
+                {
+                  "lineNumber": 8175,
+                  "content": "            \"text\": \"2. **Stock splits**: Historical prices should be split-adjusted (FMP provides this)\","
+                },
+                {
+                  "lineNumber": 10687,
+                  "content": "        \"contents\": \"export function generateExtendedMetricChart(\\n  data: FinancialMetricResult[],\\n  metricName: string,\\n  userQuestion?: string,\\n  symbol: string = 'AAPL'\\n): ChartConfig | null {\\n\\n\\n  switch (unit) {\\n    case 'percentage':\\n      // FMP stores percentage metrics as decimals (e.g., ROE of 1.52 = 152%, margin of 0.46 = 46%)\\n      // Always multiply by 100 to convert to percentage display\\n      values = validData.map(d =&amp;gt; {\\n        const val = d.metric_value!\\n        return parseFloat((val * 100).toFixed(2))\\n      })\\n      yAxisLabel = &amp;#96;${displayName} (%)&amp;#96;\\n      break\\n\\n    case 'ratio':\\n      values = validData.map(d =&amp;gt; parseFloat(d.metric_value!.toFixed(2)))\\n      yAxisLabel = displayName\\n      break\\n\\n    case 'currency':\\n      // Determine scale based on magnitude\\n      const maxVal = Math.max(...validData.map(d =&amp;gt; Math.abs(d.metric_value!)))\\n      if (maxVal &amp;gt;= 1_000_000_000) {\\n        values = validData.map(d =&amp;gt; parseFl [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 10758,
+                  "content": "            \"text\": \"      // FMP stores percentage metrics as decimals (e.g., ROE of 1.52 = 152%, margin of 0.46 = 46%)\","
+                }
+              ]
+            },
+            {
+              "file": "./.specstory/history/2026-01-15_21-51Z-multi-stock-navigation-plan-review.md",
+              "matches": [
+                {
+                  "lineNumber": 3576,
+                  "content": "        \"contents\": \"| **Operating income** | Not available | Available |\\n| **Cost breakdown** | Not available | Available |\\n| **API cost** | 1,000 calls | Free (after file download) |\\n| **Storage** | ~10MB | ~30GB (filing files) |\\n| **Accuracy** | Pre-validated by FMP | Varies (parsing quality) |\\n\\n---\\n\\n## Phase 5: Chatbot Multi-Stock Support\\n\\n### Objective\\n\\nEnable the AI chatbot to answer questions about any S&amp;amp;P 500 stock, not just Apple.\\n\\n### Important Note: Filing Tools\\n\\n&amp;gt; **Filing-based tools (&amp;#96;getRecentFilings&amp;#96;, &amp;#96;searchFilings&amp;#96;) currently only work for AAPL.**\\n&amp;gt;\\n&amp;gt; Since SEC filing infrastructure is deferred (Phase 3), only Apple has filing data from the pre-expansion work. For other stocks:\\n&amp;gt; - Filing tools should return graceful \\\"no filings available\\\" messages\\n&amp;gt; - The chatbot should guide users to financial/segment data instead\\n&amp;gt; - This is an acceptable limitation for MVP\\n\\n### Current Limitations\\n\\n1. Tool selection  [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 3596,
+                  "content": "            \"text\": \"| **Accuracy** | Pre-validated by FMP | Varies (parsing quality) |\","
+                },
+                {
+                  "lineNumber": 6094,
+                  "content": "        \"contents\": \"**For Chatbot Questions:**\\n&amp;#96;&amp;#96;&amp;#96;\\nUser Question → Tool Selection LLM → Tool Execution → Data Fetch → Answer Generation LLM → Validation → Response\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n**For Charts:**\\n&amp;#96;&amp;#96;&amp;#96;\\nUser Selects Metrics → Server Action → Database Query → Transform Data → Highcharts Render\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n---\\n\\n## Current State Analysis\\n\\n### What We Have (Working)\\n\\n**Apple (AAPL):**\\n- ✅ 20 years of annual financial data (2005-2024)\\n- ✅ 7 years of quarterly financial data (2018-2024)\\n- ✅ 139 extended metrics (P/E ratio, ROE, etc.)\\n- ✅ Business segments (iPhone, Services, Mac, iPad, Wearables)\\n- ✅ Geographic segments (Americas, Europe, China, Japan, Asia Pacific)\\n- ✅ ~20 SEC filings downloaded and chunked\\n- ✅ Chatbot fully functional\\n- ✅ Charts fully functional\\n\\n**Google/Alphabet (GOOGL):**\\n- ✅ Annual financial data\\n- ✅ Extended metrics\\n- ✅ Business segments (Google Services, Google Cloud, Other Bets)\\n- ✅ Product breakdown (Search,  [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6265,
+                  "content": "            \"text\": \"&amp;gt; **Note:** CIK mappings and filing queue systems are no longer needed since we're using FMP API for segment data instead of downloading SEC filings.\","
+                },
+                {
+                  "lineNumber": 6319,
+                  "content": "        \"contents\": \"/**\\n * Get stock overview data including current price and company info\\n * Currently hardcoded to AAPL\\n */\\nexport async function getStockOverview(): Promise&amp;lt;StockOverview&amp;gt; {\\n  const symbol = 'AAPL';\\n  const apiKey = process.env.FMP_API_KEY;\\n\\n  if (!apiKey) {\\n    throw new Error('FMP_API_KEY is not set');\\n  }\\n\\n  try {\\n    // Fetch current quote from FMP API\\n    const quoteResponse = await fetch(\\n      &amp;#96;https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}&amp;#96;,\\n      { next: { revalidate: 60 } } // Cache for 60 seconds\\n    );\\n\\n    if (!quoteResponse.ok) {\\n      throw new Error(&amp;#96;FMP API error: ${quoteResponse.status}&amp;#96;);\\n    }\\n\\n    const quoteData = await quoteResponse.json();\\n\\n    if (!quoteData || quoteData.length === 0) {\\n      throw new Error('No quote data returned from FMP API');\\n    }\\n\\n    const quote = quoteData[0];\\n\\n    // Get market session status\\n    const marketSession = getCurrentMarket [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 6348,
+                  "content": "            \"text\": \"  const apiKey = process.env.FMP_API_KEY;\","
+                },
+                {
+                  "lineNumber": 6359,
+                  "content": "            \"text\": \"    throw new Error('FMP_API_KEY is not set');\","
+                },
+                {
+                  "lineNumber": 6374,
+                  "content": "            \"text\": \"    // Fetch current quote from FMP API\","
+                },
+                {
+                  "lineNumber": 6401,
+                  "content": "            \"text\": \"      throw new Error(&amp;#96;FMP API error: ${quoteResponse.status}&amp;#96;);\","
+                },
+                {
+                  "lineNumber": 6423,
+                  "content": "            \"text\": \"      throw new Error('No quote data returned from FMP API');\","
+                },
+                {
+                  "lineNumber": 7921,
+                  "content": "        \"contents\": \"const STOCK_NAMES: Record&amp;lt;string, string&amp;gt; = {\\n  'AAPL': 'Apple',\\n  'NVDA': 'NVIDIA',\\n  'GOOGL': 'Alphabet',\\n  'TSLA': 'Tesla',\\n  'AMD': 'AMD',\\n  'MSFT': 'Microsoft',\\n  'META': 'Meta'\\n}\\n\\nexport async function getStocksData(): Promise&amp;lt;{\\n  stocks: StockData[]\\n  error?: string\\n}&amp;gt; {\\n  try {\\n    const apiKey = process.env.FMP_API_KEY\\n    if (!apiKey) {\\n      console.error('FMP_API_KEY not found in environment')\\n      return { stocks: [], error: 'API configuration error' }\\n    }\\n\\n    const symbols = ['AAPL', 'NVDA', 'GOOGL', 'TSLA', 'AMD', 'MSFT', 'META']\\n    const symbolsParam = symbols.join(',')\\n\\n    // Use the quote endpoint to get real-time data\\n    const url = &amp;#96;https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}&amp;#96;\\n\\n    const response = await fetch(url, {\\n      next: { revalidate: 60 }, // Cache for 1 minute\\n    })\\n\\n    if (!response.ok) {\\n      console.error('FMP API error:', response.stat [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 7988,
+                  "content": "            \"text\": \"    const apiKey = process.env.FMP_API_KEY\","
+                },
+                {
+                  "lineNumber": 7996,
+                  "content": "            \"text\": \"      console.error('FMP_API_KEY not found in environment')\","
+                },
+                {
+                  "lineNumber": 8052,
+                  "content": "            \"text\": \"      console.error('FMP API error:', response.status, response.statusText)\","
+                },
+                {
+                  "lineNumber": 8090,
+                  "content": "            \"text\": \"      console.error('Unexpected FMP response format:', data)\","
+                },
+                {
+                  "lineNumber": 10176,
+                  "content": "        \"contents\": \"# Database Structure &amp;amp; Chatbot Optimization Guide\\n\\n## Current Database Structure\\n\\n### Core Tables for Chatbot\\n\\n#### 1. &amp;#96;financials_std&amp;#96; - Standard Financial Data (Wide Table)\\n**Purpose**: Stores basic financial metrics in columns (one row per year)\\n\\n&amp;#96;&amp;#96;&amp;#96;sql\\nColumns:\\n- symbol (TEXT) - Stock ticker (e.g., 'AAPL')\\n- year (INTEGER) - Fiscal year\\n- revenue (NUMERIC)\\n- gross_profit (NUMERIC)\\n- net_income (NUMERIC)\\n- operating_income (NUMERIC)\\n- total_assets (NUMERIC)\\n- total_liabilities (NUMERIC)\\n- shareholders_equity (NUMERIC)\\n- operating_cash_flow (NUMERIC)\\n- eps (NUMERIC)\\n&amp;#96;&amp;#96;&amp;#96;\\n\\n**How Chatbot Uses It**:\\n- Query: &amp;#96;SELECT year, revenue FROM financials_std WHERE symbol='AAPL' ORDER BY year DESC LIMIT 5&amp;#96;\\n- Returns: &amp;#96;[{year: 2024, revenue: 383285000000}, {year: 2023, revenue: 383285000000}]&amp;#96;\\n- Sent to LLM as JSON string in prompt\\n\\n**Pros**:\\n- Fast queries for single metrics\\n- All related data i [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 10378,
+                  "content": "            \"text\": \"- data_source (TEXT) - 'FMP', 'Calculated', 'SEC'\","
+                },
+                {
+                  "lineNumber": 10453,
+                  "content": "        \"contents\": \"**Key Functions:**\\n- &amp;#96;search_filing_chunks()&amp;#96; - PostgreSQL RPC for vector similarity search using pgvector\\n\\n---\\n\\n## Key Files\\n\\n| Path | Purpose |\\n|------|---------|\\n| &amp;#96;app/actions/ask-question.ts&amp;#96; | Main Q&amp;amp;A orchestration: tool selection → execution → answer → validation |\\n| &amp;#96;lib/tools.ts&amp;#96; | Tool definitions + prompt templates (buildToolSelectionPrompt, buildFinalAnswerPrompt) |\\n| &amp;#96;lib/validators.ts&amp;#96; | Answer validation (number accuracy ±2%, year correctness, filing citations) |\\n| &amp;#96;lib/regeneration.ts&amp;#96; | Auto-correction on validation failures |\\n| &amp;#96;lib/metric-resolver.ts&amp;#96; | Alias resolution (\\\"P/E\\\" → &amp;#96;peRatio&amp;#96;, \\\"profit\\\" → &amp;#96;net_income&amp;#96;) |\\n| &amp;#96;lib/chart-helpers.ts&amp;#96; | Chart generation for financial/price data |\\n| &amp;#96;lib/ttm-calculator.ts&amp;#96; | TTM value calculation from quarterly data |\\n| &amp;#96;lib/ttm-config.ts&amp;#96; | TTM calculation type config per metric |\\n| &amp;#96;app/pag [... omitted end of long line]"
+                },
+                {
+                  "lineNumber": 10586,
+                  "content": "            \"text\": \"FMP_API_KEY=your-fmp-key\","
+                },
+                {
+                  "lineNumber": 10838,
+                  "content": "- Should we fetch from FMP API as fallback?"
+                }
+              ]
+            },
+            {
+              "file": "./.env.local.example",
+              "matches": [
+                {
+                  "lineNumber": 19,
+                  "content": "# Financial Modeling Prep API Key"
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "FMP_API_KEY=your-fmp-api-key-here"
+                }
+              ]
+            },
+            {
+              "file": "./docs/COMPANY_PAGE_DATA_REQUIREMENTS.md",
+              "matches": [
+                {
+                  "lineNumber": 7,
+                  "content": "We have **132 unique metrics already ingested** in the &#96;financial_metrics&#96; table from FMP's key-metrics, ratios, and growth endpoints. Many UI fields showing \"N/A\" are actually **query/mapping issues**, not missing data."
+                },
+                {
+                  "lineNumber": 12,
+                  "content": "2. **Live API fallback failures** - &#96;stock-key-stats.ts&#96; still makes live FMP calls instead of DB-only reads"
+                },
+                {
+                  "lineNumber": 82,
+                  "content": "| Dividend Est. | **Missing** | — | Need FMP Analyst Estimates API |"
+                },
+                {
+                  "lineNumber": 84,
+                  "content": "| Dividend Ex-Date | **Missing** | — | Need FMP Stock Dividend Calendar API |"
+                },
+                {
+                  "lineNumber": 87,
+                  "content": "| Employees | **Missing** | — | Need FMP Company Profile |"
+                },
+                {
+                  "lineNumber": 88,
+                  "content": "| IPO | **Missing** | — | Need FMP Company Profile |"
+                },
+                {
+                  "lineNumber": 95,
+                  "content": "| Forward P/E | **Missing** | — | Not in FMP ratios/key-metrics endpoints |"
+                },
+                {
+                  "lineNumber": 114,
+                  "content": "| EPS next Y | **Missing** | — | Need FMP Analyst Estimates API |"
+                },
+                {
+                  "lineNumber": 115,
+                  "content": "| EPS next Q | **Missing** | — | Need FMP Analyst Estimates API |"
+                },
+                {
+                  "lineNumber": 117,
+                  "content": "| EPS next Y (growth) | **Missing** | — | Need FMP Analyst Estimates API |"
+                },
+                {
+                  "lineNumber": 118,
+                  "content": "| EPS next 5Y | **Missing** | — | Need FMP Analyst Estimates API |"
+                },
+                {
+                  "lineNumber": 124,
+                  "content": "| Earnings Date | **Missing** | — | Need FMP Earnings Calendar |"
+                },
+                {
+                  "lineNumber": 125,
+                  "content": "| EPS Surpr. | **Missing** | — | Need FMP Earnings Surprises |"
+                },
+                {
+                  "lineNumber": 126,
+                  "content": "| Sales Surpr. | **Missing** | — | Need FMP Earnings Surprises |"
+                },
+                {
+                  "lineNumber": 132,
+                  "content": "| Insider Own | **Missing** | — | Need FMP Insider Trading API |"
+                },
+                {
+                  "lineNumber": 133,
+                  "content": "| Insider Trans | **Missing** | — | Need FMP Insider Trading API |"
+                },
+                {
+                  "lineNumber": 134,
+                  "content": "| Inst Own | **Missing** | — | Need FMP Institutional Holders |"
+                },
+                {
+                  "lineNumber": 135,
+                  "content": "| Inst Trans | **Missing** | — | Need FMP Institutional Holders |"
+                },
+                {
+                  "lineNumber": 142,
+                  "content": "| SMA20 | **Missing** | — | Need FMP Technical Indicators |"
+                },
+                {
+                  "lineNumber": 143,
+                  "content": "| SMA50 | **Missing** | — | Need FMP Technical Indicators |"
+                },
+                {
+                  "lineNumber": 144,
+                  "content": "| SMA200 | **Missing** | — | Need FMP Technical Indicators |"
+                },
+                {
+                  "lineNumber": 152,
+                  "content": "| Short Float | **Missing** | — | Need FMP Short Interest |"
+                },
+                {
+                  "lineNumber": 153,
+                  "content": "| Short Ratio | **Missing** | — | Need FMP Short Interest |"
+                },
+                {
+                  "lineNumber": 154,
+                  "content": "| Short Interest | **Missing** | — | Need FMP Short Interest |"
+                },
+                {
+                  "lineNumber": 155,
+                  "content": "| 52W High | **Live API** | FMP Quote | OK (real-time needed) |"
+                },
+                {
+                  "lineNumber": 156,
+                  "content": "| 52W Low | **Live API** | FMP Quote | OK (real-time needed) |"
+                },
+                {
+                  "lineNumber": 158,
+                  "content": "| ATR (14) | **Missing** | — | Need FMP Technical Indicators |"
+                },
+                {
+                  "lineNumber": 159,
+                  "content": "| RSI (14) | **Missing** | — | Need FMP Technical Indicators |"
+                },
+                {
+                  "lineNumber": 162,
+                  "content": "| Avg Volume | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 163,
+                  "content": "| Volume | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 169,
+                  "content": "| Perf Week | **Missing** | — | Need FMP Stock Price Change |"
+                },
+                {
+                  "lineNumber": 170,
+                  "content": "| Perf Month | **Missing** | — | Need FMP Stock Price Change |"
+                },
+                {
+                  "lineNumber": 171,
+                  "content": "| Perf Quarter | **Missing** | — | Need FMP Stock Price Change |"
+                },
+                {
+                  "lineNumber": 172,
+                  "content": "| Perf Half Y | **Missing** | — | Need FMP Stock Price Change |"
+                },
+                {
+                  "lineNumber": 173,
+                  "content": "| Perf YTD | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 174,
+                  "content": "| Perf Year | **Missing** | — | Need FMP Stock Price Change |"
+                },
+                {
+                  "lineNumber": 178,
+                  "content": "| Recom | **Missing** | — | Need FMP Analyst Estimates |"
+                },
+                {
+                  "lineNumber": 179,
+                  "content": "| Target Price | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 180,
+                  "content": "| Prev Close | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 181,
+                  "content": "| Price | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 182,
+                  "content": "| Change | **Live API** | FMP Quote | OK |"
+                },
+                {
+                  "lineNumber": 201,
+                  "content": "### Phase 2: Ingest New Data (Requires FMP API calls)"
+                },
+                {
+                  "lineNumber": 285,
+                  "content": "**FMP Endpoint:** &#96;GET /api/v3/profile/{symbol}&#96;"
+                },
+                {
+                  "lineNumber": 322,
+                  "content": "**FMP Endpoint:** &#96;GET /api/v3/stock-price-change/{symbol}&#96;"
+                },
+                {
+                  "lineNumber": 391,
+                  "content": "**FMP Endpoints:**"
+                },
+                {
+                  "lineNumber": 433,
+                  "content": "**FMP Endpoints:**"
+                },
+                {
+                  "lineNumber": 471,
+                  "content": "**FMP Endpoint:** &#96;GET /api/v3/technical_indicator/daily/{symbol}?type=sma&amp;period=20&#96;"
+                },
+                {
+                  "lineNumber": 502,
+                  "content": "  const batchSize = 50; // FMP rate limit friendly"
+                },
+                {
+                  "lineNumber": 506,
+                  "content": "      batch.map(symbol =&gt; fetchFMPProfile(symbol))"
+                },
+                {
+                  "lineNumber": 522,
+                  "content": "- [ ] Remove live FMP API calls where possible"
+                },
+                {
+                  "lineNumber": 533,
+                  "content": "## FMP API Endpoints Reference"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/prices.ts",
+              "matches": [
+                {
+                  "lineNumber": 16,
+                  "content": "// Map timeframe to FMP API endpoint path"
+                },
+                {
+                  "lineNumber": 236,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 238,
+                  "content": "      console.error('FMP_API_KEY not found in environment')"
+                },
+                {
+                  "lineNumber": 266,
+                  "content": "      console.error('FMP API error:', response.status, response.statusText)"
+                },
+                {
+                  "lineNumber": 275,
+                  "content": "    // FMP returns: { symbol: \"AAPL\", historical: [{date, open, high, low, close, volume}, ...] }"
+                },
+                {
+                  "lineNumber": 277,
+                  "content": "      console.error('Unexpected FMP response format:', json)"
+                },
+                {
+                  "lineNumber": 356,
+                  "content": "    const apiKey = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 358,
+                  "content": "      console.error('FMP_API_KEY not found in environment')"
+                },
+                {
+                  "lineNumber": 381,
+                  "content": "      console.error('FMP API error:', response.status, response.statusText)"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/get-income-statement.ts",
+              "matches": [
+                {
+                  "lineNumber": 3,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 65,
+                  "content": " * Fetch comprehensive income statement from FMP API"
+                },
+                {
+                  "lineNumber": 75,
+                  "content": "    if (!FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 76,
+                  "content": "      throw new Error('FMP_API_KEY not configured')"
+                },
+                {
+                  "lineNumber": 80,
+                  "content": "    const annualUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 84,
+                  "content": "      throw new Error(&#96;FMP API error: ${annualResponse.statusText}&#96;)"
+                },
+                {
+                  "lineNumber": 90,
+                  "content": "    const ttmUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?period=quarter&amp;limit=4&amp;apikey=${FMP_API_KEY}&#96;"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/get-stock-news.ts",
+              "matches": [
+                {
+                  "lineNumber": 19,
+                  "content": "  const apiKey = process.env.FMP_API_KEY;"
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "    console.error('FMP_API_KEY is not set');"
+                },
+                {
+                  "lineNumber": 33,
+                  "content": "      console.error(&#96;FMP News API error: ${response.status}&#96;);"
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/stock-overview.ts",
+              "matches": [
+                {
+                  "lineNumber": 23,
+                  "content": "  const apiKey = process.env.FMP_API_KEY;"
+                },
+                {
+                  "lineNumber": 26,
+                  "content": "    throw new Error('FMP_API_KEY is not set');"
+                },
+                {
+                  "lineNumber": 30,
+                  "content": "    // Fetch current quote from FMP API"
+                },
+                {
+                  "lineNumber": 37,
+                  "content": "      throw new Error(&#96;FMP API error: ${quoteResponse.status}&#96;);"
+                },
+                {
+                  "lineNumber": 43,
+                  "content": "      throw new Error('No quote data returned from FMP API');"
+                }
+              ]
+            },
+            {
+              "file": "./docs/MULTI_STOCK_NAVIGATION_PLAN.md",
+              "matches": [
+                {
+                  "lineNumber": 653,
+                  "content": "1. **Data availability** - Not all stocks may have complete financial data in the database. FMP API will return data, but Supabase tables may only have AAPL data ingested."
+                },
+                {
+                  "lineNumber": 657,
+                  "content": "3. **API rate limits** - FMP API has rate limits. Consider caching strategy for frequently accessed stocks."
+                }
+              ]
+            },
+            {
+              "file": "./app/actions/get-company-profile.ts",
+              "matches": [
+                {
+                  "lineNumber": 21,
+                  "content": " * Fetch company profile from FMP API"
+                },
+                {
+                  "lineNumber": 25,
+                  "content": "  const apiKey = process.env.FMP_API_KEY;"
+                },
+                {
+                  "lineNumber": 28,
+                  "content": "    console.error('FMP_API_KEY not configured');"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/sp500/batch-ingest-financials.ts",
+              "matches": [
+                {
+                  "lineNumber": 5,
+                  "content": " * all S&amp;P 500 constituents using the per-symbol FMP API approach."
+                },
+                {
+                  "lineNumber": 34,
+                  "content": "const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'"
+                },
+                {
+                  "lineNumber": 43,
+                  "content": "  alternate_symbols: { fmp?: string } | null"
+                },
+                {
+                  "lineNumber": 98,
+                  "content": "  fmpSymbol: string,"
+                },
+                {
+                  "lineNumber": 107,
+                  "content": "      &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;"
+                },
+                {
+                  "lineNumber": 110,
+                  "content": "      &#96;${FMP_BASE_URL}/balance-sheet-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;"
+                },
+                {
+                  "lineNumber": 113,
+                  "content": "      &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?limit=${limit}${periodParam}&amp;apikey=${apiKey}&#96;"
+                },
+                {
+                  "lineNumber": 119,
+                  "content": "    throw new Error(&#96;FMP API error for ${fmpSymbol}: ${incomeData?.['Error Message'] || 'Invalid response'}&#96;)"
+                },
+                {
+                  "lineNumber": 141,
+                  "content": "      symbol: symbol, // Use canonical symbol, not FMP symbol"
+                },
+                {
+                  "lineNumber": 190,
+                  "content": "  const fmpSymbol = alternate_symbols?.fmp || symbol"
+                },
+                {
+                  "lineNumber": 195,
+                  "content": "      fetchFinancialsForSymbol(symbol, fmpSymbol, apiKey, 'annual'),"
+                },
+                {
+                  "lineNumber": 196,
+                  "content": "      fetchFinancialsForSymbol(symbol, fmpSymbol, apiKey, 'quarterly'),"
+                },
+                {
+                  "lineNumber": 207,
+                  "content": "        error: 'No data returned from FMP',"
+                },
+                {
+                  "lineNumber": 340,
+                  "content": "  const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 342,
+                  "content": "  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 404,
+                  "content": "    const result = await ingestSingleStock(supabase, constituent, FMP_API_KEY)"
+                }
+              ]
+            },
+            {
+              "file": "./supabase/migrations/20260118000001_fix_financials_std_unique_constraint.sql",
+              "matches": [
+                {
+                  "lineNumber": 10,
+                  "content": "-- the actual period end date from FMP (never NULL, always unique per period)."
+                }
+              ]
+            },
+            {
+              "file": "./docs/FINANCIALS_STD_REVIEW_REQUEST.md",
+              "matches": [
+                {
+                  "lineNumber": 9,
+                  "content": "We have a PostgreSQL table &#96;financials_std&#96; that stores financial statement data (income, balance sheet, cash flow) fetched from the FMP API. We need to:"
+                },
+                {
+                  "lineNumber": 64,
+                  "content": "- &#96;period_end_date&#96; comes directly from FMP's &#96;date&#96; field and is never NULL"
+                },
+                {
+                  "lineNumber": 152,
+                  "content": "1. Is &#96;(symbol, period_type, period_end_date)&#96; the correct natural key for FMP financial statement data?"
+                }
+              ]
+            },
+            {
+              "file": "./docs/FINANCIALS_STD_GUARDRAILS_DESIGN.md",
+              "matches": [
+                {
+                  "lineNumber": 69,
+                  "content": "### How Data Arrives from FMP"
+                },
+                {
+                  "lineNumber": 71,
+                  "content": "The FMP API provides three separate endpoints:"
+                },
+                {
+                  "lineNumber": 80,
+                  "content": "From FMP API responses:"
+                },
+                {
+                  "lineNumber": 88,
+                  "content": "| &#96;period_end_date&#96; | Direct from FMP &#96;date&#96; field |"
+                },
+                {
+                  "lineNumber": 91,
+                  "content": "| &#96;fiscal_quarter&#96; | Parsed from FMP &#96;period&#96; field: &#96;\"Q1\"&#96; → &#96;1&#96;, &#96;\"FY\"&#96; → &#96;null&#96; |"
+                },
+                {
+                  "lineNumber": 133,
+                  "content": "The FMP API identifies each financial statement by:"
+                },
+                {
+                  "lineNumber": 139,
+                  "content": "- &#96;period_end_date&#96; is **never NULL** — FMP always provides the &#96;date&#96; field"
+                },
+                {
+                  "lineNumber": 206,
+                  "content": "-- the actual period end date from FMP (never NULL, always unique per period)."
+                },
+                {
+                  "lineNumber": 285,
+                  "content": "-- you can backfill from FMP or derive from (year, fiscal_quarter)."
+                },
+                {
+                  "lineNumber": 676,
+                  "content": "Both fetch scripts already set &#96;period_end_date: item.date&#96; from FMP. Verified:"
+                }
+              ]
+            },
+            {
+              "file": "./docs/FINANCIALS_STD_INGESTION_SPEC.md",
+              "matches": [
+                {
+                  "lineNumber": 5,
+                  "content": "| File | Function | FMP Endpoints (v3) |"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "| FMP Field | financials_std Column | Source Statement |"
+                },
+                {
+                  "lineNumber": 26,
+                  "content": "| &#96;date&#96; | &#96;period_end_date&#96; | Direct from FMP (e.g., &#96;2024-09-30&#96;) |"
+                },
+                {
+                  "lineNumber": 45,
+                  "content": "| **Currency** | USD only (FMP returns USD for US stocks) |"
+                },
+                {
+                  "lineNumber": 46,
+                  "content": "| **Scale** | Raw dollars (not thousands/millions). FMP returns absolute values. |"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/sp500/batch-ingest-metrics.ts",
+              "matches": [
+                {
+                  "lineNumber": 5,
+                  "content": " * for all S&amp;P 500 constituents using the per-symbol FMP API approach."
+                },
+                {
+                  "lineNumber": 25,
+                  "content": "const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v3'"
+                },
+                {
+                  "lineNumber": 106,
+                  "content": "  alternate_symbols: { fmp?: string } | null"
+                },
+                {
+                  "lineNumber": 156,
+                  "content": "  fmpSymbol: string,"
+                },
+                {
+                  "lineNumber": 163,
+                  "content": "    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 164,
+                  "content": "    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 165,
+                  "content": "    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 166,
+                  "content": "    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 167,
+                  "content": "    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=annual&amp;limit=${ANNUAL_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 172,
+                  "content": "    &#96;${FMP_BASE_URL}/key-metrics/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 173,
+                  "content": "    &#96;${FMP_BASE_URL}/ratios/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 174,
+                  "content": "    &#96;${FMP_BASE_URL}/financial-growth/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 175,
+                  "content": "    &#96;${FMP_BASE_URL}/cash-flow-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 176,
+                  "content": "    &#96;${FMP_BASE_URL}/income-statement/${fmpSymbol}?period=quarter&amp;limit=${QUARTERLY_LIMIT}&amp;apikey=${apiKey}&#96;,"
+                },
+                {
+                  "lineNumber": 194,
+                  "content": "      throw new Error(&#96;FMP API error: ${data['Error Message']}&#96;)"
+                },
+                {
+                  "lineNumber": 223,
+                  "content": "        // Make certain cash flow values positive (FMP returns negative for outflows)"
+                },
+                {
+                  "lineNumber": 236,
+                  "content": "          data_source: &#96;FMP:${sources[i]}&#96;,"
+                },
+                {
+                  "lineNumber": 255,
+                  "content": "  const fmpSymbol = alternate_symbols?.fmp || symbol"
+                },
+                {
+                  "lineNumber": 258,
+                  "content": "    const metrics = await fetchMetricsForSymbol(symbol, fmpSymbol, apiKey)"
+                },
+                {
+                  "lineNumber": 265,
+                  "content": "        error: 'No metrics returned from FMP',"
+                },
+                {
+                  "lineNumber": 370,
+                  "content": "  const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 372,
+                  "content": "  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 436,
+                  "content": "    const result = await ingestSingleStock(supabase, constituent, FMP_API_KEY)"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/batch-fetch-sp500-20years.ts",
+              "matches": [
+                {
+                  "lineNumber": 6,
+                  "content": " * 2. Fetches 20 years of annual data from FMP API (income, balance sheet, cash flow)"
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'"
+                },
+                {
+                  "lineNumber": 61,
+                  "content": "    incomeStatement: &#96;https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,"
+                },
+                {
+                  "lineNumber": 62,
+                  "content": "    balanceSheet: &#96;https://financialmodelingprep.com/api/v3/balance-sheet-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,"
+                },
+                {
+                  "lineNumber": 63,
+                  "content": "    cashFlow: &#96;https://financialmodelingprep.com/api/v3/cash-flow-statement/${symbol}?limit=${limit}&amp;apikey=${FMP_API_KEY}&#96;,"
+                },
+                {
+                  "lineNumber": 199,
+                  "content": "    // Fetch from FMP"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/sp500/batch-ingest-segments.ts",
+              "matches": [
+                {
+                  "lineNumber": 5,
+                  "content": " * from FMP's Segment API for all S&amp;P 500 constituents."
+                },
+                {
+                  "lineNumber": 7,
+                  "content": " * FMP Endpoints:"
+                },
+                {
+                  "lineNumber": 23,
+                  "content": "const FMP_BASE_URL = 'https://financialmodelingprep.com/stable'"
+                },
+                {
+                  "lineNumber": 30,
+                  "content": "  alternate_symbols: { fmp?: string } | null"
+                },
+                {
+                  "lineNumber": 68,
+                  "content": "    throw new Error('Restricted endpoint - requires higher FMP tier')"
+                },
+                {
+                  "lineNumber": 75,
+                  "content": "    throw new Error('Restricted endpoint - requires higher FMP tier')"
+                },
+                {
+                  "lineNumber": 91,
+                  "content": "  fmpSymbol: string,"
+                },
+                {
+                  "lineNumber": 97,
+                  "content": "  const productUrl = &#96;${FMP_BASE_URL}/revenue-product-segmentation?symbol=${fmpSymbol}&amp;apikey=${apiKey}&#96;"
+                },
+                {
+                  "lineNumber": 116,
+                  "content": "            data_source: 'fmp_api',"
+                },
+                {
+                  "lineNumber": 124,
+                  "content": "  const geoUrl = &#96;${FMP_BASE_URL}/revenue-geographic-segmentation?symbol=${fmpSymbol}&amp;apikey=${apiKey}&#96;"
+                },
+                {
+                  "lineNumber": 143,
+                  "content": "            data_source: 'fmp_api',"
+                },
+                {
+                  "lineNumber": 159,
+                  "content": "  const fmpSymbol = alternate_symbols?.fmp || symbol"
+                },
+                {
+                  "lineNumber": 162,
+                  "content": "    const segments = await fetchSegmentsForSymbol(symbol, fmpSymbol, apiKey)"
+                },
+                {
+                  "lineNumber": 301,
+                  "content": "  const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 303,
+                  "content": "  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 367,
+                  "content": "    const result = await ingestSingleStock(supabase, constituent, FMP_API_KEY)"
+                }
+              ]
+            },
+            {
+              "file": "./scripts/sp500/test-bulk-api.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Test if FMP Bulk API is available on current tier"
+                },
+                {
+                  "lineNumber": 19,
+                  "content": "  const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 20,
+                  "content": "  if (!FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 21,
+                  "content": "    console.error('FMP_API_KEY not found')"
+                },
+                {
+                  "lineNumber": 25,
+                  "content": "  console.log('Testing FMP Bulk API access...\\n')"
+                },
+                {
+                  "lineNumber": 35,
+                  "content": "    const bulkUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement-bulk?year=${year}&amp;period=annual&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 63,
+                  "content": "    const perSymbolUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/AAPL?limit=1&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 86,
+                  "content": "      // Also check alternate symbols (for FMP format like BRK-B)"
+                },
+                {
+                  "lineNumber": 88,
+                  "content": "        if (c.alternate_symbols?.fmp) {"
+                },
+                {
+                  "lineNumber": 89,
+                  "content": "          sp500Symbols.add(c.alternate_symbols.fmp)"
+                },
+                {
+                  "lineNumber": 110,
+                  "content": "    const perSymbolUrl = &#96;https://financialmodelingprep.com/api/v3/income-statement/AAPL?limit=1&amp;apikey=${FMP_API_KEY}&#96;"
+                }
+              ]
+            },
+            {
+              "file": "./data/sp500-constituents.json",
+              "matches": [
+                {
+                  "lineNumber": 2542,
+                  "content": "      \"fmp\": \"BRK-B\","
+                },
+                {
+                  "lineNumber": 4558,
+                  "content": "      \"fmp\": \"BF-B\","
+                }
+              ]
+            },
+            {
+              "file": "./scripts/sp500/fetch-sp500-constituents.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Phase 1: Fetch S&amp;P 500 constituents from Financial Modeling Prep API"
+                },
+                {
+                  "lineNumber": 14,
+                  "content": "interface FMPSP500Constituent {"
+                },
+                {
+                  "lineNumber": 38,
+                  "content": "const SYMBOL_VARIATIONS: Record&lt;string, { fmp: string; canonical: string }&gt; = {"
+                },
+                {
+                  "lineNumber": 39,
+                  "content": "  'BRK-B': { fmp: 'BRK-B', canonical: 'BRK.B' },"
+                },
+                {
+                  "lineNumber": 40,
+                  "content": "  'BF-B': { fmp: 'BF-B', canonical: 'BF.B' },"
+                },
+                {
+                  "lineNumber": 43,
+                  "content": "function normalizeSymbol(fmpSymbol: string): { canonical: string; alternate_symbols: Record&lt;string, string&gt; } {"
+                },
+                {
+                  "lineNumber": 44,
+                  "content": "  const variation = SYMBOL_VARIATIONS[fmpSymbol]"
+                },
+                {
+                  "lineNumber": 49,
+                  "content": "        fmp: variation.fmp,"
+                },
+                {
+                  "lineNumber": 55,
+                  "content": "    canonical: fmpSymbol,"
+                },
+                {
+                  "lineNumber": 61,
+                  "content": "  const FMP_API_KEY = process.env.FMP_API_KEY"
+                },
+                {
+                  "lineNumber": 62,
+                  "content": "  if (!FMP_API_KEY) {"
+                },
+                {
+                  "lineNumber": 63,
+                  "content": "    throw new Error('FMP_API_KEY not found in environment')"
+                },
+                {
+                  "lineNumber": 66,
+                  "content": "  const url = &#96;https://financialmodelingprep.com/api/v3/sp500_constituent?apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 68,
+                  "content": "  console.log('Fetching S&amp;P 500 constituents from FMP API...')"
+                },
+                {
+                  "lineNumber": 72,
+                  "content": "    throw new Error(&#96;FMP API error: ${response.status} ${response.statusText}&#96;)"
+                },
+                {
+                  "lineNumber": 75,
+                  "content": "  const fmpData: FMPSP500Constituent[] = await response.json()"
+                },
+                {
+                  "lineNumber": 76,
+                  "content": "  console.log(&#96;✓ Received ${fmpData.length} constituents from FMP\\n&#96;)"
+                },
+                {
+                  "lineNumber": 79,
+                  "content": "  const constituents: SP500Constituent[] = fmpData.map((item) =&gt; {"
+                },
+                {
+                  "lineNumber": 123,
+                  "content": "      console.log(&#96;  ${c.symbol} -&gt; FMP uses: ${c.alternate_symbols.fmp}&#96;)"
+                }
+              ]
+            },
+            {
+              "file": "./supabase/migrations/20260117000001_sp500_expansion_phase0_phase1.sql",
+              "matches": [
+                {
+                  "lineNumber": 66,
+                  "content": "  -- Vendor-specific symbol mappings (e.g., {\"fmp\": \"BRK-B\", \"sec\": \"BRK.B\"})"
+                },
+                {
+                  "lineNumber": 158,
+                  "content": "COMMENT ON COLUMN sp500_constituents.alternate_symbols IS 'Vendor-specific symbol mappings (e.g., {\"fmp\": \"BRK-B\"})';"
+                }
+              ]
+            },
+            {
+              "file": "./data/backups/financial_metrics-backup-2026-01-17.json",
+              "matches": [
+                {
+                  "lineNumber": 10,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 26,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 42,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 58,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 74,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 90,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 106,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 122,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 138,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 154,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 170,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 186,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 202,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 218,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 234,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 250,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 266,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 282,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 298,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 314,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 330,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 346,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 362,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 378,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 394,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 410,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 426,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 442,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 458,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 474,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 490,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 506,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 522,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 538,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 554,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 570,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 586,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 602,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 618,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 634,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 650,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 666,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 682,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 698,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 714,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 730,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 746,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 762,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 778,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 794,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 810,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 826,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 842,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 858,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 874,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 890,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 906,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 922,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 938,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 954,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 970,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 986,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1002,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1018,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1034,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1050,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1066,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1082,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1098,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1114,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1130,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1146,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1162,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1178,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1194,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1210,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1226,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1242,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1274,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1290,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1306,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1322,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1338,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1354,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1370,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1386,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1402,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1418,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1434,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1450,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1466,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1482,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1498,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1514,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1530,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1546,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1562,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1578,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1594,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1610,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1626,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1642,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1658,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1674,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1690,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1706,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1722,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1754,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1770,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1786,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1802,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1818,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1834,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1850,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1866,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1882,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1898,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1914,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1930,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 1946,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1962,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1978,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1994,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2010,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2026,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2042,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2058,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2090,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2106,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2122,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2138,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2154,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2170,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2186,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2218,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2234,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2250,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2266,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2282,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2298,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2314,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2330,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2346,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2362,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2378,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2394,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 2410,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2426,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2442,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2458,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2474,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2490,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2506,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 2522,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2538,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2554,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2570,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2586,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2602,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2618,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2634,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2650,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2666,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2682,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2698,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 2714,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2730,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2746,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2762,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2778,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2794,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2810,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2826,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2842,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2858,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2874,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2890,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2906,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2922,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2938,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2954,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2970,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2986,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3002,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3018,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3034,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3050,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3066,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 3082,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3098,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3114,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3130,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3146,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3162,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3178,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3194,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3210,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3226,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3242,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3274,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3290,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3306,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3322,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3338,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3354,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3370,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3386,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3402,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3418,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3434,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3450,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3466,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3482,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3498,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3514,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3530,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3546,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3562,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3578,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3594,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3610,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3626,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3642,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3658,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3674,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3690,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3706,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3722,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3754,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3770,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3786,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3802,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3818,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3834,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3850,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3866,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3882,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3898,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3914,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3930,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3946,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3962,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3978,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3994,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4010,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4026,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4042,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4058,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4090,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4106,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4122,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4138,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4154,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4170,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 4186,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4218,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4234,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4250,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4266,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4282,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4298,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4314,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4330,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4346,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4362,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4378,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4394,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4410,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4426,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4442,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4458,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4474,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4490,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4506,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4522,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4538,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4554,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4570,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4586,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4602,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4618,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4634,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 4650,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4666,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4682,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4698,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4714,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4730,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4746,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 4762,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4778,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4794,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4810,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4826,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4842,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4858,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4874,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4890,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4906,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4922,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4938,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4954,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4970,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4986,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 5002,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5018,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5034,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 5050,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5066,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5082,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5098,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 5114,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 5130,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5146,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5162,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5178,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5194,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5210,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5226,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5242,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5274,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5290,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5306,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5322,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5338,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5354,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5370,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5386,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5402,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 5418,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5434,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5450,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5466,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5482,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5498,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5514,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5530,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5546,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5562,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5578,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5594,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5610,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5626,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5642,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5658,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5674,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5690,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5706,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5722,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5754,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5770,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5786,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5802,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5818,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5834,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5850,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5866,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5882,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5898,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 5914,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 5930,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5946,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5962,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5978,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 5994,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6010,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6026,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6042,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6058,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6074,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6090,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6106,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6122,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6138,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6154,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6170,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6186,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6202,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6218,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6234,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6250,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6266,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6282,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6298,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6314,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6330,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6346,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6362,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 6378,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6394,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6410,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6426,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6442,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6458,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6474,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6490,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6506,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6522,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6538,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6554,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6570,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6586,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6602,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6618,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6634,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6650,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6666,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6682,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6698,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6714,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6730,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6746,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6762,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 6778,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6794,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6810,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6826,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6842,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6858,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6874,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 6890,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6906,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6922,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6938,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 6954,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 6970,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 6986,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7002,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7018,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7034,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7050,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7066,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 7082,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7098,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7114,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7130,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7146,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7162,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7178,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7194,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7210,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7226,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7242,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 7258,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7274,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7290,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7306,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7322,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7338,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 7354,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7370,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7386,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 7402,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7418,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7434,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7450,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 7466,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 7482,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7498,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7514,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7530,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7546,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7562,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7578,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7594,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7610,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7626,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7642,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7658,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7674,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7690,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7706,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7722,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7738,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7754,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 7770,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7786,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7802,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7818,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7834,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7850,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7866,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7882,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 7898,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7914,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7930,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7946,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7962,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 7978,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 7994,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8010,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8026,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8042,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8058,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 8074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8090,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8106,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8122,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8138,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8154,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8170,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8186,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8218,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8234,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8250,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8266,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8282,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8298,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8314,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8330,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8346,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8362,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8378,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8394,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8410,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8426,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8442,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8458,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8474,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8490,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8506,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8522,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8538,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8554,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8570,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8586,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8602,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8618,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8634,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8650,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8666,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8682,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8698,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8714,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8730,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8746,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 8762,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8778,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8794,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8810,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8826,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 8842,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8858,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 8874,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8890,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8906,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 8922,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8938,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8954,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8970,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 8986,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9002,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9018,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9034,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9050,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9066,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9082,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9098,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9114,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9130,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9146,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9162,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9178,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9194,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9210,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9226,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9242,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9274,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9290,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9306,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 9322,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9338,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9354,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9370,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9386,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9402,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9418,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 9434,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9450,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9466,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9482,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9498,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9514,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9530,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9546,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9562,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 9578,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9594,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9610,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 9626,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9642,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9658,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9674,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 9690,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9706,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 9722,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9754,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 9770,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 9786,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9802,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9818,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9834,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9850,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9866,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 9882,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9898,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9914,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9930,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9946,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 9962,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9978,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 9994,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10010,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10026,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10042,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10058,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 10074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10090,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10106,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10122,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10138,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10154,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10170,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10186,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10218,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10234,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10250,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10266,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10282,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10298,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10314,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10330,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10346,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10362,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10378,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10394,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10410,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10426,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10442,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10458,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10474,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10490,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 10506,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10522,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10538,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10554,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10570,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10586,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10602,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10618,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10634,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10650,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10666,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10682,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10698,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10714,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10730,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10746,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10762,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10778,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10794,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10810,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10826,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10842,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10858,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10874,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 10890,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10906,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10922,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10938,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10954,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 10970,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 10986,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11002,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 11018,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11034,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11050,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11066,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11082,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11098,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11114,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11130,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11146,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11162,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11178,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11194,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11210,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11226,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11242,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11258,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11274,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11290,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11306,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11322,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11338,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11354,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11370,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11386,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11402,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11418,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11434,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11450,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11466,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11482,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11498,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11514,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11530,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11546,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11562,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 11578,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11594,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11610,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11626,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11642,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11658,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11674,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 11690,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11706,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11722,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11738,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11754,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11770,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11786,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11802,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11818,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 11834,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11850,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11866,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 11882,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11898,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11914,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 11930,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 11946,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 11962,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 11978,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 11994,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12010,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12026,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12042,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12058,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12090,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12106,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12122,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12138,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12154,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12170,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12186,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12218,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12234,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12250,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12266,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12282,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12298,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12314,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 12330,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12346,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12362,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12378,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12394,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12410,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12426,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12442,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12458,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12474,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12490,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12506,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12522,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12538,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12554,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12570,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12586,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12602,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12618,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12634,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12650,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12666,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12682,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12698,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12714,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12730,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12746,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12762,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12778,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12794,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12810,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12826,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12842,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12858,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12874,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12890,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12906,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 12922,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 12938,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 12954,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12970,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 12986,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13002,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13018,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13034,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13050,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13066,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13082,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13098,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13114,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13130,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13146,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13162,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13178,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13194,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13210,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13226,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13242,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13274,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13290,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13306,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 13322,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13338,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13354,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13370,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13386,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13402,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13418,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13434,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13450,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13466,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13482,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13498,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13514,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13530,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13546,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13562,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13578,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13594,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 13610,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13626,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13642,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13658,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13674,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13690,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13706,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13722,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13754,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 13770,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13786,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13802,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13818,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13834,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13850,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 13866,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13882,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13898,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13914,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13930,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 13946,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13962,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 13978,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 13994,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14010,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14026,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14042,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14058,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14074,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14090,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14106,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 14122,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14138,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14154,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 14170,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14186,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14202,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14218,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 14234,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 14250,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14266,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14282,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14298,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14314,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14330,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14346,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14362,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14378,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14394,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14410,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14426,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14442,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14458,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14474,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14490,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14506,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14522,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14538,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14554,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14570,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14586,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14602,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14618,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14634,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14650,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 14666,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14682,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14698,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14714,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14730,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14746,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14762,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14778,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14794,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14810,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14826,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14842,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14858,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 14874,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14890,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14906,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 14922,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14938,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 14954,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 14970,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 14986,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15002,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15018,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15034,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15050,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15066,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 15082,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15098,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15114,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15130,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15146,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15162,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15178,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15194,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15210,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15226,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15242,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15258,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15274,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15290,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15306,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15322,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15338,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15354,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15370,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15386,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15402,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15418,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15434,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15450,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15466,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15482,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15498,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15514,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15530,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15546,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15562,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15578,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15594,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15610,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15626,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15642,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15658,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15674,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 15690,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15706,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 15722,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15738,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15754,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15770,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15786,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15802,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15818,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15834,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15850,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15866,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15882,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15898,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15914,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 15930,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15946,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15962,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 15978,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 15994,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                }
+              ]
+            },
+            {
+              "file": "./docs/SP500_EXPANSION_PLAN.md",
+              "matches": [
+                {
+                  "lineNumber": 22,
+                  "content": "10. [Phase 4: Segment Data Ingestion (FMP API)](#phase-4-segment-data-ingestion-fmp-api)"
+                },
+                {
+                  "lineNumber": 46,
+                  "content": "└─────────┘         └─────────┘         └────┬────┘         │(FMP API)│"
+                },
+                {
+                  "lineNumber": 60,
+                  "content": "                   └─────────┘      (FMP API provides segments)"
+                },
+                {
+                  "lineNumber": 64,
+                  "content": "- **Phase 3 (SEC Filings) is now DEFERRED** - FMP API provides segment data directly"
+                },
+                {
+                  "lineNumber": 65,
+                  "content": "- **Phase 4 (Segments)** now uses FMP API instead of iXBRL parsing - much simpler!"
+                },
+                {
+                  "lineNumber": 79,
+                  "content": "- **Business segment data** (product &amp; geographic revenue) via FMP API for all companies"
+                },
+                {
+                  "lineNumber": 83,
+                  "content": "&gt; **Key Simplification:** SEC filing downloads and iXBRL parsing have been **deferred**. FMP's Segment API provides product and geographic revenue breakdowns directly, eliminating the need to download 17,500 filings or build custom XBRL parsers. This reduces implementation time significantly while still providing segment data for all S&amp;P 500 companies."
+                },
+                {
+                  "lineNumber": 99,
+                  "content": "| SEC filings | ~20 (AAPL only) | DEFERRED (using FMP API for segments) |"
+                },
+                {
+                  "lineNumber": 100,
+                  "content": "| Segment data | AAPL + GOOGL | All 500 stocks (via FMP API) |"
+                },
+                {
+                  "lineNumber": 112,
+                  "content": "| Phase 4 | Segment Data (FMP API) | 6-8 hours |"
+                },
+                {
+                  "lineNumber": 117,
+                  "content": "&gt; **Time Savings:** By deferring SEC filing infrastructure and using FMP API for segment data, we save approximately **17-33 hours** of implementation time (Phase 3 would have been 7-11 hours, and Phase 4 with iXBRL would have been 16-22 hours vs 6-8 hours with FMP API)."
+                },
+                {
+                  "lineNumber": 149,
+                  "content": "| Financial Data API | Financial Modeling Prep (FMP) |"
+                },
+                {
+                  "lineNumber": 263,
+                  "content": "&gt; **Note:** CIK mappings and filing queue systems are no longer needed since we're using FMP API for segment data instead of downloading SEC filings."
+                },
+                {
+                  "lineNumber": 275,
+                  "content": "| &#96;scripts/ingest-segments.ts&#96; | Does not exist | Create for FMP segment API |"
+                },
+                {
+                  "lineNumber": 277,
+                  "content": "&gt; **Note:** Filing scripts (&#96;fetch-sec-filings.ts&#96;, &#96;download-filings.ts&#96;, &#96;chunk-filings.ts&#96;) are no longer needed for S&amp;P 500 expansion since segment data comes from FMP API."
+                },
+                {
+                  "lineNumber": 302,
+                  "content": "- Business and geographic segment revenue (via FMP API, where reported)"
+                },
+                {
+                  "lineNumber": 352,
+                  "content": "│   S&amp;P 500    │     │     FMP      │     │  SEC EDGAR   │"
+                },
+                {
+                  "lineNumber": 381,
+                  "content": "| FMP API | 300/min (paid) | 250/min with backoff |"
+                },
+                {
+                  "lineNumber": 521,
+                  "content": "ALTER TABLE financials_std ADD COLUMN IF NOT EXISTS data_source TEXT DEFAULT 'fmp';"
+                },
+                {
+                  "lineNumber": 525,
+                  "content": "SET data_source = 'fmp'"
+                },
+                {
+                  "lineNumber": 604,
+                  "content": "| Existing AAPL data differs from fresh FMP fetch | Keep existing data, log discrepancy for review |"
+                },
+                {
+                  "lineNumber": 647,
+                  "content": "&gt; **Note on CIK:** Since we're using FMP API for segment data (not SEC EDGAR), CIK mappings are **optional**. The schema includes a &#96;cik&#96; column for future SEC integration, but it's not required for MVP."
+                },
+                {
+                  "lineNumber": 694,
+                  "content": "  \"fmp\": \"BRK-B\",      // Financial Modeling Prep uses hyphen"
+                },
+                {
+                  "lineNumber": 702,
+                  "content": "| Canonical Symbol | FMP | SEC | Notes |"
+                },
+                {
+                  "lineNumber": 711,
+                  "content": "  vendor: 'fmp' | 'sec' | 'yahoo' | 'ui'"
+                },
+                {
+                  "lineNumber": 755,
+                  "content": "#### Step 1.2: Fetch S&amp;P 500 List from FMP API"
+                },
+                {
+                  "lineNumber": 759,
+                  "content": "FMP provides an endpoint for S&amp;P 500 constituents:"
+                },
+                {
+                  "lineNumber": 773,
+                  "content": "1. Fetch current S&amp;P 500 list from FMP"
+                },
+                {
+                  "lineNumber": 821,
+                  "content": "1. Fetch latest list from FMP"
+                },
+                {
+                  "lineNumber": 844,
+                  "content": "| FMP S&amp;P 500 List | &#96;api/v3/sp500_constituent&#96; | Tickers, names, sectors |"
+                },
+                {
+                  "lineNumber": 861,
+                  "content": "| FMP API down | Retry 3x with exponential backoff, then fail with alert |"
+                },
+                {
+                  "lineNumber": 889,
+                  "content": "Currently, we fetch financial data using the Financial Modeling Prep (FMP) API. The existing scripts work for single stocks but need to be enhanced for batch processing with:"
+                },
+                {
+                  "lineNumber": 910,
+                  "content": "### FMP API Endpoints"
+                },
+                {
+                  "lineNumber": 958,
+                  "content": "- Easy to hit daily rate limits on lower FMP tiers"
+                },
+                {
+                  "lineNumber": 962,
+                  "content": "#### Option B: FMP Bulk API (Recommended)"
+                },
+                {
+                  "lineNumber": 964,
+                  "content": "FMP provides bulk endpoints that return data for **ALL companies in a single request**:"
+                },
+                {
+                  "lineNumber": 1003,
+                  "content": "&gt; **Important:** Bulk endpoints may require FMP Premium tier ($49/month) or higher. Before implementing, verify access:"
+                },
+                {
+                  "lineNumber": 1007,
+                  "content": "curl \"https://financialmodelingprep.com/api/v3/income-statement-bulk?year=2023&amp;period=annual&amp;apikey=$FMP_API_KEY\" | head -c 500"
+                },
+                {
+                  "lineNumber": 1026,
+                  "content": "    const url = &#96;${FMP_BASE_URL}/${endpoint}&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 1066,
+                  "content": "If bulk API is not available on current FMP tier:"
+                },
+                {
+                  "lineNumber": 1068,
+                  "content": "2. Consider upgrading FMP tier if doing frequent full refreshes"
+                },
+                {
+                  "lineNumber": 1111,
+                  "content": "#### Step 2.3: Create FMP API Client with Rate Limiting"
+                },
+                {
+                  "lineNumber": 1113,
+                  "content": "**File:** &#96;lib/fmp/client.ts&#96;"
+                },
+                {
+                  "lineNumber": 1123,
+                  "content": "interface FMPClientConfig {"
+                },
+                {
+                  "lineNumber": 1130,
+                  "content": "class FMPClient {"
+                },
+                {
+                  "lineNumber": 1146,
+                  "content": "Transform FMP response to our database schema:"
+                },
+                {
+                  "lineNumber": 1149,
+                  "content": "// Transform FMP income statement to our schema"
+                },
+                {
+                  "lineNumber": 1152,
+                  "content": "  data: FMPIncomeStatement[],"
+                },
+                {
+                  "lineNumber": 1156,
+                  "content": "// Transform FMP balance sheet to our schema"
+                },
+                {
+                  "lineNumber": 1159,
+                  "content": "  data: FMPBalanceSheet[],"
+                },
+                {
+                  "lineNumber": 1163,
+                  "content": "// Transform FMP cash flow to our schema"
+                },
+                {
+                  "lineNumber": 1166,
+                  "content": "  data: FMPCashFlow[],"
+                },
+                {
+                  "lineNumber": 1170,
+                  "content": "// Transform FMP key metrics to our schema"
+                },
+                {
+                  "lineNumber": 1173,
+                  "content": "  data: FMPKeyMetrics[],"
+                },
+                {
+                  "lineNumber": 1193,
+                  "content": "  //    b. Fetch data from FMP (parallel within rate limit)"
+                },
+                {
+                  "lineNumber": 1376,
+                  "content": "**FMP Income Statement → financials_std:**"
+                },
+                {
+                  "lineNumber": 1377,
+                  "content": "| FMP Field | Our Field |"
+                },
+                {
+                  "lineNumber": 1385,
+                  "content": "**FMP Balance Sheet → financials_std:**"
+                },
+                {
+                  "lineNumber": 1386,
+                  "content": "| FMP Field | Our Field |"
+                },
+                {
+                  "lineNumber": 1392,
+                  "content": "**FMP Cash Flow → financials_std:**"
+                },
+                {
+                  "lineNumber": 1393,
+                  "content": "| FMP Field | Our Field |"
+                },
+                {
+                  "lineNumber": 1397,
+                  "content": "**FMP Key Metrics → financial_metrics:**"
+                },
+                {
+                  "lineNumber": 1398,
+                  "content": "| FMP Field | Our metric_name |"
+                },
+                {
+                  "lineNumber": 1420,
+                  "content": "| Standard Symbol | FMP Symbol | Notes |"
+                },
+                {
+                  "lineNumber": 1554,
+                  "content": "    'financial_metrics', -- Extended metrics (139 metrics from FMP)"
+                },
+                {
+                  "lineNumber": 1620,
+                  "content": "&gt; **Reason:** FMP's Segment API (&#96;/stable/revenue-product-segmentation&#96; and &#96;/stable/revenue-geographic-segmentation&#96;) provides product and geographic revenue breakdowns directly, eliminating the need to:"
+                },
+                {
+                  "lineNumber": 1632,
+                  "content": "&gt; - Operating income by segment (not available via FMP)"
+                },
+                {
+                  "lineNumber": 1660,
+                  "content": "## Phase 4: Segment Data Ingestion (FMP API)"
+                },
+                {
+                  "lineNumber": 1664,
+                  "content": "Ingest business segment and geographic segment revenue data from FMP's pre-parsed Segment API for all 500 S&amp;P 500 stocks."
+                },
+                {
+                  "lineNumber": 1668,
+                  "content": "**Major Simplification:** Instead of downloading SEC filings and building complex iXBRL/XBRL parsers, we use FMP's Segment API endpoints that provide pre-parsed, normalized segment data."
+                },
+                {
+                  "lineNumber": 1670,
+                  "content": "**What we get from FMP:**"
+                },
+                {
+                  "lineNumber": 1683,
+                  "content": "Target: Segment revenue data for all 500 stocks where FMP provides it."
+                },
+                {
+                  "lineNumber": 1692,
+                  "content": "### Data Source: FMP Segment API"
+                },
+                {
+                  "lineNumber": 1694,
+                  "content": "FMP provides pre-parsed segment data via two endpoints:"
+                },
+                {
+                  "lineNumber": 1742,
+                  "content": "FMP segment endpoints count against your API quota:"
+                },
+                {
+                  "lineNumber": 1757,
+                  "content": "  period: string           // 'FY' (annual only from FMP)"
+                },
+                {
+                  "lineNumber": 1761,
+                  "content": "  value: number            // In actual dollars (FMP provides normalized values)"
+                },
+                {
+                  "lineNumber": 1762,
+                  "content": "  dataSource: string       // 'fmp_api'"
+                },
+                {
+                  "lineNumber": 1777,
+                  "content": "#### Step 4.2: Create FMP Segment Fetcher"
+                },
+                {
+                  "lineNumber": 1779,
+                  "content": "**File:** &#96;lib/segments/fmp-fetcher.ts&#96;"
+                },
+                {
+                  "lineNumber": 1782,
+                  "content": "const FMP_BASE_URL = 'https://financialmodelingprep.com/stable'"
+                },
+                {
+                  "lineNumber": 1784,
+                  "content": "async function fetchFMPSegments(symbol: string): Promise&lt;SegmentData[]&gt; {"
+                },
+                {
+                  "lineNumber": 1788,
+                  "content": "  const productUrl = &#96;${FMP_BASE_URL}/revenue-product-segmentation?symbol=${symbol}&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 1811,
+                  "content": "            dataSource: 'fmp_api',"
+                },
+                {
+                  "lineNumber": 1821,
+                  "content": "  const geoUrl = &#96;${FMP_BASE_URL}/revenue-geographic-segmentation?symbol=${symbol}&amp;apikey=${FMP_API_KEY}&#96;"
+                },
+                {
+                  "lineNumber": 1843,
+                  "content": "            dataSource: 'fmp_api',"
+                },
+                {
+                  "lineNumber": 1862,
+                  "content": "import { fetchFMPSegments } from '../lib/segments/fmp-fetcher'"
+                },
+                {
+                  "lineNumber": 1868,
+                  "content": "  console.log('Starting segment data ingestion from FMP API...')"
+                },
+                {
+                  "lineNumber": 1890,
+                  "content": "        const segments = await fetchFMPSegments(stock.symbol)"
+                },
+                {
+                  "lineNumber": 2226,
+                  "content": "### Comparison: FMP API vs iXBRL Parsing"
+                },
+                {
+                  "lineNumber": 2228,
+                  "content": "| Aspect | FMP API (chosen) | iXBRL Parsing (deferred) |"
+                },
+                {
+                  "lineNumber": 2231,
+                  "content": "| **Maintenance** | None (FMP handles parsing) | Ongoing (format changes) |"
+                },
+                {
+                  "lineNumber": 2237,
+                  "content": "| **Accuracy** | Pre-validated by FMP | Varies (parsing quality) |"
+                },
+                {
+                  "lineNumber": 2767,
+                  "content": "  it('maps FMP fields to our schema correctly', () =&gt; {"
+                },
+                {
+                  "lineNumber": 2768,
+                  "content": "    const fmpData = [{"
+                },
+                {
+                  "lineNumber": 2778,
+                  "content": "    const result = transformIncomeStatement('AAPL', fmpData, 'annual')"
+                },
+                {
+                  "lineNumber": 2794,
+                  "content": "    const fmpData = [{"
+                },
+                {
+                  "lineNumber": 2801,
+                  "content": "    const result = transformIncomeStatement('AAPL', fmpData, 'quarterly')"
+                },
+                {
+                  "lineNumber": 2808,
+                  "content": "    const fmpData = [{"
+                },
+                {
+                  "lineNumber": 2816,
+                  "content": "    const result = transformIncomeStatement('AAPL', fmpData, 'annual')"
+                },
+                {
+                  "lineNumber": 2830,
+                  "content": "    const fmpData = [{"
+                },
+                {
+                  "lineNumber": 2838,
+                  "content": "    const result = transformBalanceSheet('AAPL', fmpData, 'annual')"
+                },
+                {
+                  "lineNumber": 2847,
+                  "content": "#### FMP Client Tests"
+                },
+                {
+                  "lineNumber": 2849,
+                  "content": "**File:** &#96;lib/__tests__/fmp-client.test.ts&#96;"
+                },
+                {
+                  "lineNumber": 2853,
+                  "content": "import { FMPClient } from '../fmp/client'"
+                },
+                {
+                  "lineNumber": 2855,
+                  "content": "describe('FMPClient', () =&gt; {"
+                },
+                {
+                  "lineNumber": 2856,
+                  "content": "  let client: FMPClient"
+                },
+                {
+                  "lineNumber": 2859,
+                  "content": "    client = new FMPClient({"
+                },
+                {
+                  "lineNumber": 2904,
+                  "content": "describe('FMP Segment Fetcher', () =&gt; {"
+                },
+                {
+                  "lineNumber": 2905,
+                  "content": "  it('fetches product segment revenue from FMP API', async () =&gt; {"
+                },
+                {
+                  "lineNumber": 2906,
+                  "content": "    // Mock FMP API response"
+                },
+                {
+                  "lineNumber": 2919,
+                  "content": "    const segments = await fetchFMPSegments('AAPL')"
+                },
+                {
+                  "lineNumber": 2929,
+                  "content": "      dataSource: 'fmp_api',"
+                },
+                {
+                  "lineNumber": 3280,
+                  "content": "│   ├── fmp-client.test.ts"
+                },
+                {
+                  "lineNumber": 3342,
+                  "content": "│   └── segments-sample.json      # AAPL + GOOGL segments from FMP"
+                },
+                {
+                  "lineNumber": 3780,
+                  "content": "          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}"
+                },
+                {
+                  "lineNumber": 3805,
+                  "content": "FMP_API_KEY=your-fmp-key"
+                },
+                {
+                  "lineNumber": 3838,
+                  "content": "| Refresh segment data | Quarterly | Fetch updated segments from FMP |"
+                },
+                {
+                  "lineNumber": 3853,
+                  "content": "| FMP API (paid tier) | $29 |"
+                },
+                {
+                  "lineNumber": 3867,
+                  "content": "| FMP API changes/downtime | Medium | High | Cache data locally, retry logic |"
+                },
+                {
+                  "lineNumber": 3868,
+                  "content": "| FMP segment data incomplete | Low | Medium | Cross-validate against company totals |"
+                },
+                {
+                  "lineNumber": 3913,
+                  "content": "&gt; **SKIPPED** - Phase 3 deferred. Segment data obtained via FMP API instead."
+                },
+                {
+                  "lineNumber": 3916,
+                  "content": "### Phase 4: Segment Data (FMP API)"
+                },
+                {
+                  "lineNumber": 3917,
+                  "content": "- [ ] 400+ stocks have segment data from FMP"
+                },
+                {
+                  "lineNumber": 3960,
+                  "content": "### B. FMP API Response Examples"
+                },
+                {
+                  "lineNumber": 4051,
+                  "content": "**Simpler alternative implemented:** Added &#96;alternate_symbols JSONB&#96; column to &#96;sp500_constituents&#96; for vendor-specific mappings (e.g., &#96;{\"fmp\": \"BRK-B\", \"edgar\": \"BRK.B\"}&#96;)."
+                },
+                {
+                  "lineNumber": 4079,
+                  "content": "**Current approach:** No filing embeddings. Segment data obtained via FMP API."
+                },
+                {
+                  "lineNumber": 4090,
+                  "content": "- **FMP API provides segment data**: The &#96;/stable/revenue-product-segmentation&#96; and &#96;/stable/revenue-geographic-segmentation&#96; endpoints provide pre-parsed, normalized segment revenue data"
+                },
+                {
+                  "lineNumber": 4096,
+                  "content": "- Operating income by segment (only revenue available via FMP)"
+                },
+                {
+                  "lineNumber": 4102,
+                  "content": "**Current approach:** Use FMP Segment API as the sole source for segment data. See Phase 4 implementation."
+                },
+                {
+                  "lineNumber": 4108,
+                  "content": "- FMP segment API data proves insufficient or unreliable"
+                },
+                {
+                  "lineNumber": 4121,
+                  "content": "**Current approach:** Daily price data fetched on-demand from FMP API with caching."
+                }
+              ]
+            },
+            {
+              "file": "./docs/GOOGL_IMPLEMENTATION_PLAN.md",
+              "matches": [
+                {
+                  "lineNumber": 65,
+                  "content": "**Current State:** Hardcoded to fetch AAPL data from FMP API."
+                },
+                {
+                  "lineNumber": 86,
+                  "content": "**FMP API Endpoints Used:**"
+                },
+                {
+                  "lineNumber": 95,
+                  "content": "- Map FMP field names to our standardized schema"
+                },
+                {
+                  "lineNumber": 99,
+                  "content": "#### 1.1.2 Modify &#96;scripts/fetch-fmp-metrics.ts&#96;"
+                },
+                {
+                  "lineNumber": 107,
+                  "content": "2. Update output filename: &#96;data/{symbol}-fmp-metrics.json&#96;"
+                },
+                {
+                  "lineNumber": 111,
+                  "content": "**FMP API Endpoints Used:**"
+                },
+                {
+                  "lineNumber": 147,
+                  "content": "#### 1.2.2 Modify &#96;scripts/ingest-fmp-metrics.ts&#96;"
+                },
+                {
+                  "lineNumber": 149,
+                  "content": "**Current State:** Reads &#96;data/aapl-fmp-metrics.json&#96; and inserts into &#96;financial_metrics&#96; table."
+                },
+                {
+                  "lineNumber": 155,
+                  "content": "2. Read from &#96;data/{symbol}-fmp-metrics.json&#96;"
+                },
+                {
+                  "lineNumber": 725,
+                  "content": "-- Extended metrics (139 metrics from FMP)"
+                },
+                {
+                  "lineNumber": 787,
+                  "content": "| &#96;scripts/fetch-fmp-metrics.ts&#96; | Add symbol parameter |"
+                },
+                {
+                  "lineNumber": 789,
+                  "content": "| &#96;scripts/ingest-fmp-metrics.ts&#96; | Add symbol parameter |"
+                },
+                {
+                  "lineNumber": 810,
+                  "content": "| &#96;data/googl-fmp-metrics.json&#96; | GOOGL extended metrics (generated) |"
+                },
+                {
+                  "lineNumber": 829,
+                  "content": "- [ ] **1.2** Update &#96;fetch-fmp-metrics.ts&#96; with symbol parameter"
+                },
+                {
+                  "lineNumber": 831,
+                  "content": "- [ ] **1.4** Run fetch for GOOGL metrics: &#96;npx tsx scripts/fetch-fmp-metrics.ts GOOGL&#96;"
+                },
+                {
+                  "lineNumber": 833,
+                  "content": "- [ ] **1.6** Update &#96;ingest-fmp-metrics.ts&#96; with symbol parameter"
+                },
+                {
+                  "lineNumber": 836,
+                  "content": "- [ ] **1.9** Run ingest for GOOGL metrics: &#96;npx tsx scripts/ingest-fmp-metrics.ts GOOGL&#96;"
+                },
+                {
+                  "lineNumber": 885,
+                  "content": "| FMP API rate limits | Medium | Medium | Add delays, cache responses |"
+                },
+                {
+                  "lineNumber": 919,
+                  "content": "## Appendix: FMP API Reference"
+                }
+              ]
+            },
+            {
+              "file": "./package-lock.json",
+              "matches": [
+                {
+                  "lineNumber": 2109,
+                  "content": "      \"integrity\": \"sha512-VYsFMpULAz87ZW6BVYw3I6sWesGpsP9OPcyKe8ofdg9LHxSbRMd7zrVrr5xi/3kMZtpWL/wC+UIJWJYVX5uTKg==\","
+                },
+                {
+                  "lineNumber": 3306,
+                  "content": "      \"integrity\": \"sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==\","
+                },
+                {
+                  "lineNumber": 3884,
+                  "content": "      \"integrity\": \"sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==\","
+                },
+                {
+                  "lineNumber": 5857,
+                  "content": "      \"integrity\": \"sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g==\","
+                }
+              ]
+            },
+            {
+              "file": "./scripts/ingest-fmp-metrics.ts",
+              "matches": [
+                {
+                  "lineNumber": 2,
+                  "content": " * Ingest FMP metrics into Supabase financial_metrics table"
+                },
+                {
+                  "lineNumber": 6,
+                  "content": " *   npx tsx scripts/ingest-fmp-metrics.ts AAPL    # Ingest AAPL metrics"
+                },
+                {
+                  "lineNumber": 7,
+                  "content": " *   npx tsx scripts/ingest-fmp-metrics.ts GOOGL   # Ingest GOOGL metrics"
+                },
+                {
+                  "lineNumber": 48,
+                  "content": "  console.log(&#96;📥 Loading FMP metrics for ${SYMBOL} from file...\\n&#96;)"
+                },
+                {
+                  "lineNumber": 52,
+                  "content": "  const filePath = path.join(process.cwd(), &#96;data/${symbolLower}-fmp-metrics.json&#96;)"
+                }
+              ]
+            },
+            {
+              "file": "./data/googl-fmp-metrics.json",
+              "matches": [
+                {
+                  "lineNumber": 9,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 22,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 35,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 48,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 61,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 74,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 87,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 100,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 113,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 126,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 139,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 152,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 165,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 178,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 191,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 204,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 217,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 230,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 243,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 256,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 269,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 282,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 295,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 308,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 321,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 334,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 347,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 360,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 373,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 386,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 399,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 412,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 425,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 438,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 451,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 464,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 477,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 490,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 503,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 516,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 529,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 542,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 555,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 568,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 581,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 594,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 607,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 620,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 633,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 646,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 659,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 672,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 685,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 698,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 711,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 724,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 737,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 750,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 763,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 776,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 789,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 802,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 815,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 828,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 841,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 854,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 867,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 880,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 893,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 906,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 919,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 932,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 945,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 958,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 971,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 984,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 997,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1010,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1023,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1036,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1049,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 1062,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1075,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1088,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1101,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1114,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1127,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1140,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1153,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1166,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1179,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1192,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1205,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1218,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1231,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1244,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1257,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1270,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1283,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1296,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1309,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1322,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1335,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1348,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1361,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1374,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1387,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1400,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1413,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1426,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1439,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1452,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1465,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1478,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 1491,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1504,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 1517,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1530,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1543,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1556,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1569,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1582,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1595,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1608,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1621,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1634,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1647,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1660,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1673,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1686,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1699,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1712,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1725,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 1738,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1751,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1764,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1777,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1790,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1803,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1816,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 1829,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1842,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1855,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1868,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1881,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 1894,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1907,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1920,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1933,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1946,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 1959,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1972,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 1985,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 1998,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2011,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2024,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2037,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2050,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2063,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2076,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2089,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2102,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2115,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2128,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 2141,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2154,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2167,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2180,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2193,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 2206,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2219,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2232,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2245,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2258,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2271,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2284,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2297,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2310,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2323,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2336,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2349,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2362,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2375,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2388,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2401,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2414,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2427,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 2440,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2453,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2466,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2479,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2492,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2505,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2518,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2531,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2544,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2557,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2570,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2583,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2596,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2609,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2622,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2635,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2648,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2661,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 2674,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 2687,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2700,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2713,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2726,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2739,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2752,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2765,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 2778,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2791,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2804,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2817,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2830,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 2843,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2856,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2869,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2882,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2895,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2908,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2921,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2934,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2947,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2960,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2973,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 2986,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 2999,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3012,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3025,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3038,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3051,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3064,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3077,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3090,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3103,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3116,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3129,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3142,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3155,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3168,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3181,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3194,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 3207,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3220,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 3233,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3246,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3259,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3272,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3285,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3298,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3311,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3324,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3337,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3350,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3363,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3376,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3389,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3402,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3415,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3428,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3441,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 3454,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3467,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3480,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3493,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3506,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3519,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3532,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3545,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3558,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3571,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3584,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3597,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 3610,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3623,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3636,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3649,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3662,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3675,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3688,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 3701,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3714,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3727,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3740,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3753,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3766,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3779,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3792,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3805,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 3818,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3831,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3844,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 3857,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3870,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3883,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3896,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 3909,
+                  "content": "    \"data_source\": \"FMP:income-statement\","
+                },
+                {
+                  "lineNumber": 3922,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 3935,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3948,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3961,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 3974,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 3987,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4000,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4013,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4026,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4039,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4052,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4065,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4078,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4091,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4104,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4117,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4130,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4143,
+                  "content": "    \"data_source\": \"FMP:cash-flow-statement\","
+                },
+                {
+                  "lineNumber": 4156,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4169,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4182,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4195,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4208,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4221,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4234,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4247,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4260,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4273,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4286,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4299,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4312,
+                  "content": "    \"data_source\": \"FMP:growth\","
+                },
+                {
+                  "lineNumber": 4325,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4338,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4351,
+                  "content": "    \"data_source\": \"FMP:ratios\","
+                },
+                {
+                  "lineNumber": 4364,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                },
+                {
+                  "lineNumber": 4377,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 4390,
+                  "content": "    \"data_source\": \"FMP:enterprise-values\","
+                },
+                {
+                  "lineNumber": 4403,
+                  "content": "    \"data_source\": \"FMP:key-metrics\","
+                }
+              ]
+            }
+          ],
+          "totalLines": 2000,
+          "totalMatchedLines": 2000,
+          "clientTruncated": true,
+          "ripgrepTruncated": true
+        }
+      }
+    }
+  }
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+
+Reviewing the insiders feature plan and providing feedback:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/cliffordtraff/Desktop/Coding/Fin Quote/app/actions/gainers.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/cliffordtraff/Desktop/Coding/Fin Quote/components/GainersTable.tsx</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="web_search">
+<details>
+            <summary>Tool use: **web_search** • Searched web `undefined` • **1** results</summary>
+        
+| Title | URL | Chunk |
+|-------|-----|-------|
+| Web search results for query: FMP API insider trading endpoint v4 rate limits pricing tier |  | Links:<br/>1. [Pricing \| Financial Modeling Prep  \| FMP](https://site.financialmodelingprep.com/developer/docs/pricing)<br/>2. [Latest Insider Trading  API](https://site.financialmodelingprep.com/developer/docs/stable/latest-insider-trade)<br/>3. [Insider Trades Search  API](https://site.financialmodelingprep.com/developer/docs/stock-insider-trading-api)<br/>4. [Insider Trades Search  API](https://site.financialmodelingprep.com/developer/docs/stock-insider-trading-api/?direct=true)<br/>5. [Search Insider Trades  API](https://site.financialmodelingprep.com/developer/docs/stable/search-insider-trades)<br/><br/># FMP API Insider Trading v4 Rate Limits and Pricing<br/><br/>Based on the available documentation, here's what I found:<br/><br/>## Insider Trading Endpoints<br/><br/>FMP offers v4 insider trading endpoints including:[2][5]<br/>- **Latest Insider Trading API** - tracks recent stock purchases and sales by company insiders<br/>- **Search Insider Trades API** - allows searching by company name, ticker symbol, or insider name<br/><br/>## Rate Limits and Pricing Tiers<br/><br/>The search results show FMP's general pricing structure includes:[1]<br/>- **Basic tier** (Free): 250 calls/day<br/>- **Starter tier** ($22/month): 300 API calls/minute, plus 5+ years of historical data<br/><br/>However, the specific rate limits for the insider trading endpoints at v4 are not detailed in these results. The documentation pages reference pricing and rate limit information, but the complete rate limit specifications for insider trading endpoints are not included in the provided content.<br/><br/>To find exact v4 insider trading rate limits by tier, you would need to consult FMP's complete API documentation or contact their support, as the detailed endpoint-specific rate limits aren't shown in these search results. |
+
+</details>
+</tool-use>
+
+---
+
+
+Reviewing the insiders feature plan and providing feedback:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file_v2">
+<details><summary>Tool use: **read_file_v2** • Read file: /Users/cliffordtraff/Desktop/Coding/Fin Quote/components/Navigation.tsx</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+## Overall assessment
+
+The plan is solid and aligns with existing patterns. A few issues and improvements:
+
+---
+
+## Critical issues
+
+### 1. API endpoint version mismatch
+Problem: The plan uses `/api/v4/insider-trading`, but FMP typically uses v3 for most endpoints. The codebase uses v3.
+
+Recommendation: Verify the correct endpoint:
+- Check if v4 exists: `https://financialmodelingprep.com/api/v4/insider-trading`
+- If not, use v3: `https://financialmodelingprep.com/api/v3/insider-trading`
+- Or check for: `/api/v3/insider-trading` or `/api/v3/form-4`
+
+Action: Test the endpoint before implementation.
+
+---
+
+### 2. Name search efficiency
+Problem: Fetching 500 records and filtering server-side is inefficient and may hit rate limits.
+
+Current approach:
+```typescript
+searchInsiderTradesByName(name: string, limit: number = 500)
+// Fetches 500, filters server-side
+```
+
+Better approach:
+- Check if FMP has a name search parameter (e.g., `reportingName` or `name`)
+- If not, consider:
+  - Client-side filtering after fetching latest trades
+  - Debounced search with a minimum character threshold
+  - Caching search results
+
+Recommendation:
+```typescript
+// Option 1: Check if FMP supports name parameter
+GET /api/v3/insider-trading?reportingName=Tim%20Cook&apikey=...
+
+// Option 2: If not, fetch latest 1000 once, cache, filter client-side
+// This avoids repeated API calls for name searches
+```
+
+---
+
+### 3. Rate limiting strategy
+Problem: 5-minute cache (`revalidate: 300`) may be too aggressive for insider trading data, which updates frequently.
+
+Current codebase patterns:
+- Gainers: `revalidate: 60` (1 minute)
+- Market data: `revalidate: 60`
+- Price data: `revalidate: 60` or `revalidate: 300`
+
+Recommendation:
+- Latest trades: `revalidate: 60` (1 minute) — more timely
+- By-ticker: `revalidate: 300` (5 minutes) — less frequent
+- By-name: Cache results client-side or use longer cache
+
+---
+
+## Architecture improvements
+
+### 4. Missing error handling for restricted endpoints
+The codebase handles 402 errors for restricted endpoints. Add this:
+
+```typescript
+// In insider-trading.ts
+if (response.status === 402) {
+  throw new Error('Restricted endpoint - requires higher FMP tier')
+}
+```
+
+Some FMP endpoints require premium tiers. Test if insider trading is available on your tier.
+
+---
+
+### 5. TypeScript interface alignment
+The plan's interface looks good. Add validation:
+
+```typescript
+// Add to insider-types.ts
+export function isValidInsiderTrade(data: any): data is InsiderTrade {
+  return (
+    typeof data.symbol === 'string' &&
+    typeof data.filingDate === 'string' &&
+    typeof data.reportingName === 'string' &&
+    // ... validate all required fields
+  )
+}
+```
+
+This matches patterns in `gainers.ts` that filter bad data.
+
+---
+
+### 6. Client-side filtering location
+Problem: The plan says "client-side filtering" but doesn't specify where.
+
+Recommendation: Filter in `InsidersPageClient.tsx`:
+```typescript
+// In InsidersPageClient.tsx
+const filteredTrades = useMemo(() => {
+  return trades.filter(trade => {
+    // Apply transactionType filter
+    if (filters.transactionType !== 'all' && 
+        trade.transactionType !== filters.transactionType) {
+      return false
+    }
+    // Apply dateRange filter
+    // ... etc
+  })
+}, [trades, filters])
+```
+
+This matches how other components handle filtering.
+
+---
+
+## Missing considerations
+
+### 7. Pagination strategy
+The plan mentions pagination as "optional/future" but it's important for:
+- Latest trades (could be 1000+)
+- Name searches (could return many results)
+
+Recommendation: Add basic pagination in Phase 4:
+- Show 50-100 rows per page
+- "Load more" button or page numbers
+- Avoids overwhelming the UI
+
+---
+
+### 8. Date range filter implementation
+The plan lists date ranges but doesn't specify how to calculate them.
+
+Add helper:
+```typescript
+// lib/insider-helpers.ts
+export function getDateRangeFilter(dateRange: DateRangeFilter): { from: Date, to: Date } {
+  const now = new Date()
+  switch (dateRange) {
+    case 'week':
+      return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: now }
+    case 'month':
+      return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), to: now }
+    // ... etc
+  }
+}
+```
+
+---
+
+### 9. Value calculation edge cases
+Problem: `Value = shares × price`, but `price` can be `null`.
+
+Recommendation:
+```typescript
+const value = trade.price !== null && trade.price > 0
+  ? trade.securitiesTransacted * trade.price
+  : null
+
+// In table: Display "-" for null values
+```
+
+---
+
+### 10. Symbol link integration
+The plan mentions "clickable SEC filing links" as future work, but symbol links should be Phase 5.
+
+Recommendation: Make symbols clickable to `/stock/[symbol]`:
+```tsx
+<Link href={`/stock/${trade.symbol}`} className="text-blue-400">
+  {trade.symbol}
+</Link>
+```
+
+This matches existing patterns (e.g., `GainersTable.tsx`).
+
+---
+
+## Minor improvements
+
+### 11. Table column widths
+The plan specifies widths, but consider responsive design:
+- Mobile: Horizontal scroll or stack columns
+- Desktop: Fixed widths work well
+
+Recommendation: Use Tailwind responsive classes:
+```tsx
+<div className="grid grid-cols-8 gap-3 px-4 py-2 
+  max-md:grid-cols-4 max-md:overflow-x-auto">
+```
+
+---
+
+### 12. Loading states
+The plan mentions loading states but doesn't specify patterns.
+
+Recommendation: Match existing patterns:
+```tsx
+// Similar to GainersTable empty state
+if (loading) {
+  return <div className="text-center p-8">Loading insider trades...</div>
+}
+```
+
+---
+
+### 13. Transaction type display
+The plan shows single letters (P, S, A, G, M) but consider tooltips:
+
+```tsx
+<span 
+  className="text-green-500"
+  title="Purchase"
+>
+  P
+</span>
+```
+
+---
+
+## Implementation order suggestion
+
+1. Phase 1: Foundation — verify API endpoint first
+2. Phase 2: Basic page — start with "Latest Trades" only
+3. Phase 3: Search — add ticker search first (simpler)
+4. Phase 4: Filters — add transaction type, then date range
+5. Phase 5: Name search — most complex, do last
+6. Phase 6: Polish — pagination, links, tooltips
+
+---
+
+## Summary
+
+Strengths:
+- Clear structure and phases
+- Good alignment with existing patterns
+- Thoughtful component architecture
+- Proper TypeScript interfaces
+
+Critical fixes needed:
+1. Verify API endpoint version (v3 vs v4)
+2. Improve name search efficiency
+3. Adjust caching strategy
+4. Add error handling for restricted endpoints
+
+Nice-to-haves:
+- Pagination earlier
+- Symbol links in Phase 5
+- Better mobile responsiveness
+- Tooltips for transaction types
+
+Overall: Strong plan with minor adjustments needed. The biggest risk is the API endpoint version — verify that first.
+
+Should I help verify the FMP API endpoint or start implementing a specific phase?
+
+---
+
+_**User**_
+
+@node resend more concise answer
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+## Insiders Feature Plan - Concise Review
+
+**Overall:** Solid plan, aligns with existing patterns. A few fixes needed.
+
+### Critical Issues
+
+1. **API endpoint** — Plan uses `/api/v4/insider-trading`. Verify it exists; codebase uses v3. Test first.
+2. **Name search** — Fetching 500 and filtering server-side is inefficient. Check if FMP supports a name parameter; otherwise cache latest trades and filter client-side.
+3. **Caching** — 5-minute cache may be too long. Use 1 minute for latest trades (matches `gainers.ts` pattern).
+
+### Quick Fixes
+
+- Add 402 error handling for restricted endpoints (like other actions)
+- Make symbol column clickable → `/stock/[symbol]` (Phase 5, not future)
+- Add pagination earlier (Phase 4) — 100+ results will overwhelm UI
+
+### What's Good
+
+- Clear component structure
+- Proper TypeScript interfaces
+- Follows existing patterns (`GainersTable`, `gainers.ts`)
+- Phased approach is logical
+
+### Recommendation
+
+Start with Phase 1, but verify the API endpoint first. If v4 doesn't exist, switch to v3. Everything else looks ready to implement.
+
+Should I verify the FMP endpoint or start implementing?
 
 ---
 
