@@ -19,7 +19,7 @@ function SparklineCard({ index }: SparklineCardProps) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !index.priceHistory || index.priceHistory.length === 0) return
+    if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -34,20 +34,25 @@ function SparklineCard({ index }: SparklineCardProps) {
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height)
 
-    const prices = index.priceHistory
-    const timestamps = index.priceTimestamps || []
-    const todayOHLCData = index.todayOHLC || []
+    const yesterdayOHLC = index.yesterdayOHLC || []
+    const todayOHLC = index.todayOHLC || []
     const previousClose = index.previousClose
 
-    // Include previousClose and today's OHLC highs/lows in min/max calculation
-    const todayHighs = todayOHLCData.map(c => c.high)
-    const todayLows = todayOHLCData.map(c => c.low)
+    // Include all OHLC highs/lows in min/max calculation
+    const yesterdayHighs = yesterdayOHLC.map(c => c.high)
+    const yesterdayLows = yesterdayOHLC.map(c => c.low)
+    const todayHighs = todayOHLC.map(c => c.high)
+    const todayLows = todayOHLC.map(c => c.low)
     const allPrices = [
-      ...prices,
+      ...yesterdayHighs,
+      ...yesterdayLows,
       ...todayHighs,
       ...todayLows,
       ...(previousClose ? [previousClose] : [])
     ]
+
+    if (allPrices.length === 0) return
+
     const minPrice = Math.min(...allPrices)
     const maxPrice = Math.max(...allPrices)
     const priceRange = maxPrice - minPrice || 1
@@ -58,39 +63,52 @@ function SparklineCard({ index }: SparklineCardProps) {
     const chartWidth = rect.width - padding * 2
     const chartHeight = rect.height - padding - bottomPadding
 
-    
-    // Draw sparkline
-    const todayOHLC = index.todayOHLC || []
-    const totalDataPoints = prices.length + todayOHLC.length
 
-    if (prices.length > 0 && todayOHLC.length > 0) {
-      // Draw yesterday's data as a line (dimmer, thinner)
+    // Draw candlesticks for both days
+    const totalCandles = yesterdayOHLC.length + todayOHLC.length
+    if (totalCandles === 0) return
+
+    // Draw dashed gridlines
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'
+    ctx.strokeStyle = gridColor
+    ctx.lineWidth = 1
+    ctx.setLineDash([3, 3])
+
+    // Horizontal gridlines (4 lines)
+    const horizontalLines = 4
+    for (let i = 1; i < horizontalLines; i++) {
+      const y = padding + (i / horizontalLines) * chartHeight
       ctx.beginPath()
-      ctx.strokeStyle = isDark ? '#4b5563' : '#9ca3af'
-      ctx.lineWidth = 1
-      ctx.lineJoin = 'round'
-      ctx.lineCap = 'round'
-
-      for (let i = 0; i < prices.length; i++) {
-        const x = padding + (i / (totalDataPoints - 1)) * chartWidth
-        const y = padding + ((maxPrice - prices[i]) / priceRange) * chartHeight
-
-        if (i === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      }
+      ctx.moveTo(padding, y)
+      ctx.lineTo(padding + chartWidth, y)
       ctx.stroke()
+    }
 
-      // Draw today's data as candlesticks
-      const todayStartX = padding + (prices.length / (totalDataPoints - 1)) * chartWidth
-      const todayWidth = chartWidth - todayStartX + padding
-      const candleWidth = todayWidth / todayOHLC.length
+    // Vertical gridlines (6 evenly spaced - 3 for yesterday, 3 for today)
+    const verticalLines = 6
+    for (let i = 1; i < verticalLines; i++) {
+      const x = padding + (i / verticalLines) * chartWidth
+      ctx.beginPath()
+      ctx.moveTo(x, padding)
+      ctx.lineTo(x, padding + chartHeight)
+      ctx.stroke()
+    }
+
+    // Reset line dash for candlesticks
+    ctx.setLineDash([])
+
+    // Helper function to draw candlesticks
+    const drawCandlesticks = (
+      ohlcData: typeof yesterdayOHLC,
+      startIndex: number,
+      totalCandles: number,
+      dimmed: boolean = false
+    ) => {
+      const candleWidth = chartWidth / totalCandles
       const bodyWidth = Math.max(candleWidth * 0.7, 2)
 
-      todayOHLC.forEach((candle, i) => {
-        const x = todayStartX + (i + 0.5) * candleWidth
+      ohlcData.forEach((candle, i) => {
+        const x = padding + ((startIndex + i + 0.5) / totalCandles) * chartWidth
         const isGreen = candle.close >= candle.open
 
         const openY = padding + ((maxPrice - candle.open) / priceRange) * chartHeight
@@ -98,9 +116,18 @@ function SparklineCard({ index }: SparklineCardProps) {
         const highY = padding + ((maxPrice - candle.high) / priceRange) * chartHeight
         const lowY = padding + ((maxPrice - candle.low) / priceRange) * chartHeight
 
-        const color = isGreen
-          ? (isDark ? '#22c55e' : '#16a34a')
-          : (isDark ? '#ef4444' : '#dc2626')
+        let color: string
+        if (dimmed) {
+          // Dimmed colors for yesterday
+          color = isGreen
+            ? (isDark ? '#166534' : '#22c55e')  // darker green
+            : (isDark ? '#991b1b' : '#ef4444')  // darker red
+        } else {
+          // Bright colors for today
+          color = isGreen
+            ? (isDark ? '#22c55e' : '#16a34a')
+            : (isDark ? '#ef4444' : '#dc2626')
+        }
 
         // Draw wick
         ctx.beginPath()
@@ -116,30 +143,20 @@ function SparklineCard({ index }: SparklineCardProps) {
         const bodyHeight = Math.max(Math.abs(closeY - openY), 1)
         ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight)
       })
-    } else {
-      // No today/yesterday split, draw everything as a line
-      ctx.beginPath()
-      ctx.strokeStyle = isDark ? '#6b7280' : '#374151'
-      ctx.lineWidth = 1.5
-      ctx.lineJoin = 'round'
-      ctx.lineCap = 'round'
+    }
 
-      prices.forEach((price, i) => {
-        const x = padding + (i / (prices.length - 1)) * chartWidth
-        const y = padding + ((maxPrice - price) / priceRange) * chartHeight
+    // Draw yesterday's candlesticks (dimmed)
+    if (yesterdayOHLC.length > 0) {
+      drawCandlesticks(yesterdayOHLC, 0, totalCandles, true)
+    }
 
-        if (i === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      })
-
-      ctx.stroke()
+    // Draw today's candlesticks (bright)
+    if (todayOHLC.length > 0) {
+      drawCandlesticks(todayOHLC, yesterdayOHLC.length, totalCandles, false)
     }
 
     // Draw bracket-style x-axis labels with hourly times below
-    if (timestamps.length > 0 && todayOHLC.length > 0) {
+    if (yesterdayOHLC.length > 0 && todayOHLC.length > 0) {
       ctx.font = '10px sans-serif'
       ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)'
@@ -152,7 +169,7 @@ function SparklineCard({ index }: SparklineCardProps) {
       const percentY = timeY + 14
 
       // Calculate the dividing point between yesterday and today
-      const todayStartX = padding + (prices.length / (totalDataPoints - 1)) * chartWidth
+      const todayStartX = padding + (yesterdayOHLC.length / totalCandles) * chartWidth
       const gapWidth = 4 // Small gap between the two brackets
 
       // Yesterday bracket (left side)
@@ -185,8 +202,8 @@ function SparklineCard({ index }: SparklineCardProps) {
       const hoursToShowYesterday = ['10', '12', '14'] // Show 10am, 12pm, 2pm for yesterday
 
       for (const targetHour of hoursToShowYesterday) {
-        const matchIdx = timestamps.findIndex(ts => {
-          const timePart = ts.split(' ')[1]
+        const matchIdx = yesterdayOHLC.findIndex(candle => {
+          const timePart = candle.date.split(' ')[1]
           if (!timePart) return false
           const hour = timePart.split(':')[0]
           const minute = timePart.split(':')[1]
@@ -194,7 +211,7 @@ function SparklineCard({ index }: SparklineCardProps) {
         })
 
         if (matchIdx !== -1) {
-          const x = padding + (matchIdx / (totalDataPoints - 1)) * chartWidth
+          const x = padding + ((matchIdx + 0.5) / totalCandles) * chartWidth
           ctx.textAlign = 'center'
           ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
           const hourNum = parseInt(targetHour)
@@ -216,9 +233,7 @@ function SparklineCard({ index }: SparklineCardProps) {
         })
 
         if (matchIdx !== -1) {
-          const todayWidth = chartWidth - todayStartX + padding
-          const candleWidth = todayWidth / todayOHLC.length
-          const x = todayStartX + (matchIdx + 0.5) * candleWidth
+          const x = padding + ((yesterdayOHLC.length + matchIdx + 0.5) / totalCandles) * chartWidth
           ctx.textAlign = 'center'
           ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
           const hourNum = parseInt(targetHour)
@@ -255,7 +270,7 @@ function SparklineCard({ index }: SparklineCardProps) {
         percentY
       )
     }
-  }, [index.priceHistory, index.priceTimestamps, index.todayOHLC, index.previousClose, index.yesterdayChangePercent, index.priceChangePercent, isDark])
+  }, [index.yesterdayOHLC, index.todayOHLC, index.previousClose, index.yesterdayChangePercent, index.priceChangePercent, isDark])
 
   return (
     <div className="flex flex-col items-center pt-2 pb-1 px-3 flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[rgb(33,33,33)]">

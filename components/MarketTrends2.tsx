@@ -2,14 +2,10 @@
 
 import type { GainerData } from '@/app/actions/gainers'
 import type { LoserData } from '@/app/actions/losers'
-import type { MostActiveStock } from '@/app/actions/most-active'
-import type { TrendingStock } from '@/app/actions/trending-stocks'
 
-interface MarketTrendsProps {
-  mostActive: MostActiveStock[]
+interface MarketTrends2Props {
   gainers: GainerData[]
   losers: LoserData[]
-  trending: TrendingStock[]
 }
 
 interface StockData {
@@ -70,14 +66,9 @@ function MiniTable({ title, stocks, colorMode }: { title: string; stocks: StockD
   )
 }
 
-export default function MarketTrends({ mostActive, gainers, losers }: MarketTrendsProps) {
+export default function MarketTrends2({ gainers, losers }: MarketTrends2Props) {
   return (
     <div className="flex gap-2">
-      <MiniTable
-        title="Most Active"
-        stocks={mostActive.slice(0, 17)}
-        colorMode="neutral"
-      />
       <MiniTable
         title="Gainers"
         stocks={gainers.slice(0, 17)}

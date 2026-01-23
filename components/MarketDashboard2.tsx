@@ -9,18 +9,22 @@ import SectorHeatmap from '@/components/SectorHeatmap'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import MarketHeadlines from '@/components/MarketHeadlines'
 import IndexSparklines from '@/components/IndexSparklines'
-import MarketTrends from '@/components/MarketTrends'
+import MarketTrends2 from '@/components/MarketTrends2'
 import SP500PerformanceChart from '@/components/SP500PerformanceChart'
+import MarketInsights from '@/components/MarketInsights'
+import AfterHours from '@/components/AfterHours'
+import EarningsCalendar from '@/components/EarningsCalendar'
+import TopGainerSparklines from '@/components/TopGainerSparklines'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
-interface MarketDashboardProps {
+interface MarketDashboard2Props {
   initialData: AllMarketData
 }
 
 const ENABLE_MOVERS = process.env.NEXT_PUBLIC_ENABLE_MOVERS === 'true'
 
-export default function MarketDashboard({ initialData }: MarketDashboardProps) {
+export default function MarketDashboard2({ initialData }: MarketDashboard2Props) {
   const [data, setData] = useState<AllMarketData>(initialData)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -44,7 +48,7 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
     return () => clearInterval(interval)
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, mostActive, trending, sp500Gainers, sp500Losers } = data
+  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline } = data
 
   // Placeholder for LLM-generated market summary
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
@@ -72,23 +76,21 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
         </div>
       )}
 
-      {/* Market Trends Table and S&P 500 Movers */}
-      <div className="flex gap-4 mb-8" style={{ width: '1360px' }}>
-        {mostActive.length > 0 && (
-          <MarketTrends
-            mostActive={mostActive}
-            gainers={gainers}
-            losers={losers}
-            trending={trending}
-          />
-        )}
+      {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}
+      {(sp500GainerSparklines.length > 0 || sp500LoserSparklines.length > 0) && (
+        <div className="mb-4">
+          <TopGainerSparklines sparklines={sp500GainerSparklines} loserSparklines={sp500LoserSparklines} />
+        </div>
+      )}
 
-        {(sp500Gainers.length > 0 || sp500Losers.length > 0) && (
-          <SP500PerformanceChart
-            gainers={sp500Gainers.slice(0, 17)}
-            losers={sp500Losers.slice(0, 17)}
-          />
-        )}
+      {/* Market Trends Tables and Insights */}
+      <div className="flex gap-4 mb-8">
+        <MarketTrends2
+          gainers={gainers}
+          losers={losers}
+        />
+        <MarketInsights metaSparkline={metaSparkline || undefined} xlbSparkline={xlbSparkline || undefined} />
+        <AfterHours />
       </div>
 
       {/* Main Content Grid */}
@@ -146,6 +148,13 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
           {losers.length > 0 && (
             <LosersTable losers={losers} />
           )}
+        </div>
+      )}
+
+      {/* Earnings Calendar */}
+      {earnings.length > 0 && (
+        <div className="mt-8">
+          <EarningsCalendar earnings={earnings} />
         </div>
       )}
     </div>

@@ -33,7 +33,7 @@ export async function getMostActiveData(): Promise<{ mostActive?: MostActiveStoc
 
     if (Array.isArray(data) && data.length > 0) {
       const mostActive: MostActiveStock[] = data
-        .slice(0, 10)
+        .slice(0, 20)
         .filter((item: any) => item.price > 0)
         .map((item: any) => ({
           symbol: item.symbol,

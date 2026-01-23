@@ -38,6 +38,10 @@ export type { SparklineIndexData } from '@/app/actions/sparkline-indices'
 export type { MostActiveStock } from '@/app/actions/most-active'
 export type { TrendingStock } from '@/app/actions/trending-stocks'
 export type { SP500MoverData } from '@/app/actions/sp500-movers'
+export type { EarningsData } from '@/app/actions/earnings-calendar'
+export type { SP500GainerSparklineData } from '@/app/actions/sp500-gainer-sparklines'
+export type { SP500LoserSparklineData } from '@/app/actions/sp500-loser-sparklines'
+export type { StockSparklineData } from '@/app/actions/stock-sparkline'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -60,4 +64,9 @@ export interface AllMarketData {
   trending: import('@/app/actions/trending-stocks').TrendingStock[]
   sp500Gainers: import('@/app/actions/sp500-movers').SP500MoverData[]
   sp500Losers: import('@/app/actions/sp500-movers').SP500MoverData[]
+  earnings: import('@/app/actions/earnings-calendar').EarningsData[]
+  sp500GainerSparklines: import('@/app/actions/sp500-gainer-sparklines').SP500GainerSparklineData[]
+  sp500LoserSparklines: import('@/app/actions/sp500-loser-sparklines').SP500LoserSparklineData[]
+  metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
+  xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
 }

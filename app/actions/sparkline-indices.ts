@@ -15,8 +15,9 @@ export interface SparklineIndexData {
   priceChange: number
   priceChangePercent: number
   yesterdayChangePercent: number | null // Previous day's percentage change
-  priceHistory: number[] // Simple array of closing prices for sparkline (yesterday)
-  priceTimestamps: string[] // Timestamps corresponding to each price point
+  priceHistory: number[] // Simple array of closing prices for sparkline (yesterday) - deprecated
+  priceTimestamps: string[] // Timestamps corresponding to each price point - deprecated
+  yesterdayOHLC: OHLCData[] // Full OHLC data for yesterday's candlesticks
   todayOHLC: OHLCData[] // Full OHLC data for today's candlesticks
   previousClose: number | null // Previous day's closing price for reference line
   todayStartIndex: number | null // Index in priceHistory where today's data begins
@@ -70,6 +71,7 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
 
         let priceHistory: number[] = []
         let priceTimestamps: string[] = []
+        let yesterdayOHLC: OHLCData[] = []
         let todayOHLC: OHLCData[] = []
         let previousClose: number | null = null
         let todayStartIndex: number | null = null
@@ -94,10 +96,25 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
             // Reverse to chronological order
             const chronological = filteredData.reverse()
 
-            // For yesterday's data: sample every 5 minutes for line chart
+            // For yesterday's data: aggregate into 5-minute OHLC candles (same as today)
             const yesterdayData = chronological.filter((c: { date: string }) => c.date.split(' ')[0] === previousDay)
-            const sampledYesterday = yesterdayData.filter((_: unknown, i: number) => i % 5 === 0)
 
+            // Group into 5-minute candles (every 5 1-min bars)
+            for (let i = 0; i < yesterdayData.length; i += 5) {
+              const group = yesterdayData.slice(i, i + 5)
+              if (group.length > 0) {
+                yesterdayOHLC.push({
+                  date: group[0].date,
+                  open: group[0].open,
+                  high: Math.max(...group.map((c: { high: number }) => c.high)),
+                  low: Math.min(...group.map((c: { low: number }) => c.low)),
+                  close: group[group.length - 1].close
+                })
+              }
+            }
+
+            // Keep priceHistory for backwards compatibility
+            const sampledYesterday = yesterdayData.filter((_: unknown, i: number) => i % 5 === 0)
             priceHistory = sampledYesterday.map((d: { close: number }) => d.close)
             priceTimestamps = sampledYesterday.map((d: { date: string }) => d.date)
 
@@ -150,6 +167,7 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
           yesterdayChangePercent,
           priceHistory,
           priceTimestamps,
+          yesterdayOHLC,
           todayOHLC,
           previousClose,
           todayStartIndex

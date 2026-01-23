@@ -39,7 +39,7 @@ export async function getLosersData(): Promise<{ losers: LoserData[] } | { error
           const pctChange = Math.abs(item.changesPercentage || 0)
           return pctChange < 100 && item.price > 0
         })
-        .slice(0, 10) // Take top 10
+        .slice(0, 20) // Take top 20
         .map((item: any) => ({
           symbol: item.symbol,
           name: item.name,
