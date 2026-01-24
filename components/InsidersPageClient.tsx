@@ -2,7 +2,12 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { InsiderTrade } from '@/app/actions/insider-trading'
-import { getInsiderTradesBySymbol, getLatestInsiderTrades } from '@/app/actions/insider-trading'
+import {
+  getInsiderTradesBySymbol,
+  getLatestInsiderTrades,
+  getTopInsiderTrades,
+  searchInsiderTradesByName
+} from '@/app/actions/insider-trading'
 import InsiderTradesTable from './InsiderTradesTable'
 
 type ViewType = 'latest' | 'top' | 'ticker' | 'insider'
@@ -79,6 +84,55 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     }
   }, [tickerQuery, activeView])
 
+  // Debounced insider name search
+  useEffect(() => {
+    if (activeView !== 'insider') return
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    if (insiderQuery.trim().length < 2) {
+      // Show all trades if query is too short
+      if (insiderQuery.trim().length === 0) {
+        setTrades(initialTrades)
+      } else {
+        setTrades([])
+      }
+      return
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    const timeoutId = setTimeout(async () => {
+      setIsLoading(true)
+      try {
+        const result = await searchInsiderTradesByName(insiderQuery.trim(), 200)
+        if (!controller.signal.aborted) {
+          if ('trades' in result) {
+            setTrades(result.trades)
+          } else {
+            setTrades([])
+          }
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setTrades([])
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }, 300)
+
+    return () => {
+      clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [insiderQuery, activeView, initialTrades])
+
   // Handle view change
   const handleViewChange = async (view: ViewType) => {
     setActiveView(view)
@@ -93,15 +147,18 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       }
       setIsLoading(false)
     } else if (view === 'top') {
-      // Fetch more trades for top weekly view
+      // Use dedicated server action for top trades (already sorted by value)
       setIsLoading(true)
-      const result = await getLatestInsiderTrades(500)
+      const result = await getTopInsiderTrades(7, 200)
       if ('trades' in result) {
         setTrades(result.trades)
       }
       setIsLoading(false)
-    } else if (view === 'ticker' || view === 'insider') {
-      // For search views, start with initial trades (all latest)
+    } else if (view === 'ticker') {
+      // Clear trades for ticker search, user needs to enter a symbol
+      setTrades([])
+    } else if (view === 'insider') {
+      // Show initial trades for insider search
       setTrades(initialTrades)
     }
   }
@@ -109,30 +166,6 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
   // Client-side filtering
   const filteredTrades = useMemo(() => {
     let result = trades
-
-    // For "Top Trades" view: filter to past 7 days, with price > 0, sort by value
-    if (activeView === 'top') {
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-      result = result
-        .filter(trade => {
-          const tradeDate = new Date(trade.transactionDate).getTime()
-          const hasValue = trade.price && trade.price > 0 && trade.securitiesTransacted > 0
-          return tradeDate >= sevenDaysAgo && hasValue
-        })
-        .sort((a, b) => {
-          const aValue = (a.securitiesTransacted || 0) * (a.price || 0)
-          const bValue = (b.securitiesTransacted || 0) * (b.price || 0)
-          return bValue - aValue
-        })
-    }
-
-    // Insider name filter (for insider search tab)
-    if (activeView === 'insider' && insiderQuery.trim()) {
-      const query = insiderQuery.toLowerCase().trim()
-      result = result.filter(trade =>
-        trade.reportingName?.toLowerCase().includes(query)
-      )
-    }
 
     // Transaction type filter
     if (transactionFilter !== 'all') {
@@ -148,7 +181,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       )
     }
 
-    // Date range filter (not applied to "top" view which has its own date logic)
+    // Date range filter (not applied to "top" view which already filters by date on server)
     if (dateFilter !== 'all' && activeView !== 'top') {
       const days: Record<string, number> = {
         week: 7,
@@ -166,7 +199,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     }
 
     return result
-  }, [trades, transactionFilter, dateFilter, activeView, insiderQuery])
+  }, [trades, transactionFilter, dateFilter, activeView])
 
   // Pagination
   const totalPages = Math.ceil(filteredTrades.length / ROWS_PER_PAGE)
@@ -273,6 +306,9 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               placeholder="Search insider name..."
               className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {isLoading && (
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            )}
           </div>
         )}
       </div>

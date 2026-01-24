@@ -7,11 +7,13 @@ import StockPriceChart from '@/components/StockPriceChart'
 import FinancialStatementsTabs from '@/components/FinancialStatementsTabs'
 import NewsFeed from '@/components/NewsFeed'
 import CompanyDescription from '@/components/CompanyDescription'
+import StockInsiderTrades from '@/components/StockInsiderTrades'
 import { getStockOverview } from '@/app/actions/stock-overview'
 import { getStockKeyStats } from '@/app/actions/stock-key-stats'
 import { getAllFinancials } from '@/app/actions/get-all-financials'
 import { getStockNews } from '@/app/actions/get-stock-news'
 import { getCompanyProfile } from '@/app/actions/get-company-profile'
+import { getInsiderTradesBySymbol } from '@/app/actions/insider-trading'
 import { isValidSymbol } from '@/lib/symbol-resolver'
 
 interface PageProps {
@@ -88,13 +90,17 @@ export default async function StockPage({ params }: PageProps) {
   }
 
   // Parallel data fetching for all sections
-  const [overview, keyStats, financials, news, profile] = await Promise.all([
+  const [overview, keyStats, financials, news, profile, insiderResult] = await Promise.all([
     getStockOverview(normalizedSymbol).catch(() => null),
     getStockKeyStats(normalizedSymbol).catch(() => null),
     getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
     getStockNews(normalizedSymbol, 30).catch(() => []),
     getCachedProfile(normalizedSymbol).catch(() => null),
+    getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
   ])
+
+  // Extract insider trades from result
+  const insiderTrades = 'trades' in insiderResult ? insiderResult.trades : []
 
   // If we couldn't get basic overview data, show a message
   if (!overview || !keyStats) {
@@ -724,6 +730,15 @@ export default async function StockPage({ params }: PageProps) {
         <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
             <NewsFeed news={news} />
+          </div>
+        </div>
+      </section>
+
+      {/* Insider Trading Section */}
+      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <StockInsiderTrades symbol={normalizedSymbol} trades={insiderTrades} />
           </div>
         </div>
       </section>

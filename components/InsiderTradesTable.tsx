@@ -185,7 +185,16 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
                 </Link>
               </div>
               <div className="text-xs text-gray-900 dark:text-white truncate" title={trade.reportingName}>
-                {trade.reportingName}
+                {trade.insiderId ? (
+                  <Link
+                    href={`/insider/${trade.insiderId}`}
+                    className="text-blue-400 hover:text-blue-300 hover:underline"
+                  >
+                    {trade.reportingName}
+                  </Link>
+                ) : (
+                  trade.reportingName
+                )}
               </div>
               <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={trade.typeOfOwner}>
                 {formatTitle(trade.typeOfOwner)}
