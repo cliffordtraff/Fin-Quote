@@ -53,24 +53,41 @@ interface FMPInsiderTrade {
   formType: string
 }
 
+// FMP API returns max 100 results per page, so we need to paginate
+const FMP_PAGE_SIZE = 100
+
 async function fetchFromFMP(limit: number): Promise<FMPInsiderTrade[]> {
-  const url = `https://financialmodelingprep.com/api/v4/insider-trading?limit=${limit}&apikey=${FMP_API_KEY}`
+  const allTrades: FMPInsiderTrade[] = []
+  const pagesNeeded = Math.ceil(limit / FMP_PAGE_SIZE)
 
-  console.log(`Fetching ${limit} trades from FMP API...`)
+  console.log(`Fetching ${limit} trades from FMP API (${pagesNeeded} pages)...`)
 
-  const response = await fetch(url)
+  for (let page = 0; page < pagesNeeded && allTrades.length < limit; page++) {
+    const url = `https://financialmodelingprep.com/api/v4/insider-trading?page=${page}&limit=${FMP_PAGE_SIZE}&apikey=${FMP_API_KEY}`
 
-  if (!response.ok) {
-    throw new Error(`FMP API error: ${response.status} ${response.statusText}`)
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      throw new Error(`FMP API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid FMP response format')
+    }
+
+    if (data.length === 0) {
+      console.log(`  Page ${page}: empty - stopping`)
+      break
+    }
+
+    allTrades.push(...data)
+    console.log(`  Page ${page}: ${data.length} trades (total: ${allTrades.length})`)
   }
 
-  const data = await response.json()
-
-  if (!Array.isArray(data)) {
-    throw new Error('Invalid FMP response format')
-  }
-
-  return data
+  // Trim to requested limit
+  return allTrades.slice(0, limit)
 }
 
 function normalizeTransactionCode(type: string | null): string | null {
