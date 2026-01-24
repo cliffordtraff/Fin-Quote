@@ -9,9 +9,9 @@ import StockSearch from './StockSearch'
 export default function Navigation() {
   const pathname = usePathname()
 
-  // Extract current stock symbol from path if on a stock page
-  const stockMatch = pathname?.match(/^\/stock\/([^/]+)/)
-  const currentSymbol = stockMatch ? stockMatch[1].toUpperCase() : null
+  // Extract current stock symbol from path if on a stock or company page
+  const stockMatch = pathname?.match(/^\/(stock|company)\/([^/]+)/)
+  const currentSymbol = stockMatch ? stockMatch[2].toUpperCase() : null
 
   return (
     <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
@@ -63,6 +63,16 @@ export default function Navigation() {
                 Market 3
               </Link>
               <Link
+                href={currentSymbol ? `/company/${currentSymbol}` : '/company/AAPL'}
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  pathname?.startsWith('/company')
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                Company
+              </Link>
+              <Link
                 href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname?.startsWith('/stock')
@@ -70,7 +80,7 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Company
+                Financials
               </Link>
               <Link
                 href="/charts"
