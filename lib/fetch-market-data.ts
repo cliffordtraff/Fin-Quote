@@ -1,7 +1,7 @@
 'use server'
 
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData, getESFuturesMarketData } from '@/app/actions/market-data'
-import { getFuturesData, getFuturesWithHistory } from '@/app/actions/futures'
+import { getFuturesWithYTDSparkline, getFuturesWithHistory } from '@/app/actions/futures'
 import { getGainersData } from '@/app/actions/gainers'
 import { getLosersData } from '@/app/actions/losers'
 import { getStocksData } from '@/app/actions/stocks'
@@ -18,7 +18,8 @@ import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsData } from '@/app/actions/forex-bonds'
-import type { AllMarketData, MarketData, FutureData, FutureMarketData } from './market-types'
+import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
+import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
 
 /**
  * Fetches all market data in parallel.
@@ -54,14 +55,15 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     sp500LoserSparklinesResult,
     metaSparklineResult,
     xlbSparklineResult,
-    forexBondsResult
+    forexBondsResult,
+    largeInsiderTradesResult
   ] = await Promise.all([
     getAaplMarketData(),
     getNasdaqMarketData(),
     getDowMarketData(),
     getRussellMarketData(),
     getESFuturesMarketData(),
-    getFuturesData(),
+    getFuturesWithYTDSparkline(),
     getFuturesWithHistory(),
     getGainersData(),
     getLosersData(),
@@ -80,7 +82,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getSP500LoserSparklines(),
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
-    getForexBondsData()
+    getForexBondsData(),
+    getLargestInsiderTrades(4, 6)  // Last 4 weeks, top 6 trades
   ])
 
   // Process results - gracefully handle failures per-section
@@ -90,7 +93,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     dow: 'error' in dowResult ? null : dowResult as MarketData,
     russell: 'error' in russellResult ? null : russellResult as MarketData,
     esFutures: 'error' in esFuturesResult ? null : esFuturesResult as MarketData,
-    futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureData[]),
+    futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureDataWithSparkline[]),
     futuresWithHistory: 'error' in futuresWithHistoryResult ? [] : (futuresWithHistoryResult.futuresWithHistory as FutureMarketData[]),
     gainers: 'error' in gainersResult ? [] : gainersResult.gainers,
     losers: 'error' in losersResult ? [] : losersResult.losers,
@@ -109,6 +112,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
     metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
     xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
-    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds
+    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
+    largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades
   }
 }

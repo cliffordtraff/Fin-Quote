@@ -16,6 +16,11 @@ export interface FutureData {
   changesPercentage: number
 }
 
+export interface FutureDataWithSparkline extends FutureData {
+  ytdPriceHistory: Array<{ date: string; close: number }>
+  ytdChangePercent: number
+}
+
 export interface FutureMarketData {
   symbol: string
   name: string
@@ -43,6 +48,7 @@ export type { SP500GainerSparklineData } from '@/app/actions/sp500-gainer-sparkl
 export type { SP500LoserSparklineData } from '@/app/actions/sp500-loser-sparklines'
 export type { StockSparklineData } from '@/app/actions/stock-sparkline'
 export type { ForexBondData } from '@/app/actions/forex-bonds'
+export type { LargeInsiderTrade } from '@/app/actions/insider-trading'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -51,7 +57,7 @@ export interface AllMarketData {
   dow: MarketData | null
   russell: MarketData | null
   esFutures: MarketData | null
-  futures: FutureData[]
+  futures: FutureDataWithSparkline[]
   futuresWithHistory: FutureMarketData[]
   gainers: import('@/app/actions/gainers').GainerData[]
   losers: import('@/app/actions/losers').LoserData[]
@@ -71,4 +77,5 @@ export interface AllMarketData {
   metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   forexBonds: import('@/app/actions/forex-bonds').ForexBondData[]
+  largeInsiderTrades: import('@/app/actions/insider-trading').LargeInsiderTrade[]
 }

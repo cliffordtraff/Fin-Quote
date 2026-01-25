@@ -8,6 +8,11 @@ interface FutureData {
   changesPercentage: number
 }
 
+export interface FutureDataWithSparkline extends FutureData {
+  ytdPriceHistory: Array<{ date: string; close: number }>
+  ytdChangePercent: number
+}
+
 export interface FutureMarketData {
   symbol: string
   name: string
@@ -150,6 +155,99 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
     return { futuresWithHistory: validFutures }
   } catch (error) {
     console.error('Error fetching futures with history:', error)
+    return { error: 'Failed to load futures data' }
+  }
+}
+
+/**
+ * Fetch futures data with YTD sparkline data
+ */
+export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
+  const apiKey = process.env.FMP_API_KEY
+
+  if (!apiKey) {
+    return { error: 'API configuration error' }
+  }
+
+  // Get start of year date
+  const currentYear = new Date().getFullYear()
+  const yearStart = `${currentYear}-01-01`
+
+  const futuresSymbols = [
+    { symbol: 'CL=F', name: 'Crude Oil' },
+    { symbol: 'NG=F', name: 'Natural Gas' },
+    { symbol: 'GC=F', name: 'Gold' },
+    { symbol: 'YM=F', name: 'Dow' },
+    { symbol: 'ES=F', name: 'S&P 500' },
+    { symbol: 'NQ=F', name: 'Nasdaq 100' },
+    { symbol: 'RTY=F', name: 'Russell 2000' }
+  ]
+
+  try {
+    const futuresData = await Promise.all(
+      futuresSymbols.map(async ({ symbol, name }) => {
+        // Fetch quote data
+        const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`
+        const quoteResponse = await fetch(quoteUrl, {
+          next: { revalidate: 60 }
+        })
+
+        if (!quoteResponse.ok) {
+          console.error(`Failed to fetch quote for ${symbol}`)
+          return null
+        }
+
+        const quoteData = await quoteResponse.json()
+        const quote = quoteData[0]
+
+        if (!quote) {
+          return null
+        }
+
+        // Fetch YTD historical data
+        const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?from=${yearStart}&apikey=${apiKey}`
+        const historyResponse = await fetch(historyUrl, {
+          next: { revalidate: 3600 } // Cache for 1 hour
+        })
+
+        let ytdPriceHistory: Array<{ date: string; close: number }> = []
+        let ytdChangePercent = 0
+
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json()
+          const historical = historyData?.historical || []
+
+          // Reverse to get chronological order and map to just date/close
+          ytdPriceHistory = historical
+            .slice()
+            .reverse()
+            .map((d: { date: string; close: number }) => ({ date: d.date, close: d.close }))
+
+          // Calculate YTD change percentage
+          if (ytdPriceHistory.length >= 2) {
+            const firstClose = ytdPriceHistory[0].close
+            const lastClose = ytdPriceHistory[ytdPriceHistory.length - 1].close
+            ytdChangePercent = ((lastClose - firstClose) / firstClose) * 100
+          }
+        }
+
+        return {
+          symbol,
+          name,
+          price: quote.price,
+          change: quote.change,
+          changesPercentage: quote.changesPercentage,
+          ytdPriceHistory,
+          ytdChangePercent
+        }
+      })
+    )
+
+    const validFutures = futuresData.filter((f): f is FutureDataWithSparkline => f !== null)
+
+    return { futures: validFutures }
+  } catch (error) {
+    console.error('Error fetching futures with YTD sparkline:', error)
     return { error: 'Failed to load futures data' }
   }
 }
