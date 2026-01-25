@@ -32,35 +32,51 @@ export default function Navigation() {
           {/* Navigation Tabs */}
           <div className="flex items-center">
             <div className="flex items-center space-x-1">
+              {process.env.NEXT_PUBLIC_ENABLE_MARKET === 'true' && (
+                <Link
+                  href="/"
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                    pathname === '/'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Market Test
+                </Link>
+              )}
+              {process.env.NEXT_PUBLIC_ENABLE_MARKET2 === 'true' && (
+                <Link
+                  href="/market2"
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                    pathname === '/market2'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Market 2
+                </Link>
+              )}
+              {process.env.NEXT_PUBLIC_ENABLE_MARKET3 === 'true' && (
+                <Link
+                  href="/market"
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                    pathname === '/market'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Market
+                </Link>
+              )}
               <Link
-                href="/"
+                href="/market-sunday"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/'
+                  pathname === '/market-sunday'
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Market
-              </Link>
-              <Link
-                href="/market2"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/market2'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                Market 2
-              </Link>
-              <Link
-                href="/market3"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/market3'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                Market 3
+                Market Sunday
               </Link>
               <Link
                 href={currentSymbol ? `/company/${currentSymbol}` : '/company/AAPL'}
@@ -100,7 +116,7 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Concept
+                Market Internals
               </Link>
               <Link
                 href="/calendar"
