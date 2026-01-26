@@ -77,7 +77,7 @@ function StockCard({ stock }: { stock: DiscoverStock }) {
   return (
     <Link
       href={`/stock/${stock.symbol}`}
-      className="flex-shrink-0 w-[170px] rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(45,45,45)] p-4 hover:shadow-md transition-all cursor-pointer"
+      className="flex-shrink-0 w-[170px] rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[rgb(38,38,38)] p-4 hover:shadow-md transition-all cursor-pointer"
     >
       {/* Symbol Badge */}
       <div className="flex items-center justify-between mb-3">
@@ -171,7 +171,7 @@ export default function DiscoverMoreCarousel({
 
   return (
     <section className="bg-white dark:bg-[rgb(45,45,45)]">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div>

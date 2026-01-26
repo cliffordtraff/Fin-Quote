@@ -40,4 +40,8 @@ next-env.d.ts
 # excel exports
 /exports
 Watchlist/
+
+# Dexter agent (cloned repo)
+/dexter
+
 # Trigger rebuild

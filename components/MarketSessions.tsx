@@ -19,6 +19,7 @@ interface MarketSession {
 interface MarketSessionsProps {
   indexQuotes?: GlobalIndexQuote[]
   futuresQuotes?: FuturesQuote[]
+  hideTable?: boolean
 }
 
 const MARKETS: MarketSession[] = [
@@ -219,7 +220,7 @@ function areFuturesOpen(): boolean {
   return true
 }
 
-export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }: MarketSessionsProps) {
+export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], hideTable = false }: MarketSessionsProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
@@ -250,151 +251,152 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
   const futuresBarWidth = 100 // Full width (24 hours)
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
+    <div className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
       {/* Header */}
       <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Global Market Hours</h2>
       </div>
 
       {/* Table View */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Market</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Index</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Local Time</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Change</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Change</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {MARKETS.map((market) => {
-              const isOpen = isMarketOpen(market)
-              const isWeekend = isWeekendInMarket(market)
-              const extendedStatus = isExtendedHours(market)
-              const localTime = formatLocalTime(market.timezone)
-              const quote = quoteMap.get(market.name)
+      {!hideTable && (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Market</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Index</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Local Time</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Change</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Change</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {MARKETS.map((market) => {
+                const isOpen = isMarketOpen(market)
+                const isWeekend = isWeekendInMarket(market)
+                const extendedStatus = isExtendedHours(market)
+                const localTime = formatLocalTime(market.timezone)
+                const quote = quoteMap.get(market.name)
 
-              let statusLabel = 'Closed'
-              let statusColor = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                let statusLabel = 'Closed'
+                let statusColor = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
 
-              if (isWeekend) {
-                statusLabel = 'Weekend'
-                statusColor = 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500'
-              } else if (isOpen) {
-                statusLabel = 'Open'
-                statusColor = 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-              } else if (extendedStatus === 'pre') {
-                statusLabel = 'Pre-Market'
-                statusColor = 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
-              } else if (extendedStatus === 'after') {
-                statusLabel = 'After-Hours'
-                statusColor = 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300'
-              }
+                if (isWeekend) {
+                  statusLabel = 'Weekend'
+                  statusColor = 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500'
+                } else if (isOpen) {
+                  statusLabel = 'Open'
+                  statusColor = 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                } else if (extendedStatus === 'pre') {
+                  statusLabel = 'Pre-Market'
+                  statusColor = 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
+                } else if (extendedStatus === 'after') {
+                  statusLabel = 'After-Hours'
+                  statusColor = 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300'
+                }
 
-              return (
-                <tr key={market.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{market.name}</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{quote?.name || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
-                      {statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{localTime}</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    {quote ? (
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {formatPrice(quote.price)}
+                return (
+                  <tr key={market.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{market.name}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{quote?.name || '—'}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                        {statusLabel}
                       </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    {quote ? (
-                      <span className={`text-sm font-medium ${
-                        quote.change >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {quote.change >= 0 ? '+' : ''}{quote.change.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    {quote ? (
-                      <span className={`text-sm font-medium ${
-                        quote.changesPercentage >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {quote.changesPercentage >= 0 ? '+' : ''}{quote.changesPercentage.toFixed(2)}%
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{localTime}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {quote ? (
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {formatPrice(quote.price)}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {quote ? (
+                        <span className={`text-sm font-medium ${
+                          quote.change >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {quote.change >= 0 ? '+' : ''}{quote.change.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {quote ? (
+                        <span className={`text-sm font-medium ${
+                          quote.changesPercentage >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {quote.changesPercentage >= 0 ? '+' : ''}{quote.changesPercentage.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Visual Timeline */}
       <div className="border-t border-gray-200 dark:border-gray-700">
-        {/* Timeline Header with Day Labels */}
-        <div className="bg-gray-50 dark:bg-gray-800/50 px-4 pt-1 pb-1 relative border-b border-gray-200 dark:border-gray-700">
-          {/* Day labels */}
-          {(() => {
-            const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
-            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-            const today = days[etNow.getDay()]
-            const tomorrow = days[(etNow.getDay() + 1) % 7]
-            // Midnight is at position (24 - 17) / 24 * 100 = 29.17% (7 hours from 5pm)
-            const midnightPos = ((24 - TIMELINE_START_HOUR) / HOURS_IN_TIMELINE) * 100
+        {/* Timeline Header with Hour Labels */}
+        <div className="bg-gray-50 dark:bg-gray-800/50 px-4 pt-2 pb-1 relative border-b border-gray-200 dark:border-gray-700">
+          {/* Hour labels with day indicators inline */}
+          <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 relative h-4">
+            {(() => {
+              const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+              const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+              const today = days[etNow.getDay()]
+              const tomorrow = days[(etNow.getDay() + 1) % 7]
+              const midnightPos = ((24 - TIMELINE_START_HOUR) / HOURS_IN_TIMELINE) * 100
 
-            return (
-              <div className="flex justify-between text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
-                <span style={{ position: 'absolute', left: `calc(${midnightPos / 2}% + 16px)`, transform: 'translateX(-50%)' }}>
-                  {today}
-                </span>
-                <span style={{ position: 'absolute', left: `calc(${midnightPos + (100 - midnightPos) / 2}% + 16px)`, transform: 'translateX(-50%)' }}>
-                  {tomorrow}
-                </span>
-                {/* Midnight divider line */}
-                <div
-                  className="absolute top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600"
-                  style={{ left: `calc(${midnightPos}% + 16px)` }}
-                />
-              </div>
-            )
-          })()}
-          {/* Hour labels */}
-          <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 relative">
-            {timelineHours.map(({ label, position }) => (
-              <span key={label} style={{ position: 'absolute', left: `calc(${position}% + 16px)`, transform: 'translateX(-50%)' }}>
-                {label}
-              </span>
-            ))}
+              return (
+                <>
+                  {timelineHours.map(({ label, position, hour }) => {
+                    // Show day label at 5pm (start) and 12am (midnight)
+                    const showDay = position === 0 ? today : (hour === 0 ? tomorrow : null)
+                    return (
+                      <span
+                        key={label}
+                        style={{ position: 'absolute', left: `calc(${position}% + 16px)`, transform: 'translateX(-50%)' }}
+                        className={showDay ? 'font-semibold text-gray-600 dark:text-gray-300' : ''}
+                      >
+                        {showDay ? `${label} ${showDay}` : label}
+                      </span>
+                    )
+                  })}
+                  {/* Midnight divider line */}
+                  <div
+                    className="absolute top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600"
+                    style={{ left: `calc(${midnightPos}% + 16px)` }}
+                  />
+                </>
+              )
+            })()}
           </div>
-          <div className="h-3"></div>
         </div>
 
         {/* Market Bars */}
-        <div className="relative px-4 pt-3 pb-4 bg-white dark:bg-[rgb(33,33,33)] overflow-visible" style={{ height: `${32 + MARKETS.length * 36 + 70}px` }}>
+        <div className="relative px-4 pt-2 pb-3 bg-white dark:bg-[rgb(33,33,33)] overflow-visible" style={{ height: `${24 + MARKETS.length * 28 + 55}px` }}>
           {/* Midnight divider line through bars */}
           {(() => {
             const midnightPos = ((24 - TIMELINE_START_HOUR) / HOURS_IN_TIMELINE) * 100
@@ -414,7 +416,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
           {/* Futures overlay bar (background) - only show when futures are open */}
           {areFuturesOpen() && (
             <div
-              className="absolute h-full rounded opacity-10 bg-yellow-500 dark:bg-yellow-400"
+              className="absolute h-full rounded opacity-5 bg-gray-500 dark:bg-gray-400"
               style={{
                 left: `calc(${futuresBarLeft}% + 16px)`,
                 width: `calc(${futuresBarWidth}% - 32px)`,
@@ -437,23 +439,18 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
             const performanceText = quote ? formatPercent(quote.changesPercentage) : ''
             const isPositive = quote ? quote.changesPercentage >= 0 : true
 
-            // Determine bar styling based on market state
+            // Determine bar styling based on market state - same for all
             const getBarStyle = () => {
-              if (isWeekend) return 'bg-gray-300/50 dark:bg-gray-800/50' // Weekend - more muted
-              if (isOpen) return isPositive ? 'bg-green-200 dark:bg-green-900/50' : 'bg-red-200 dark:bg-red-900/50'
-              return 'bg-gray-200 dark:bg-gray-700' // Closed but weekday
+              return 'bg-gray-200 dark:bg-gray-700'
             }
 
             const getTextStyle = () => {
-              if (isWeekend) return 'text-gray-400 dark:text-gray-600' // Weekend - muted
-              if (isOpen) return isPositive ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'
-              return 'text-gray-600 dark:text-gray-400' // Closed but weekday
+              return 'text-gray-700 dark:text-gray-300'
             }
 
             const getTimeStyle = () => {
               if (isWeekend) return 'text-gray-400 dark:text-gray-600'
-              if (isOpen) return isPositive ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-              return 'text-gray-500 dark:text-gray-500'
+              return 'text-gray-500 dark:text-gray-400'
             }
 
             return (
@@ -461,7 +458,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
                 {/* Pre-market bar (US only) - hide on weekends */}
                 {preMarketPos && !isWeekend && (
                   <div
-                    className={`absolute h-8 rounded-l flex items-center px-2 ${
+                    className={`absolute h-6 rounded-l flex items-center px-2 ${
                       extendedStatus === 'pre'
                         ? 'bg-blue-200/60 dark:bg-blue-900/30'
                         : 'bg-gray-100 dark:bg-gray-800'
@@ -469,7 +466,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
                     style={{
                       left: `calc(${preMarketPos.left}% + 16px)`,
                       width: `${preMarketPos.width}%`,
-                      top: `${6 + index * 36}px`,
+                      top: `${6 + index * 28}px`,
                     }}
                   >
                     <span className="text-[10px] text-gray-500 dark:text-gray-500">Pre</span>
@@ -478,25 +475,21 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
 
                 {/* Main market bar */}
                 <div
-                  className={`absolute h-8 flex items-center justify-between px-2 gap-2 whitespace-nowrap overflow-hidden ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
+                  className={`absolute h-6 flex items-center justify-between px-2 gap-3 whitespace-nowrap overflow-hidden ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
                   style={{
                     left: `calc(${left}% + 16px)`,
                     width: `${width}%`,
-                    top: `${6 + index * 36}px`,
+                    top: `${6 + index * 28}px`,
                   }}
                 >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={`font-semibold text-xs ${getTextStyle()}`}>
+                  <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                    <span className={`font-semibold text-xs flex-shrink-0 ${getTextStyle()}`}>
                       {market.name}
                     </span>
-                    <span className={`text-[11px] ${getTimeStyle()}`}>
-                      {localTime}
-                      {isWeekend && <span className="ml-1 text-[9px]">(wknd)</span>}
-                    </span>
                   </div>
-                  {/* Performance percentage on the bar - hide on weekends */}
-                  {quote && !isWeekend && (
-                    <span className={`text-xs font-bold ${
+                  {/* Performance percentage on the bar - only show when market is open */}
+                  {quote && isOpen && (
+                    <span className={`text-xs font-bold flex-shrink-0 ${
                       isPositive
                         ? 'text-green-700 dark:text-green-300'
                         : 'text-red-700 dark:text-red-300'
@@ -509,7 +502,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
                 {/* After-hours bar (US only) - hide on weekends */}
                 {afterHoursPos && !isWeekend && (
                   <div
-                    className={`absolute h-8 rounded-r flex items-center justify-end px-2 ${
+                    className={`absolute h-6 rounded-r flex items-center justify-end px-2 ${
                       extendedStatus === 'after'
                         ? 'bg-purple-200/60 dark:bg-purple-900/30'
                         : 'bg-gray-100 dark:bg-gray-800'
@@ -517,7 +510,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
                     style={{
                       left: `calc(${afterHoursPos.left}% + 16px)`,
                       width: `${afterHoursPos.width}%`,
-                      top: `${6 + index * 36}px`,
+                      top: `${6 + index * 28}px`,
                     }}
                   >
                     <span className="text-[10px] text-gray-500 dark:text-gray-500">AH</span>
@@ -527,7 +520,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
             )
           })}
 
-          {/* Futures bars at the bottom */}
+          {/* Futures info at the bottom */}
           <div className="absolute left-4 right-4 bottom-3">
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Futures</span>
@@ -538,8 +531,11 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
               }`}>
                 {areFuturesOpen() ? 'Open' : 'Closed'}
               </span>
+              <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                Sun 6pm – Fri 5pm ET
+              </span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {['ES', 'NQ'].map((symbol) => {
                 const futures = futuresMap.get(symbol)
                 const isPositive = futures ? futures.changesPercentage >= 0 : true
@@ -548,30 +544,24 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [] }:
                 return (
                   <div
                     key={symbol}
-                    className={`flex-1 h-7 rounded flex items-center justify-between px-3 ${
+                    className={`px-3 py-1 rounded flex items-center gap-2 ${
                       futuresOpen
-                        ? isPositive
-                          ? 'bg-green-100 dark:bg-green-900/30'
-                          : 'bg-red-100 dark:bg-red-900/30'
+                        ? 'bg-blue-100 dark:bg-blue-900/30'
                         : 'bg-gray-100 dark:bg-gray-800'
                     }`}
                   >
                     <span className={`text-xs font-semibold ${
                       futuresOpen
-                        ? isPositive
-                          ? 'text-green-700 dark:text-green-300'
-                          : 'text-red-700 dark:text-red-300'
+                        ? 'text-blue-700 dark:text-blue-300'
                         : 'text-gray-500 dark:text-gray-400'
                     }`}>
                       {symbol}
                     </span>
-                    {futures && (
+                    {futures && futuresOpen && (
                       <span className={`text-xs font-bold ${
-                        futuresOpen
-                          ? isPositive
-                            ? 'text-green-700 dark:text-green-300'
-                            : 'text-red-700 dark:text-red-300'
-                          : 'text-gray-500 dark:text-gray-400'
+                        isPositive
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
                       }`}>
                         {formatPercent(futures.changesPercentage)}
                       </span>

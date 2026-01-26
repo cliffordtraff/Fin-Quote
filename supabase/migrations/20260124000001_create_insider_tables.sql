@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS insiders (
   CONSTRAINT insiders_name_normalized_unique UNIQUE (name_normalized)
 );
 
-CREATE INDEX idx_insiders_cik ON insiders(cik) WHERE cik IS NOT NULL;
-CREATE INDEX idx_insiders_name_normalized ON insiders(name_normalized);
+CREATE INDEX IF NOT EXISTS idx_insiders_cik ON insiders(cik) WHERE cik IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_insiders_name_normalized ON insiders(name_normalized);
 
 CREATE TABLE IF NOT EXISTS insider_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,21 +42,21 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_insider_tx_accession_dedupe
+CREATE UNIQUE INDEX IF NOT EXISTS idx_insider_tx_accession_dedupe
   ON insider_transactions(accession_number, reporting_name, transaction_date, transaction_code, shares)
   WHERE accession_number IS NOT NULL;
 
-CREATE UNIQUE INDEX idx_insider_tx_fmp_dedupe
+CREATE UNIQUE INDEX IF NOT EXISTS idx_insider_tx_fmp_dedupe
   ON insider_transactions(symbol, reporting_name, transaction_date, transaction_code, shares, price, filing_date)
   WHERE accession_number IS NULL;
 
-CREATE INDEX idx_insider_tx_latest ON insider_transactions(transaction_date DESC, created_at DESC);
-CREATE INDEX idx_insider_tx_symbol ON insider_transactions(symbol, transaction_date DESC);
-CREATE INDEX idx_insider_tx_insider_id ON insider_transactions(insider_id, transaction_date DESC) WHERE insider_id IS NOT NULL;
-CREATE INDEX idx_insider_tx_reporting_name ON insider_transactions(reporting_name, transaction_date DESC);
-CREATE INDEX idx_insider_tx_top_value ON insider_transactions(value DESC NULLS LAST) WHERE value IS NOT NULL AND value > 0;
-CREATE INDEX idx_insider_tx_type ON insider_transactions(transaction_code, transaction_date DESC);
-CREATE INDEX idx_insider_tx_source ON insider_transactions(source, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_insider_tx_latest ON insider_transactions(transaction_date DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_insider_tx_symbol ON insider_transactions(symbol, transaction_date DESC);
+CREATE INDEX IF NOT EXISTS idx_insider_tx_insider_id ON insider_transactions(insider_id, transaction_date DESC) WHERE insider_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_insider_tx_reporting_name ON insider_transactions(reporting_name, transaction_date DESC);
+CREATE INDEX IF NOT EXISTS idx_insider_tx_top_value ON insider_transactions(value DESC NULLS LAST) WHERE value IS NOT NULL AND value > 0;
+CREATE INDEX IF NOT EXISTS idx_insider_tx_type ON insider_transactions(transaction_code, transaction_date DESC);
+CREATE INDEX IF NOT EXISTS idx_insider_tx_source ON insider_transactions(source, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS ingestion_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,23 +74,48 @@ CREATE TABLE IF NOT EXISTS ingestion_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_ingestion_logs_created ON ingestion_logs(created_at DESC);
-CREATE INDEX idx_ingestion_logs_source ON ingestion_logs(source, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ingestion_logs_created ON ingestion_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ingestion_logs_source ON ingestion_logs(source, created_at DESC);
 
 ALTER TABLE insiders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE insider_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ingestion_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read access" ON insiders FOR SELECT USING (true);
-CREATE POLICY "Public read access" ON insider_transactions FOR SELECT USING (true);
-CREATE POLICY "Public read access" ON ingestion_logs FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON insiders FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE POLICY "Service role insert" ON insiders FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update" ON insiders FOR UPDATE USING (true);
-CREATE POLICY "Service role insert" ON insider_transactions FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update" ON insider_transactions FOR UPDATE USING (true);
-CREATE POLICY "Service role insert" ON ingestion_logs FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role update" ON ingestion_logs FOR UPDATE USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON insider_transactions FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON ingestion_logs FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role insert" ON insiders FOR INSERT WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role update" ON insiders FOR UPDATE USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role insert" ON insider_transactions FOR INSERT WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role update" ON insider_transactions FOR UPDATE USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role insert" ON ingestion_logs FOR INSERT WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Service role update" ON ingestion_logs FOR UPDATE USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE OR REPLACE FUNCTION normalize_insider_name(name TEXT)
 RETURNS TEXT AS $$

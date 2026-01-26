@@ -38,6 +38,7 @@ interface FinancialRecord {
   shareholders_equity: number
   operating_cash_flow: number
   eps: number
+  shares_outstanding?: number
 }
 
 async function ingestFinancials() {
@@ -138,6 +139,7 @@ async function ingestFinancials() {
     shareholders_equity: f.shareholders_equity,
     operating_cash_flow: f.operating_cash_flow,
     eps: f.eps,
+    shares_outstanding: f.shares_outstanding || null,
   }))
 
   console.log(`Upserting ${upsertData.length} records...`)

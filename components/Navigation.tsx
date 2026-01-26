@@ -17,7 +17,7 @@ export default function Navigation() {
     <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
       {/* Top Header Row */}
       <div className="w-full border-b border-gray-200 dark:border-gray-700">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
+        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
           <div className="flex items-center gap-6">
             <Link href="/" className="text-lg font-medium text-gray-900 dark:text-white">
               The Intraday
@@ -28,7 +28,7 @@ export default function Navigation() {
       </div>
       {/* Navigation Tabs Row */}
       <div className="w-full">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
+        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
           {/* Navigation Tabs */}
           <div className="flex items-center">
             <div className="flex items-center space-x-1">
@@ -77,6 +77,16 @@ export default function Navigation() {
                 }`}
               >
                 Market Sunday
+              </Link>
+              <Link
+                href="/market-dexter"
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  pathname === '/market-dexter'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                Market Dexter
               </Link>
               <Link
                 href={currentSymbol ? `/company/${currentSymbol}` : '/company/AAPL'}

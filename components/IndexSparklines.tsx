@@ -291,7 +291,7 @@ function SparklineCard({ index }: SparklineCardProps) {
 export default function IndexSparklines({ indices }: IndexSparklinesProps) {
   return (
     <div className="pt-2 pb-2">
-      <div className="flex gap-4" style={{ width: '1400px' }}>
+      <div className="flex gap-4 w-full">
         {indices.map((index) => (
           <SparklineCard
             key={index.symbol}

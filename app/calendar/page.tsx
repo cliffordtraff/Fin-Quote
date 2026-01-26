@@ -8,7 +8,7 @@ import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-ind
 
 export default async function CalendarPage() {
   // Fetch all calendar data in parallel
-  const [economicResult, earnings, indexQuotes, futuresQuotes] = await Promise.all([
+  const [economicResult, earningsResult, indexQuotes, futuresQuotes] = await Promise.all([
     getEconomicEvents(),
     fetchEarningsCalendar(),
     getGlobalIndexQuotes(),
@@ -16,6 +16,8 @@ export default async function CalendarPage() {
   ])
 
   const economicEvents = 'events' in economicResult ? economicResult.events : []
+  const earnings = earningsResult?.earnings || []
+  const earningsTotalCount = earningsResult?.totalCount || 0
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
@@ -37,7 +39,7 @@ export default async function CalendarPage() {
 
           {/* Earnings Calendar */}
           <div className="flex-1">
-            <EarningsCalendar earnings={earnings} expanded />
+            <EarningsCalendar earnings={earnings} expanded totalCount={earningsTotalCount} />
           </div>
         </div>
       </main>

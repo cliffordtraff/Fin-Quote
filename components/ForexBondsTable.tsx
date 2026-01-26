@@ -41,10 +41,10 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
   }
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full">
       <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-4 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
+        <div className="grid grid-cols-4 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold whitespace-nowrap">
           <div>Forex & Bonds</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
@@ -62,7 +62,7 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
             return (
               <div
                 key={item.symbol}
-                className="grid grid-cols-4 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
+                className="grid grid-cols-4 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors whitespace-nowrap"
               >
                 <div className="text-blue-400 font-medium text-xs">{item.name}</div>
                 <div className={`text-right ${colorClass} text-xs`}>

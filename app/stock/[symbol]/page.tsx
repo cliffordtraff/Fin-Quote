@@ -15,7 +15,9 @@ import { getStockNews } from '@/app/actions/get-stock-news'
 import { getCompanyProfile } from '@/app/actions/get-company-profile'
 import { getInsiderTradesBySymbol } from '@/app/actions/insider-trading'
 import { getDiscoverStocks } from '@/app/actions/discover-stocks'
+import { getFinancialChartData } from '@/app/actions/get-financial-chart-data'
 import { isValidSymbol } from '@/lib/symbol-resolver'
+import FinancialMetricsCharts from '@/components/FinancialMetricsCharts'
 import DiscoverMoreCarousel from '@/components/DiscoverMoreCarousel'
 
 interface PageProps {
@@ -92,7 +94,7 @@ export default async function StockPage({ params }: PageProps) {
   }
 
   // Parallel data fetching for all sections
-  const [overview, keyStats, financials, news, profile, insiderResult, discoverResult] = await Promise.all([
+  const [overview, keyStats, financials, news, profile, insiderResult, discoverResult, chartData] = await Promise.all([
     getStockOverview(normalizedSymbol).catch(() => null),
     getStockKeyStats(normalizedSymbol).catch(() => null),
     getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
@@ -100,6 +102,7 @@ export default async function StockPage({ params }: PageProps) {
     getCachedProfile(normalizedSymbol).catch(() => null),
     getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
     getDiscoverStocks(normalizedSymbol, 12).catch(() => ({ stocks: [] })),
+    getFinancialChartData(normalizedSymbol).catch(() => ({ data: [] })),
   ])
 
   // Extract insider trades from result
@@ -111,7 +114,7 @@ export default async function StockPage({ params }: PageProps) {
     return (
       <div className="min-h-screen bg-white dark:bg-[rgb(45,45,45)]">
         <Navigation />
-        <div className="mx-auto max-w-7xl px-4 py-16 text-center">
+        <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
             {normalizedSymbol}
           </h1>
@@ -141,7 +144,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Price Chart Section */}
       <section className="bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 pt-0 pb-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 pt-0 pb-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
             <StockPriceChart symbol={normalizedSymbol} initialRange="365d" />
           </div>
@@ -150,7 +153,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Quick Stats Grid Section - Finviz Style */}
       <section className="bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-4">
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
               {/* Column 1: Company Info */}
@@ -555,7 +558,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* News Section */}
       <section className="bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
             <NewsFeed news={news} />
           </div>
@@ -564,7 +567,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Insider Trading Section */}
       <section className="bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
             <StockInsiderTrades symbol={normalizedSymbol} trades={insiderTrades} />
           </div>
@@ -574,7 +577,7 @@ export default async function StockPage({ params }: PageProps) {
       {/* Company Description Section */}
       {profile && (
         <section className="bg-white dark:bg-[rgb(45,45,45)]">
-          <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
             <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
               <CompanyDescription
                 description={profile.description}
@@ -587,9 +590,20 @@ export default async function StockPage({ params }: PageProps) {
         </section>
       )}
 
+      {/* Financial Metrics Charts Section */}
+      {chartData.data && chartData.data.length > 0 && (
+        <section className="bg-white dark:bg-[rgb(45,45,45)]">
+          <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
+            <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+              <FinancialMetricsCharts data={chartData.data} />
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Financial Statements Section */}
       <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
-        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
             {financials.incomeStatement.length > 0 ||
             financials.balanceSheet.length > 0 ||
@@ -615,7 +629,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Footer */}
       <footer className="bg-white dark:bg-[rgb(45,45,45)] border-t border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               &copy; {new Date().getFullYear()} The Intraday. All rights reserved.

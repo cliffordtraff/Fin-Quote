@@ -19,6 +19,9 @@ import MarketSessions from '@/components/MarketSessions'
 import TopInsiderTrades from '@/components/TopInsiderTrades'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import { getMarketSummary } from '@/app/actions/market-summary'
+import { getMarketTrendsResponses, type MarketTrendsBullet } from '@/app/actions/market-trends-responses'
+import { getMarketTrendsAgents } from '@/app/actions/market-trends-agents'
+import { getCalendarSummaries } from '@/app/actions/calendar-summaries'
 import type { AllMarketData } from '@/lib/market-types'
 
 interface MarketDashboardSundayProps {
@@ -32,34 +35,136 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [marketSummary, setMarketSummary] = useState<string>('')
   const [marketSummaryLoading, setMarketSummaryLoading] = useState(true)
+  const [summaryLastUpdated, setSummaryLastUpdated] = useState<Date | null>(null)
+
+  // Market Trends bullet points state (for MarketInsights component)
+  const [responsesApiBullets, setResponsesApiBullets] = useState<MarketTrendsBullet[]>([])
+  const [agentsSdkBullets, setAgentsSdkBullets] = useState<MarketTrendsBullet[]>([])
+  const [responsesLoading, setResponsesLoading] = useState(false)
+  const [agentsLoading, setAgentsLoading] = useState(false)
+  const [responsesError, setResponsesError] = useState<string | undefined>()
+  const [agentsError, setAgentsError] = useState<string | undefined>()
+  const [responsesGeneratedAt, setResponsesGeneratedAt] = useState<string | undefined>()
+  const [agentsGeneratedAt, setAgentsGeneratedAt] = useState<string | undefined>()
+
+  // Calendar summaries state
+  const [economicSummary, setEconomicSummary] = useState<string>('')
+  const [earningsSummary, setEarningsSummary] = useState<string>('')
 
   // Set initial timestamp on client mount to avoid hydration mismatch
   useEffect(() => {
     setLastUpdated(new Date())
   }, [])
 
-  // Fetch market summary on mount (using market data for context)
-  useEffect(() => {
-    async function fetchSummary() {
-      setMarketSummaryLoading(true)
-      try {
-        const result = await getMarketSummary({
-          gainers: data.gainers,
-          losers: data.losers,
-          sectors: data.sectors,
-          indices: data.sparklineIndices,
-        })
-        if (result.summary) {
-          setMarketSummary(result.summary)
-        }
-      } catch (error) {
-        console.error('Failed to fetch market summary:', error)
-      } finally {
-        setMarketSummaryLoading(false)
+  // Function to fetch market summary (for "What's Happening Today")
+  const fetchSummary = async (forceRefresh = false) => {
+    setMarketSummaryLoading(true)
+    try {
+      const result = await getMarketSummary({
+        gainers: data.gainers,
+        losers: data.losers,
+        sectors: data.sectors,
+        indices: data.sparklineIndices,
+        forexBonds: data.forexBonds,
+        vix: data.vix,
+        marketNews: data.marketNews,
+      }, forceRefresh)
+      if (result.summary) {
+        setMarketSummary(result.summary)
+        setSummaryLastUpdated(new Date())
       }
+    } catch (error) {
+      console.error('Failed to fetch market summary:', error)
+    } finally {
+      setMarketSummaryLoading(false)
     }
+  }
+
+  // Function to fetch bullet points from Responses API (for MarketInsights/Market Trends)
+  const fetchResponsesBullets = async () => {
+    setResponsesLoading(true)
+    setResponsesError(undefined)
+    try {
+      const result = await getMarketTrendsResponses({
+        gainers: data.gainers,
+        losers: data.losers,
+        sectors: data.sectors,
+        indices: data.sparklineIndices,
+        forexBonds: data.forexBonds,
+        vix: data.vix,
+      })
+      if (result.error) {
+        setResponsesError(result.error)
+      } else {
+        setResponsesApiBullets(result.bullets)
+        setResponsesGeneratedAt(result.generatedAt)
+      }
+    } catch (error) {
+      console.error('Failed to fetch Responses API bullets:', error)
+      setResponsesError(error instanceof Error ? error.message : 'Unknown error')
+    } finally {
+      setResponsesLoading(false)
+    }
+  }
+
+  // Function to fetch bullet points from Agents SDK (for MarketInsights/Market Trends)
+  const fetchAgentsBullets = async () => {
+    setAgentsLoading(true)
+    setAgentsError(undefined)
+    try {
+      const result = await getMarketTrendsAgents({
+        gainers: data.gainers,
+        losers: data.losers,
+        sectors: data.sectors,
+        indices: data.sparklineIndices,
+        forexBonds: data.forexBonds,
+        vix: data.vix,
+      })
+      if (result.error) {
+        setAgentsError(result.error)
+      } else {
+        setAgentsSdkBullets(result.bullets)
+        setAgentsGeneratedAt(result.generatedAt)
+      }
+    } catch (error) {
+      console.error('Failed to fetch Agents SDK bullets:', error)
+      setAgentsError(error instanceof Error ? error.message : 'Unknown error')
+    } finally {
+      setAgentsLoading(false)
+    }
+  }
+
+  // Function to fetch calendar summaries
+  const fetchCalendarSummaries = async () => {
+    try {
+      const economicEvents = data.economicEvents.map(e => ({
+        date: e.date,
+        event: e.event,
+        impact: e.impact,
+        previous: e.previous,
+        estimate: e.estimate,
+      }))
+      const earningsEvents = data.earnings.map(e => ({
+        symbol: e.symbol,
+        name: e.name,
+        date: e.date,
+        time: e.time,
+      }))
+      const result = await getCalendarSummaries(economicEvents, earningsEvents)
+      if (result.economicSummary) setEconomicSummary(result.economicSummary)
+      if (result.earningsSummary) setEarningsSummary(result.earningsSummary)
+    } catch (error) {
+      console.error('Failed to fetch calendar summaries:', error)
+    }
+  }
+
+  // Fetch market summary and bullet points on mount
+  useEffect(() => {
     fetchSummary()
-  }, [data.gainers, data.losers, data.sectors, data.sparklineIndices])
+    fetchResponsesBullets()
+    fetchAgentsBullets()
+    fetchCalendarSummaries()
+  }, []) // Only run on mount, not on data changes
 
   // Polling effect - refresh every 60 seconds
   useEffect(() => {
@@ -76,13 +181,32 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     return () => clearInterval(interval)
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, largeInsiderTrades } = data
+  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, earningsTotalCount, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, largeInsiderTrades, globalIndexQuotes, globalFuturesQuotes } = data
 
-  // Placeholder for top-of-page summary sentence (separate from the card)
-  const topSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
+  // Extract the opening line from market summary (first line before double newline)
+  // This gives us the market status/date line to show at the top of the page
+  const { topSummary, summaryBody } = (() => {
+    if (!marketSummary) {
+      return { topSummary: '', summaryBody: '' }
+    }
+    // Split on double newline to separate headline from body
+    const parts = marketSummary.split(/\n\n/)
+    if (parts.length > 1) {
+      return { topSummary: parts[0].trim(), summaryBody: parts.slice(1).join('\n\n').trim() }
+    }
+    // Fallback: use first sentence
+    const firstSentenceMatch = marketSummary.match(/^[^.!?]+[.!?]/)
+    if (firstSentenceMatch) {
+      return {
+        topSummary: firstSentenceMatch[0].trim(),
+        summaryBody: marketSummary.slice(firstSentenceMatch[0].length).trim()
+      }
+    }
+    return { topSummary: '', summaryBody: marketSummary }
+  })()
 
   return (
-    <div className="w-full max-w-[1360px] mx-auto px-4">
+    <div className="w-full max-w-[1600px] mx-auto px-4">
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -90,11 +214,17 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
         </div>
       )}
 
-      {/* Market Summary Sentence */}
+      {/* Market Summary Sentence (extracted from LLM summary) */}
       <div className="mb-3">
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
-          {topSummary}
-        </p>
+        {marketSummaryLoading ? (
+          <p className="text-base text-gray-400 dark:text-gray-500 leading-relaxed animate-pulse">
+            Loading market summary...
+          </p>
+        ) : topSummary ? (
+          <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
+            {topSummary}
+          </p>
+        ) : null}
       </div>
 
       {/* Index Sparklines - Top Row */}
@@ -109,24 +239,38 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
         <MarketTrendsCombined
           gainers={gainers}
           losers={losers}
-          marketSummary={marketSummary}
+          sp500Losers={sp500Losers}
+          marketSummary={summaryBody}
           marketSummaryLoading={marketSummaryLoading}
+          onRefreshSummary={() => fetchSummary(true)}
+          summaryLastUpdated={summaryLastUpdated}
         />
       </div>
 
-      {/* Market Insights and Calendars */}
+      {/* Market Insights (Market Trends with bullet points) and Calendars */}
       <div className="flex gap-4 mb-8">
         <div className="flex-1">
-          <MarketInsights />
+          <MarketInsights
+            responsesApiBullets={responsesApiBullets}
+            agentsSdkBullets={agentsSdkBullets}
+            responsesLoading={responsesLoading}
+            agentsLoading={agentsLoading}
+            responsesError={responsesError}
+            agentsError={agentsError}
+            onRefreshResponses={fetchResponsesBullets}
+            onRefreshAgents={fetchAgentsBullets}
+            responsesGeneratedAt={responsesGeneratedAt}
+            agentsGeneratedAt={agentsGeneratedAt}
+          />
         </div>
         {economicEvents.length > 0 && (
           <div className="flex-1">
-            <EconomicCalendar events={economicEvents} />
+            <EconomicCalendar events={economicEvents} summary={economicSummary} />
           </div>
         )}
         {earnings.length > 0 && (
           <div className="flex-1">
-            <EarningsCalendar earnings={earnings} />
+            <EarningsCalendar earnings={earnings} summary={earningsSummary} totalCount={earningsTotalCount} />
           </div>
         )}
       </div>
@@ -183,7 +327,7 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
           )}
         </div>
         <div>
-          <MarketSessions hideTable={true} />
+          <MarketSessions hideTable={true} indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
         </div>
       </div>
 

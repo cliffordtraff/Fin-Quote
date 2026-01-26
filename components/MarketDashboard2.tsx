@@ -50,7 +50,7 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
     return () => clearInterval(interval)
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds } = data
+  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, globalIndexQuotes, globalFuturesQuotes } = data
 
   // Placeholder for LLM-generated market summary
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
@@ -166,7 +166,7 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
         {forexBonds.length > 0 && (
           <ForexBondsTable data={forexBonds} />
         )}
-        <MarketSessions />
+        <MarketSessions indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
       </div>
     </div>
   )

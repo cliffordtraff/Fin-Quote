@@ -39,6 +39,7 @@ interface FinancialRecord {
   shareholders_equity: number
   operating_cash_flow: number
   eps: number
+  shares_outstanding: number
 }
 
 /**
@@ -131,6 +132,7 @@ async function fetchFinancials(periodType: PeriodType, symbol: string): Promise<
       shareholders_equity: 0,
       operating_cash_flow: 0,
       eps: item.eps,
+      shares_outstanding: item.weightedAverageShsOut || 0,
     }
   })
 

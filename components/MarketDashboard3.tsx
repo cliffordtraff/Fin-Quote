@@ -17,6 +17,7 @@ import EarningsCalendar from '@/components/EarningsCalendar'
 import TopGainerSparklines from '@/components/TopGainerSparklines'
 import ForexBondsTable from '@/components/ForexBondsTable'
 import MarketSessions from '@/components/MarketSessions'
+import TopInsiderTrades from '@/components/TopInsiderTrades'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
@@ -50,7 +51,7 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
     return () => clearInterval(interval)
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds } = data
+  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, largeInsiderTrades, globalIndexQuotes, globalFuturesQuotes } = data
 
   // Placeholder for LLM-generated market summary
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
@@ -154,12 +155,15 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
         </div>
       )}
 
-      {/* Forex & Bonds Table and Market Sessions */}
-      <div className="flex gap-4 mb-8">
+      {/* Forex & Bonds Table, Insider Trades, and Market Sessions Timeline */}
+      <div className="flex gap-4 mb-8 justify-center">
         {forexBonds.length > 0 && (
           <ForexBondsTable data={forexBonds} />
         )}
-        <MarketSessions />
+        {largeInsiderTrades.length > 0 && (
+          <TopInsiderTrades trades={largeInsiderTrades} />
+        )}
+        <MarketSessions hideTable={true} indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
       </div>
 
       {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}

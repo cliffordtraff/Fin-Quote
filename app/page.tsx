@@ -1,5 +1,5 @@
 import Navigation from '@/components/Navigation'
-import MarketDashboard from '@/components/MarketDashboard'
+import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
 // Enable ISR with 60-second revalidation
@@ -13,7 +13,7 @@ export default async function Home() {
     <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
       <Navigation />
       <main className="py-4">
-        <MarketDashboard initialData={initialData} />
+        <MarketDashboardSunday initialData={initialData} />
       </main>
     </div>
   )

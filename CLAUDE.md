@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For every project, write a detailed FORFORD.md file that explains the whole project in plain language. 
+
+Explain the technical architecture, the structure of the codebase and how the various parts are connected, the technologies used, why we made these technical decisions, and lessons I can learn from it (this should include the bugs we ran into and how we fixed them, potential pitfalls and how to avoid them in the future, new technologies used, how good engineers think and work, best practices, etc). 
+
+It should be very engaging to read; don't make it sound like boring technical documentation/textbook. Where appropriate, use analogies and anecdotes to make it more understandable and memorable.
+
 ## Project Overview
 
 **The Intraday** (formerly Fin Quote) is a Next.js 15-based financial data platform featuring:
@@ -179,6 +185,8 @@ FMP_API_KEY=your-fmp-key
 | Flag | Default | Description |
 |------|---------|-------------|
 | `NEXT_PUBLIC_ENABLE_CHAT` | `false` | Enables the AI chatbot feature (Chat tab in navigation + `/chatbot` route) |
+| `NEXT_PUBLIC_ENABLE_MARKET` | `false` | Enables the Market tab (homepage `/`) |
+| `NEXT_PUBLIC_ENABLE_MARKET2` | `false` | Enables the Market 2 tab (`/market2`) |
 
 To enable a feature: Set to `true` in `.env.local` and restart the dev server.
 

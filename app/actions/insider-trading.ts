@@ -352,3 +352,66 @@ export async function getInsiderByName(
     return { error: 'Failed to find insider' }
   }
 }
+
+export interface LargeInsiderTrade {
+  symbol: string
+  reportingName: string
+  transactionDate: string
+  transactionCode: string
+  shares: number
+  price: number
+  value: number
+  acquisitionDisposition: string
+}
+
+/**
+ * Fetch largest insider trades by value (shares * price) within a date range
+ */
+export async function getLargestInsiderTrades(
+  weeks: number = 4,
+  limit: number = 6
+): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
+  try {
+    const supabase = await createServerClient()
+
+    // Calculate date range
+    const fromDate = new Date()
+    fromDate.setDate(fromDate.getDate() - weeks * 7)
+    const fromDateStr = fromDate.toISOString().split('T')[0]
+
+    // Query trades with price, calculate value on the fly
+    const { data, error } = await supabase
+      .from('insider_transactions')
+      .select('symbol, reporting_name, transaction_date, transaction_code, shares, price, acquisition_disposition')
+      .gte('transaction_date', fromDateStr)
+      .not('price', 'is', null)
+      .not('shares', 'is', null)
+      .gt('price', 0)
+      .gt('shares', 0)
+
+    if (error) {
+      console.error('Error fetching largest insider trades:', error)
+      return { error: 'Failed to load insider trading data' }
+    }
+
+    // Calculate value and sort by value descending
+    const tradesWithValue = (data || [])
+      .map((row) => ({
+        symbol: row.symbol,
+        reportingName: row.reporting_name,
+        transactionDate: row.transaction_date,
+        transactionCode: row.transaction_code || '',
+        shares: Number(row.shares),
+        price: Number(row.price),
+        value: Number(row.shares) * Number(row.price),
+        acquisitionDisposition: row.acquisition_disposition || '',
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, limit)
+
+    return { trades: tradesWithValue }
+  } catch (error) {
+    console.error('Error fetching largest insider trades:', error)
+    return { error: 'Failed to load insider trading data' }
+  }
+}

@@ -19,6 +19,7 @@ import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsData } from '@/app/actions/forex-bonds'
 import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
+import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-indices'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
 
 /**
@@ -56,7 +57,9 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     metaSparklineResult,
     xlbSparklineResult,
     forexBondsResult,
-    largeInsiderTradesResult
+    largeInsiderTradesResult,
+    globalIndexQuotesResult,
+    globalFuturesQuotesResult
   ] = await Promise.all([
     getAaplMarketData(),
     getNasdaqMarketData(),
@@ -83,7 +86,9 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
     getForexBondsData(),
-    getLargestInsiderTrades(4, 6)  // Last 4 weeks, top 6 trades
+    getLargestInsiderTrades(4, 6),  // Last 4 weeks, top 6 trades
+    getGlobalIndexQuotes(),
+    getFuturesQuotes()
   ])
 
   // Process results - gracefully handle failures per-section
@@ -107,12 +112,15 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending,
     sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers,
     sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers,
-    earnings: earningsResult || [],
+    earnings: earningsResult?.earnings || [],
+    earningsTotalCount: earningsResult?.totalCount || 0,
     sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines,
     sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
     metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
     xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
     forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
-    largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades
+    largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
+    globalIndexQuotes: globalIndexQuotesResult || [],
+    globalFuturesQuotes: globalFuturesQuotesResult || []
   }
 }

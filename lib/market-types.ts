@@ -49,6 +49,7 @@ export type { SP500LoserSparklineData } from '@/app/actions/sp500-loser-sparklin
 export type { StockSparklineData } from '@/app/actions/stock-sparkline'
 export type { ForexBondData } from '@/app/actions/forex-bonds'
 export type { LargeInsiderTrade } from '@/app/actions/insider-trading'
+export type { GlobalIndexQuote, FuturesQuote } from '@/app/actions/global-indices'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -72,10 +73,13 @@ export interface AllMarketData {
   sp500Gainers: import('@/app/actions/sp500-movers').SP500MoverData[]
   sp500Losers: import('@/app/actions/sp500-movers').SP500MoverData[]
   earnings: import('@/app/actions/earnings-calendar').EarningsData[]
+  earningsTotalCount: number  // Total companies reporting this week (before filtering to popular stocks)
   sp500GainerSparklines: import('@/app/actions/sp500-gainer-sparklines').SP500GainerSparklineData[]
   sp500LoserSparklines: import('@/app/actions/sp500-loser-sparklines').SP500LoserSparklineData[]
   metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   forexBonds: import('@/app/actions/forex-bonds').ForexBondData[]
   largeInsiderTrades: import('@/app/actions/insider-trading').LargeInsiderTrade[]
+  globalIndexQuotes: import('@/app/actions/global-indices').GlobalIndexQuote[]
+  globalFuturesQuotes: import('@/app/actions/global-indices').FuturesQuote[]
 }

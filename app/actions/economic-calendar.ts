@@ -47,26 +47,41 @@ export async function getEconomicEvents() {
     const data = await response.json()
 
     if (Array.isArray(data) && data.length > 0) {
-      // Filter for high impact US events only
-      const highImpactUSEvents = data
-        .filter((event: any) =>
-          event.country === 'US' &&
-          (event.impact === 'High' || event.impact === 'Medium')
-        )
-        .slice(0, 5) // Get top 5 events
-        .map((event: any) => ({
-          date: event.date,
-          country: event.country,
-          event: event.event,
-          currency: event.currency,
-          previous: event.previous,
-          estimate: event.estimate,
-          actual: event.actual,
-          impact: event.impact,
-          unit: event.unit
-        }))
+      const mapEvent = (event: any) => ({
+        date: event.date,
+        country: event.country,
+        event: event.event,
+        currency: event.currency,
+        previous: event.previous,
+        estimate: event.estimate,
+        actual: event.actual,
+        impact: event.impact,
+        unit: event.unit || ''
+      })
 
-      return { events: highImpactUSEvents }
+      // Get all High impact US events (these are critical - FOMC, GDP, etc.)
+      const highImpactEvents = data
+        .filter((event: any) => event.country === 'US' && event.impact === 'High')
+        .map(mapEvent)
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      // Get Medium impact US events to fill remaining slots
+      const mediumImpactEvents = data
+        .filter((event: any) => event.country === 'US' && event.impact === 'Medium')
+        .map(mapEvent)
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      // Take all High impact events (up to 10), then fill with Medium
+      const maxEvents = 12
+      const selectedHigh = highImpactEvents.slice(0, maxEvents)
+      const remainingSlots = maxEvents - selectedHigh.length
+      const selectedMedium = mediumImpactEvents.slice(0, remainingSlots)
+
+      // Combine and sort chronologically
+      const combinedEvents = [...selectedHigh, ...selectedMedium]
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      return { events: combinedEvents }
     }
 
     return { events: [] }
