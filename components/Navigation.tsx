@@ -83,16 +83,18 @@ export default function Navigation() {
                 Market Sunday
               </Link>
 
-              <Link
-                href="/market-dexter"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/market-dexter'
-                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                Market Dexter
-              </Link>
+              {process.env.NEXT_PUBLIC_ENABLE_DEXTER === 'true' && (
+                <Link
+                  href="/market-dexter"
+                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                    pathname === '/market-dexter'
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Market Dexter
+                </Link>
+              )}
 
               <Link
                 href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
