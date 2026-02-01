@@ -56,7 +56,7 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
 
   return (
-    <div className="mx-auto px-4" style={{ width: '1360px' }}>
+    <div className="mx-auto w-full max-w-[1400px] px-4">
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -102,18 +102,12 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
       </div>
 
       {/* Main Content Grid */}
-      <div
-        className="grid gap-4 mb-8 w-full"
-        style={{
-          gridTemplateColumns: '600px 180px 1fr',
-          gridTemplateRows: 'auto auto auto',
-        }}
-      >
+      <div className="grid gap-4 mb-8 w-full grid-cols-1 lg:grid-cols-[600px_180px_1fr]">
         {/* Headlines Column */}
         <div className="flex flex-col gap-4 self-start">
           {/* Headlines */}
           {marketNews.length > 0 && (
-            <div style={{ width: '600px' }}>
+            <div className="w-full lg:w-[600px]">
               <MarketHeadlines news={marketNews} />
             </div>
           )}
@@ -134,7 +128,7 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
         {/* Sector Column */}
         <div className="flex flex-col gap-4 justify-self-end">
           {sectors.length > 0 && (
-            <div style={{ width: '400px' }}>
+            <div className="w-full lg:w-[400px]">
               <SectorHeatmap sectors={sectors} />
             </div>
           )}

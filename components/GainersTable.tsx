@@ -1,5 +1,7 @@
 'use client'
 
+import TickerLink from '@/components/TickerLink'
+
 interface GainerData {
   symbol: string
   name: string
@@ -102,7 +104,9 @@ export default function GainersTable({ gainers }: GainersTableProps) {
                 key={gainer.symbol}
                 className="grid grid-cols-6 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
               >
-                <div className="text-blue-400 font-medium text-xs">{gainer.symbol}</div>
+                <div className="font-medium text-xs">
+                  <TickerLink symbol={gainer.symbol} className="text-blue-400" />
+                </div>
                 <div className={`text-right ${colorClass} text-xs`}>
                   {formatPrice(gainer.price)}
                 </div>

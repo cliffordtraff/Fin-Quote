@@ -1,6 +1,7 @@
 'use client'
 
 import type { SP500MoverData } from '@/app/actions/sp500-movers'
+import TickerLink from '@/components/TickerLink'
 
 interface SP500PerformanceChartProps {
   gainers: SP500MoverData[]
@@ -33,8 +34,8 @@ export default function SP500PerformanceChart({ gainers, losers }: SP500Performa
           <span className={`font-medium ${isGainer ? 'text-green-500' : 'text-red-500'}`}>
             {isGainer ? '+' : ''}{stock.changesPercentage.toFixed(2)}%
           </span>
-          <span className="ml-1 text-gray-400 dark:text-gray-500 font-medium">
-            {stock.symbol}
+          <span className="ml-1 font-medium">
+            <TickerLink symbol={stock.symbol} className="text-gray-400 dark:text-gray-500" />
           </span>
         </div>
       </div>
@@ -42,7 +43,7 @@ export default function SP500PerformanceChart({ gainers, losers }: SP500Performa
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden" style={{ width: '400px' }}>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden w-full lg:w-[400px]">
       <div className="px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">S&P 500 Biggest Movers</h2>
       </div>

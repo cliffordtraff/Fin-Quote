@@ -46,11 +46,31 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
 
   const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, mostActive, trending, sp500Gainers, sp500Losers } = data
 
-  // Placeholder for LLM-generated market summary
-  const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
+  // Deterministic market summary (avoid fake/LLM placeholder copy)
+  const summarize = () => {
+    const parts: string[] = []
+    if (sparklineIndices && sparklineIndices.length) {
+      const byName: Record<string, string> = {}
+      for (const idx of sparklineIndices) {
+        if (!idx?.name) continue
+        byName[idx.name] = `${idx.priceChangePercent >= 0 ? '+' : ''}${idx.priceChangePercent.toFixed(2)}%`
+      }
+      const sp = byName['S&P 500'] || byName['S&P']
+      const nd = byName['NASDAQ']
+      const dw = byName['DOW'] || byName['Dow']
+      if (sp) parts.push(`S&P 500 ${sp}`)
+      if (dw) parts.push(`Dow ${dw}`)
+      if (nd) parts.push(`Nasdaq ${nd}`)
+    }
+    if (vix?.changesPercentage !== undefined) {
+      parts.push(`VIX ${vix.changesPercentage >= 0 ? '+' : ''}${vix.changesPercentage.toFixed(2)}%`)
+    }
+    return parts.length ? `Today: ${parts.join(' · ')}` : ''
+  }
+  const marketSummary = summarize()
 
   return (
-    <div className="mx-auto px-4" style={{ width: '1360px' }}>
+    <div className="mx-auto w-full max-w-[1400px] px-4">
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -59,11 +79,13 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
       )}
 
       {/* Market Summary Sentence */}
-      <div className="mb-3">
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
-          {marketSummary}
-        </p>
-      </div>
+      {marketSummary && (
+        <div className="mb-3">
+          <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
+            {marketSummary}
+          </p>
+        </div>
+      )}
 
       {/* Index Sparklines - Top Row */}
       {sparklineIndices.length > 0 && (
@@ -92,18 +114,12 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
       </div>
 
       {/* Main Content Grid */}
-      <div
-        className="grid gap-4 mb-8 w-full"
-        style={{
-          gridTemplateColumns: '600px 180px 1fr',
-          gridTemplateRows: 'auto auto auto',
-        }}
-      >
+      <div className="grid gap-4 mb-8 w-full grid-cols-1 lg:grid-cols-[600px_180px_1fr]">
         {/* Headlines Column */}
         <div className="flex flex-col gap-4 self-start">
           {/* Headlines */}
           {marketNews.length > 0 && (
-            <div style={{ width: '600px' }}>
+            <div className="w-full lg:w-[600px]">
               <MarketHeadlines news={marketNews} />
             </div>
           )}
@@ -124,12 +140,12 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
         {/* Economic Calendar and Sector Column */}
         <div className="flex flex-col gap-4 justify-self-end">
           {economicEvents.length > 0 && (
-            <div style={{ width: '400px' }}>
+            <div className="w-full lg:w-[400px]">
               <EconomicCalendar events={economicEvents} />
             </div>
           )}
           {sectors.length > 0 && (
-            <div style={{ width: '400px' }}>
+            <div className="w-full lg:w-[400px]">
               <SectorHeatmap sectors={sectors} />
             </div>
           )}
