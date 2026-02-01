@@ -18,7 +18,7 @@ import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsData } from '@/app/actions/forex-bonds'
-import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
+import { getTopInsiderTrades } from '@/app/actions/insider-trading'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
 
 /**
@@ -105,7 +105,7 @@ export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),
     getForexBondsData(),
-    getLargestInsiderTrades(4, 6),
+    getTopInsiderTrades(28, 6),
   ])
 
   return {
@@ -187,7 +187,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
     getForexBondsData(),
-    getLargestInsiderTrades(4, 6)  // Last 4 weeks, top 6 trades
+    getTopInsiderTrades(28, 6)  // Last 28 days, top 6 trades
   ])
 
   // Process results - gracefully handle failures per-section
