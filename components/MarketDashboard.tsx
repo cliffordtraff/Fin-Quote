@@ -72,7 +72,7 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
     }
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, mostActive, trending, sp500Gainers, sp500Losers } = data
+  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, mostActive, trending, sp500Gainers, sp500Losers, vix } = data
 
   // Deterministic market summary (avoid fake/LLM placeholder copy)
   const summarize = () => {
