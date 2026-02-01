@@ -13,11 +13,17 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Create Supabase client for caching
-const supabase = createClient(
+// Supabase clients for caching
+// - public client (anon) for reads
+// - admin client (service role) for writes
+const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null
 
 // In-memory cache as fallback + faster first check
 let cachedTrends: { bullets: MarketTrendsBullet[]; timestamp: number } | null = null
@@ -151,7 +157,7 @@ export async function getMarketTrendsResponses(data: MarketTrendsInput, forceRef
     // 2. Check Supabase cache
     console.log('Checking Supabase cache for market trends...')
     try {
-      const { data: dbCache, error } = await supabase
+      const { data: dbCache, error } = await supabasePublic
         .from('market_trends_cache')
         .select('bullets, created_at')
         .order('created_at', { ascending: false })
@@ -255,13 +261,17 @@ Example format:
     cachedTrends = { bullets, timestamp: Date.now() }
 
     // Also save to Supabase (fire and forget)
-    supabase
-      .from('market_trends_cache')
-      .insert({ bullets })
-      .then(({ error }) => {
-        if (error) console.log('Failed to save market trends to Supabase cache:', error.message)
-        else console.log('Saved market trends to Supabase cache')
-      })
+    if (supabaseAdmin) {
+      supabaseAdmin
+        .from('market_trends_cache')
+        .insert({ bullets })
+        .then(({ error }) => {
+          if (error) console.log('Failed to save market trends to Supabase cache:', error.message)
+          else console.log('Saved market trends to Supabase cache')
+        })
+    } else {
+      console.log('Skipping market_trends_cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
+    }
 
     return {
       bullets,

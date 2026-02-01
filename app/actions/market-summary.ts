@@ -14,11 +14,17 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Create a simple Supabase client for caching (no auth needed)
-const supabase = createClient(
+// Supabase clients for caching
+// - public client (anon) for reads
+// - admin client (service role) for writes
+const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null
 
 // In-memory cache as fallback + faster first check
 let cachedSummary: { summary: string; timestamp: number } | null = null
@@ -170,7 +176,7 @@ export async function getMarketSummary(data?: MarketSummaryInput, forceRefresh?:
     // 2. Check Supabase cache (survives server restarts)
     console.log('Checking Supabase cache...')
     try {
-      const { data: dbCache, error } = await supabase
+      const { data: dbCache, error } = await supabasePublic
         .from('market_summary_cache')
         .select('summary, created_at')
         .order('created_at', { ascending: false })
@@ -269,13 +275,17 @@ Now write the market summary, using web search to verify and explain the drivers
     cachedSummary = { summary, timestamp: Date.now() }
 
     // Also save to Supabase (fire and forget, don't block on it)
-    supabase
-      .from('market_summary_cache')
-      .insert({ summary })
-      .then(({ error }) => {
-        if (error) console.log('Failed to save to Supabase cache:', error.message)
-        else console.log('Saved market summary to Supabase cache')
-      })
+    if (supabaseAdmin) {
+      supabaseAdmin
+        .from('market_summary_cache')
+        .insert({ summary })
+        .then(({ error }) => {
+          if (error) console.log('Failed to save to Supabase cache:', error.message)
+          else console.log('Saved market summary to Supabase cache')
+        })
+    } else {
+      console.log('Skipping market_summary_cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
+    }
 
     return { summary }
   } catch (error) {

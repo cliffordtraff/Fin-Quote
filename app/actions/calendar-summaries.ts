@@ -7,11 +7,17 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Create Supabase client for caching
-const supabase = createClient(
+// Supabase clients for caching
+// - public client (anon) for reads
+// - admin client (service role) for writes
+const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null
 
 // In-memory cache as fallback + faster first check
 let cachedSummaries: { economicSummary: string; earningsSummary: string; timestamp: number } | null = null
@@ -59,7 +65,7 @@ export async function getCalendarSummaries(
     // 2. Check Supabase cache
     console.log('[Calendar Summaries] Checking Supabase cache...')
     try {
-      const { data: dbCache, error } = await supabase
+      const { data: dbCache, error } = await supabasePublic
         .from('calendar_summaries_cache')
         .select('economic_summary, earnings_summary, created_at')
         .order('created_at', { ascending: false })
@@ -158,13 +164,17 @@ Rules:
       cachedSummaries = { economicSummary, earningsSummary, timestamp: Date.now() }
 
       // Also save to Supabase (fire and forget)
-      supabase
-        .from('calendar_summaries_cache')
-        .insert({ economic_summary: economicSummary, earnings_summary: earningsSummary })
-        .then(({ error }) => {
-          if (error) console.log('[Calendar Summaries] Failed to save to Supabase cache:', error.message)
-          else console.log('[Calendar Summaries] Saved to Supabase cache')
-        })
+      if (supabaseAdmin) {
+        supabaseAdmin
+          .from('calendar_summaries_cache')
+          .insert({ economic_summary: economicSummary, earnings_summary: earningsSummary })
+          .then(({ error }) => {
+            if (error) console.log('[Calendar Summaries] Failed to save to Supabase cache:', error.message)
+            else console.log('[Calendar Summaries] Saved to Supabase cache')
+          })
+      } else {
+        console.log('[Calendar Summaries] Skipping cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
+      }
 
       return {
         economicSummary,
