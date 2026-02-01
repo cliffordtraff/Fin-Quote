@@ -2,6 +2,7 @@
 
 import type { GainerData } from '@/app/actions/gainers'
 import type { LoserData } from '@/app/actions/losers'
+import TickerLink from '@/components/TickerLink'
 
 interface MarketTrends2Props {
   gainers: GainerData[]
@@ -49,7 +50,10 @@ function MiniTable({ title, stocks, colorMode }: { title: string; stocks: StockD
                 className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
               >
                 <td className="py-1 px-2">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
+                  <TickerLink
+                    symbol={stock.symbol}
+                    className="font-medium text-gray-900 dark:text-gray-100"
+                  />
                 </td>
                 <td className="py-1 px-2 text-right text-gray-900 dark:text-gray-100">
                   ${stock.price.toFixed(2)}

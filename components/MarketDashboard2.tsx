@@ -17,7 +17,6 @@ import EarningsCalendar from '@/components/EarningsCalendar'
 import TopGainerSparklines from '@/components/TopGainerSparklines'
 import ForexBondsTable from '@/components/ForexBondsTable'
 import MarketSessions from '@/components/MarketSessions'
-import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
 interface MarketDashboard2Props {
@@ -35,19 +34,47 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
     setLastUpdated(new Date())
   }, [])
 
-  // Polling effect - refresh every 60 seconds
+  async function fetchFast() {
+    const res = await fetch('/api/market-snapshot/fast')
+    if (!res.ok) throw new Error(`fast snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as Partial<AllMarketData>
+  }
+
+  async function fetchSlow() {
+    const res = await fetch('/api/market-snapshot/slow')
+    if (!res.ok) throw new Error(`slow snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as Partial<AllMarketData>
+  }
+
+  // Polling effect - fast data every 60s, slow data every 10 min
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const apply = (patch: Partial<AllMarketData>) => {
+      setData((prev) => ({ ...prev, ...patch }))
+      setLastUpdated(new Date())
+    }
+
+    fetchSlow().then(apply).catch((e) => console.error('Failed to refresh slow market data:', e))
+
+    const fastInterval = setInterval(async () => {
       try {
-        const freshData = await fetchAllMarketData()
-        setData(freshData)
-        setLastUpdated(new Date())
+        apply(await fetchFast())
       } catch (error) {
-        console.error('Failed to refresh market data:', error)
+        console.error('Failed to refresh fast market data:', error)
       }
     }, 60000)
 
-    return () => clearInterval(interval)
+    const slowInterval = setInterval(async () => {
+      try {
+        apply(await fetchSlow())
+      } catch (error) {
+        console.error('Failed to refresh slow market data:', error)
+      }
+    }, 600000)
+
+    return () => {
+      clearInterval(fastInterval)
+      clearInterval(slowInterval)
+    }
   }, [])
 
   const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, globalIndexQuotes, globalFuturesQuotes } = data
@@ -56,7 +83,7 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
   const marketSummary = "U.S. stock markets are broadly higher today, extending a relief rally that began Wednesday."
 
   return (
-    <div className="mx-auto px-4" style={{ width: '1360px' }}>
+    <div className="mx-auto w-full max-w-[1400px] px-4">
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -109,18 +136,12 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
       </div>
 
       {/* Main Content Grid */}
-      <div
-        className="grid gap-4 mb-8 w-full"
-        style={{
-          gridTemplateColumns: '600px 180px 1fr',
-          gridTemplateRows: 'auto auto auto',
-        }}
-      >
+      <div className="grid gap-4 mb-8 w-full grid-cols-1 lg:grid-cols-[600px_180px_1fr]">
         {/* Headlines Column */}
         <div className="flex flex-col gap-4 self-start">
           {/* Headlines */}
           {marketNews.length > 0 && (
-            <div style={{ width: '600px' }}>
+            <div className="w-full lg:w-[600px]">
               <MarketHeadlines news={marketNews} />
             </div>
           )}
@@ -141,7 +162,7 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
         {/* Sector Column */}
         <div className="flex flex-col gap-4 justify-self-end">
           {sectors.length > 0 && (
-            <div style={{ width: '400px' }}>
+            <div className="w-full lg:w-[400px]">
               <SectorHeatmap sectors={sectors} />
             </div>
           )}

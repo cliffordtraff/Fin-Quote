@@ -1,5 +1,7 @@
 'use client'
 
+import TickerLink from '@/components/TickerLink'
+
 interface LoserData {
   symbol: string
   name: string
@@ -102,7 +104,9 @@ export default function LosersTable({ losers }: LosersTableProps) {
                 key={loser.symbol}
                 className="grid grid-cols-6 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
               >
-                <div className="text-blue-400 font-medium text-xs">{loser.symbol}</div>
+                <div className="font-medium text-xs">
+                  <TickerLink symbol={loser.symbol} className="text-blue-400" />
+                </div>
                 <div className={`text-right ${colorClass} text-xs`}>
                   {formatPrice(loser.price)}
                 </div>

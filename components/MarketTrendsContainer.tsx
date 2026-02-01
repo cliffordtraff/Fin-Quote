@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { GainerData } from '@/app/actions/gainers'
 import type { LoserData } from '@/app/actions/losers'
 import type { SP500MoverData } from '@/app/actions/sp500-movers'
+import TickerLink from '@/components/TickerLink'
 
 type TrendCategory = 'indexes' | 'gainers' | 'losers' | 'sp500-gainers' | 'sp500-losers'
 
@@ -59,8 +60,8 @@ function StockTable({ stocks, colorMode }: { stocks: StockData[]; colorMode: 'gr
               key={stock.symbol}
               className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
-              <td className="py-2 px-3 font-medium text-gray-900 dark:text-gray-100">
-                {stock.symbol}
+              <td className="py-2 px-3 font-medium">
+                <TickerLink symbol={stock.symbol} className="text-gray-900 dark:text-gray-100" />
               </td>
               <td className="py-2 px-3 text-gray-600 dark:text-gray-400 truncate max-w-[200px]">
                 {stock.name}
@@ -104,7 +105,7 @@ export default function MarketTrendsContainer({ gainers, losers, sp500Gainers, s
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden" style={{ width: '500px' }}>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden w-full lg:w-[500px]">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Market trends</h2>

@@ -1,6 +1,7 @@
 'use client'
 
 import type { SP500MoverData } from '@/app/actions/sp500-movers'
+import TickerLink from '@/components/TickerLink'
 
 interface SP500MoversTableProps {
   data: SP500MoverData[]
@@ -32,7 +33,10 @@ export default function SP500MoversTable({ data, type }: SP500MoversTableProps) 
                 className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
               >
                 <td className="py-1.5 px-2">
-                  <span className="font-medium text-xs text-gray-900 dark:text-gray-100">{stock.symbol}</span>
+                  <TickerLink
+                    symbol={stock.symbol}
+                    className="font-medium text-xs text-gray-900 dark:text-gray-100"
+                  />
                 </td>
                 <td className="py-1.5 px-2 text-right text-xs text-gray-900 dark:text-gray-100">
                   ${stock.price.toFixed(2)}

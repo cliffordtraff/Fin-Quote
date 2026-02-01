@@ -18,9 +18,113 @@ import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsData } from '@/app/actions/forex-bonds'
-import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
+import { getTopInsiderTrades } from '@/app/actions/insider-trading'
 import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-indices'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
+
+/**
+ * Fetches all market data in parallel.
+ * Can be called from:
+ * 1. Server component (initial SSR load)
+ * 2. Client component (polling for updates)
+ *
+ * Each section that fails returns null/empty, others continue to display.
+ */
+export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
+  const [
+    spxResult,
+    nasdaqResult,
+    dowResult,
+    russellResult,
+    gainersResult,
+    losersResult,
+    stocksResult,
+    vixResult,
+    mostActiveResult,
+    trendingResult,
+    sp500GainersResult,
+    sp500LosersResult,
+    commoditiesResult
+  ] = await Promise.all([
+    getAaplMarketData(),
+    getNasdaqMarketData(),
+    getDowMarketData(),
+    getRussellMarketData(),
+    getGainersData(),
+    getLosersData(),
+    getStocksData(),
+    getVIXData(),
+    getMostActiveData(),
+    getTrendingStocksData(),
+    getSP500Gainers(),
+    getSP500Losers(),
+    getSparklineIndicesData(),
+  ])
+
+  return {
+    spx: 'error' in spxResult ? null : spxResult as MarketData,
+    nasdaq: 'error' in nasdaqResult ? null : nasdaqResult as MarketData,
+    dow: 'error' in dowResult ? null : dowResult as MarketData,
+    russell: 'error' in russellResult ? null : russellResult as MarketData,
+    gainers: 'error' in gainersResult ? [] : gainersResult.gainers,
+    losers: 'error' in losersResult ? [] : losersResult.losers,
+    stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
+    vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
+    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive,
+    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending,
+    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers,
+    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers,
+    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices,
+  }
+}
+
+export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
+  const [
+    esFuturesResult,
+    futuresResult,
+    futuresWithHistoryResult,
+    sectorsResult,
+    economicResult,
+    newsResult,
+    earningsResult,
+    sp500GainerSparklinesResult,
+    sp500LoserSparklinesResult,
+    metaSparklineResult,
+    xlbSparklineResult,
+    forexBondsResult,
+    largeInsiderTradesResult,
+  ] = await Promise.all([
+    getESFuturesMarketData(),
+    getFuturesWithYTDSparkline(),
+    getFuturesWithHistory(),
+    getSectorPerformance(),
+    getEconomicEvents(),
+    getMarketNews(6),
+    fetchEarningsCalendar(),
+    getSP500GainerSparklines(),
+    getSP500LoserSparklines(),
+    getStockSparkline('META'),
+    getStockSparkline('XLB'),
+    getForexBondsData(),
+    getTopInsiderTrades(28, 6),
+  ])
+
+  return {
+    esFutures: 'error' in esFuturesResult ? null : esFuturesResult as MarketData,
+    futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureDataWithSparkline[]),
+    futuresWithHistory: 'error' in futuresWithHistoryResult ? [] : (futuresWithHistoryResult.futuresWithHistory as FutureMarketData[]),
+    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors,
+    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events,
+    marketNews: newsResult || [],
+    earnings: earningsResult || [],
+    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines,
+    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
+    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
+    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
+    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
+    largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
+  }
+}
 
 /**
  * Fetches all market data in parallel.
@@ -86,7 +190,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
     getForexBondsData(),
-    getLargestInsiderTrades(4, 6),  // Last 4 weeks, top 6 trades
+    getTopInsiderTrades(28, 6), // Last 28 days, top 6 trades
     getGlobalIndexQuotes(),
     getFuturesQuotes()
   ])

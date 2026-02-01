@@ -125,6 +125,13 @@ export async function getTopInsiderTrades(
   days: number = 7,
   limit: number = 100
 ): Promise<{ trades: InsiderTrade[] } | { error: string }> {
+  // Allow local dev to run without Supabase configured.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { error: 'Supabase not configured' }
+  }
+
   try {
     const supabase = await createServerClient()
 
