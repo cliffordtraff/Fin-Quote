@@ -34,25 +34,47 @@ export default function MarketDashboard2({ initialData }: MarketDashboard2Props)
     setLastUpdated(new Date())
   }, [])
 
-  async function fetchSnapshot() {
-    const res = await fetch('/api/market-snapshot')
-    if (!res.ok) throw new Error(`snapshot fetch failed: ${res.status}`)
-    return (await res.json()) as AllMarketData
+  async function fetchFast() {
+    const res = await fetch('/api/market-snapshot/fast')
+    if (!res.ok) throw new Error(`fast snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as Partial<AllMarketData>
   }
 
-  // Polling effect - refresh every 60 seconds
+  async function fetchSlow() {
+    const res = await fetch('/api/market-snapshot/slow')
+    if (!res.ok) throw new Error(`slow snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as Partial<AllMarketData>
+  }
+
+  // Polling effect - fast data every 60s, slow data every 10 min
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const apply = (patch: Partial<AllMarketData>) => {
+      setData((prev) => ({ ...prev, ...patch }))
+      setLastUpdated(new Date())
+    }
+
+    fetchSlow().then(apply).catch((e) => console.error('Failed to refresh slow market data:', e))
+
+    const fastInterval = setInterval(async () => {
       try {
-        const freshData = await fetchSnapshot()
-        setData(freshData)
-        setLastUpdated(new Date())
+        apply(await fetchFast())
       } catch (error) {
-        console.error('Failed to refresh market data:', error)
+        console.error('Failed to refresh fast market data:', error)
       }
     }, 60000)
 
-    return () => clearInterval(interval)
+    const slowInterval = setInterval(async () => {
+      try {
+        apply(await fetchSlow())
+      } catch (error) {
+        console.error('Failed to refresh slow market data:', error)
+      }
+    }, 600000)
+
+    return () => {
+      clearInterval(fastInterval)
+      clearInterval(slowInterval)
+    }
   }, [])
 
   const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds } = data
