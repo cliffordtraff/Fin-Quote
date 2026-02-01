@@ -152,6 +152,12 @@ function buildMarketDataContext(data: MarketSummaryInput): string {
 
 export async function getMarketSummary(data?: MarketSummaryInput, forceRefresh?: boolean): Promise<MarketSummaryResult> {
   console.log('getMarketSummary called, forceRefresh:', forceRefresh)
+
+  // Helpful error message if env isn't configured.
+  if (!process.env.OPENAI_API_KEY) {
+    return { summary: '', error: 'OPENAI_API_KEY is missing' }
+  }
+
   const now = Date.now()
 
   if (!forceRefresh) {
@@ -275,6 +281,17 @@ Now write the market summary, using web search to verify and explain the drivers
   } catch (error) {
     console.error('Error generating market summary:', error)
     console.error('Error details:', JSON.stringify(error, null, 2))
+
+    // Fallback: return a deterministic summary from the provided data so UI isn't blank.
+    // This keeps the app usable if the OpenAI call fails (rate limit, model/tool mismatch, etc.).
+    if (data) {
+      const fallback = buildMarketDataContext(data)
+      return {
+        summary: fallback || '',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      }
+    }
+
     return {
       summary: '',
       error: error instanceof Error ? error.message : 'Unknown error occurred',
