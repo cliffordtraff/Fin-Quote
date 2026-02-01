@@ -9,9 +9,9 @@ import StockSearch from './StockSearch'
 export default function Navigation() {
   const pathname = usePathname()
 
-  // Extract current stock symbol from path if on a stock or company page
-  const stockMatch = pathname?.match(/^\/(stock|company)\/([^/]+)/)
-  const currentSymbol = stockMatch ? stockMatch[2].toUpperCase() : null
+  // Extract current stock symbol from path if on a stock page
+  const stockMatch = pathname?.match(/^\/stock\/([^/]+)/)
+  const currentSymbol = stockMatch ? stockMatch[1].toUpperCase() : null
 
   return (
     <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
@@ -26,6 +26,7 @@ export default function Navigation() {
           </div>
         </div>
       </div>
+
       {/* Navigation Tabs Row */}
       <div className="w-full">
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
@@ -44,6 +45,7 @@ export default function Navigation() {
                   Market Test
                 </Link>
               )}
+
               {process.env.NEXT_PUBLIC_ENABLE_MARKET2 === 'true' && (
                 <Link
                   href="/market2"
@@ -56,6 +58,7 @@ export default function Navigation() {
                   Market 2
                 </Link>
               )}
+
               {process.env.NEXT_PUBLIC_ENABLE_MARKET3 === 'true' && (
                 <Link
                   href="/market"
@@ -68,6 +71,7 @@ export default function Navigation() {
                   Market
                 </Link>
               )}
+
               <Link
                 href="/market-sunday"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -78,6 +82,7 @@ export default function Navigation() {
               >
                 Market Sunday
               </Link>
+
               <Link
                 href="/market-dexter"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -88,16 +93,7 @@ export default function Navigation() {
               >
                 Market Dexter
               </Link>
-              <Link
-                href={currentSymbol ? `/company/${currentSymbol}` : '/company/AAPL'}
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname?.startsWith('/company')
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                Company
-              </Link>
+
               <Link
                 href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -108,6 +104,7 @@ export default function Navigation() {
               >
                 Financials
               </Link>
+
               <Link
                 href="/charts"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -118,6 +115,7 @@ export default function Navigation() {
               >
                 Charting
               </Link>
+
               <Link
                 href="/concept"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -128,6 +126,7 @@ export default function Navigation() {
               >
                 Market Internals
               </Link>
+
               <Link
                 href="/calendar"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -138,6 +137,7 @@ export default function Navigation() {
               >
                 Calendar
               </Link>
+
               <Link
                 href="/insiders"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
@@ -148,6 +148,7 @@ export default function Navigation() {
               >
                 Insiders
               </Link>
+
               {process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true' && (
                 <Link
                   href="/chatbot"

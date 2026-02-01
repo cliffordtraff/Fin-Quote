@@ -23,6 +23,16 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Consolidate: /company/:symbol → /stock/:symbol
+  if (pathname.startsWith('/company/')) {
+    const sym = pathname.split('/')[2]
+    if (sym) {
+      const url = req.nextUrl.clone()
+      url.pathname = `/stock/${encodeURIComponent(sym.toUpperCase())}`
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Convenience: /AAPL → /stock/AAPL
   // Only for single-segment paths that look like tickers.
   // Exclude known top-level routes.
