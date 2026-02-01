@@ -9,7 +9,6 @@ import { getStockOverview } from '@/app/actions/stock-overview'
 import { getCompanyProfile } from '@/app/actions/get-company-profile'
 import { getSegmentData } from '@/app/actions/segment-data'
 import { getCompanyFundamentals } from '@/app/actions/company-fundamentals'
-import { isValidSymbol } from '@/lib/symbol-resolver'
 
 interface PageProps {
   params: Promise<{ symbol: string }>
@@ -52,11 +51,9 @@ export default async function CompanyPage({ params }: PageProps) {
   const { symbol } = await params
   const normalizedSymbol = symbol.toUpperCase()
 
-  // Validate symbol exists
-  const valid = await isValidSymbol(normalizedSymbol)
-  if (!valid) {
-    notFound()
-  }
+  // NOTE: Don't hard-404 on symbol validation.
+  // In local/dev (or when the symbol DB isn't populated), validation may be unavailable.
+  // We rely on downstream data fetches to decide what to render.
 
   // Parallel data fetching
   const [overview, productSegmentsResult, geoSegmentsResult, fundamentals] = await Promise.all([
