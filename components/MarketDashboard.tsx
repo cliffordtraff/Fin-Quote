@@ -11,7 +11,6 @@ import MarketHeadlines from '@/components/MarketHeadlines'
 import IndexSparklines from '@/components/IndexSparklines'
 import MarketTrends from '@/components/MarketTrends'
 import SP500PerformanceChart from '@/components/SP500PerformanceChart'
-import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
 interface MarketDashboardProps {
@@ -29,11 +28,17 @@ export default function MarketDashboard({ initialData }: MarketDashboardProps) {
     setLastUpdated(new Date())
   }, [])
 
+  async function fetchSnapshot() {
+    const res = await fetch('/api/market-snapshot')
+    if (!res.ok) throw new Error(`snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as AllMarketData
+  }
+
   // Polling effect - refresh every 60 seconds
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const freshData = await fetchAllMarketData()
+        const freshData = await fetchSnapshot()
         setData(freshData)
         setLastUpdated(new Date())
       } catch (error) {

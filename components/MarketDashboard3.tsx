@@ -17,7 +17,6 @@ import EarningsCalendar from '@/components/EarningsCalendar'
 import TopGainerSparklines from '@/components/TopGainerSparklines'
 import ForexBondsTable from '@/components/ForexBondsTable'
 import MarketSessions from '@/components/MarketSessions'
-import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import type { AllMarketData } from '@/lib/market-types'
 
 interface MarketDashboard3Props {
@@ -35,11 +34,17 @@ export default function MarketDashboard3({ initialData }: MarketDashboard3Props)
     setLastUpdated(new Date())
   }, [])
 
+  async function fetchSnapshot() {
+    const res = await fetch('/api/market-snapshot')
+    if (!res.ok) throw new Error(`snapshot fetch failed: ${res.status}`)
+    return (await res.json()) as AllMarketData
+  }
+
   // Polling effect - refresh every 60 seconds
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const freshData = await fetchAllMarketData()
+        const freshData = await fetchSnapshot()
         setData(freshData)
         setLastUpdated(new Date())
       } catch (error) {
