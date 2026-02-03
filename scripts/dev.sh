@@ -8,4 +8,7 @@ if lsof -iTCP:"$PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
   exit 1
 fi
 
+# Check data freshness (non-blocking)
+node scripts/check-data-freshness.js 2>/dev/null || true
+
 exec npm run dev:next

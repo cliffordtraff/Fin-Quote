@@ -2,7 +2,8 @@
  * Symbol Resolver - Smart Stock Symbol Resolution
  *
  * This module resolves user input (company names, ticker symbols, variations)
- * to canonical stock symbols that exist in the sp500_constituents table.
+ * to canonical stock symbols. Supports all US stocks via the us_stocks table,
+ * with fallback to sp500_constituents for backwards compatibility.
  *
  * Resolution Strategy:
  * 1. Check if input is already a valid symbol (exact match)
@@ -151,7 +152,8 @@ export interface SymbolResolution {
 }
 
 /**
- * Load S&P 500 constituents into cache
+ * Load stock symbols into cache
+ * Tries us_stocks first (all US stocks), falls back to sp500_constituents
  */
 async function loadSymbolCache(): Promise<Map<string, { symbol: string; name: string }>> {
   const now = Date.now()
@@ -164,14 +166,26 @@ async function loadSymbolCache(): Promise<Map<string, { symbol: string; name: st
   try {
     const supabase = await createServerClient()
 
-    const { data, error } = await supabase
-      .from('sp500_constituents')
+    // Try us_stocks table first (has all US stocks)
+    // Note: Supabase default limit is 1000, we need all ~10k stocks
+    let { data, error } = await supabase
+      .from('us_stocks')
       .select('symbol, name')
       .eq('is_active', true)
+      .limit(15000)
 
-    if (error) {
-      console.error('Failed to load symbol cache:', error)
-      return symbolCache || new Map()
+    // Fallback to sp500_constituents if us_stocks doesn't exist or is empty
+    if (error || !data || data.length === 0) {
+      const fallback = await supabase
+        .from('sp500_constituents')
+        .select('symbol, name')
+        .eq('is_active', true)
+
+      if (fallback.error) {
+        console.error('Failed to load symbol cache:', fallback.error)
+        return symbolCache || new Map()
+      }
+      data = fallback.data
     }
 
     symbolCache = new Map()
@@ -266,13 +280,39 @@ export async function resolveSymbol(input: string): Promise<SymbolResolution> {
 
 /**
  * Validate that a symbol exists in the database
+ * Queries database directly to support 10k+ stocks
  *
  * @param symbol - Stock symbol to validate
  * @returns True if symbol exists, false otherwise
  */
 export async function isValidSymbol(symbol: string): Promise<boolean> {
-  const cache = await loadSymbolCache()
-  return cache.has(symbol.toUpperCase())
+  try {
+    const supabase = await createServerClient()
+
+    // Try us_stocks first
+    const { data, error } = await supabase
+      .from('us_stocks')
+      .select('symbol')
+      .eq('symbol', symbol.toUpperCase())
+      .eq('is_active', true)
+      .single()
+
+    if (!error && data) {
+      return true
+    }
+
+    // Fallback to sp500_constituents
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('sp500_constituents')
+      .select('symbol')
+      .eq('symbol', symbol.toUpperCase())
+      .eq('is_active', true)
+      .single()
+
+    return !fallbackError && !!fallbackData
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -301,6 +341,8 @@ export async function getAllSymbols(): Promise<string[]> {
  * Search for stocks by symbol or company name
  * Used for the stock search dropdown
  *
+ * Queries database directly (not cache) to support 10k+ stocks
+ *
  * @param query - Search query (symbol or company name)
  * @returns Array of matching stocks, sorted by relevance
  *
@@ -315,41 +357,70 @@ export async function searchSymbols(
     return []
   }
 
-  const cache = await loadSymbolCache()
   const normalizedQuery = query.toUpperCase()
   const normalizedQueryLower = query.toLowerCase()
 
-  const results = Array.from(cache.values())
-    .filter(
-      (stock) =>
-        stock.symbol.includes(normalizedQuery) ||
-        stock.name.toLowerCase().includes(normalizedQueryLower)
-    )
-    .sort((a, b) => {
-      // Exact symbol match first
-      if (a.symbol === normalizedQuery) return -1
-      if (b.symbol === normalizedQuery) return 1
+  try {
+    const supabase = await createServerClient()
 
-      // Symbol starts-with second
-      if (a.symbol.startsWith(normalizedQuery) && !b.symbol.startsWith(normalizedQuery)) return -1
-      if (b.symbol.startsWith(normalizedQuery) && !a.symbol.startsWith(normalizedQuery)) return 1
+    // Query us_stocks directly with pattern matching
+    // Try us_stocks first, fallback to sp500_constituents
+    let { data, error } = await supabase
+      .from('us_stocks')
+      .select('symbol, name, market_cap')
+      .eq('is_active', true)
+      .or(`symbol.ilike.%${query}%,name.ilike.%${query}%`)
+      .order('market_cap', { ascending: false, nullsFirst: false })
+      .limit(50)
 
-      // Name starts-with third
-      if (
-        a.name.toLowerCase().startsWith(normalizedQueryLower) &&
-        !b.name.toLowerCase().startsWith(normalizedQueryLower)
-      ) return -1
-      if (
-        b.name.toLowerCase().startsWith(normalizedQueryLower) &&
-        !a.name.toLowerCase().startsWith(normalizedQueryLower)
-      ) return 1
+    // Fallback to sp500_constituents if us_stocks query fails
+    if (error || !data) {
+      const fallback = await supabase
+        .from('sp500_constituents')
+        .select('symbol, name')
+        .eq('is_active', true)
+        .or(`symbol.ilike.%${query}%,name.ilike.%${query}%`)
+        .limit(50)
 
-      // Alphabetical by symbol
-      return a.symbol.localeCompare(b.symbol)
-    })
-    .slice(0, 10)
+      if (fallback.error || !fallback.data) {
+        console.error('Search failed:', fallback.error)
+        return []
+      }
+      data = fallback.data
+    }
 
-  return results
+    // Sort by relevance
+    const results = data
+      .sort((a, b) => {
+        // Exact symbol match first
+        if (a.symbol === normalizedQuery) return -1
+        if (b.symbol === normalizedQuery) return 1
+
+        // Symbol starts-with second
+        if (a.symbol.startsWith(normalizedQuery) && !b.symbol.startsWith(normalizedQuery)) return -1
+        if (b.symbol.startsWith(normalizedQuery) && !a.symbol.startsWith(normalizedQuery)) return 1
+
+        // Name starts-with third
+        if (
+          a.name.toLowerCase().startsWith(normalizedQueryLower) &&
+          !b.name.toLowerCase().startsWith(normalizedQueryLower)
+        ) return -1
+        if (
+          b.name.toLowerCase().startsWith(normalizedQueryLower) &&
+          !a.name.toLowerCase().startsWith(normalizedQueryLower)
+        ) return 1
+
+        // Keep market cap order (already sorted by DB)
+        return 0
+      })
+      .slice(0, 10)
+      .map(({ symbol, name }) => ({ symbol, name }))
+
+    return results
+  } catch (err) {
+    console.error('Search error:', err)
+    return []
+  }
 }
 
 /**

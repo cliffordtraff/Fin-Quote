@@ -80,7 +80,7 @@ export default function Navigation() {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                Market Sunday
+                Market
               </Link>
 
               {process.env.NEXT_PUBLIC_ENABLE_DEXTER === 'true' && (
