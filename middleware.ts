@@ -1,20 +1,53 @@
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Routing helpers:
-// - Prevent old/dead routes from 404ing (e.g. /market3)
-// - Allow short ticker URLs like /AAPL → /stock/AAPL
-export function middleware(req: NextRequest) {
+// Routes that require authentication
+const PROTECTED_ROUTES = ['/profile', '/admin']
+
+// Routes that should redirect to home if already authenticated
+const AUTH_ROUTES = ['/auth', '/auth/forgot-password']
+
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Ignore Next internals + API routes
+  // Ignore Next internals + API routes + static files
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname.match(/\.(ico|png|jpg|jpeg|svg|gif|webp|css|js|woff|woff2)$/)
   ) {
     return NextResponse.next()
   }
+
+  // Create response and supabase client
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
+
+  // Refresh session if needed (required for auth to work properly)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // Check if route requires authentication
+  const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
+  const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route))
+
+  // Redirect unauthenticated users away from protected routes
+  if (isProtectedRoute && !session) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/auth'
+    url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated users away from auth pages (optional - can be commented out if you want to allow access)
+  // if (isAuthRoute && session && !pathname.includes('reset-password')) {
+  //   const url = req.nextUrl.clone()
+  //   url.pathname = '/'
+  //   return NextResponse.redirect(url)
+  // }
 
   // Legacy route: /market3 → /market
   if (pathname === '/market3' || pathname === '/market3/') {
@@ -51,6 +84,9 @@ export function middleware(req: NextRequest) {
     'chatbot',
     'login',
     'logout',
+    'auth',
+    'profile',
+    'admin',
   ])
 
   const parts = pathname.split('/').filter(Boolean)
@@ -66,7 +102,7 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  return res
 }
 
 export const config = {

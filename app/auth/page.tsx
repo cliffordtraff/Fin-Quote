@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/lib/database.types'
 import Link from 'next/link'
@@ -14,6 +14,8 @@ export default function AuthPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
   const supabase = createClientComponentClient<Database>()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,8 +49,8 @@ export default function AuthPage() {
         // Refresh the router to update server-side auth state
         router.refresh()
 
-        // Navigate to home
-        router.push('/')
+        // Navigate to redirect destination or home
+        router.push(redirectTo)
       }
     } catch (error: any) {
       console.error('Auth error:', error)
@@ -133,7 +135,7 @@ export default function AuthPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp)
@@ -144,6 +146,16 @@ export default function AuthPage() {
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
+            {!isSignUp && (
+              <div>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 text-center">
