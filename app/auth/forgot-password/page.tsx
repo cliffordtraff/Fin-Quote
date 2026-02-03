@@ -74,7 +74,7 @@ export default function ForgotPasswordPage() {
         {/* Logo/Title */}
         <div className="text-center mb-8">
           <Link href="/" className="text-3xl font-bold text-gray-900 dark:text-white">
-            Fin Quote
+            The Intraday
           </Link>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Reset your password

@@ -125,9 +125,12 @@ export default function FinancialStatementsTabs({
   cashFlow,
 }: FinancialStatementsTabsProps) {
   const [activeTab, setActiveTab] = useState<StatementType>('income')
+  const [sortAscending, setSortAscending] = useState(false)
 
-  // Get unique years
-  const years = [...new Set(incomeStatement.map(f => f.year))].sort((a, b) => b - a)
+  // Get unique years, sorted based on user preference
+  const years = [...new Set(incomeStatement.map(f => f.year))].sort((a, b) =>
+    sortAscending ? a - b : b - a
+  )
 
   // Format helpers
   const formatCurrency = (value: number | null): string => {
@@ -331,21 +334,43 @@ export default function FinancialStatementsTabs({
     <div>
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
-        <nav className="flex space-x-4" aria-label="Financial Statements">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+        <div className="flex items-center justify-between">
+          <nav className="flex space-x-4" aria-label="Financial Statements">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          <button
+            onClick={() => setSortAscending(!sortAscending)}
+            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            title={sortAscending ? 'Showing oldest first - click to show newest first' : 'Showing newest first - click to show oldest first'}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-6 h-6"
             >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Table */}
