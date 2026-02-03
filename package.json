@@ -20,7 +20,8 @@
     "ingest:metrics": "npx tsx scripts/ingest-fmp-metrics.ts",
     "generate:catalog": "npx tsx scripts/generate-metrics-catalog.ts",
     "refresh:stocks": "npx tsx scripts/us-stocks/refresh-registry.ts",
-    "stocks:status": "npx tsx scripts/us-stocks/check-status.ts"
+    "stocks:status": "npx tsx scripts/us-stocks/check-status.ts",
+    "ingest:segments": "npx tsx scripts/ingest-segment-data-all.ts"
   },
   "dependencies": {
     "@openai/agents": "^0.4.3",
