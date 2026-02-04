@@ -144,7 +144,16 @@ async function fetchSegmentsForSymbol(symbol: string, apiKey: string): Promise<S
     }
   }
 
-  return segments
+  // Deduplicate segments by unique key to avoid "ON CONFLICT DO UPDATE cannot affect row a second time" error
+  // FMP API can return multiple entries for the same segment (e.g., different periods mapping to same FY)
+  const uniqueSegments = new Map<string, SegmentRecord>()
+  for (const seg of segments) {
+    const key = `${seg.symbol}|${seg.year}|${seg.period}|${seg.metric_name}|${seg.dimension_type}|${seg.dimension_value}`
+    // Keep the last value (most recent) if duplicates exist
+    uniqueSegments.set(key, seg)
+  }
+
+  return Array.from(uniqueSegments.values())
 }
 
 async function ingestSingleStock(
@@ -290,30 +299,49 @@ async function main() {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-  // Build query
-  let query = supabase
-    .from('us_stocks')
-    .select('symbol, name, market_cap, segment_status')
-    .eq('is_active', true)
+  // Fetch stocks with pagination (Supabase limits to 1000 rows per request)
+  const PAGE_SIZE = 1000
+  let allStocks: USStock[] = []
+  let page = 0
 
-  if (singleSymbol) {
-    query = query.eq('symbol', singleSymbol)
-  } else {
-    if (minMarketCap) {
-      query = query.gte('market_cap', minMarketCap)
+  while (true) {
+    let query = supabase
+      .from('us_stocks')
+      .select('symbol, name, market_cap, segment_status')
+      .eq('is_active', true)
+
+    if (singleSymbol) {
+      query = query.eq('symbol', singleSymbol)
+    } else {
+      if (minMarketCap) {
+        query = query.gte('market_cap', minMarketCap)
+      }
+      query = query.order('market_cap', { ascending: false, nullsFirst: false })
     }
-    query = query.order('market_cap', { ascending: false, nullsFirst: false })
+
+    query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Error fetching stocks:', error)
+      process.exit(1)
+    }
+
+    if (!data || data.length === 0) {
+      break
+    }
+
+    allStocks.push(...(data as USStock[]))
+
+    if (data.length < PAGE_SIZE) {
+      break // Last page
+    }
+
+    page++
   }
 
-  // Fetch stocks
-  const { data: allStocks, error } = await query
-
-  if (error) {
-    console.error('Error fetching stocks:', error)
-    process.exit(1)
-  }
-
-  if (!allStocks || allStocks.length === 0) {
+  if (allStocks.length === 0) {
     console.log('No stocks found matching criteria')
     return
   }
