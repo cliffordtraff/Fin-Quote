@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import FuturesTable from '@/components/FuturesTable'
-import GainersTable from '@/components/GainersTable'
-import LosersTable from '@/components/LosersTable'
+import MarketMoversTable from '@/components/MarketMoversTable'
 import StocksTable from '@/components/StocksTable'
 import SectorHeatmap from '@/components/SectorHeatmap'
 import EconomicCalendar from '@/components/EconomicCalendar'
@@ -22,6 +21,8 @@ import { getMarketTrendsResponses, type MarketTrendsBullet } from '@/app/actions
 import { getMarketTrendsAgents } from '@/app/actions/market-trends-agents'
 import { getCalendarSummaries } from '@/app/actions/calendar-summaries'
 import type { AllMarketData } from '@/lib/market-types'
+import { useTimezone, getTimezoneAbbr } from '@/lib/timezone-context'
+import { formatTimeInTimezone } from '@/lib/timezone-utils'
 
 interface MarketDashboardSundayProps {
   initialData: AllMarketData
@@ -30,16 +31,19 @@ interface MarketDashboardSundayProps {
 const ENABLE_MOVERS = process.env.NEXT_PUBLIC_ENABLE_MOVERS === 'true'
 
 export default function MarketDashboardSunday({ initialData }: MarketDashboardSundayProps) {
+  const { timezone } = useTimezone()
   const [data, setData] = useState<AllMarketData>(initialData)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [marketSummary, setMarketSummary] = useState<string>('')
-  const [marketSummaryLoading, setMarketSummaryLoading] = useState(true)
+  // Initialize from server-fetched cache (shows immediately if available)
+  const [marketSummary, setMarketSummary] = useState<string>(initialData.marketSummary || '')
+  const [marketSummaryLoading, setMarketSummaryLoading] = useState(!initialData.marketSummary)
   const [summaryLastUpdated, setSummaryLastUpdated] = useState<Date | null>(null)
 
   // Market Trends bullet points state (for MarketInsights component)
-  const [responsesApiBullets, setResponsesApiBullets] = useState<MarketTrendsBullet[]>([])
+  // Initialize from server-fetched cache (shows immediately if available)
+  const [responsesApiBullets, setResponsesApiBullets] = useState<MarketTrendsBullet[]>(initialData.marketTrendsBullets || [])
   const [agentsSdkBullets, setAgentsSdkBullets] = useState<MarketTrendsBullet[]>([])
-  const [responsesLoading, setResponsesLoading] = useState(false)
+  const [responsesLoading, setResponsesLoading] = useState(!initialData.marketTrendsBullets?.length)
   const [agentsLoading, setAgentsLoading] = useState(false)
   const [responsesError, setResponsesError] = useState<string | undefined>()
   const [agentsError, setAgentsError] = useState<string | undefined>()
@@ -59,9 +63,10 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
   const fetchSummary = async (forceRefresh = false) => {
     setMarketSummaryLoading(true)
     try {
+      // Use cash session data for LLM summary (main trading hours)
       const result = await getMarketSummary({
-        gainers: data.gainers,
-        losers: data.losers,
+        gainers: data.gainers.cash,
+        losers: data.losers.cash,
         sectors: data.sectors,
         indices: data.sparklineIndices,
         forexBonds: data.forexBonds,
@@ -84,9 +89,10 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     setResponsesLoading(true)
     setResponsesError(undefined)
     try {
+      // Use cash session data for LLM trends (main trading hours)
       const result = await getMarketTrendsResponses({
-        gainers: data.gainers,
-        losers: data.losers,
+        gainers: data.gainers.cash,
+        losers: data.losers.cash,
         sectors: data.sectors,
         indices: data.sparklineIndices,
         forexBonds: data.forexBonds,
@@ -111,9 +117,10 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     setAgentsLoading(true)
     setAgentsError(undefined)
     try {
+      // Use cash session data for LLM trends (main trading hours)
       const result = await getMarketTrendsAgents({
-        gainers: data.gainers,
-        losers: data.losers,
+        gainers: data.gainers.cash,
+        losers: data.losers.cash,
         sectors: data.sectors,
         indices: data.sparklineIndices,
         forexBonds: data.forexBonds,
@@ -159,8 +166,14 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
 
   // Fetch market summary and bullet points on mount
   useEffect(() => {
-    fetchSummary()
-    fetchResponsesBullets()
+    // Only fetch summary if not already loaded from server cache
+    if (!initialData.marketSummary) {
+      fetchSummary()
+    }
+    // Only fetch trends bullets if not already loaded from server cache
+    if (!initialData.marketTrendsBullets?.length) {
+      fetchResponsesBullets()
+    }
     fetchAgentsBullets()
     fetchCalendarSummaries()
   }, []) // Only run on mount, not on data changes
@@ -238,7 +251,7 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
-          Last updated: {lastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+          Last updated: {formatTimeInTimezone(lastUpdated, timezone)} {getTimezoneAbbr(timezone)}
         </div>
       )}
 
@@ -332,13 +345,9 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
 
       {/* Gainers, Losers */}
       {ENABLE_MOVERS && (
-        <div className="flex gap-8 mb-8">
-          {gainers.length > 0 && (
-            <GainersTable gainers={gainers} />
-          )}
-          {losers.length > 0 && (
-            <LosersTable losers={losers} />
-          )}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <MarketMoversTable title="Gainers" data={gainers} />
+          <MarketMoversTable title="Losers" data={losers} />
         </div>
       )}
 

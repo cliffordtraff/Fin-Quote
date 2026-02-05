@@ -156,6 +156,43 @@ function buildMarketDataContext(data: MarketSummaryInput): string {
   return lines.join('\n')
 }
 
+/**
+ * Fetch only the cached market summary (no LLM generation).
+ * Used for server-side rendering to show content immediately.
+ * Returns empty string if no cache exists.
+ */
+export async function getCachedMarketSummary(): Promise<string> {
+  const now = Date.now()
+
+  // 1. Check in-memory cache first (fastest)
+  if (cachedSummary && (now - cachedSummary.timestamp) < CACHE_TTL_MS) {
+    return cachedSummary.summary
+  }
+
+  // 2. Check Supabase cache
+  try {
+    const { data: dbCache, error } = await supabasePublic
+      .from('market_summary_cache')
+      .select('summary, created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!error && dbCache) {
+      const cacheAge = now - new Date(dbCache.created_at).getTime()
+      if (cacheAge < CACHE_TTL_MS) {
+        // Update in-memory cache
+        cachedSummary = { summary: dbCache.summary, timestamp: new Date(dbCache.created_at).getTime() }
+        return dbCache.summary
+      }
+    }
+  } catch (dbError) {
+    console.log('getCachedMarketSummary: Supabase check failed:', dbError)
+  }
+
+  return ''
+}
+
 export async function getMarketSummary(data?: MarketSummaryInput, forceRefresh?: boolean): Promise<MarketSummaryResult> {
   console.log('getMarketSummary called, forceRefresh:', forceRefresh)
 

@@ -1,15 +1,17 @@
 'use client'
 
-import type { ForexBondData } from '@/app/actions/forex-bonds'
+import type { ForexBondDataWithYTD } from '@/app/actions/forex-bonds'
 
 interface ForexBondsTableProps {
-  data: ForexBondData[]
+  data: ForexBondDataWithYTD[]
 }
 
 export default function ForexBondsTable({ data }: ForexBondsTableProps) {
   if (data.length === 0) {
     return null
   }
+
+  const hasYTDData = data.some(item => item.ytdChangePercent !== undefined)
 
   const formatPrice = (price: number, symbol: string) => {
     // Treasury yields are already in percentage form
@@ -24,6 +26,11 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
     return price.toFixed(4)
   }
 
+  const formatPercentage = (percentage: number) => {
+    const sign = percentage >= 0 ? '+' : ''
+    return `${sign}${percentage.toFixed(2)}%`
+  }
+
   const formatChange = (change: number, symbol: string) => {
     const sign = change >= 0 ? '+' : ''
     if (symbol.startsWith('^')) {
@@ -35,20 +42,16 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
     return `${sign}${change.toFixed(4)}`
   }
 
-  const formatPercentage = (percentage: number) => {
-    const sign = percentage >= 0 ? '+' : ''
-    return `${sign}${percentage.toFixed(2)}%`
-  }
-
   return (
     <div className="w-full">
       <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-4 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold whitespace-nowrap">
+        <div className={`grid ${hasYTDData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold whitespace-nowrap`}>
           <div>Forex & Bonds</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
           <div className="text-right">Change %</div>
+          {hasYTDData && <div className="text-right">YTD</div>}
         </div>
 
         {/* Rows */}
@@ -59,10 +62,12 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
               ? 'text-green-500'
               : 'text-red-500'
 
+            const ytdIsPositive = (item.ytdChangePercent ?? 0) >= 0
+
             return (
               <div
                 key={item.symbol}
-                className="grid grid-cols-4 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors whitespace-nowrap"
+                className={`grid ${hasYTDData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-1 hover:bg-gray-750 transition-colors whitespace-nowrap`}
               >
                 <div className="text-blue-400 font-medium text-xs">{item.name}</div>
                 <div className={`text-right ${colorClass} text-xs`}>
@@ -74,6 +79,15 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
                 <div className={`text-right ${colorClass} text-xs`}>
                   {formatPercentage(item.changesPercentage)}
                 </div>
+                {hasYTDData && (
+                  <div className={`text-right text-xs ${ytdIsPositive ? 'text-green-500' : 'text-red-500'}`}>
+                    {item.ytdChangePercent !== undefined ? (
+                      formatPercentage(item.ytdChangePercent)
+                    ) : (
+                      <span className="text-gray-500">—</span>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}

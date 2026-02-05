@@ -47,9 +47,11 @@ export type { EarningsData } from '@/app/actions/earnings-calendar'
 export type { SP500GainerSparklineData } from '@/app/actions/sp500-gainer-sparklines'
 export type { SP500LoserSparklineData } from '@/app/actions/sp500-loser-sparklines'
 export type { StockSparklineData } from '@/app/actions/stock-sparkline'
-export type { ForexBondData } from '@/app/actions/forex-bonds'
+export type { ForexBondData, ForexBondDataWithYTD } from '@/app/actions/forex-bonds'
 export type { LargeInsiderTrade } from '@/app/actions/insider-trading'
 export type { GlobalIndexQuote, FuturesQuote } from '@/app/actions/global-indices'
+export type { MoverData, AllSessionMoversResult } from '@/app/actions/market-movers'
+export type { MarketSession } from '@/lib/market-hours'
 
 // Aggregated market data structure passed from server to client
 export interface AllMarketData {
@@ -60,8 +62,9 @@ export interface AllMarketData {
   esFutures: MarketData | null
   futures: FutureDataWithSparkline[]
   futuresWithHistory: FutureMarketData[]
-  gainers: import('@/app/actions/gainers').GainerData[]
-  losers: import('@/app/actions/losers').LoserData[]
+  // Session-aware gainers/losers with premarket, cash, and afterhours data
+  gainers: import('@/app/actions/market-movers').AllSessionMoversResult
+  losers: import('@/app/actions/market-movers').AllSessionMoversResult
   stocks: import('@/app/actions/stocks').StockData[]
   sectors: import('@/app/actions/sectors').SectorData[]
   vix: import('@/app/actions/vix').VIXData | null
@@ -78,8 +81,11 @@ export interface AllMarketData {
   sp500LoserSparklines: import('@/app/actions/sp500-loser-sparklines').SP500LoserSparklineData[]
   metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
-  forexBonds: import('@/app/actions/forex-bonds').ForexBondData[]
+  forexBonds: import('@/app/actions/forex-bonds').ForexBondDataWithYTD[]
   largeInsiderTrades: import('@/app/actions/insider-trading').LargeInsiderTrade[]
   globalIndexQuotes: import('@/app/actions/global-indices').GlobalIndexQuote[]
   globalFuturesQuotes: import('@/app/actions/global-indices').FuturesQuote[]
+  // Pre-fetched LLM summaries (cached)
+  marketSummary: string
+  marketTrendsBullets: import('@/app/actions/market-trends-responses').MarketTrendsBullet[]
 }

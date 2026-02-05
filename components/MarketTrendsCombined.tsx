@@ -1,13 +1,18 @@
 'use client'
 
 import { type ReactNode, useState, useEffect } from 'react'
-import type { GainerData } from '@/app/actions/gainers'
 import type { LoserData } from '@/app/actions/losers'
+import type { AllSessionMoversResult, MoverData } from '@/app/actions/market-movers'
+import type { MarketSession } from '@/lib/market-hours'
 import { LOADING_STEPS, LOADING_MESSAGES, type LoadingStep } from '@/lib/loading-steps'
+import { useTimezone } from '@/lib/timezone-context'
+import { getSessionTimeRange } from '@/lib/timezone-utils'
+
+type SessionType = 'premarket' | 'cash' | 'afterhours'
 
 interface MarketTrendsCombinedProps {
-  gainers: GainerData[]
-  losers: LoserData[]
+  gainers: AllSessionMoversResult
+  losers: AllSessionMoversResult
   sp500Losers?: LoserData[]
   marketSummary?: string
   marketSummaryLoading?: boolean
@@ -21,6 +26,54 @@ interface StockData {
   name: string
   price: number
   changesPercentage: number
+}
+
+function SessionToggle({
+  selected,
+  onChange,
+  currentSession,
+  timezone
+}: {
+  selected: SessionType
+  onChange: (session: SessionType) => void
+  currentSession: MarketSession
+  timezone: string
+}) {
+  const sessions: { id: SessionType; label: string; fullName: string }[] = [
+    { id: 'premarket', label: 'Pre', fullName: 'Pre-market' },
+    { id: 'cash', label: 'Reg', fullName: 'Regular' },
+    { id: 'afterhours', label: 'AH', fullName: 'After-hours' }
+  ]
+
+  return (
+    <div className="flex rounded bg-gray-100 dark:bg-gray-800 p-0.5">
+      {sessions.map((session) => {
+        const isActive = selected === session.id
+        const isLive = currentSession === session.id
+        const timeRange = getSessionTimeRange(session.id, timezone)
+
+        return (
+          <button
+            key={session.id}
+            onClick={() => onChange(session.id)}
+            title={`${session.fullName}: ${timeRange}`}
+            className={`
+              relative px-2 py-0.5 text-[9px] font-medium rounded transition-colors
+              ${isActive
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }
+            `}
+          >
+            {session.label}
+            {isLive && (
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full" />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function MiniTable({ title, stocks, colorMode }: { title: string; stocks: StockData[]; colorMode: 'green' | 'red' | 'neutral' }) {
@@ -302,19 +355,118 @@ export default function MarketTrendsCombined({
   summaryLastUpdated,
 }: MarketTrendsCombinedProps) {
   const maxRows = 17
+  const { timezone } = useTimezone()
+
+  // Default to current session, fallback to 'cash' if market closed
+  const getDefaultSession = (): SessionType => {
+    if (gainers.currentSession === 'premarket') return 'premarket'
+    if (gainers.currentSession === 'cash') return 'cash'
+    if (gainers.currentSession === 'afterhours') return 'afterhours'
+    return 'cash'
+  }
+
+  const [selectedSession, setSelectedSession] = useState<SessionType>(getDefaultSession)
+
+  // Get the data for the selected session
+  const gainersData = gainers[selectedSession] || []
+  const losersData = losers[selectedSession] || []
 
   return (
     <div className="flex gap-4 w-full">
-      <MiniTable
-        title="Gainers"
-        stocks={gainers.slice(0, maxRows)}
-        colorMode="green"
-      />
-      <MiniTable
-        title="Losers"
-        stocks={losers.slice(0, maxRows)}
-        colorMode="red"
-      />
+      <div className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
+        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Gainers</h2>
+          <SessionToggle
+            selected={selectedSession}
+            onChange={setSelectedSession}
+            currentSession={gainers.currentSession}
+            timezone={timezone}
+          />
+        </div>
+        <table className="w-full text-[10px]">
+          <thead>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
+              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
+              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {gainersData.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-4 px-2 text-center text-gray-400 dark:text-gray-500">
+                  No data for {selectedSession === 'premarket' ? 'pre-market' : selectedSession === 'afterhours' ? 'after-hours' : 'regular'} session
+                </td>
+              </tr>
+            ) : (
+              gainersData.slice(0, maxRows).map((stock) => (
+                <tr
+                  key={stock.symbol}
+                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                >
+                  <td className="py-1 px-2">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
+                  </td>
+                  <td className="py-1 px-2 text-right text-gray-900 dark:text-gray-100">
+                    ${stock.price.toFixed(2)}
+                  </td>
+                  <td className="py-1 px-2 text-right font-medium text-green-600 dark:text-green-400">
+                    +{stock.changesPercentage.toFixed(2)}%
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
+        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Losers</h2>
+          <SessionToggle
+            selected={selectedSession}
+            onChange={setSelectedSession}
+            currentSession={losers.currentSession}
+            timezone={timezone}
+          />
+        </div>
+        <table className="w-full text-[10px]">
+          <thead>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
+              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
+              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {losersData.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-4 px-2 text-center text-gray-400 dark:text-gray-500">
+                  No data for {selectedSession === 'premarket' ? 'pre-market' : selectedSession === 'afterhours' ? 'after-hours' : 'regular'} session
+                </td>
+              </tr>
+            ) : (
+              losersData.slice(0, maxRows).map((stock) => (
+                <tr
+                  key={stock.symbol}
+                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                >
+                  <td className="py-1 px-2">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
+                  </td>
+                  <td className="py-1 px-2 text-right text-gray-900 dark:text-gray-100">
+                    ${stock.price.toFixed(2)}
+                  </td>
+                  <td className="py-1 px-2 text-right font-medium text-red-600 dark:text-red-400">
+                    {stock.changesPercentage.toFixed(2)}%
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {sp500Losers && sp500Losers.length > 0 && (
         <MiniTable
           title="S&P 500 Losers"

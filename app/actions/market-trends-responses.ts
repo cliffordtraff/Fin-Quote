@@ -139,6 +139,44 @@ function buildMarketDataContext(data: MarketTrendsInput): string {
   return lines.join('\n')
 }
 
+/**
+ * Fetch only the cached market trends bullets (no LLM generation).
+ * Used for server-side rendering to show content immediately.
+ * Returns empty array if no cache exists.
+ */
+export async function getCachedMarketTrendsBullets(): Promise<MarketTrendsBullet[]> {
+  const now = Date.now()
+
+  // 1. Check in-memory cache first (fastest)
+  if (cachedTrends && (now - cachedTrends.timestamp) < CACHE_TTL_MS) {
+    return cachedTrends.bullets
+  }
+
+  // 2. Check Supabase cache
+  try {
+    const { data: dbCache, error } = await supabasePublic
+      .from('market_trends_cache')
+      .select('bullets, created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!error && dbCache) {
+      const cacheAge = now - new Date(dbCache.created_at).getTime()
+      if (cacheAge < CACHE_TTL_MS) {
+        const bullets = dbCache.bullets as MarketTrendsBullet[]
+        // Update in-memory cache
+        cachedTrends = { bullets, timestamp: new Date(dbCache.created_at).getTime() }
+        return bullets
+      }
+    }
+  } catch (dbError) {
+    console.log('getCachedMarketTrendsBullets: Supabase check failed:', dbError)
+  }
+
+  return []
+}
+
 export async function getMarketTrendsResponses(data: MarketTrendsInput, forceRefresh?: boolean): Promise<MarketTrendsResult> {
   console.log('getMarketTrendsResponses called, forceRefresh:', forceRefresh)
   const now = Date.now()

@@ -2,8 +2,7 @@
 
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData, getESFuturesMarketData } from '@/app/actions/market-data'
 import { getFuturesWithYTDSparkline, getFuturesWithHistory } from '@/app/actions/futures'
-import { getGainersData } from '@/app/actions/gainers'
-import { getLosersData } from '@/app/actions/losers'
+import { getAllSessionMovers } from '@/app/actions/market-movers'
 import { getStocksData } from '@/app/actions/stocks'
 import { getSectorPerformance } from '@/app/actions/sectors'
 import { getVIXData } from '@/app/actions/vix'
@@ -17,9 +16,11 @@ import { fetchEarningsCalendar } from '@/app/actions/earnings-calendar'
 import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
-import { getForexBondsData } from '@/app/actions/forex-bonds'
+import { getForexBondsWithYTD } from '@/app/actions/forex-bonds'
 import { getTopInsiderTrades } from '@/app/actions/insider-trading'
 import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-indices'
+import { getCachedMarketSummary } from '@/app/actions/market-summary'
+import { getCachedMarketTrendsBullets } from '@/app/actions/market-trends-responses'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
 
 /**
@@ -50,8 +51,8 @@ export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
     getNasdaqMarketData(),
     getDowMarketData(),
     getRussellMarketData(),
-    getGainersData(),
-    getLosersData(),
+    getAllSessionMovers('gainers'),
+    getAllSessionMovers('losers'),
     getStocksData(),
     getVIXData(),
     getMostActiveData(),
@@ -66,8 +67,8 @@ export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
     nasdaq: 'error' in nasdaqResult ? null : nasdaqResult as MarketData,
     dow: 'error' in dowResult ? null : dowResult as MarketData,
     russell: 'error' in russellResult ? null : russellResult as MarketData,
-    gainers: 'error' in gainersResult ? [] : gainersResult.gainers,
-    losers: 'error' in losersResult ? [] : losersResult.losers,
+    gainers: gainersResult,
+    losers: losersResult,
     stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
     vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
     mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive,
@@ -105,7 +106,7 @@ export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
     getSP500LoserSparklines(),
     getStockSparkline('META'),
     getStockSparkline('XLB'),
-    getForexBondsData(),
+    getForexBondsWithYTD(),
     getTopInsiderTrades(28, 6),
   ])
 
@@ -163,7 +164,9 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     forexBondsResult,
     largeInsiderTradesResult,
     globalIndexQuotesResult,
-    globalFuturesQuotesResult
+    globalFuturesQuotesResult,
+    marketSummaryResult,
+    marketTrendsBulletsResult
   ] = await Promise.all([
     getAaplMarketData(),
     getNasdaqMarketData(),
@@ -172,8 +175,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getESFuturesMarketData(),
     getFuturesWithYTDSparkline(),
     getFuturesWithHistory(),
-    getGainersData(),
-    getLosersData(),
+    getAllSessionMovers('gainers'),
+    getAllSessionMovers('losers'),
     getStocksData(),
     getSectorPerformance(),
     getVIXData(),
@@ -189,10 +192,12 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getSP500LoserSparklines(),
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
-    getForexBondsData(),
+    getForexBondsWithYTD(),
     getTopInsiderTrades(28, 6), // Last 28 days, top 6 trades
     getGlobalIndexQuotes(),
-    getFuturesQuotes()
+    getFuturesQuotes(),
+    getCachedMarketSummary(),
+    getCachedMarketTrendsBullets()
   ])
 
   // Process results - gracefully handle failures per-section
@@ -204,8 +209,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     esFutures: 'error' in esFuturesResult ? null : esFuturesResult as MarketData,
     futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureDataWithSparkline[]),
     futuresWithHistory: 'error' in futuresWithHistoryResult ? [] : (futuresWithHistoryResult.futuresWithHistory as FutureMarketData[]),
-    gainers: 'error' in gainersResult ? [] : gainersResult.gainers,
-    losers: 'error' in losersResult ? [] : losersResult.losers,
+    gainers: gainersResult,
+    losers: losersResult,
     stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
     sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors,
     vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
@@ -225,6 +230,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
     largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
     globalIndexQuotes: globalIndexQuotesResult || [],
-    globalFuturesQuotes: globalFuturesQuotesResult || []
+    globalFuturesQuotes: globalFuturesQuotesResult || [],
+    marketSummary: marketSummaryResult || '',
+    marketTrendsBullets: marketTrendsBulletsResult || []
   }
 }

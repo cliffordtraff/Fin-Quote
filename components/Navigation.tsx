@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import ThemeToggle from './ThemeToggle'
 import UserMenu from './UserMenu'
 import StockSearch from './StockSearch'
+import TimezoneSelector from './TimezoneSelector'
 
 export default function Navigation() {
   const pathname = usePathname()
@@ -166,8 +167,9 @@ export default function Navigation() {
             </div>
           </div>
 
-          {/* Right side: Theme toggle and User menu */}
+          {/* Right side: Timezone, Theme toggle, and User menu */}
           <div className="flex items-center space-x-2">
+            <TimezoneSelector />
             <ThemeToggle />
             <UserMenu />
           </div>
