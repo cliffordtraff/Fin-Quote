@@ -2,8 +2,8 @@ import Navigation from '@/components/Navigation'
 import MarketDashboard2 from '@/components/MarketDashboard2'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
-// Enable ISR with 60-second revalidation
-export const revalidate = 60
+// Render dynamically (market data requires live API calls)
+export const dynamic = 'force-dynamic'
 
 export default async function Market2() {
   // Fetch data on the server
