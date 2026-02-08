@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that require authentication
-const PROTECTED_ROUTES = ['/profile', '/admin']
+const PROTECTED_ROUTES = ['/profile', '/admin', '/dashboard']
 
 // Routes that should redirect to home if already authenticated
 const AUTH_ROUTES = ['/auth', '/auth/forgot-password']
@@ -75,6 +75,7 @@ export async function middleware(req: NextRequest) {
     'market2',
     'market-sunday',
     'market-dexter',
+    'dashboard',
     'stock',
     'company',
     'charts',
@@ -87,6 +88,7 @@ export async function middleware(req: NextRequest) {
     'auth',
     'profile',
     'admin',
+    'pricing',
   ])
 
   const parts = pathname.split('/').filter(Boolean)

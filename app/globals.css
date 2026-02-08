@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Range slider styles */
 .range-slider-wrap {
   --thumb-width: 18px;
   --thumb-height: 26px;
@@ -32,7 +33,7 @@
 }
 
 .range-slider-track {
-  background: #e5e7eb;
+  background: #e5e5e0;
 }
 
 html.dark .range-slider-track {
@@ -40,7 +41,7 @@ html.dark .range-slider-track {
 }
 
 .range-slider-range {
-  background: #3b82f6;
+  background: #5a6b4a;
 }
 
 .range-slider-input {
@@ -89,7 +90,7 @@ html.dark .range-slider-track {
       transparent 82%,
       transparent 100%
     ),
-    #2563eb;
+    #4a5a3a;
   border: var(--thumb-border) solid #ffffff;
   box-shadow: 0 0 0 var(--thumb-shadow) rgba(0, 0, 0, 0.1);
 }
@@ -127,7 +128,7 @@ html.dark .range-slider-input::-webkit-slider-thumb {
       transparent 82%,
       transparent 100%
     ),
-    #2563eb;
+    #4a5a3a;
   border: var(--thumb-border) solid #ffffff;
   box-shadow: 0 0 0 var(--thumb-shadow) rgba(0, 0, 0, 0.1);
 }
@@ -156,24 +157,24 @@ html.dark .range-slider-input::-moz-range-thumb {
   animation: pulse-subtle 2s ease-in-out infinite;
 }
 
-/* Custom scrollbar styles for stock dropdown */
+/* Custom scrollbar styles for stock dropdown - updated to sage green */
 .stock-dropdown-scroll::-webkit-scrollbar {
   width: 12px;
 }
 
 .stock-dropdown-scroll::-webkit-scrollbar-track {
-  background: #e5e7eb;
+  background: #e5e5e0;
   border-radius: 4px;
 }
 
 .stock-dropdown-scroll::-webkit-scrollbar-thumb {
-  background: #3b82f6;
+  background: #5a6b4a;
   border-radius: 4px;
   min-height: 60px;
 }
 
 .stock-dropdown-scroll::-webkit-scrollbar-thumb:hover {
-  background: #2563eb;
+  background: #4a5a3a;
 }
 
 html.dark .stock-dropdown-scroll::-webkit-scrollbar-track {
@@ -181,9 +182,16 @@ html.dark .stock-dropdown-scroll::-webkit-scrollbar-track {
 }
 
 html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb {
-  background: #3b82f6;
+  background: #8a9b7a;
 }
 
 html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb:hover {
-  background: #60a5fa;
+  background: #5a6b4a;
 }
+
+/* Staggered animation delays for landing page elements */
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
