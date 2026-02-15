@@ -342,7 +342,7 @@ export default function FinancialStatementsTabs({
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    ? 'border-sage-500 text-sage-600 dark:text-sage-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
@@ -352,7 +352,7 @@ export default function FinancialStatementsTabs({
           </nav>
           <button
             onClick={() => setSortAscending(!sortAscending)}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-cream-50 dark:hover:bg-gray-700 rounded transition-colors"
             title={sortAscending ? 'Showing oldest first - click to show newest first' : 'Showing newest first - click to show oldest first'}
           >
             <svg
@@ -376,7 +376,7 @@ export default function FinancialStatementsTabs({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-800">
+          <thead className="bg-cream-50 dark:bg-gray-800">
             <tr>
               <th className="px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
                 Metric
@@ -388,9 +388,9 @@ export default function FinancialStatementsTabs({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-[rgb(45,45,45)]">
+          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
             {rows.map((row, idx) => (
-              <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <tr key={idx} className="hover:bg-cream-50 dark:hover:bg-gray-800">
                 <td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-gray-900 dark:text-gray-100">
                   {row.label}
                 </td>

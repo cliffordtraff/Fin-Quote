@@ -616,11 +616,11 @@ export default function ChartsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)]">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       <Navigation />
 
       <main className="max-w-[1600px] mx-auto px-6 py-8">
-        <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-cream-300 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2">
           {/* Stock Selector + Metric Selectors */}
@@ -628,7 +628,7 @@ export default function ChartsPage() {
             {/* Stock Selector - wider */}
             <div className="relative w-72">
               {addedStocks.length === 0 && (
-                <div className="absolute inset-0 ring-2 ring-blue-400 dark:ring-blue-500 rounded-lg animate-pulse-subtle pointer-events-none z-10" />
+                <div className="absolute inset-0 ring-2 ring-sage-400 dark:ring-sage-500 rounded-lg animate-pulse-subtle pointer-events-none z-10" />
               )}
               <StockSelector
                 ref={stockSelectorRef}
@@ -643,7 +643,7 @@ export default function ChartsPage() {
             {/* Metric Selector */}
             <div className="relative flex-1">
               {addedStocks.length > 0 && addedMetrics.length === 0 && (
-                <div className="absolute inset-0 ring-2 ring-blue-400 dark:ring-blue-500 rounded-lg animate-pulse-subtle pointer-events-none" />
+                <div className="absolute inset-0 ring-2 ring-sage-400 dark:ring-sage-500 rounded-lg animate-pulse-subtle pointer-events-none" />
               )}
               <MetricSelector
                 metrics={availableMetrics}
@@ -671,16 +671,16 @@ export default function ChartsPage() {
                     return (
                       <div
                         key={symbol}
-                        className="inline-flex items-center gap-2 bg-gray-100 dark:bg-[rgb(55,55,55)] px-2 py-1 rounded-md h-[32px]"
+                        className="inline-flex items-center gap-2 bg-cream-50 dark:bg-gray-700 px-2 py-1 rounded-md h-[32px]"
                       >
                         <input
                           type="checkbox"
                           checked={isVisible}
                           onChange={() => handleStockVisibilityToggle(symbol)}
                           title={`Toggle ${symbol} visibility`}
-                          className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0"
+                          className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2 flex-shrink-0"
                         />
-                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{symbol}</span>
+                        <span className="text-sm font-semibold text-sage-600 dark:text-sage-400">{symbol}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">{stock?.name}</span>
                         <button
                           type="button"
@@ -708,7 +708,7 @@ export default function ChartsPage() {
                   return (
                     <div
                       key={metricId}
-                      className="inline-flex items-center gap-2 bg-gray-100 dark:bg-[rgb(55,55,55)] px-2 py-1 rounded-md relative h-[32px]"
+                      className="inline-flex items-center gap-2 bg-cream-50 dark:bg-gray-700 px-2 py-1 rounded-md relative h-[32px]"
                       title={metric?.definition}
                     >
                       <input
@@ -717,7 +717,7 @@ export default function ChartsPage() {
                         onChange={() => handleVisibilityToggle(metricId)}
                         disabled={isOnlyVisible}
                         title={isOnlyVisible ? 'At least one metric must be visible' : metric?.definition}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 flex-shrink-0"
+                        className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2 flex-shrink-0"
                       />
                       {/* Color swatch button */}
                       <button
@@ -729,7 +729,7 @@ export default function ChartsPage() {
                       />
                       {/* Color picker dropdown */}
                       {colorPickerOpen === metricId && (
-                        <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                        <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                           <div className="grid grid-cols-4 gap-1">
                             {COLOR_PALETTE.map((color) => (
                               <button
@@ -769,13 +769,13 @@ export default function ChartsPage() {
             {/* Period Toggle + Stock Price + Time Range Slider - right half */}
             <div className="flex items-start gap-4 flex-shrink-0">
               {/* Period Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-cream-50 dark:bg-gray-700 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => setPeriodType('annual')}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                     periodType === 'annual'
-                      ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -786,7 +786,7 @@ export default function ChartsPage() {
                   onClick={() => setPeriodType('quarterly')}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                     periodType === 'quarterly'
-                      ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -794,12 +794,12 @@ export default function ChartsPage() {
                 </button>
               </div>
               {/* Stock Price Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-lg px-3 py-1.5">
+              <label className="flex items-center gap-2 cursor-pointer bg-cream-50 dark:bg-gray-700 rounded-lg px-3 py-1.5">
                 <input
                   type="checkbox"
                   checked={showStockPrice}
                   onChange={(e) => setShowStockPrice(e.target.checked)}
-                  className="w-4 h-4 text-green-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-green-500 focus:ring-2"
+                  className="w-4 h-4 text-green-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-green-500 focus:ring-2"
                 />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Price</span>
               </label>
@@ -877,7 +877,7 @@ export default function ChartsPage() {
                   <p className="text-gray-600 dark:text-gray-400 text-sm">{error}</p>
                   <button
                     onClick={fetchData}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="mt-4 px-4 py-2 bg-sage-500 text-white rounded-lg hover:bg-sage-600 transition-colors"
                   >
                     Try Again
                   </button>
@@ -941,7 +941,7 @@ export default function ChartsPage() {
                           <button
                             key={preset.label}
                             onClick={() => handleApplyPreset(preset)}
-                            className="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-700 dark:hover:text-blue-300 transition-colors border border-gray-200 dark:border-gray-700"
+                            className="px-4 py-2 text-sm font-medium bg-cream-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-sage-100 dark:hover:bg-sage-900/20 hover:text-sage-700 dark:hover:text-sage-300 transition-colors border border-gray-200 dark:border-gray-700"
                           >
                             {preset.label}
                           </button>

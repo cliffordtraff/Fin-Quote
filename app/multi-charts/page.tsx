@@ -59,7 +59,7 @@ export default function MultiChartsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 dark:bg-[rgb(33,33,33)]">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       <Navigation />
 
       <main className="max-w-[1600px] mx-auto px-6 py-6">

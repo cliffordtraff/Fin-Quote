@@ -36,9 +36,9 @@ export default function MarketMoversTable({
   const isGainers = title === 'Gainers'
 
   return (
-    <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-cream-300 dark:border-gray-700">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-cream-300 dark:border-gray-700">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
           {title}
         </h3>
@@ -50,7 +50,7 @@ export default function MarketMoversTable({
       </div>
 
       {/* Table */}
-      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="divide-y divide-cream-200 dark:divide-gray-700">
         {movers.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
             No {title.toLowerCase()} data for {selectedSession === 'premarket' ? 'pre-market' : selectedSession === 'afterhours' ? 'after-hours' : 'regular'} session
@@ -60,10 +60,10 @@ export default function MarketMoversTable({
             <Link
               key={mover.symbol}
               href={`/stock/${mover.symbol}`}
-              className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex items-center justify-between px-4 py-2 hover:bg-cream-50 dark:hover:bg-gray-800 transition-colors"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                <div className="text-sm font-medium text-sage-600 dark:text-sage-400">
                   {mover.symbol}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">

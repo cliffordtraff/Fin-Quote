@@ -90,7 +90,7 @@ function CollapsibleSection({
 
   return (
     <div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-[rgb(50,50,50)] hover:bg-gray-150 dark:hover:bg-[rgb(55,55,55)] transition-colors">
+      <div className="flex items-center gap-2 px-3 py-2 bg-cream-50 dark:bg-gray-700 hover:bg-gray-150 dark:hover:bg-gray-600 transition-colors">
         <button
           type="button"
           onClick={onToggleExpand}
@@ -106,7 +106,7 @@ function CollapsibleSection({
           </svg>
           <span className="text-gray-700 dark:text-gray-200">{title}</span>
           {selectedInSection > 0 && (
-            <span className="text-blue-600 dark:text-blue-400 text-xs">({selectedInSection})</span>
+            <span className="text-sage-600 dark:text-sage-400 text-xs">({selectedInSection})</span>
           )}
         </button>
         <button
@@ -118,9 +118,9 @@ function CollapsibleSection({
           <div
             className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
               allSelected
-                ? 'bg-blue-600 border-blue-600'
+                ? 'bg-sage-500 border-sage-500'
                 : someSelected
-                ? 'bg-blue-300 border-blue-400'
+                ? 'bg-sage-300 border-sage-400'
                 : 'border-gray-300 dark:border-gray-600'
             }`}
           >
@@ -155,14 +155,14 @@ function CollapsibleSection({
                 title={metric.definition}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors text-sm ${
                   isDisabled
-                    ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-[rgb(40,40,40)]'
-                    : 'hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]'
+                    ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
+                    : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                 }`}
               >
                 <div
                   className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
                     isSelected
-                      ? 'bg-blue-600 border-blue-600'
+                      ? 'bg-sage-500 border-sage-500'
                       : 'border-gray-300 dark:border-gray-600'
                   }`}
                 >
@@ -272,12 +272,12 @@ function StockSpecificDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-[rgb(55,55,55)] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-[rgb(65,65,65)] transition-colors text-sm"
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-sm"
       >
         <span className="truncate text-left">
           {label}
           {selectedInThisGroup > 0 && (
-            <span className="ml-1 text-blue-600 dark:text-blue-400">({selectedInThisGroup})</span>
+            <span className="ml-1 text-sage-600 dark:text-sage-400">({selectedInThisGroup})</span>
           )}
         </span>
         <svg
@@ -291,7 +291,7 @@ function StockSpecificDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
           <div className="max-h-[500px] overflow-y-auto">
             {metricsByCategory.map(({ key, title, metrics: sectionMetrics }) => (
               <CollapsibleSection
@@ -356,12 +356,12 @@ function StatementDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-50 dark:bg-[rgb(55,55,55)] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-[rgb(65,65,65)] transition-colors text-sm"
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-sm"
       >
         <span className="truncate text-left">
           {label}
           {selectedInThisGroup > 0 && (
-            <span className="ml-1 text-blue-600 dark:text-blue-400">({selectedInThisGroup})</span>
+            <span className="ml-1 text-sage-600 dark:text-sage-400">({selectedInThisGroup})</span>
           )}
         </span>
         <svg
@@ -375,7 +375,7 @@ function StatementDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
           <div className="max-h-[500px] overflow-y-auto">
             {metrics.map((metric) => {
               const isSelected = selectedMetrics.includes(metric.id)
@@ -394,14 +394,14 @@ function StatementDropdown({
                   title={metric.definition}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors text-sm ${
                     isDisabled
-                      ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-[rgb(40,40,40)]'
-                      : 'hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]'
+                      ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
+                      : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
                       isSelected
-                        ? 'bg-blue-600 border-blue-600'
+                        ? 'bg-sage-500 border-sage-500'
                         : 'border-gray-300 dark:border-gray-600'
                     }`}
                   >

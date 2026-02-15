@@ -178,7 +178,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-cream-50 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -228,7 +228,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
               placeholder="you@example.com"
               disabled={loading}
             />
@@ -245,7 +245,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                 placeholder="••••••••"
                 disabled={loading}
                 minLength={6}
@@ -264,7 +264,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                 placeholder="••••••••"
                 disabled={loading}
                 minLength={6}
@@ -275,7 +275,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+            className="w-full bg-sage-600 text-white px-4 py-3 rounded-lg hover:bg-sage-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
           >
             {loading ? 'Please wait...' : mode === 'login' ? 'Login' : mode === 'signup' ? 'Sign Up' : 'Send Reset Link'}
           </button>
@@ -293,7 +293,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                     setError('')
                     setMessage('')
                   }}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-sage-600 hover:text-sage-700 font-medium"
                   disabled={loading}
                 >
                   Sign up
@@ -306,7 +306,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                     setError('')
                     setMessage('')
                   }}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-sage-600 hover:text-sage-700 font-medium"
                   disabled={loading}
                 >
                   Forgot password?
@@ -324,7 +324,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                   setError('')
                   setMessage('')
                 }}
-                className="text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sage-600 hover:text-sage-700 font-medium"
                 disabled={loading}
               >
                 Login
@@ -340,7 +340,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
                   setError('')
                   setMessage('')
                 }}
-                className="text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sage-600 hover:text-sage-700 font-medium"
                 disabled={loading}
               >
                 Back to login

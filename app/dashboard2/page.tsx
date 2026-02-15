@@ -10,7 +10,7 @@ export default async function Dashboard2() {
   const initialData = await fetchAllMarketData()
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-[rgb(28,28,28)] flex flex-col">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
       <Navigation />
       <main className="py-6">
         <Dashboard2Content initialData={initialData} />

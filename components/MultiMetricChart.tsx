@@ -200,7 +200,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
   if (!isMounted) {
     return (
-      <div className="w-full h-[650px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[650px] bg-cream-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
@@ -870,7 +870,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     <div
       ref={containerRef}
       className={`${isFullscreen
-        ? 'fixed inset-0 z-50 bg-white dark:bg-[rgb(45,45,45)] p-6 overflow-auto'
+        ? 'fixed inset-0 z-50 bg-white dark:bg-gray-800 p-6 overflow-auto'
         : 'w-full'
       }`}
     >
@@ -925,7 +925,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               type="checkbox"
               checked={showDataLabels}
               onChange={(e) => setShowDataLabels(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+              className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Show Labels</span>
           </label>
@@ -935,7 +935,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               checked={isStacked || chartType === 'area'}
               onChange={(e) => setIsStacked(e.target.checked)}
               disabled={chartType !== 'bar'}
-              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50"
+              className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2 disabled:opacity-50"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Stacked</span>
           </label>
@@ -944,7 +944,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               type="checkbox"
               checked={indexToZero}
               onChange={(e) => setIndexToZero(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+              className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Index to 0</span>
           </label>
@@ -953,8 +953,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               onClick={() => setChartType('bar')}
               className={`px-2 py-1 text-sm flex items-center gap-1 ${
                 chartType === 'bar'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-sage-500 text-white'
+                  : 'bg-cream-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -968,8 +968,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               onClick={() => { setChartType('line'); setIsStacked(false) }}
               className={`px-2 py-1 text-sm flex items-center gap-1 ${
                 chartType === 'line'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-sage-500 text-white'
+                  : 'bg-cream-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -981,8 +981,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               onClick={() => { setChartType('area'); setIsStacked(false) }}
               className={`px-2 py-1 text-sm flex items-center gap-1 ${
                 chartType === 'area'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-sage-500 text-white'
+                  : 'bg-cream-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -1017,22 +1017,22 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               </svg>
             </button>
             {showExportMenu && (
-              <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+              <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PNG
                 </button>
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download JPEG
                 </button>
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PDF
                 </button>
@@ -1059,9 +1059,9 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
       {/* Data Table - hidden in fullscreen mode */}
       {!isFullscreen && (
-      <div className="bg-gray-50 dark:bg-[rgb(40,40,40)] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
+      <div className="bg-cream-50 dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
+        <table className="w-full table-fixed divide-y divide-cream-200 dark:divide-gray-700">
+          <thead className="bg-cream-50 dark:bg-gray-900">
             <tr>
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
                 Metric
@@ -1076,7 +1076,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-cream-200 dark:divide-gray-700">
             {filteredData.map((metricData) => {
               // For price metrics with monthly data, extract year-end values for table display
               const isMonthlyPriceData = isPriceMetric(metricData.metric) && metricData.data.length > years.length
@@ -1099,7 +1099,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               }
 
               return (
-                <tr key={metricData.metric} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
+                <tr key={metricData.metric} className="hover:bg-cream-50 dark:hover:bg-gray-700">
                   <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium">
                     {metricData.label}
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">

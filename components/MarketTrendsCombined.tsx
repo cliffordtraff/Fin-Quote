@@ -46,7 +46,7 @@ function SessionToggle({
   ]
 
   return (
-    <div className="flex rounded bg-gray-100 dark:bg-gray-800 p-0.5">
+    <div className="flex rounded bg-cream-50 dark:bg-gray-800 p-0.5">
       {sessions.map((session) => {
         const isActive = selected === session.id
         const isLive = currentSession === session.id
@@ -78,13 +78,13 @@ function SessionToggle({
 
 function MiniTable({ title, stocks, colorMode }: { title: string; stocks: StockData[]; colorMode: 'green' | 'red' | 'neutral' }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden flex-1">
-      <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex-1">
+      <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">{title}</h2>
       </div>
       <table className="w-full text-[10px]">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-gray-700">
+          <tr className="border-b border-cream-300 dark:border-gray-700">
             <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
             <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
             <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
@@ -107,7 +107,7 @@ function MiniTable({ title, stocks, colorMode }: { title: string; stocks: StockD
             return (
               <tr
                 key={stock.symbol}
-                className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
               >
                 <td className="py-1 px-2">
                   <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
@@ -179,7 +179,7 @@ function renderFormattedText(text: string) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center text-blue-500 hover:text-blue-600 ml-0.5"
+          className="inline-flex items-center text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 ml-0.5"
           title="View source"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,13 +292,13 @@ function LoadingSteps({ loading }: { loading: boolean }) {
             {isCompleted ? (
               <span className="text-green-500 w-4">✓</span>
             ) : isCurrent ? (
-              <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
             ) : (
               <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-600" />
             )}
             <span className={`${
               isCompleted ? 'text-green-600 dark:text-green-400' :
-              isCurrent ? 'text-blue-600 dark:text-blue-400 font-medium' :
+              isCurrent ? 'text-sage-600 dark:text-sage-400 font-medium' :
               'text-gray-400 dark:text-gray-500'
             }`}>
               {LOADING_MESSAGES[step]}
@@ -312,8 +312,8 @@ function LoadingSteps({ loading }: { loading: boolean }) {
 
 function MarketSummaryCard({ summary, loading, onRefresh, lastUpdated }: { summary?: string; loading?: boolean; onRefresh?: () => void; lastUpdated?: Date | null }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden flex-1">
-      <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex-1">
+      <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">What&apos;s Happening Today</h2>
         <div className="flex items-center gap-2">
           {lastUpdated && (
@@ -325,7 +325,7 @@ function MarketSummaryCard({ summary, loading, onRefresh, lastUpdated }: { summa
             <button
               onClick={onRefresh}
               disabled={loading}
-              className="text-[9px] px-2 py-0.5 rounded bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white"
+              className="text-[9px] px-2 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
             >
               {loading ? 'Loading...' : 'Refresh'}
             </button>
@@ -373,8 +373,8 @@ export default function MarketTrendsCombined({
 
   return (
     <div className="flex gap-4 w-full">
-      <div className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
-        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+      <div className="flex-1 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+        <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
           <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Gainers</h2>
           <SessionToggle
             selected={selectedSession}
@@ -385,7 +385,7 @@ export default function MarketTrendsCombined({
         </div>
         <table className="w-full text-[10px]">
           <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
+            <tr className="border-b border-cream-300 dark:border-gray-700">
               <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
               <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
               <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
@@ -402,7 +402,7 @@ export default function MarketTrendsCombined({
               gainersData.slice(0, maxRows).map((stock) => (
                 <tr
                   key={stock.symbol}
-                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
                 >
                   <td className="py-1 px-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
@@ -420,8 +420,8 @@ export default function MarketTrendsCombined({
         </table>
       </div>
 
-      <div className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
-        <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+      <div className="flex-1 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+        <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
           <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Losers</h2>
           <SessionToggle
             selected={selectedSession}
@@ -432,7 +432,7 @@ export default function MarketTrendsCombined({
         </div>
         <table className="w-full text-[10px]">
           <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
+            <tr className="border-b border-cream-300 dark:border-gray-700">
               <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
               <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
               <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
@@ -449,7 +449,7 @@ export default function MarketTrendsCombined({
               losersData.slice(0, maxRows).map((stock) => (
                 <tr
                   key={stock.symbol}
-                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
                 >
                   <td className="py-1 px-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>

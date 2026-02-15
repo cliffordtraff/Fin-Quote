@@ -251,9 +251,9 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
   const futuresBarWidth = 100 // Full width (24 hours)
 
   return (
-    <div className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
+    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
       {/* Header */}
-      <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-cream-50 dark:bg-gray-800 px-4 py-2 border-b border-cream-300 dark:border-gray-700">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Global Market Hours</h2>
       </div>
 
@@ -262,7 +262,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+              <tr className="bg-cream-50 dark:bg-gray-800/50 border-b border-cream-300 dark:border-gray-700">
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Market</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Index</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
@@ -272,7 +272,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Change</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody className="divide-y divide-cream-200 dark:divide-gray-800">
               {MARKETS.map((market) => {
                 const isOpen = isMarketOpen(market)
                 const isWeekend = isWeekendInMarket(market)
@@ -298,7 +298,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                 }
 
                 return (
-                  <tr key={market.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <tr key={market.name} className="hover:bg-cream-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900 dark:text-white">{market.name}</span>
                     </td>
@@ -357,9 +357,9 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
       )}
 
       {/* Visual Timeline */}
-      <div className="border-t border-gray-200 dark:border-gray-700">
+      <div className="border-t border-cream-300 dark:border-gray-700">
         {/* Timeline Header with Hour Labels */}
-        <div className="bg-gray-50 dark:bg-gray-800/50 px-4 pt-2 pb-1 relative border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-cream-50 dark:bg-gray-800/50 px-4 pt-2 pb-1 relative border-b border-cream-300 dark:border-gray-700">
           {/* Hour labels with day indicators inline */}
           <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 relative h-4">
             {(() => {
@@ -396,7 +396,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
         </div>
 
         {/* Market Bars */}
-        <div className="relative px-4 pt-2 pb-3 bg-white dark:bg-[rgb(33,33,33)] overflow-visible" style={{ height: `${24 + MARKETS.length * 28 + 55}px` }}>
+        <div className="relative px-4 pt-2 pb-3 bg-white dark:bg-gray-800 overflow-visible" style={{ height: `${24 + MARKETS.length * 28 + 55}px` }}>
           {/* Midnight divider line through bars */}
           {(() => {
             const midnightPos = ((24 - TIMELINE_START_HOUR) / HOURS_IN_TIMELINE) * 100

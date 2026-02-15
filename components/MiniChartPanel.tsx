@@ -310,28 +310,28 @@ export default function MiniChartPanel({ title, symbol, metrics, height = 300, c
 
   if (!isMounted) {
     return (
-      <div className="bg-white dark:bg-[rgb(45,45,45)] rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-        <div className="h-[300px] bg-gray-100 dark:bg-gray-800 animate-pulse rounded" />
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-cream-300 dark:border-gray-700 p-4">
+        <div className="h-[300px] bg-cream-50 dark:bg-gray-700 animate-pulse rounded" />
       </div>
     )
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-[rgb(45,45,45)] rounded-xl border border-gray-300 dark:border-gray-700 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-cream-300 dark:border-gray-700 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-cream-300 dark:border-gray-700">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
           <span className="text-xs text-gray-500 dark:text-gray-400">{symbol}</span>
         </div>
         {/* Period Toggle */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-[rgb(55,55,55)] rounded-md p-0.5">
+        <div className="flex items-center gap-1 bg-cream-50 dark:bg-gray-700 rounded-md p-0.5">
           <button
             type="button"
             onClick={() => setPeriodType('annual')}
             className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
               periodType === 'annual'
-                ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
@@ -342,7 +342,7 @@ export default function MiniChartPanel({ title, symbol, metrics, height = 300, c
             onClick={() => setPeriodType('quarterly')}
             className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
               periodType === 'quarterly'
-                ? 'bg-white dark:bg-[rgb(70,70,70)] text-gray-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
@@ -355,7 +355,7 @@ export default function MiniChartPanel({ title, symbol, metrics, height = 300, c
       <div className="p-2">
         {loading ? (
           <div className="flex items-center justify-center" style={{ height }}>
-            <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-blue-500" />
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-sage-500" />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center text-sm text-red-500" style={{ height }}>
@@ -406,8 +406,8 @@ export default function MiniChartPanel({ title, symbol, metrics, height = 300, c
                     }}
                     className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                       isActive
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        ? 'bg-sage-500 text-white'
+                        : 'bg-cream-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-cream-200 dark:hover:bg-gray-600'
                     }`}
                   >
                     {label}

@@ -3,7 +3,7 @@ import Navigation from '@/components/Navigation'
 
 export default function StockNotFound() {
   return (
-    <div className="min-h-screen bg-white dark:bg-[rgb(45,45,45)]">
+    <div className="min-h-screen bg-white dark:bg-gray-800">
       <Navigation />
 
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
@@ -18,13 +18,13 @@ export default function StockNotFound() {
         <div className="flex gap-4">
           <Link
             href="/"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-sage-600 text-white rounded-lg hover:bg-sage-700 transition-colors"
           >
             Back to Market Dashboard
           </Link>
           <Link
             href="/stock/AAPL"
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="px-4 py-2 border border-cream-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-cream-50 dark:hover:bg-gray-800 transition-colors"
           >
             View Apple (AAPL)
           </Link>

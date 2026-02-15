@@ -66,7 +66,7 @@ function SegmentTable({ title, segments, fiscalYear }: SegmentTableProps) {
       </div>
       <table className="w-full">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-gray-700">
+          <tr className="border-b border-cream-300 dark:border-gray-700">
             <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 uppercase">
               {title.replace(' Segment', '')}
             </th>
@@ -78,6 +78,7 @@ function SegmentTable({ title, segments, fiscalYear }: SegmentTableProps) {
             </th>
           </tr>
         </thead>
+
         <tbody>
           {latestData.map((item, index) => {
             const percentage = total > 0 ? (item.value / total) * 100 : 0
@@ -94,9 +95,9 @@ function SegmentTable({ title, segments, fiscalYear }: SegmentTableProps) {
                 </td>
                 <td className="py-2 pl-4">
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                    <div className="flex-1 h-4 bg-cream-50 dark:bg-gray-700 rounded overflow-hidden">
                       <div
-                        className="h-full bg-blue-400 dark:bg-blue-500 rounded transition-all duration-300"
+                        className="h-full bg-sage-400 dark:bg-sage-500 rounded transition-all duration-300"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -141,7 +142,7 @@ export default function CompanySegmentsCard({
   fiscalYear,
 }: CompanySegmentsCardProps) {
   return (
-    <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+    <div className="rounded-lg bg-cream-50 dark:bg-gray-800 p-6">
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Segments</h2>
         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +155,7 @@ export default function CompanySegmentsCard({
           segments={productSegments}
           fiscalYear={fiscalYear}
         />
-        <div className="hidden lg:block w-px bg-gray-200 dark:bg-gray-700" />
+        <div className="hidden lg:block w-px bg-cream-300 dark:bg-gray-700" />
         <SegmentTable
           title="Geographic Segment"
           segments={geographicSegments}

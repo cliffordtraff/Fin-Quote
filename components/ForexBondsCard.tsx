@@ -43,7 +43,7 @@ export default function ForexBondsCard({ data, title = 'Forex & Bonds' }: ForexB
   }
 
   return (
-    <div className="bg-white dark:bg-[rgb(40,40,40)] rounded-2xl p-5 shadow-sm">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-cream-300 dark:border-gray-700 shadow-sm">
       {/* Header */}
       <div className="mb-4">
         <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">{title}</div>
@@ -63,7 +63,7 @@ export default function ForexBondsCard({ data, title = 'Forex & Bonds' }: ForexB
             >
               {/* Left: Icon circle + name */}
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-cream-50 dark:bg-gray-700 flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     {firstLetter}
                   </span>

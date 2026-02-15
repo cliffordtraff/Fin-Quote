@@ -150,7 +150,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
               setIsOpen(true)
             }}
             onFocus={() => setIsOpen(true)}
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+            className="w-full pl-9 pr-8 py-1.5 text-sm bg-cream-50 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent cursor-pointer"
           />
           {/* Down/Up arrow button */}
           <button
@@ -176,9 +176,9 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
       ) : (
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
-          <span className="font-semibold text-blue-600 dark:text-blue-400">
+          <span className="font-semibold text-sage-600 dark:text-sage-400">
             {displayInfo.symbol}
           </span>
           <span className="text-gray-500 dark:text-gray-400 text-xs hidden sm:inline max-w-[150px] truncate">
@@ -221,7 +221,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                   placeholder="Search stocks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-cream-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                 />
                 {searchQuery && (
                   <button
@@ -271,8 +271,8 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                         onClick={() => handleStockToggle(stock.symbol)}
                         className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-left transition-colors ${
                           isSelected
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                            ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300'
+                            : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                         }`}
                       >
                         {allowMultiple ? (
@@ -280,7 +280,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                           <div
                             className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                               isSelected
-                                ? 'bg-blue-500 border-blue-500'
+                                ? 'bg-sage-500 border-sage-500'
                                 : 'border-gray-300 dark:border-gray-600'
                             }`}
                           >
@@ -295,7 +295,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                           <div
                             className={`w-2 h-2 rounded-full flex-shrink-0 ${
                               isSelected
-                                ? 'bg-blue-500'
+                                ? 'bg-sage-500'
                                 : 'bg-gray-300 dark:bg-gray-600'
                             }`}
                           />
@@ -306,7 +306,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                         </div>
                         {!allowMultiple && isSelected && (
                           <svg
-                            className="w-4 h-4 text-blue-500 flex-shrink-0"
+                            className="w-4 h-4 text-sage-500 flex-shrink-0"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"

@@ -104,7 +104,7 @@ export default function SegmentChart({
 
   if (!isMounted) {
     return (
-      <div className="w-full h-[650px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[650px] bg-cream-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
@@ -373,7 +373,7 @@ export default function SegmentChart({
               type="checkbox"
               checked={showDataLabels}
               onChange={(e) => setShowDataLabels(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+              className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2"
             />
             <span className="text-sm text-gray-600 dark:text-gray-400">Show Labels</span>
           </label>
@@ -391,28 +391,28 @@ export default function SegmentChart({
               </svg>
             </button>
             {showExportMenu && (
-              <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-[rgb(45,45,45)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+              <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PNG
                 </button>
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download JPEG
                 </button>
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PDF
                 </button>
                 <button
                   onClick={() => { chartRef.current?.exportChart({ type: 'image/svg+xml' }, {}); setShowExportMenu(false) }}
-                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[rgb(55,55,55)]"
+                  className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download SVG
                 </button>
@@ -435,9 +435,9 @@ export default function SegmentChart({
           </button>
         </div>
 
-        <div className="bg-gray-50 dark:bg-[rgb(40,40,40)] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-100 dark:bg-[rgb(35,35,35)]">
+        <div className="bg-cream-50 dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
+          <table className="w-full table-fixed divide-y divide-cream-200 dark:divide-gray-700">
+            <thead className="bg-cream-50 dark:bg-gray-900">
               <tr>
                 <th className="px-2 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider w-[200px]">
                   Segment
@@ -452,9 +452,9 @@ export default function SegmentChart({
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-[rgb(45,45,45)] divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-cream-200 dark:divide-gray-700">
               {filteredData.map((segmentData) => (
-                <tr key={segmentData.segment} className="hover:bg-gray-50 dark:hover:bg-[rgb(50,50,50)]">
+                <tr key={segmentData.segment} className="hover:bg-cream-50 dark:hover:bg-gray-700">
                   <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100 font-medium truncate">
                     {segmentData.segment}
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">
@@ -477,7 +477,7 @@ export default function SegmentChart({
                 </tr>
               ))}
               {/* Total row */}
-              <tr className="bg-gray-100 dark:bg-[rgb(35,35,35)] font-semibold">
+              <tr className="bg-cream-50 dark:bg-gray-900 font-semibold">
                 <td className="px-2 py-2 text-sm text-gray-900 dark:text-gray-100">
                   Total
                   <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal ml-1">

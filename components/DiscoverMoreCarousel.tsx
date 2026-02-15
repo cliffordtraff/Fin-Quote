@@ -77,7 +77,7 @@ function StockCard({ stock }: { stock: DiscoverStock }) {
   return (
     <Link
       href={`/stock/${stock.symbol}`}
-      className="flex-shrink-0 w-[170px] rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[rgb(38,38,38)] p-4 hover:shadow-md transition-all cursor-pointer"
+      className="flex-shrink-0 w-[170px] rounded-2xl border border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 p-4 hover:shadow-md transition-all cursor-pointer"
     >
       {/* Symbol Badge */}
       <div className="flex items-center justify-between mb-3">
@@ -170,7 +170,7 @@ export default function DiscoverMoreCarousel({
   }
 
   return (
-    <section className="bg-white dark:bg-[rgb(45,45,45)]">
+    <section className="bg-white dark:bg-gray-800">
       <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
@@ -190,8 +190,8 @@ export default function DiscoverMoreCarousel({
             disabled={!canScrollRight}
             className={`w-10 h-10 flex items-center justify-center rounded-full border-2 ${
               canScrollRight
-                ? 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
-                : 'border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                ? 'border-gray-300 dark:border-gray-600 hover:bg-cream-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+                : 'border-cream-300 dark:border-gray-700 text-gray-300 dark:text-gray-600 cursor-not-allowed'
             } transition-colors bg-white dark:bg-transparent`}
             aria-label="Scroll right"
           >
@@ -205,7 +205,7 @@ export default function DiscoverMoreCarousel({
           {canScrollLeft && (
             <button
               onClick={() => scroll('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-[rgb(45,45,45)] hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-md transition-colors"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-cream-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-md transition-colors"
               aria-label="Scroll left"
             >
               <ChevronLeftIcon className="w-5 h-5" />

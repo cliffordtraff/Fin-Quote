@@ -41,13 +41,13 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
   const { insider, trades } = result
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex flex-col">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {/* Back link */}
         <Link
           href="/insiders"
-          className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:underline mb-6"
+          className="inline-flex items-center text-sm text-sage-600 dark:text-sage-400 hover:underline mb-6"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -69,7 +69,7 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-[rgb(38,38,38)] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-cream-300 dark:border-gray-700">
             <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Total Trades
             </div>
@@ -78,7 +78,7 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[rgb(38,38,38)] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-cream-300 dark:border-gray-700">
             <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Companies
             </div>
@@ -91,7 +91,7 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[rgb(38,38,38)] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-cream-300 dark:border-gray-700">
             <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Total Buys
             </div>
@@ -103,7 +103,7 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[rgb(38,38,38)] rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-cream-300 dark:border-gray-700">
             <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Total Sells
             </div>
@@ -122,7 +122,7 @@ export default async function InsiderPage({ params }: InsiderPageProps) {
         </div>
 
         {/* Trades Table */}
-        <div className="bg-white dark:bg-[rgb(38,38,38)] rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-cream-300 dark:border-gray-700 p-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Transaction History
           </h2>

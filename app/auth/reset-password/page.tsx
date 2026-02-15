@@ -68,8 +68,8 @@ export default function ResetPasswordPage() {
   // Loading state while checking session
   if (validSession === null) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sage-600"></div>
       </div>
     )
   }
@@ -77,7 +77,7 @@ export default function ResetPasswordPage() {
   // Invalid/expired link
   if (!validSession) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
             </p>
             <Link
               href="/auth/forgot-password"
-              className="inline-block w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-medium transition-colors text-center"
+              className="inline-block w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 font-medium transition-colors text-center"
             >
               Request New Link
             </Link>
@@ -110,7 +110,7 @@ export default function ResetPasswordPage() {
   // Success state
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -124,7 +124,7 @@ export default function ResetPasswordPage() {
             </p>
             <button
               onClick={() => router.push('/')}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+              className="w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 font-medium transition-colors"
             >
               Continue to App
             </button>
@@ -135,7 +135,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
@@ -163,7 +163,7 @@ export default function ResetPasswordPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 required
                 minLength={6}
                 placeholder="••••••••"
@@ -178,7 +178,7 @@ export default function ResetPasswordPage() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 required
                 minLength={6}
                 placeholder="••••••••"
@@ -194,7 +194,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              className="w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {loading ? 'Updating...' : 'Update Password'}
             </button>

@@ -19,7 +19,7 @@ export default function MarketBreadth({ breadth }: MarketBreadthProps) {
   if (!breadth) {
     return (
       <div className="w-full max-w-4xl">
-        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-6">
           <div className="text-center text-gray-500 dark:text-gray-400">
             Loading market breadth data...
           </div>
@@ -42,7 +42,7 @@ export default function MarketBreadth({ breadth }: MarketBreadthProps) {
 
   return (
     <div className="w-full max-w-4xl">
-      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Market Breadth Indicators
         </h3>
@@ -77,7 +77,7 @@ export default function MarketBreadth({ breadth }: MarketBreadthProps) {
             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Stocks near extremes
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
+            <div className="w-full bg-cream-200 dark:bg-gray-700 rounded-full h-2 mt-2">
               <div
                 className="bg-green-500 h-2 rounded-full"
                 style={{
@@ -98,7 +98,7 @@ export default function MarketBreadth({ breadth }: MarketBreadthProps) {
             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               {breadth.aboveTwoHundredDayMA} of {breadth.totalStocks} stocks
             </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
+            <div className="w-full bg-cream-200 dark:bg-gray-700 rounded-full h-2 mt-2">
               <div
                 className={`h-2 rounded-full ${aboveMAPercent >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
                 style={{ width: `${aboveMAPercent}%` }}
