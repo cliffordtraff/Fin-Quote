@@ -11,10 +11,11 @@ It should be very engaging to read; don't make it sound like boring technical do
 ## Project Overview
 
 **The Intraday** (formerly Fin Quote) is a Next.js 15-based financial data platform featuring:
-1. **Market Dashboard** - Real-time market data with index charts (S&P 500, NASDAQ, DOW, Russell 2000), sector heatmaps, VIX, gainers/losers, futures, and economic calendar
-2. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation (feature-flagged)
-3. **Multi-Stock Charts** - Stock-specific pages with price charts and financial metrics
-4. **Insider Trading** - SEC Form 4 filings with trade data (in development at `/insiders`)
+1. **Landing Page** (`/`) - Marketing/conversion page with hero, features, pricing CTA (components in `components/landing/`)
+2. **Market Dashboard** (`/dashboard`) - Real-time market data with index charts (S&P 500, NASDAQ, DOW, Russell 2000), sector heatmaps, VIX, gainers/losers, futures, and economic calendar
+3. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation (feature-flagged)
+4. **Multi-Stock Charts** (`/charts`) - Stock-specific pages with price charts and financial metrics
+5. **Insider Trading** (`/insiders`) - SEC Form 4 filings with trade data (in development)
 
 **Core Design Philosophy:**
 - **Safety First**: LLMs cannot execute arbitrary database queries. Instead, they select from a whitelist of pre-built "tools" (server actions) with validated inputs.
@@ -61,6 +62,55 @@ npm run generate:catalog            # Regenerate metrics catalog
 # - Fetches SEC filings
 # - Requires secrets: SUPABASE_URL, SUPABASE_ANON_KEY, FMP_API_KEY
 ```
+
+---
+
+## Routing & Middleware
+
+### URL Routing (`middleware.ts`)
+
+The middleware handles several routing patterns:
+- **Auth protection**: `/profile` and `/admin/*` require Supabase session; redirects to `/auth` if unauthenticated
+- **Ticker shortcuts**: Single-segment paths that look like tickers redirect to `/stock/TICKER` (e.g., `/AAPL` → `/stock/AAPL`)
+- **Legacy redirects**: `/market3` → `/market`, `/company/AAPL` → `/stock/AAPL`
+- **Reserved top-level routes**: `market`, `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile` (won't be treated as tickers)
+
+### Key Routes
+
+| Route | Nav Component | Rendering | Purpose |
+|-------|---------------|-----------|---------|
+| `/` | LandingNav | Static | Landing/marketing page |
+| `/dashboard` | AppNavigation | ISR (60s) | Main market dashboard (sage/cream theme) |
+| `/dashboard2` | Navigation | ISR (60s) | Experimental card-based dashboard layout |
+| `/market-sunday` | Navigation | Dynamic | Dashboard with force-dynamic rendering |
+| `/stock/[symbol]` | Navigation | Dynamic | Individual stock pages |
+| `/charts` | Navigation | - | Multi-stock financial charts |
+| `/multi-charts` | Navigation | - | Alternative multi-chart layout |
+| `/calendar` | Navigation | - | Economic & earnings calendar |
+| `/insiders` | Navigation | - | Insider trading data |
+| `/pricing` | LandingNav | Static | Pricing page |
+| `/chatbot` | Sidebar | - | AI chatbot (feature-flagged) |
+| `/auth` | - | - | Login/signup (Google OAuth via Supabase) |
+
+### Two Navigation Components
+
+- **`Navigation.tsx`** — Used by most app pages. Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
+- **`AppNavigation.tsx`** — Used by `/dashboard`. Similar structure but styled for the sage/cream theme.
+- **`LandingNav`** (`components/landing/LandingNav.tsx`) — Marketing page nav with sign-in/sign-up CTAs.
+
+### Theme System
+
+Custom color tokens in `tailwind.config.ts`, dark mode via `class` strategy:
+- **Sage** (`sage-50` through `sage-900`): Primary accent color. `sage-500` (#5a6b4a) is the main accent.
+- **Cream** (`cream-50` through `cream-300`): Page backgrounds and subtle borders. `cream-100` (#f5f5f0) is the main background.
+- **Dark mode**: `bg-gray-900` backgrounds, `bg-gray-800` cards, `border-gray-700` borders.
+- See `APP-THEME-IMPLEMENTATION-PLAN.md` for the full design system with component styling patterns.
+
+### Rendering Strategies
+
+- **ISR (60s)**: `/dashboard` — `export const revalidate = 60` — Server-fetches market data, regenerates every 60s
+- **Dynamic**: `/market-sunday`, stock pages — `export const dynamic = 'force-dynamic'` — Fresh data on every request
+- **Static**: Landing page, pricing — No data fetching at build time
 
 ---
 
@@ -131,14 +181,23 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 
 ## Key Files
 
+### Landing Page & Marketing
+| Path | Purpose |
+|------|---------|
+| `app/page.tsx` | Homepage — renders `LandingPage` component |
+| `components/landing/` | Landing page sections: HeroSection, FeaturesGrid, FAQSection, CTASection, Footer, etc. |
+| `app/pricing/page.tsx` | Pricing page |
+
 ### Market Dashboard
 | Path | Purpose |
 |------|---------|
-| `app/page.tsx` | Homepage with market dashboard (indexes, sectors, gainers/losers, VIX, calendar) |
-| `app/market2/page.tsx` | Alternative market layout |
-| `components/MarketDashboard.tsx` | Main dashboard component |
+| `app/dashboard/page.tsx` | Main dashboard (AppNavigation + MarketDashboardSunday, ISR 60s) |
+| `app/dashboard2/page.tsx` | Experimental dashboard (Navigation + Dashboard2Content, card layout) |
+| `components/MarketDashboardSunday.tsx` | Primary dashboard component with all market widgets |
+| `components/Dashboard2Content.tsx` | Experimental card-based dashboard layout |
 | `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
 | `components/SectorHeatmap.tsx` | Sector performance visualization |
+| `lib/fetch-market-data.ts` | Server-side market data fetching (shared by dashboard variants) |
 
 ### Chatbot (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
 | Path | Purpose |
@@ -180,17 +239,23 @@ FMP_API_KEY=your-fmp-key
 
 ---
 
+## Authentication
+
+- **Provider**: Supabase Auth with Google OAuth
+- **Middleware**: `middleware.ts` refreshes sessions on every request and protects `/profile` and `/admin/*`
+- **Client**: `lib/supabase/client.ts` (browser), `lib/supabase/server.ts` (server components/actions)
+- **UI**: `/auth` page for login, `/auth/forgot-password` and `/auth/reset-password` for password recovery
+- **Components**: `UserMenu.tsx` shows auth state in navigation
+
 ## Feature Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `NEXT_PUBLIC_ENABLE_CHAT` | `false` | Enables the AI chatbot feature (Chat tab in navigation + `/chatbot` route) |
-| `NEXT_PUBLIC_ENABLE_MARKET` | `false` | Enables the Market tab (homepage `/`) |
-| `NEXT_PUBLIC_ENABLE_MARKET2` | `false` | Enables the Market 2 tab (`/market2`) |
+| `NEXT_PUBLIC_ENABLE_MARKET` | `false` | Enables the Market tab in navigation |
+| `NEXT_PUBLIC_ENABLE_MARKET2` | `false` | Enables the Market 2 tab in navigation |
 
-To enable a feature: Set to `true` in `.env.local` and restart the dev server.
-
-**Note:** The chatbot backend code (server actions, tools, validators, database tables) remains in place even when disabled. Only the UI entry points are hidden.
+Feature flags control navigation tab visibility only. Backend code (server actions, tools, database tables) remains in place when disabled. Set to `true` in `.env.local` and restart the dev server.
 
 ---
 
@@ -315,7 +380,7 @@ For quarterly data, TTM values are calculated differently by metric type (`lib/t
 
 ## Market Dashboard Server Actions
 
-The homepage fetches data from these server actions in `app/actions/`:
+`lib/fetch-market-data.ts` orchestrates parallel fetching from these server actions in `app/actions/`:
 
 | Action | Purpose |
 |--------|---------|
