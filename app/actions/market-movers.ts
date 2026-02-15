@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { getMarketStatus, getTradingDate, type MarketSession } from '@/lib/market-hours'
+import { deriveGainers, deriveLosers, type ExtendedHoursStock } from '@/app/actions/scan-extended-hours'
 
 // Types
 export interface MoverData {
@@ -293,8 +294,75 @@ async function fetchFromFMP(
 }
 
 /**
+ * Map ExtendedHoursStock[] to MoverData[] (drop extra fields like volume, marketCap)
+ */
+function mapToMoverData(stocks: ExtendedHoursStock[]): MoverData[] {
+  return stocks.map(s => ({
+    symbol: s.symbol,
+    name: s.name,
+    price: s.price,
+    change: s.change,
+    changesPercentage: s.changesPercentage,
+  }))
+}
+
+/**
+ * Get movers for an extended session (premarket or afterhours) using the bulk scan.
+ *
+ * - During the active session: fetches fresh data via bulk scan, saves to Supabase
+ * - After the session ends: returns the saved Supabase snapshot from earlier
+ * - If Supabase cache is fresh (<60s) during active session: skips re-fetching
+ */
+async function getExtendedSessionMovers(
+  session: 'premarket' | 'afterhours',
+  direction: Direction
+): Promise<MoverData[]> {
+  const marketDate = getTradingDate()
+  const marketStatus = getMarketStatus()
+  const isActiveSession = marketStatus.session === session
+
+  // 1. Check Supabase cache
+  const cached = await getCachedMovers(session, direction, marketDate)
+
+  if (cached) {
+    const cacheAge = Date.now() - new Date(cached.fetched_at).getTime()
+    const isFresh = cacheAge < CACHE_TTL_MS
+
+    // Session is over — return the persisted snapshot
+    if (!isActiveSession) {
+      return cached.data as MoverData[]
+    }
+
+    // Session is active but cache is fresh enough — skip re-fetching
+    if (isFresh) {
+      return cached.data as MoverData[]
+    }
+  }
+
+  // 2. Session is active — fetch fresh via bulk scan and save to Supabase
+  if (isActiveSession) {
+    const deriveFn = direction === 'gainers' ? deriveGainers : deriveLosers
+    const stocks = await deriveFn(session)
+    const movers = mapToMoverData(stocks)
+
+    if (movers.length > 0) {
+      await updateCache(session, direction, marketDate, movers)
+      return movers
+    }
+  }
+
+  // 3. Fallback: stale cache or empty
+  return (cached?.data as MoverData[]) || []
+}
+
+/**
  * Get all sessions for a direction (for initial page load).
- * Returns cached data for all three sessions.
+ *
+ * Pre-market and after-hours use the bulk scan approach (scan-extended-hours.ts)
+ * which fetches all NASDAQ+NYSE quotes and computes movers from extended hours trades.
+ * Results are persisted to Supabase so users can view pre-market data later in the day.
+ *
+ * Cash/regular session uses the dedicated FMP endpoints + Supabase cache.
  */
 export async function getAllSessionMovers(
   direction: Direction
@@ -302,15 +370,15 @@ export async function getAllSessionMovers(
   const marketStatus = getMarketStatus()
 
   const [premarket, cash, afterhours] = await Promise.all([
-    getMarketMovers('premarket', direction),
+    getExtendedSessionMovers('premarket', direction),
     getMarketMovers('cash', direction),
-    getMarketMovers('afterhours', direction)
+    getExtendedSessionMovers('afterhours', direction),
   ])
 
   return {
-    premarket: premarket.movers,
+    premarket,
     cash: cash.movers,
-    afterhours: afterhours.movers,
+    afterhours,
     currentSession: marketStatus.session
   }
 }

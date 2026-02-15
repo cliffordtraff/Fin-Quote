@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that require authentication
-const PROTECTED_ROUTES = ['/profile', '/admin', '/dashboard']
+const PROTECTED_ROUTES = ['/profile', '/admin']
 
 // Routes that should redirect to home if already authenticated
 const AUTH_ROUTES = ['/auth', '/auth/forgot-password']
@@ -48,6 +48,13 @@ export async function middleware(req: NextRequest) {
   //   url.pathname = '/'
   //   return NextResponse.redirect(url)
   // }
+
+  // Root → Dashboard
+  if (pathname === '/' || pathname === '') {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
 
   // Legacy route: /market3 → /market
   if (pathname === '/market3' || pathname === '/market3/') {
