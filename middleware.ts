@@ -49,13 +49,6 @@ export async function middleware(req: NextRequest) {
   //   return NextResponse.redirect(url)
   // }
 
-  // Root → Dashboard
-  if (pathname === '/' || pathname === '') {
-    const url = req.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
   // Legacy route: /market3 → /market
   if (pathname === '/market3' || pathname === '/market3/') {
     const url = req.nextUrl.clone()
