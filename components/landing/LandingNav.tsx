@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Logo from '@/components/Logo'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export default function LandingNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -33,7 +34,7 @@ export default function LandingNav() {
   ]
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-sm border-b border-gray-100">
+    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-[rgb(18,18,18)]/90 backdrop-blur-sm border-b border-gray-100 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -46,7 +47,7 @@ export default function LandingNav() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                 >
                   {link.label}
                 </Link>
@@ -54,7 +55,7 @@ export default function LandingNav() {
                 <a
                   key={link.href}
                   href={link.href}
-                  className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                 >
                   {link.label}
                 </a>
@@ -62,8 +63,9 @@ export default function LandingNav() {
             )}
           </div>
 
-          {/* Auth Buttons */}
+          {/* Theme Toggle + Auth Buttons */}
           <div className="hidden md:flex items-center gap-4">
+            <ThemeToggle />
             {isLoggedIn ? (
               <Link
                 href="/dashboard"
@@ -75,7 +77,7 @@ export default function LandingNav() {
               <>
                 <Link
                   href="/auth"
-                  className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                 >
                   Log in
                 </Link>
@@ -92,7 +94,7 @@ export default function LandingNav() {
           {/* Mobile Menu Button */}
           <button
             type="button"
-            className="md:hidden p-2 text-gray-600 hover:text-gray-900"
+            className="md:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? (
@@ -109,14 +111,14 @@ export default function LandingNav() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-100">
+          <div className="md:hidden py-4 border-t border-gray-100 dark:border-gray-800">
             <div className="flex flex-col gap-4">
               {navLinks.map((link) =>
                 link.href.startsWith('/') ? (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {link.label}
@@ -125,14 +127,18 @@ export default function LandingNav() {
                   <a
                     key={link.href}
                     href={link.href}
-                    className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {link.label}
                   </a>
                 )
               )}
-              <hr className="border-gray-100" />
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Theme</span>
+                <ThemeToggle />
+              </div>
+              <hr className="border-gray-100 dark:border-gray-800" />
               {isLoggedIn ? (
                 <Link
                   href="/dashboard"
@@ -145,7 +151,7 @@ export default function LandingNav() {
                 <>
                   <Link
                     href="/auth"
-                    className="text-sm text-gray-600 hover:text-sage-600 transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-sage-600 dark:hover:text-sage-400 transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Log in

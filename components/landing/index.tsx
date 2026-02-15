@@ -9,7 +9,7 @@ import Footer from './Footer'
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-[rgb(18,18,18)]">
       <LandingNav />
       <main>
         <HeroSection />

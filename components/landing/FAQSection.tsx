@@ -33,18 +33,18 @@ export default function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
-    <section id="faq" className="bg-white py-16 md:py-24 border-t border-gray-100">
+    <section id="faq" className="bg-white dark:bg-[rgb(18,18,18)] py-16 md:py-24 border-t border-gray-100 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid md:grid-cols-3 gap-12">
           {/* Header */}
           <div>
-            <h2 className="font-serif text-2xl md:text-3xl text-gray-900 mb-4">
+            <h2 className="font-serif text-2xl md:text-3xl text-gray-900 dark:text-white mb-4">
               Questions & Answers
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Learn more about what The Intraday has to offer or
               feel free to contact us at{' '}
-              <a href="mailto:support@theintraday.com" className="text-sage-600 hover:underline">
+              <a href="mailto:support@theintraday.com" className="text-sage-600 dark:text-sage-400 hover:underline">
                 support@theintraday.com
               </a>
             </p>
@@ -53,20 +53,20 @@ export default function FAQSection() {
           {/* FAQ List */}
           <div className="md:col-span-2 space-y-0">
             {faqs.map((faq, index) => (
-              <div key={index} className="border-b border-gray-100">
+              <div key={index} className="border-b border-gray-100 dark:border-gray-800">
                 <button
                   type="button"
                   className="w-full py-5 flex items-center justify-between text-left"
                   onClick={() => setOpenIndex(openIndex === index ? null : index)}
                 >
-                  <span className="text-gray-900 font-medium pr-8">{faq.question}</span>
-                  <span className="text-gray-400 text-2xl flex-shrink-0">
+                  <span className="text-gray-900 dark:text-white font-medium pr-8">{faq.question}</span>
+                  <span className="text-gray-400 dark:text-gray-500 text-2xl flex-shrink-0">
                     {openIndex === index ? '−' : '+'}
                   </span>
                 </button>
                 {openIndex === index && (
                   <div className="pb-5 pr-12">
-                    <p className="text-gray-600 text-sm leading-relaxed">{faq.answer}</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{faq.answer}</p>
                   </div>
                 )}
               </div>

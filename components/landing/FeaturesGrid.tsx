@@ -30,11 +30,11 @@ export default function FeaturesGrid() {
   ]
 
   return (
-    <section className="bg-white py-16 md:py-24 border-t border-gray-100">
+    <section id="features" className="bg-white dark:bg-[rgb(18,18,18)] py-16 md:py-24 border-t border-gray-100 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="max-w-2xl mb-12">
-          <h2 className="font-serif text-2xl md:text-3xl text-gray-900 mb-4">
+          <h2 className="font-serif text-2xl md:text-3xl text-gray-900 dark:text-white mb-4">
             The Intraday offers a range of tools that
             <br />
             suit your trading goals.
@@ -44,10 +44,10 @@ export default function FeaturesGrid() {
         {/* Features Grid */}
         <div className="grid md:grid-cols-3 gap-8">
           {features.map((feature, index) => (
-            <div key={index} className="border-l-2 border-gray-200 pl-6">
-              <div className="text-sage-600 mb-4">{feature.icon}</div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">{feature.description}</p>
+            <div key={index} className="border-l-2 border-gray-200 dark:border-gray-700 pl-6">
+              <div className="text-sage-600 dark:text-sage-400 mb-4">{feature.icon}</div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{feature.title}</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{feature.description}</p>
             </div>
           ))}
         </div>
