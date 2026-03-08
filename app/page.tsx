@@ -1,5 +1,23 @@
 import LandingPage from '@/components/landing'
+import Navigation from '@/components/Navigation'
+import MarketDashboardSunday from '@/components/MarketDashboardSunday'
+import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
-export default function Home() {
-  return <LandingPage />
+export const dynamic = 'force-dynamic'
+
+export default async function Home() {
+  if (process.env.NEXT_PUBLIC_ENABLE_LANDING === 'true') {
+    return <LandingPage />
+  }
+
+  const initialData = await fetchAllMarketData()
+
+  return (
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
+      <Navigation />
+      <main className="py-4">
+        <MarketDashboardSunday initialData={initialData} />
+      </main>
+    </div>
+  )
 }
