@@ -1,4 +1,4 @@
-import AppNavigation from '@/components/AppNavigation'
+import Navigation from '@/components/Navigation'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
@@ -11,7 +11,7 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
-      <AppNavigation />
+      <Navigation />
       <main className="py-4">
         <MarketDashboardSunday initialData={initialData} />
       </main>
