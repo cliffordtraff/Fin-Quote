@@ -31,7 +31,14 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (error) {
+      console.error('[Auth Callback] Code exchange failed:', error.message)
+      return NextResponse.redirect(
+        new URL(`/auth?error=${encodeURIComponent(error.message)}`, requestUrl.origin)
+      )
+    }
   }
 
   // URL to redirect to after sign in process completes

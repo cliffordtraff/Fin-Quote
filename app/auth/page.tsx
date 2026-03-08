@@ -30,6 +30,9 @@ function AuthPageContent() {
   const redirectTo = searchParams.get('redirect') || '/dashboard'
   const supabase = createClient()
 
+  // Show error from callback if present
+  const callbackError = searchParams.get('error')
+
   // Check if coming from signup link
   const isSignUpParam = searchParams.get('signup') === 'true'
   if (isSignUpParam && !isSignUp) {
@@ -99,6 +102,12 @@ function AuthPageContent() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
             {isSignUp ? 'Sign Up' : 'Sign In'}
           </h2>
+
+          {callbackError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm mb-4">
+              Sign-in failed: {callbackError}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
