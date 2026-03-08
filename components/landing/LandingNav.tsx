@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import Logo from '@/components/Logo'
 import ThemeToggle from '@/components/ThemeToggle'
 
 export default function LandingNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
   useEffect(() => {
     // Check initial auth state

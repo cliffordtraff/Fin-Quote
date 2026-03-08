@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+import { createClient } from '@/lib/supabase/client'
 
 type AuthMode = 'login' | 'signup' | 'reset'
 
@@ -21,7 +20,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   const handleGoogleSignIn = async () => {
     setLoading(true)

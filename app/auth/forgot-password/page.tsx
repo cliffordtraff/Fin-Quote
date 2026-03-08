@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 export default function ForgotPasswordPage() {
@@ -11,7 +10,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

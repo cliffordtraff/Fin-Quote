@@ -1,4 +1,4 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -21,21 +21,43 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Create response and supabase client
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  // Create response and supabase client using @supabase/ssr
+  const cookieDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined
+  let supabaseResponse = NextResponse.next({ request: req })
 
-  // Refresh session if needed (required for auth to work properly)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request: req })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              domain: cookieDomain,
+            })
+          )
+        },
+      },
+    }
+  )
+
+  // Refresh session if needed (use getUser for security — validates with Supabase Auth server)
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // Check if route requires authentication
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route))
 
   // Redirect unauthenticated users away from protected routes
-  if (isProtectedRoute && !session) {
+  if (isProtectedRoute && !user) {
     const url = req.nextUrl.clone()
     url.pathname = '/auth'
     url.searchParams.set('redirect', pathname)
@@ -43,7 +65,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages (optional - can be commented out if you want to allow access)
-  // if (isAuthRoute && session && !pathname.includes('reset-password')) {
+  // if (isAuthRoute && user && !pathname.includes('reset-password')) {
   //   const url = req.nextUrl.clone()
   //   url.pathname = '/'
   //   return NextResponse.redirect(url)
@@ -104,7 +126,7 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  return res
+  return supabaseResponse
 }
 
 export const config = {

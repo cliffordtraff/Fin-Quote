@@ -126,6 +126,20 @@ export default function Navigation() {
                 Charting
               </Link>
 
+              {process.env.NEXT_PUBLIC_CHARTING_URL && (
+                <a
+                  href={`${process.env.NEXT_PUBLIC_CHARTING_URL}/tos/${currentSymbol || 'AAPL'}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 text-xs font-medium rounded-lg transition-colors text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800 inline-flex items-center gap-1"
+                >
+                  Workspace
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+
               <Link
                 href="/concept"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${

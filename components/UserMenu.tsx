@@ -2,9 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import type { Database } from '@/lib/database.types'
 
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
@@ -12,7 +11,7 @@ export default function UserMenu() {
   const [user, setUser] = useState<User | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   // Fetch user on mount
   useEffect(() => {

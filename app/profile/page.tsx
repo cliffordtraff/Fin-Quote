@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import type { Database } from '@/lib/database.types'
 import Link from 'next/link'
 
 export default function ProfilePage() {
@@ -21,7 +20,7 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('')
 
   const router = useRouter()
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   useEffect(() => {
     const getUser = async () => {

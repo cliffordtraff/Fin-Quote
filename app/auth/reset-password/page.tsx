@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 export default function ResetPasswordPage() {
@@ -15,7 +14,7 @@ export default function ResetPasswordPage() {
   const [validSession, setValidSession] = useState<boolean | null>(null)
 
   const router = useRouter()
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   useEffect(() => {
     // Check if user arrived via reset password link (has valid session)

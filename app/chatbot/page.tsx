@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 // Feature flag check - redirect if chat is disabled
 const CHAT_ENABLED = process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
 import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
@@ -21,7 +21,6 @@ import Navigation from '@/components/Navigation'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
-import type { Database } from '@/lib/database.types'
 
 const stripMarkdown = (text: string): string => {
   return text
@@ -269,7 +268,7 @@ function AskPageContent() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showFinancialsModal, setShowFinancialsModal] = useState(false)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   // Ref for the textarea to enable auto-focus
   const textareaRef = useRef<HTMLTextAreaElement>(null)

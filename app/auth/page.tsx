@@ -2,8 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Logo from '@/components/Logo'
 
@@ -29,7 +28,7 @@ function AuthPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') || '/dashboard'
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   // Check if coming from signup link
   const isSignUpParam = searchParams.get('signup') === 'true'

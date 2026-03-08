@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/lib/database.types'
 
 // Client-side Supabase client (for use in React components)
-// This uses the anon key which is safe to expose in the browser
-export function createBrowserClient() {
+// Uses @supabase/ssr for cookie-based session management
+export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -11,9 +11,14 @@ export function createBrowserClient() {
     throw new Error('Missing Supabase environment variables')
   }
 
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false, // Since you're using Firebase Auth separately
+  const cookieDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined
+
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: {
+      domain: cookieDomain,
+      path: '/',
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
     },
   })
 }
