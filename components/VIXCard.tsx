@@ -20,7 +20,7 @@ interface VIXCardProps {
 export default function VIXCard({ vix }: VIXCardProps) {
   if (!vix) {
     return (
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] p-4" style={{ width: '150px' }}>
+      <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-4" style={{ width: '150px' }}>
         <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
           Loading VIX...
         </div>
@@ -71,7 +71,7 @@ export default function VIXCard({ vix }: VIXCardProps) {
   const isNegative = vix.change < 0
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] p-4 self-start" style={{ width: '150px' }}>
+    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 self-start" style={{ width: '150px' }}>
       <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
         VIX
       </div>

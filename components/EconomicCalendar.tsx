@@ -36,7 +36,7 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
   if (events.length === 0) {
     return (
       <div className="w-full">
-        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-4">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             Loading economic events...
           </div>
@@ -55,8 +55,8 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
   }, {} as Record<string, EconomicEvent[]>)
 
   return (
-    <div className="w-full bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700" style={{ height: '400px' }}>
-      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+    <div className="w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700" style={{ height: '400px' }}>
+      <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
         <h2 className={`font-semibold text-gray-700 dark:text-gray-300 ${expanded ? 'text-sm' : 'text-[10px]'}`}>
           Economic Calendar (US)
         </h2>
@@ -88,7 +88,7 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
                     : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
 
                   return (
-                    <div key={index} className="p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <div key={index} className="p-2 rounded hover:bg-cream-50 dark:hover:bg-gray-800 transition-colors">
                       <div className="flex items-start gap-2">
                         <div className="text-[9px] text-gray-500 dark:text-gray-400 min-w-[50px]">
                           {time}
@@ -114,7 +114,7 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
                               </div>
                             )}
                             {event.actual !== null && (
-                              <div className="font-bold text-blue-600 dark:text-blue-400">
+                              <div className="font-bold text-sage-600 dark:text-sage-400">
                                 <span>Actual:</span> {formatValue(event.actual, event.unit)}
                               </div>
                             )}

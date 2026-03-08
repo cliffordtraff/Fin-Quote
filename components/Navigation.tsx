@@ -15,13 +15,19 @@ export default function Navigation() {
   const currentSymbol = stockMatch ? stockMatch[1].toUpperCase() : null
 
   return (
-    <nav className="bg-gray-50 dark:bg-[rgb(33,33,33)]">
+    <nav className="bg-white dark:bg-gray-900 border-b-2 border-sage-500">
       {/* Top Header Row */}
-      <div className="w-full border-b border-gray-200 dark:border-gray-700">
+      <div className="w-full border-b border-gray-100 dark:border-gray-800">
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
           <div className="flex items-center gap-6">
-            <Link href="/" className="text-lg font-medium text-gray-900 dark:text-white">
-              The Intraday
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-sage-500 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 3v18h18" />
+                  <path d="M18 9l-5 5-4-4-3 3" />
+                </svg>
+              </div>
+              <span className="text-lg font-medium text-gray-900 dark:text-white">The Intraday</span>
             </Link>
             <StockSearch />
           </div>
@@ -29,7 +35,7 @@ export default function Navigation() {
       </div>
 
       {/* Navigation Tabs Row */}
-      <div className="w-full">
+      <div className="w-full bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
           {/* Navigation Tabs */}
           <div className="flex items-center">
@@ -39,8 +45,8 @@ export default function Navigation() {
                   href="/"
                   className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                     pathname === '/'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                   }`}
                 >
                   Market Test
@@ -52,8 +58,8 @@ export default function Navigation() {
                   href="/market2"
                   className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                     pathname === '/market2'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                   }`}
                 >
                   Market 2
@@ -65,8 +71,8 @@ export default function Navigation() {
                   href="/market"
                   className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                     pathname === '/market'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                   }`}
                 >
                   Market
@@ -74,14 +80,25 @@ export default function Navigation() {
               )}
 
               <Link
-                href="/market-sunday"
+                href="/dashboard"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/market-sunday'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  pathname === '/dashboard'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
-                Market
+                Dashboard
+              </Link>
+
+              <Link
+                href="/dashboard2"
+                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  pathname === '/dashboard2'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
+                }`}
+              >
+                Dashboard 2
               </Link>
 
               {process.env.NEXT_PUBLIC_ENABLE_DEXTER === 'true' && (
@@ -89,8 +106,8 @@ export default function Navigation() {
                   href="/market-dexter"
                   className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                     pathname === '/market-dexter'
-                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                   }`}
                 >
                   Market Dexter
@@ -101,8 +118,8 @@ export default function Navigation() {
                 href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname?.startsWith('/stock')
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
                 Financials
@@ -112,8 +129,8 @@ export default function Navigation() {
                 href="/charts"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/charts'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
                 Charting
@@ -123,8 +140,8 @@ export default function Navigation() {
                 href="/concept"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/concept'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
                 Market Internals
@@ -134,8 +151,8 @@ export default function Navigation() {
                 href="/calendar"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/calendar'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
                 Calendar
@@ -145,8 +162,8 @@ export default function Navigation() {
                 href="/insiders"
                 className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                   pathname === '/insiders'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                 }`}
               >
                 Insiders
@@ -157,8 +174,8 @@ export default function Navigation() {
                   href="/chatbot"
                   className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
                     pathname === '/chatbot'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
                   }`}
                 >
                   Chat

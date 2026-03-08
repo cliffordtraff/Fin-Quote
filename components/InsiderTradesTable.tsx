@@ -120,7 +120,7 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
   if (trades.length === 0) {
     return (
       <div className="w-full">
-        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-8">
           <div className="text-center text-gray-500 dark:text-gray-400">
             No trades found
           </div>
@@ -131,12 +131,12 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
 
   return (
     <div className="w-full">
-      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-8 gap-2 px-4 py-2 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
+        <div className="grid grid-cols-8 gap-2 px-4 py-2 bg-cream-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 text-xs font-semibold">
           <button
             onClick={() => handleSort('symbol')}
-            className="text-left hover:text-blue-500 transition-colors flex items-center"
+            className="text-left hover:text-sage-500 transition-colors flex items-center"
           >
             Symbol<SortIcon field="symbol" />
           </button>
@@ -145,41 +145,41 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
           <div className="text-center">Type</div>
           <button
             onClick={() => handleSort('securitiesTransacted')}
-            className="text-right hover:text-blue-500 transition-colors flex items-center justify-end"
+            className="text-right hover:text-sage-500 transition-colors flex items-center justify-end"
           >
             Shares<SortIcon field="securitiesTransacted" />
           </button>
           <button
             onClick={() => handleSort('price')}
-            className="text-right hover:text-blue-500 transition-colors flex items-center justify-end"
+            className="text-right hover:text-sage-500 transition-colors flex items-center justify-end"
           >
             Price<SortIcon field="price" />
           </button>
           <button
             onClick={() => handleSort('value')}
-            className="text-right hover:text-blue-500 transition-colors flex items-center justify-end"
+            className="text-right hover:text-sage-500 transition-colors flex items-center justify-end"
           >
             Value<SortIcon field="value" />
           </button>
           <button
             onClick={() => handleSort('transactionDate')}
-            className="text-right hover:text-blue-500 transition-colors flex items-center justify-end"
+            className="text-right hover:text-sage-500 transition-colors flex items-center justify-end"
           >
             Date<SortIcon field="transactionDate" />
           </button>
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        <div className="divide-y divide-cream-200 dark:divide-gray-700">
           {sortedTrades.map((trade, idx) => (
             <div
               key={`${trade.symbol}-${trade.filingDate}-${idx}`}
-              className="grid grid-cols-8 gap-2 px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="grid grid-cols-8 gap-2 px-4 py-1.5 hover:bg-cream-50 dark:hover:bg-gray-800 transition-colors"
             >
               <div className="text-xs">
                 <Link
                   href={`/stock/${trade.symbol}`}
-                  className="text-blue-400 hover:text-blue-300 font-medium hover:underline"
+                  className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 font-medium hover:underline"
                 >
                   {trade.symbol}
                 </Link>
@@ -188,7 +188,7 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
                 {trade.insiderId ? (
                   <Link
                     href={`/insider/${trade.insiderId}`}
-                    className="text-blue-400 hover:text-blue-300 hover:underline"
+                    className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 hover:underline"
                   >
                     {trade.reportingName}
                   </Link>

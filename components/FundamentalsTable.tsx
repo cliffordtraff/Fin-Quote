@@ -43,7 +43,7 @@ export default function FundamentalsTable({ data }: FundamentalsTableProps) {
 
   if (metrics.length === 0 || annualYears.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+      <div className="rounded-lg bg-cream-50 dark:bg-gray-800 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Fundamentals & Estimates
         </h2>
@@ -65,7 +65,7 @@ export default function FundamentalsTable({ data }: FundamentalsTableProps) {
   const yearsWithQuarters = Object.keys(quartersByYear).map(Number).sort((a, b) => a - b)
 
   return (
-    <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+    <div className="rounded-lg bg-cream-50 dark:bg-gray-800 p-6">
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Fundamentals & Estimates
@@ -81,8 +81,8 @@ export default function FundamentalsTable({ data }: FundamentalsTableProps) {
         <table className="w-full text-sm">
           <thead>
             {/* Year header row */}
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400 sticky left-0 bg-gray-100 dark:bg-[rgb(38,38,38)]">
+            <tr className="border-b border-cream-300 dark:border-gray-700">
+              <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400 sticky left-0 bg-cream-50 dark:bg-gray-800">
                 {/* Empty cell for metric labels */}
               </th>
               {/* Annual year columns */}
@@ -110,8 +110,8 @@ export default function FundamentalsTable({ data }: FundamentalsTableProps) {
               })}
             </tr>
             {/* FY sub-header row */}
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="text-left py-1 pr-4 font-normal text-xs text-gray-400 dark:text-gray-500 sticky left-0 bg-gray-100 dark:bg-[rgb(38,38,38)]">
+            <tr className="border-b border-cream-300 dark:border-gray-700">
+              <th className="text-left py-1 pr-4 font-normal text-xs text-gray-400 dark:text-gray-500 sticky left-0 bg-cream-50 dark:bg-gray-800">
                 {/* Empty */}
               </th>
               {annualYears.map(year => (
@@ -141,9 +141,9 @@ export default function FundamentalsTable({ data }: FundamentalsTableProps) {
             {metrics.map((metric, index) => (
               <tr
                 key={metric.label}
-                className={index < metrics.length - 1 ? 'border-b border-gray-100 dark:border-gray-800' : ''}
+                className={index < metrics.length - 1 ? 'border-b border-cream-200 dark:border-gray-800' : ''}
               >
-                <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100 sticky left-0 bg-gray-100 dark:bg-[rgb(38,38,38)] whitespace-nowrap">
+                <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100 sticky left-0 bg-cream-50 dark:bg-gray-800 whitespace-nowrap">
                   {metric.label}
                 </td>
                 {/* Annual values */}

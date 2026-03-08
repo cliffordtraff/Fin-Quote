@@ -273,7 +273,7 @@ function SparklineCard({ index }: SparklineCardProps) {
   }, [index.yesterdayOHLC, index.todayOHLC, index.previousClose, index.yesterdayChangePercent, index.priceChangePercent, isDark])
 
   return (
-    <div className="flex flex-col items-center pt-2 pb-1 px-3 flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-[rgb(33,33,33)]">
+    <div className="flex flex-col items-center pt-2 pb-1 px-3 flex-1 rounded-lg border border-cream-300 dark:border-gray-600 bg-white dark:bg-gray-800">
       <div className="flex items-baseline justify-center mb-2">
         <span className="text-sm font-semibold tracking-wide text-gray-500 dark:text-gray-400 whitespace-nowrap">
           {index.name}

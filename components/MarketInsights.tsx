@@ -53,13 +53,13 @@ function TrendsLoadingSteps({ loading }: { loading: boolean }) {
             {isCompleted ? (
               <span className="text-green-500 w-3 text-center">✓</span>
             ) : isCurrent ? (
-              <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="w-3 h-3 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
             ) : (
               <span className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600" />
             )}
             <span className={`${
               isCompleted ? 'text-green-600 dark:text-green-400' :
-              isCurrent ? 'text-blue-600 dark:text-blue-400 font-medium' :
+              isCurrent ? 'text-sage-600 dark:text-sage-400 font-medium' :
               'text-gray-400 dark:text-gray-500'
             }`}>
               {TRENDS_LOADING_MESSAGES[step]}
@@ -147,9 +147,9 @@ export default function MarketInsights({
   }
 
   return (
-    <div className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden" style={{ height: '400px' }}>
+    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden" style={{ height: '400px' }}>
       {/* Header with toggle */}
-      <div className="px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+      <div className="px-2 py-1 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
         <div className="flex justify-between items-center">
           <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Market Trends</h2>
           <div className="flex items-center gap-2">
@@ -159,8 +159,8 @@ export default function MarketInsights({
                 onClick={() => setApproach('responses-api')}
                 className={`px-1.5 py-0.5 text-[8px] ${
                   approach === 'responses-api'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ? 'bg-sage-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Responses
@@ -169,8 +169,8 @@ export default function MarketInsights({
                 onClick={() => setApproach('agents-sdk')}
                 className={`px-1.5 py-0.5 text-[8px] border-l border-gray-300 dark:border-gray-600 ${
                   approach === 'agents-sdk'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ? 'bg-sage-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Agents
@@ -179,8 +179,8 @@ export default function MarketInsights({
                 onClick={() => setApproach('side-by-side')}
                 className={`px-1.5 py-0.5 text-[8px] border-l border-gray-300 dark:border-gray-600 ${
                   approach === 'side-by-side'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ? 'bg-sage-500 text-white'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Compare
@@ -191,7 +191,7 @@ export default function MarketInsights({
               <button
                 onClick={approach === 'responses-api' ? onRefreshResponses : onRefreshAgents}
                 disabled={approach === 'responses-api' ? responsesLoading : agentsLoading}
-                className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white"
+                className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
               >
                 {(approach === 'responses-api' ? responsesLoading : agentsLoading) ? '...' : 'Refresh'}
               </button>
@@ -203,7 +203,7 @@ export default function MarketInsights({
                   onRefreshAgents?.()
                 }}
                 disabled={responsesLoading || agentsLoading}
-                className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white"
+                className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
               >
                 {responsesLoading || agentsLoading ? '...' : 'Both'}
               </button>
@@ -217,13 +217,13 @@ export default function MarketInsights({
         {approach === 'side-by-side' ? (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[9px] font-semibold text-blue-500 mb-1.5 pb-1 border-b border-gray-200 dark:border-gray-700">
+              <div className="text-[9px] font-semibold text-sage-500 mb-1.5 pb-1 border-b border-cream-200 dark:border-gray-700">
                 Responses API
               </div>
               {renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)}
             </div>
             <div>
-              <div className="text-[9px] font-semibold text-green-500 mb-1.5 pb-1 border-b border-gray-200 dark:border-gray-700">
+              <div className="text-[9px] font-semibold text-green-500 mb-1.5 pb-1 border-b border-cream-200 dark:border-gray-700">
                 Agents SDK
               </div>
               {renderBulletList(agentsSdkBullets, agentsLoading, agentsError, agentsGeneratedAt)}

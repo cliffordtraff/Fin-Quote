@@ -84,16 +84,16 @@ export default function StockInsiderTrades({ symbol, trades }: StockInsiderTrade
         </h3>
         <Link
           href={`/insiders?ticker=${symbol}`}
-          className="text-sm text-blue-500 hover:text-blue-400 hover:underline"
+          className="text-sm text-sage-600 dark:text-sage-400 hover:text-sage-500 hover:underline"
         >
           View All
         </Link>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="overflow-hidden rounded-lg border border-cream-300 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-6 gap-2 px-3 py-2 bg-gray-200 dark:bg-[rgb(30,30,30)] text-gray-600 dark:text-gray-400 text-xs font-medium">
+        <div className="grid grid-cols-6 gap-2 px-3 py-2 bg-cream-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400 text-xs font-medium">
           <div>Insider</div>
           <div className="text-center">Type</div>
           <div className="text-right">Shares</div>
@@ -103,17 +103,17 @@ export default function StockInsiderTrades({ symbol, trades }: StockInsiderTrade
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-[rgb(38,38,38)]">
+        <div className="divide-y divide-cream-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
           {displayTrades.map((trade, idx) => (
             <div
               key={`${trade.reportingName}-${trade.transactionDate}-${idx}`}
-              className="grid grid-cols-6 gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="grid grid-cols-6 gap-2 px-3 py-2 hover:bg-cream-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="text-xs truncate" title={trade.reportingName}>
                 {trade.insiderId ? (
                   <Link
                     href={`/insider/${trade.insiderId}`}
-                    className="text-blue-400 hover:text-blue-300 hover:underline"
+                    className="text-sage-600 dark:text-sage-400 hover:text-sage-300 hover:underline"
                   >
                     {trade.reportingName}
                   </Link>
@@ -145,7 +145,7 @@ export default function StockInsiderTrades({ symbol, trades }: StockInsiderTrade
       {hasMore && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="mt-3 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+          className="mt-3 text-sm text-sage-600 dark:text-sage-400 hover:text-sage-500 hover:underline"
         >
           {showAll ? 'Show Less' : `Show ${trades.length - 5} More`}
         </button>

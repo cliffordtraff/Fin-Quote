@@ -48,7 +48,7 @@ export default function StockPriceHeader({
   }, [symbol])
 
   return (
-    <section className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-[rgb(45,45,45)]/90 backdrop-blur-sm">
+    <section className="sticky top-0 z-30 h-16 bg-cream-100/90 dark:bg-gray-900/90 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl h-full px-4 sm:px-6 lg:px-8 flex items-center">
         <div className="flex items-center justify-between w-full">
           {/* Company Info */}

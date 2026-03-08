@@ -167,7 +167,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
   if (!isMounted) {
     // Show placeholder while loading
     return (
-      <div className="w-full h-[400px] bg-gray-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
+      <div className="w-full h-[400px] bg-cream-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
         <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
       </div>
     )
@@ -545,7 +545,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-[rgb(60,60,60)] rounded-lg shadow-sm border border-gray-200 dark:border-[rgb(50,50,50)] hover:bg-gray-50 dark:hover:bg-[rgb(70,70,70)] transition-colors"
+        className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-cream-300 dark:border-gray-600 hover:bg-cream-50 dark:hover:bg-gray-600 transition-colors"
         title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
       >
         {isFullscreen ? (
@@ -614,7 +614,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           <div className="flex justify-between items-center mb-2">
             <button
               onClick={() => setShowDataTable(!showDataTable)}
-              className="text-sm text-blue-600 dark:text-white hover:text-blue-800 dark:hover:text-gray-300 font-medium flex items-center gap-2"
+              className="text-sm text-sage-600 dark:text-white hover:text-sage-800 dark:hover:text-gray-300 font-medium flex items-center gap-2"
             >
               {showDataTable ? (
                 <>
@@ -651,10 +651,10 @@ export default function FinancialChart({ config }: FinancialChartProps) {
           </div>
 
           {showDataTable && (
-            <div className="bg-gray-50 dark:bg-gray-800 border-[10px] border-gray-200 dark:border-[rgb(50,50,50)] rounded-lg overflow-hidden">
+            <div className="bg-cream-50 dark:bg-gray-800 border-[10px] border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-100 dark:bg-gray-900">
+                <table className="min-w-full divide-y divide-cream-200 dark:divide-gray-700">
+                  <thead className="bg-cream-50 dark:bg-gray-900">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                         {config.xAxisLabel}
@@ -664,9 +664,9 @@ export default function FinancialChart({ config }: FinancialChartProps) {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-cream-200 dark:divide-gray-700">
                     {config.categories.map((category, index) => (
-                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <tr key={index} className="hover:bg-cream-50 dark:hover:bg-gray-700">
                         <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{category}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 text-right font-medium">
                           {config.data[index].toLocaleString('en-US')}

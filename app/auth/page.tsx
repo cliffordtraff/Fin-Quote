@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/lib/database.types'
 import Link from 'next/link'
+import Logo from '@/components/Logo'
 
 export default function AuthPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center">
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
       </div>
     }>
@@ -27,8 +28,14 @@ function AuthPageContent() {
   const [message, setMessage] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/'
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
   const supabase = createClientComponentClient<Database>()
+
+  // Check if coming from signup link
+  const isSignUpParam = searchParams.get('signup') === 'true'
+  if (isSignUpParam && !isSignUp) {
+    setIsSignUp(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,7 +49,7 @@ function AuthPageContent() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${window.location.origin}/dashboard`,
           },
         })
         if (error) throw error
@@ -61,7 +68,7 @@ function AuthPageContent() {
         // Refresh the router to update server-side auth state
         router.refresh()
 
-        // Navigate to redirect destination or home
+        // Navigate to redirect destination or dashboard
         router.push(redirectTo)
       }
     } catch (error: any) {
@@ -73,21 +80,24 @@ function AuthPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold text-gray-900 dark:text-white">
-            The Intraday
-          </Link>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" href="/" />
+          </div>
+          <h1 className="font-serif text-2xl text-gray-900 dark:text-white">
             {isSignUp ? 'Create your account' : 'Welcome back'}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">
+            {isSignUp ? 'Start your trading journey today' : 'Sign in to access your dashboard'}
           </p>
         </div>
 
         {/* Auth Form */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
             {isSignUp ? 'Sign Up' : 'Sign In'}
           </h2>
 
@@ -100,7 +110,7 @@ function AuthPageContent() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white bg-cream-50"
                 required
                 placeholder="you@example.com"
               />
@@ -114,7 +124,7 @@ function AuthPageContent() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white bg-cream-50"
                 required
                 minLength={6}
                 placeholder="••••••••"
@@ -133,7 +143,7 @@ function AuthPageContent() {
             )}
 
             {message && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-800 text-sage-700 dark:text-sage-400 px-4 py-3 rounded-lg text-sm">
                 {message}
               </div>
             )}
@@ -141,7 +151,7 @@ function AuthPageContent() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              className="w-full bg-sage-500 text-white py-3 px-4 rounded-lg hover:bg-sage-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {loading ? 'Loading...' : (isSignUp ? 'Create Account' : 'Sign In')}
             </button>
@@ -149,7 +159,7 @@ function AuthPageContent() {
             {/* Divider */}
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                <div className="w-full border-t border-gray-200 dark:border-gray-600"></div>
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
@@ -178,7 +188,7 @@ function AuthPageContent() {
                 }
               }}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-3 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-3 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -209,7 +219,7 @@ function AuthPageContent() {
                 setError('')
                 setMessage('')
               }}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-sm text-sage-600 dark:text-sage-400 hover:underline"
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>

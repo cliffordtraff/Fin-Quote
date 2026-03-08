@@ -116,7 +116,7 @@ export default async function StockPage({ params }: PageProps) {
   // If we couldn't get basic overview data, show a message
   if (!overview || !keyStats) {
     return (
-      <div className="min-h-screen bg-white dark:bg-[rgb(45,45,45)]">
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
         <Navigation />
         <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
@@ -131,7 +131,7 @@ export default async function StockPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[rgb(45,45,45)]">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       {/* Navigation Header */}
       <Navigation />
 
@@ -147,16 +147,16 @@ export default async function StockPage({ params }: PageProps) {
       />
 
       {/* Price Chart Section */}
-      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 pt-0 pb-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             <StockPriceChart symbol={normalizedSymbol} initialRange="365d" />
           </div>
         </div>
       </section>
 
       {/* Segments (moved from Company tab) */}
-      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <CompanySegmentsCard
             productSegments={productSegmentsResult?.data || null}
@@ -166,9 +166,9 @@ export default async function StockPage({ params }: PageProps) {
       </section>
 
       {/* Quick Stats Grid Section - Finviz Style */}
-      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-4">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-4">
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
               {/* Column 1: Company Info */}
               <div className="space-y-0.5">
@@ -571,18 +571,18 @@ export default async function StockPage({ params }: PageProps) {
       </section>
 
       {/* News Section */}
-      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             <NewsFeed news={news} />
           </div>
         </div>
       </section>
 
       {/* Insider Trading Section */}
-      <section className="bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             <StockInsiderTrades symbol={normalizedSymbol} trades={insiderTrades} />
           </div>
         </div>
@@ -590,9 +590,9 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Company Description Section */}
       {profile && (
-        <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <section className="bg-cream-100 dark:bg-gray-900">
           <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-            <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
               <CompanyDescription
                 description={profile.description}
                 ceo={profile.ceo}
@@ -606,9 +606,9 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Financial Metrics Charts Section */}
       {chartData.data && chartData.data.length > 0 && (
-        <section className="bg-white dark:bg-[rgb(45,45,45)]">
+        <section className="bg-cream-100 dark:bg-gray-900">
           <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-            <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+            <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
               <FinancialMetricsCharts data={chartData.data} />
             </div>
           </div>
@@ -616,9 +616,9 @@ export default async function StockPage({ params }: PageProps) {
       )}
 
       {/* Financial Statements Section */}
-      <section className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[rgb(45,45,45)]">
+      <section className="border-b border-cream-300 dark:border-gray-700 bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-gray-100 dark:bg-[rgb(38,38,38)] p-6">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             {financials.incomeStatement.length > 0 ||
             financials.balanceSheet.length > 0 ||
             financials.cashFlow.length > 0 ? (
@@ -642,7 +642,7 @@ export default async function StockPage({ params }: PageProps) {
       )}
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-[rgb(45,45,45)] border-t border-gray-200 dark:border-gray-800">
+      <footer className="bg-cream-100 dark:bg-gray-900 border-t border-cream-300 dark:border-gray-700">
         <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="text-sm text-gray-500 dark:text-gray-400">

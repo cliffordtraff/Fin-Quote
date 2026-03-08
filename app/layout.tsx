@@ -29,8 +29,8 @@ export default function RootLayout({
           document.body && (document.body.style.backgroundColor = '#111827');
         } else {
           root.classList.remove('dark');
-          root.style.backgroundColor = '#f9fafb';
-          document.body && (document.body.style.backgroundColor = '#f9fafb');
+          root.style.backgroundColor = '#f5f5f0';
+          document.body && (document.body.style.backgroundColor = '#f5f5f0');
         }
       } catch (e) {}
     })();
@@ -41,7 +41,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={`${inter.className} bg-gray-50 dark:bg-gray-900 min-h-full`}>
+      <body className={`${inter.className} bg-cream-100 dark:bg-gray-900 min-h-full`}>
         <ThemeProvider>
           <TimezoneProvider>{children}</TimezoneProvider>
         </ThemeProvider>

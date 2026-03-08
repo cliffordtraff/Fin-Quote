@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
             <div className="space-y-3">
               <button
                 onClick={() => setSuccess(false)}
-                className="w-full text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                className="w-full text-sage-600 dark:text-sage-400 hover:underline text-sm"
               >
                 Try a different email
               </button>
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
@@ -97,7 +97,7 @@ export default function ForgotPasswordPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 required
                 placeholder="you@example.com"
               />
@@ -112,7 +112,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              className="w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {loading ? 'Sending...' : 'Send Reset Link'}
             </button>

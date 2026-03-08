@@ -75,6 +75,7 @@ export async function middleware(req: NextRequest) {
     'market2',
     'market-sunday',
     'market-dexter',
+    'dashboard',
     'stock',
     'company',
     'charts',
@@ -87,6 +88,7 @@ export async function middleware(req: NextRequest) {
     'auth',
     'profile',
     'admin',
+    'pricing',
   ])
 
   const parts = pathname.split('/').filter(Boolean)

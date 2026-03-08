@@ -134,8 +134,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sage-600"></div>
       </div>
     )
   }
@@ -146,7 +146,7 @@ export default function ProfilePage() {
   const isOAuthUser = user.app_metadata?.provider !== 'email'
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[rgb(33,33,33)] py-12 px-4">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 py-12 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -213,7 +213,7 @@ export default function ProfilePage() {
                     <button
                       onClick={handleResendVerification}
                       disabled={saving}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                      className="text-sm text-sage-600 dark:text-sage-400 hover:underline disabled:opacity-50"
                     >
                       Resend verification
                     </button>
@@ -248,7 +248,7 @@ export default function ProfilePage() {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 placeholder="Your display name"
               />
             </div>
@@ -256,7 +256,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              className="bg-sage-600 text-white py-2 px-4 rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -277,7 +277,7 @@ export default function ProfilePage() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   placeholder="••••••••"
                   minLength={6}
                 />
@@ -291,7 +291,7 @@ export default function ProfilePage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   placeholder="••••••••"
                   minLength={6}
                 />
@@ -300,7 +300,7 @@ export default function ProfilePage() {
               <button
                 type="submit"
                 disabled={saving || !newPassword || !confirmPassword}
-                className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                className="bg-sage-600 text-white py-2 px-4 rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
               >
                 {saving ? 'Updating...' : 'Update Password'}
               </button>

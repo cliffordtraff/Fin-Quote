@@ -35,7 +35,7 @@ function getTransactionLabel(code: string, acqDisp: string): { label: string; co
   }
   // Award, exercise, gift, etc.
   if (code === 'A' || code === 'M') {
-    return { label: 'Award', color: 'text-blue-400' }
+    return { label: 'Award', color: 'text-sage-600 dark:text-sage-400' }
   }
   return { label: code || '-', color: 'text-gray-400' }
 }
@@ -44,7 +44,7 @@ export default function TopInsiderTrades({ trades }: TopInsiderTradesProps) {
   if (trades.length === 0) {
     return (
       <div className="w-full">
-        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-4">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             No insider trades found...
           </div>
@@ -54,34 +54,34 @@ export default function TopInsiderTrades({ trades }: TopInsiderTradesProps) {
   }
 
   return (
-    <div className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden">
+    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+      <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
         <h2 className="font-semibold text-gray-700 dark:text-gray-300 text-[10px]">
           Largest Insider Trades
         </h2>
         <Link
           href="/insiders"
-          className="text-[9px] text-blue-500 hover:text-blue-400 transition-colors"
+          className="text-[9px] text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 transition-colors"
         >
           View All →
         </Link>
       </div>
 
       {/* Trades List */}
-      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+      <div className="divide-y divide-cream-200 dark:divide-gray-800">
         {trades.map((trade, index) => {
           const { label: txLabel, color: txColor } = getTransactionLabel(trade.transactionCode, trade.acquisitionDisposition)
 
           return (
             <div
               key={`${trade.symbol}-${trade.reportingName}-${index}`}
-              className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+              className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-cream-50 dark:hover:bg-gray-800/50"
             >
               {/* Symbol */}
               <Link
                 href={`/stock/${trade.symbol}`}
-                className="w-11 text-[10px] font-semibold text-blue-500 hover:text-blue-400 transition-colors shrink-0"
+                className="w-11 text-[10px] font-semibold text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 transition-colors shrink-0"
               >
                 {trade.symbol}
               </Link>

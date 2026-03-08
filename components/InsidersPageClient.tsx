@@ -226,7 +226,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               onClick={() => handleViewChange(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeView === tab.id
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  ? 'border-sage-500 text-sage-600 dark:text-sage-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               }`}
             >
@@ -244,7 +244,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
           <select
             value={transactionFilter}
             onChange={(e) => setTransactionFilter(e.target.value)}
-            className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
           >
             <option value="all">All</option>
             <option value="purchase">Purchase</option>
@@ -262,7 +262,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
             >
               <option value="all">All Time</option>
               <option value="week">Past Week</option>
@@ -288,10 +288,10 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               value={tickerQuery}
               onChange={(e) => setTickerQuery(e.target.value.toUpperCase())}
               placeholder="Enter symbol (e.g., AAPL)"
-              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-sage-500"
             />
             {isLoading && (
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
             )}
           </div>
         )}
@@ -304,10 +304,10 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               value={insiderQuery}
               onChange={(e) => setInsiderQuery(e.target.value)}
               placeholder="Search insider name..."
-              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-sage-500"
             />
             {isLoading && (
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
             )}
           </div>
         )}
@@ -335,14 +335,14 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-[rgb(38,38,38)] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

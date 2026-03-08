@@ -69,7 +69,7 @@ export default function GainersTable({ gainers }: GainersTableProps) {
   if (gainers.length === 0) {
     return (
       <div className="w-full max-w-3xl">
-        <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 p-8">
+        <div className="bg-white dark:bg-gray-900 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-8">
           <div className="text-center text-gray-500 dark:text-gray-400">
             Loading gainers data...
           </div>
@@ -80,9 +80,9 @@ export default function GainersTable({ gainers }: GainersTableProps) {
 
   return (
     <div className="w-full max-w-3xl">
-      <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-900 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
         {/* Header */}
-        <div className="grid grid-cols-6 gap-3 px-4 py-1 bg-gray-100 dark:bg-[rgb(26,26,26)] text-gray-700 dark:text-gray-300 text-xs font-semibold">
+        <div className="grid grid-cols-6 gap-3 px-4 py-1 bg-cream-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-xs font-semibold">
           <div>Symbol</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
@@ -105,7 +105,7 @@ export default function GainersTable({ gainers }: GainersTableProps) {
                 className="grid grid-cols-6 gap-3 px-4 py-1 hover:bg-gray-750 transition-colors"
               >
                 <div className="font-medium text-xs">
-                  <TickerLink symbol={gainer.symbol} className="text-blue-400" />
+                  <TickerLink symbol={gainer.symbol} className="text-sage-400" />
                 </div>
                 <div className={`text-right ${colorClass} text-xs`}>
                   {formatPrice(gainer.price)}

@@ -67,7 +67,7 @@ export default function MarketHeadlines({ news }: MarketHeadlinesProps) {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] pt-1 px-2 pb-1">
+    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 pt-1 px-2 pb-1">
       <h3 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
         Headlines
       </h3>

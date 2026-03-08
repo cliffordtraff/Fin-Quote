@@ -34,7 +34,7 @@ function StockTable({ stocks, colorMode }: { stocks: StockData[]; colorMode: 'gr
   return (
     <table className="w-full text-xs">
       <thead>
-        <tr className="border-b border-gray-200 dark:border-gray-700">
+        <tr className="border-b border-cream-300 dark:border-gray-700">
           <th className="text-left py-2 px-3 font-medium text-gray-500 dark:text-gray-400">Symbol</th>
           <th className="text-left py-2 px-3 font-medium text-gray-500 dark:text-gray-400">Name</th>
           <th className="text-right py-2 px-3 font-medium text-gray-500 dark:text-gray-400">Price</th>
@@ -58,7 +58,7 @@ function StockTable({ stocks, colorMode }: { stocks: StockData[]; colorMode: 'gr
           return (
             <tr
               key={stock.symbol}
-              className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+              className="border-b border-cream-200 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
             >
               <td className="py-2 px-3 font-medium">
                 <TickerLink symbol={stock.symbol} className="text-gray-900 dark:text-gray-100" />
@@ -105,22 +105,22 @@ export default function MarketTrendsContainer({ gainers, losers, sp500Gainers, s
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[rgb(33,33,33)] overflow-hidden w-full lg:w-[500px]">
+    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden w-full lg:w-[500px]">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-4 py-3 border-b border-cream-300 dark:border-gray-700">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Market trends</h2>
       </div>
 
       {/* Category Buttons */}
-      <div className="px-4 py-3 flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-4 py-3 flex flex-wrap gap-2 border-b border-cream-300 dark:border-gray-700">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.key}
             onClick={() => setActiveCategory(cat.key)}
             className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
               activeCategory === cat.key
-                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                ? 'bg-sage-50 dark:bg-sage-900/30 border-sage-200 dark:border-sage-700 text-sage-700 dark:text-sage-300'
+                : 'bg-white dark:bg-gray-800 border-cream-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700'
             }`}
           >
             {cat.label}

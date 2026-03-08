@@ -163,7 +163,7 @@ export default function StockSearch() {
             }
           }}
           placeholder="Search stocks..."
-          className="w-48 sm:w-64 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-[rgb(38,38,38)] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-48 sm:w-64 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
           aria-label="Search stocks"
           aria-expanded={isOpen}
           aria-controls="stock-search-results"
@@ -171,7 +171,7 @@ export default function StockSearch() {
         />
         {isLoading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 border-t-sage-500 rounded-full animate-spin" />
           </div>
         )}
       </div>
@@ -182,7 +182,7 @@ export default function StockSearch() {
           ref={dropdownRef}
           id="stock-search-results"
           role="listbox"
-          className="absolute z-50 w-full mt-1 bg-white dark:bg-[rgb(38,38,38)] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-80 overflow-y-auto"
+          className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg shadow-lg max-h-80 overflow-y-auto"
         >
           {error ? (
             <div className="px-3 py-2 text-sm text-red-600 dark:text-red-400">
@@ -200,9 +200,9 @@ export default function StockSearch() {
                 aria-selected={highlightedIndex === index}
                 onClick={() => navigateToStock(result.symbol)}
                 onMouseEnter={() => setHighlightedIndex(index)}
-                className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-cream-50 dark:hover:bg-gray-700 ${
                   highlightedIndex === index
-                    ? 'bg-gray-100 dark:bg-gray-700'
+                    ? 'bg-cream-50 dark:bg-gray-700'
                     : ''
                 }`}
               >
