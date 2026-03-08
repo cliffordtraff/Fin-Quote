@@ -90,16 +90,6 @@ export default function Navigation() {
                 Dashboard
               </Link>
 
-              <Link
-                href="/dashboard2"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/dashboard2'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Dashboard 2
-              </Link>
 
               {process.env.NEXT_PUBLIC_ENABLE_DEXTER === 'true' && (
                 <Link
