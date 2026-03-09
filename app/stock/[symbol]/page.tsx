@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import Navigation from '@/components/Navigation'
 import StockPriceHeader from '@/components/StockPriceHeader'
-import StockPriceChart from '@/components/StockPriceChart'
+import EmbedChart from '@/components/EmbedChart'
 import FinancialStatementsTabs from '@/components/FinancialStatementsTabs'
 import NewsFeed from '@/components/NewsFeed'
 import CompanyDescription from '@/components/CompanyDescription'
@@ -149,23 +149,8 @@ export default async function StockPage({ params }: PageProps) {
       {/* Price Chart Section */}
       <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 pt-0 pb-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
-            {process.env.NEXT_PUBLIC_CHARTING_URL && (
-              <div className="flex justify-end mb-2">
-                <a
-                  href={`${process.env.NEXT_PUBLIC_CHARTING_URL}/tos/${encodeURIComponent(normalizedSymbol)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  Open in Workspace
-                </a>
-              </div>
-            )}
-            <StockPriceChart symbol={normalizedSymbol} />
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 overflow-hidden">
+            <EmbedChart symbol={normalizedSymbol} />
           </div>
         </div>
       </section>
