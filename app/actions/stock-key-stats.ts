@@ -139,7 +139,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
     }
 
     // Transform key-value rows into an object with metric names as keys
-    const latestMetrics: Record<string, number> = {};
+    const latestMetrics: Record<string, number | null> = {};
     metricsData?.forEach((row) => {
       if (!latestMetrics[row.metric_name]) {
         latestMetrics[row.metric_name] = row.metric_value;
@@ -178,7 +178,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .order('year', { ascending: false })
       .limit(1);
 
-    const latestFinancials = financialsData?.[0] || {};
+    const latestFinancials = financialsData?.[0];
 
     // Fetch company profile data (employees, IPO date, sector, etc.)
     const { data: profileData } = await supabase
@@ -187,7 +187,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .eq('symbol', symbol)
       .single();
 
-    const companyProfile = profileData || {};
+    const companyProfile = profileData;
 
     // Fetch price performance data (1D, 5D, 1M, 3M, 6M, YTD, 1Y, 3Y, 5Y, 10Y returns)
     const { data: perfData } = await supabase
@@ -197,7 +197,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .order('as_of_date', { ascending: false })
       .limit(1);
 
-    const pricePerformance = perfData?.[0] || {};
+    const pricePerformance = perfData?.[0];
 
     // Fetch analyst estimates data (EPS estimates, target price)
     const { data: estimatesData } = await supabase
@@ -207,7 +207,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .order('period_end', { ascending: false })
       .limit(1);
 
-    const analystEstimates = estimatesData?.[0] || {};
+    const analystEstimates = estimatesData?.[0];
 
     // Fetch earnings history data (EPS surprise)
     const { data: earningsData } = await supabase
@@ -217,7 +217,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .order('earnings_date', { ascending: false })
       .limit(1);
 
-    const latestEarnings = earningsData?.[0] || {};
+    const latestEarnings = earningsData?.[0];
 
     // Fetch technical indicators (SMA, RSI, ATR)
     const { data: technicalData } = await supabase
@@ -227,11 +227,11 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       .order('as_of_date', { ascending: false })
       .limit(1);
 
-    const technicalIndicators = technicalData?.[0] || {};
+    const technicalIndicators = technicalData?.[0];
 
     // Calculate some derived values
-    const revenue = latestFinancials.revenue || 0;
-    const netIncome = latestFinancials.net_income || 0;
+    const revenue = latestFinancials?.revenue || 0;
+    const netIncome = latestFinancials?.net_income || 0;
     const freeCashFlow = keyMetrics.freeCashFlowPerShare
       ? keyMetrics.freeCashFlowPerShare * (quote.sharesOutstanding || 1)
       : (latestMetrics.freeCashFlowPerShare ? latestMetrics.freeCashFlowPerShare * (quote.sharesOutstanding || 1) : 0);
@@ -255,8 +255,8 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
           ? latestMetrics.fiveYDividendperShareGrowthPerShare * 100
           : null),
       payoutRatio: (latestMetrics.payoutRatio || latestMetrics.dividendPayoutRatio || 0) * 100,
-      employees: companyProfile.employees || null,
-      ipoDate: companyProfile.ipo_date || null,
+      employees: companyProfile?.employees || null,
+      ipoDate: companyProfile?.ipo_date || null,
 
       // Column 2: Valuation Ratios
       peRatio: quote.pe || latestMetrics.peRatio || 0,
@@ -278,8 +278,8 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       optionShort: null, // Options/short availability (premium data)
 
       // Column 3: EPS & Sales
-      eps: quote.eps || latestFinancials.eps || 0,
-      epsNextY: analystEstimates.eps_estimated_avg || null,
+      eps: quote.eps || latestFinancials?.eps || 0,
+      epsNextY: analystEstimates?.eps_estimated_avg || null,
       epsNextQ: null, // Next quarter EPS estimate (need quarterly estimates)
       // EPS this year growth - use epsgrowth or netIncomeGrowth
       epsThisYGrowth: latestMetrics.epsgrowth
@@ -302,9 +302,9 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       salesYoYTTM: latestMetrics.revenueGrowth ? latestMetrics.revenueGrowth * 100 : null,
       epsQoQ: null, // Quarter over quarter EPS (need quarterly data)
       salesQoQ: null, // Quarter over quarter sales (need quarterly data)
-      earningsDate: latestEarnings.earnings_date || null,
-      epsSurprise: latestEarnings.eps_surprise_pct ?? null,
-      salesSurprise: latestEarnings.revenue_surprise_pct ?? null,
+      earningsDate: latestEarnings?.earnings_date || null,
+      epsSurprise: latestEarnings?.eps_surprise_pct ?? null,
+      salesSurprise: latestEarnings?.revenue_surprise_pct ?? null,
 
       // Column 4: Ownership & Returns
       insiderOwn: null, // Insider ownership % (separate API)
@@ -319,9 +319,9 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       // Operating margin - check operatingProfitMargin and ebitPerRevenue
       operatingMargin: (latestMetrics.operatingProfitMargin || latestMetrics.ebitPerRevenue || ratios.operatingProfitMargin || 0) * 100,
       netMargin: (latestMetrics.netProfitMargin || ratios.netProfitMargin || 0) * 100,
-      sma20: technicalIndicators.sma_20 || null,
-      sma50: technicalIndicators.sma_50 || null,
-      sma200: technicalIndicators.sma_200 || null,
+      sma20: technicalIndicators?.sma_20 || null,
+      sma50: technicalIndicators?.sma_50 || null,
+      sma200: technicalIndicators?.sma_200 || null,
 
       // Column 5: Shares & Volatility
       sharesOutstanding: quote.sharesOutstanding || latestMetrics.numberOfShares || null,
@@ -331,27 +331,27 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       shortInterest: null, // Short interest shares (separate API)
       fiftyTwoWeekHigh: quote.yearHigh || 0,
       fiftyTwoWeekLow: quote.yearLow || 0,
-      volatilityWeek: technicalIndicators.volatility_week || null,
-      volatilityMonth: technicalIndicators.volatility_month || null,
-      atr14: technicalIndicators.atr_14 || null,
-      rsi14: technicalIndicators.rsi_14 || null,
+      volatilityWeek: technicalIndicators?.volatility_week || null,
+      volatilityMonth: technicalIndicators?.volatility_month || null,
+      atr14: technicalIndicators?.atr_14 || null,
+      rsi14: technicalIndicators?.rsi_14 || null,
       beta: latestMetrics.beta || keyMetrics.beta || null,
       relVolume: quote.volume && quote.avgVolume ? quote.volume / quote.avgVolume : null,
       avgVolume: quote.avgVolume || 0,
       volume: quote.volume || null,
 
       // Column 6: Performance (price_performance table provides 3Y, 5Y, 10Y)
-      perfWeek: pricePerformance.perf_5d ?? quote.priceChange1W ?? null,
-      perfMonth: pricePerformance.perf_1m ?? quote.priceChange1M ?? null,
-      perfQuarter: pricePerformance.perf_3m ?? quote.priceChange3M ?? null,
-      perfHalfY: pricePerformance.perf_6m ?? quote.priceChange6M ?? null,
-      perfYTD: pricePerformance.perf_ytd ?? quote.ytdChange ?? null,
-      perfYear: pricePerformance.perf_1y ?? quote.priceChange1Y ?? null,
-      perf3Y: pricePerformance.perf_3y ?? null,
-      perf5Y: pricePerformance.perf_5y ?? null,
-      perf10Y: pricePerformance.perf_10y ?? null,
+      perfWeek: pricePerformance?.perf_5d ?? quote.priceChange1W ?? null,
+      perfMonth: pricePerformance?.perf_1m ?? quote.priceChange1M ?? null,
+      perfQuarter: pricePerformance?.perf_3m ?? quote.priceChange3M ?? null,
+      perfHalfY: pricePerformance?.perf_6m ?? quote.priceChange6M ?? null,
+      perfYTD: pricePerformance?.perf_ytd ?? quote.ytdChange ?? null,
+      perfYear: pricePerformance?.perf_1y ?? quote.priceChange1Y ?? null,
+      perf3Y: pricePerformance?.perf_3y ?? null,
+      perf5Y: pricePerformance?.perf_5y ?? null,
+      perf10Y: pricePerformance?.perf_10y ?? null,
       analystRecom: null, // Analyst recommendation 1-5 (need consensus endpoint)
-      targetPrice: analystEstimates.target_price || quote.targetPrice || null,
+      targetPrice: analystEstimates?.target_price || quote.targetPrice || null,
       prevClose: quote.previousClose || null,
       price: quote.price || null,
       change: quote.changesPercentage || null,
@@ -363,7 +363,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       oneYearReturn: quote.priceChange1Y || 0,
       threeYearCAGR: (latestMetrics.threeYRevenueGrowthPerShare || latestMetrics.threeYNetIncomeGrowthPerShare || 0) * 100,
       fiveYearCAGR: (latestMetrics.fiveYRevenueGrowthPerShare || latestMetrics.fiveYNetIncomeGrowthPerShare || 0) * 100,
-      operatingCashFlow: latestFinancials.operating_cash_flow || 0,
+      operatingCashFlow: latestFinancials?.operating_cash_flow || 0,
       freeCashFlow,
       dividendYield: (latestMetrics.dividendYield || quote.dividendYield || 0) * 100,
     };

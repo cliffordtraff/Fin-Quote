@@ -371,7 +371,7 @@ export async function searchSymbols(
       .eq('is_active', true)
       .or(`symbol.ilike.%${query}%,name.ilike.%${query}%`)
       .order('market_cap', { ascending: false, nullsFirst: false })
-      .limit(50)
+      .limit(50) as { data: { symbol: string; name: string; market_cap?: number | null }[] | null; error: any }
 
     // Fallback to sp500_constituents if us_stocks query fails
     if (error || !data) {

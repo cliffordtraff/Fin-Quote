@@ -332,7 +332,7 @@ export async function getFinancialsByMetric(params: {
     const rows: RawRow[] = (data ?? []) as RawRow[]
 
     const mapped: FinancialMetricDataPoint[] = rows.map((row) => {
-      const metricValue = (row as Record<string, number | null>)[metric] ?? 0
+      const metricValue = (row as unknown as Record<string, number | null>)[metric] ?? 0
       const result: FinancialMetricDataPoint = {
         year: row.year,
         value: typeof metricValue === 'number' ? metricValue : Number(metricValue ?? 0),

@@ -614,7 +614,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             color: isStacked ? '#ffffff' : (isDark ? '#e5e7eb' : '#374151'),
             textOutline: isStacked ? '1px rgba(0, 0, 0, 0.3)' : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff'),
           },
-          formatter: function (this: Highcharts.PointLabelObject) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter: function (this: any) {
             const point = this.point
             const seriesName = this.series.name
             const metricInfo = filteredData.find((d) => d.label === seriesName)
@@ -646,7 +647,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             color: isDark ? '#e5e7eb' : '#374151',
             textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
           },
-          formatter: function (this: Highcharts.PointLabelObject) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter: function (this: any) {
             const point = this.point
             const seriesName = this.series.name
             const metricInfo = filteredData.find((d) => d.label === seriesName)
@@ -679,7 +681,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             color: '#ffffff',
             textOutline: '1px rgba(0, 0, 0, 0.3)',
           },
-          formatter: function (this: Highcharts.PointLabelObject) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter: function (this: any) {
             const point = this.point
             const seriesName = this.series.name
             const metricInfo = filteredData.find((d) => d.label === seriesName)
@@ -745,7 +748,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
         return { x, y }
       },
-      formatter: function () {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter: function (this: any) {
         const points = this.points || []
         // With datetime axis, this.x is a timestamp - format it appropriately
         const timestamp = this.x as number
@@ -753,7 +757,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         const year = date.getUTCFullYear()
         const month = date.getUTCMonth()
         // For price data with monthly granularity, show month; for financials show FY
-        const hasMonthlyPrice = points.some((p) => {
+        const hasMonthlyPrice = points.some((p: { series: { name: string } }) => {
           const metricInfo = filteredData.find((d) => d.label === p.series.name)
           return metricInfo && isPriceMetric(metricInfo.metric) && metricInfo.data.length > 20
         })
@@ -765,7 +769,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             : `FY ${year}`
         let html = `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>`
 
-        points.forEach((point) => {
+        points.forEach((point: { series: { name: string; color: string }; y: number | null; color: string }) => {
           const metricInfo = filteredData.find((d) => d.label === point.series.name)
           const unit = metricInfo?.unit
           const val = point.y ?? 0
@@ -1019,19 +1023,19 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
             {showExportMenu && (
               <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PNG
                 </button>
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download JPEG
                 </button>
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PDF

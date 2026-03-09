@@ -165,7 +165,7 @@ export default async function StockPage({ params }: PageProps) {
                 </a>
               </div>
             )}
-            <StockPriceChart symbol={normalizedSymbol} initialRange="365d" />
+            <StockPriceChart symbol={normalizedSymbol} />
           </div>
         </div>
       </section>

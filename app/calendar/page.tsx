@@ -15,7 +15,7 @@ export default async function CalendarPage() {
     getFuturesQuotes(),
   ])
 
-  const economicEvents = 'events' in economicResult ? economicResult.events : []
+  const economicEvents = 'events' in economicResult ? economicResult.events ?? [] : []
   const earnings = earningsResult?.earnings || []
   const earningsTotalCount = earningsResult?.totalCount || 0
 

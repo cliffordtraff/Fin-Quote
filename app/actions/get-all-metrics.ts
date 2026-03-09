@@ -151,7 +151,7 @@ export async function getAllMetrics(symbol: string): Promise<AllMetrics> {
     }
 
     // Group metrics by year
-    const metricsByYear = new Map<number, Map<string, number>>();
+    const metricsByYear = new Map<number, Map<string, number | null>>();
     metricsData.forEach((row) => {
       if (!metricsByYear.has(row.year)) {
         metricsByYear.set(row.year, new Map());

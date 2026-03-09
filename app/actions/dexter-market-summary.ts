@@ -169,7 +169,7 @@ Write a professional, well-structured market briefing (3-4 paragraphs) that synt
 
     return {
       summary: result.answer,
-      toolsUsed: [...new Set(toolsUsed)], // dedupe
+      toolsUsed: [...new Set(toolsUsed)] as string[], // dedupe
       iterations: result.iterations,
     }
   } catch (error) {

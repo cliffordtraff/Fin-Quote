@@ -200,7 +200,7 @@ async function calculateTTMForMetric(
       is_ttm: true,
       ttm_quarters_used: ttmResult.quarters_used,
       ttm_calculation_type: ttmResult.calculation_type
-    }] : null
+    }] : []
 
     return {
       data: ttmData,

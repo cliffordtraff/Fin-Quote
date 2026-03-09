@@ -17,7 +17,7 @@ import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
 import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsWithYTD } from '@/app/actions/forex-bonds'
-import { getTopInsiderTrades } from '@/app/actions/insider-trading'
+import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
 import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-indices'
 import { getCachedMarketSummary } from '@/app/actions/market-summary'
 import { getCachedMarketTrendsBullets } from '@/app/actions/market-trends-responses'
@@ -71,11 +71,11 @@ export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
     losers: losersResult,
     stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
     vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
-    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive,
-    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending,
-    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers,
-    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers,
-    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices,
+    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive || [],
+    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending || [],
+    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers || [],
+    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers || [],
+    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices || [],
   }
 }
 
@@ -107,22 +107,22 @@ export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),
     getForexBondsWithYTD(),
-    getTopInsiderTrades(28, 6),
+    getLargestInsiderTrades(4, 6),
   ])
 
   return {
     esFutures: 'error' in esFuturesResult ? null : esFuturesResult as MarketData,
     futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureDataWithSparkline[]),
     futuresWithHistory: 'error' in futuresWithHistoryResult ? [] : (futuresWithHistoryResult.futuresWithHistory as FutureMarketData[]),
-    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors,
-    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events,
+    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors || [],
+    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events || [],
     marketNews: newsResult || [],
-    earnings: earningsResult || [],
-    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines,
-    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
-    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
-    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
-    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
+    earnings: earningsResult?.earnings || [],
+    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines || [],
+    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines || [],
+    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline ?? null,
+    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline ?? null,
+    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds || [],
     largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
   }
 }
@@ -193,7 +193,7 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     getStockSparkline('META'),
     getStockSparkline('XLB'),  // Materials sector ETF
     getForexBondsWithYTD(),
-    getTopInsiderTrades(28, 6), // Last 28 days, top 6 trades
+    getLargestInsiderTrades(4, 6), // Last 28 days, top 6 trades
     getGlobalIndexQuotes(),
     getFuturesQuotes(),
     getCachedMarketSummary(),
@@ -212,22 +212,22 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     gainers: gainersResult,
     losers: losersResult,
     stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
-    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors,
-    vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
-    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events,
+    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors || [],
+    vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix ?? null,
+    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events || [],
     marketNews: newsResult || [],
-    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices,
-    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive,
-    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending,
-    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers,
-    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers,
+    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices || [],
+    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive || [],
+    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending || [],
+    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers || [],
+    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers || [],
     earnings: earningsResult?.earnings || [],
     earningsTotalCount: earningsResult?.totalCount || 0,
-    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines,
-    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines,
-    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline,
-    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline,
-    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds,
+    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines || [],
+    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines || [],
+    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline ?? null,
+    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline ?? null,
+    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds || [],
     largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
     globalIndexQuotes: globalIndexQuotesResult || [],
     globalFuturesQuotes: globalFuturesQuotesResult || [],

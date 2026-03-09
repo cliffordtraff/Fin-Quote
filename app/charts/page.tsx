@@ -5,7 +5,7 @@ import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
 import StockSelector, { type StockSelectorHandle } from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
-import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType } from '@/app/actions/chart-metrics'
+import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
 import { getChartPriceData, getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
@@ -94,7 +94,7 @@ export default function ChartsPage() {
   const COLOR_PALETTE = isDark ? COLOR_PALETTE_DARK : COLOR_PALETTE_LIGHT
   const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
 
-  const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; definition: string; stock?: string }[]>([])
+  const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; statement: StatementType; definition: string; segmentCategory?: SegmentCategory; stock?: string }[]>([])
   // Available stocks from database
   const [availableStocks, setAvailableStocks] = useState<Stock[]>([])
   // Stocks added to the page (from dropdown)
@@ -378,15 +378,16 @@ export default function ChartsPage() {
 
       // Set up year bounds - either from financial data or use defaults for price-only
       if (combinedBounds) {
+        const bounds = combinedBounds as { min: number; max: number }
         setYearBounds((prev) => {
-          if (prev && prev.min === combinedBounds!.min && prev.max === combinedBounds!.max) return prev
-          return combinedBounds
+          if (prev && prev.min === bounds.min && prev.max === bounds.max) return prev
+          return bounds
         })
         // Set initial range to DEFAULT_MIN_YEAR-present on first load
         if (!initialRangeSet) {
-          const effectiveMin = Math.max(combinedBounds.min, DEFAULT_MIN_YEAR)
+          const effectiveMin = Math.max(bounds.min, DEFAULT_MIN_YEAR)
           setMinYear(effectiveMin)
-          setMaxYear(combinedBounds.max)
+          setMaxYear(bounds.max)
           setInitialRangeSet(true)
         }
       } else if (showStockPrice && visibleMetrics.length === 0 && !initialRangeSet) {

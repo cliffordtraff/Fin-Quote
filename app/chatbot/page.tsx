@@ -97,7 +97,7 @@ const getFilteredYearRange = (question: string, availableData: any[]): any[] => 
 
   // If no years mentioned, default to last 5 years
   if (mentionedYears.length === 0) {
-    const last5Years = []
+    const last5Years: number[] = []
     for (let i = 0; i < 5; i++) {
       last5Years.push(currentYear - i)
     }
@@ -150,7 +150,10 @@ const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): st
     return cleanedAnswer
   }
 
-  const { data, categories, yAxisLabel, title } = chartConfig
+  const { categories, yAxisLabel, title } = chartConfig
+  // Only narrate simple number[] data (column/line charts), not time-series or candlestick
+  if (!chartConfig.data.every((d): d is number => typeof d === 'number')) return cleanedAnswer
+  const data = chartConfig.data as number[]
   if (data.length === 0) return cleanedAnswer
 
   const metricMatch = title?.match(/AAPL\s+(.+?)\s*\(/i)
@@ -1125,7 +1128,7 @@ function AskPageContent() {
             </button>
             <ThemeToggle />
             {user ? (
-              <UserMenu user={user} />
+              <UserMenu />
             ) : (
               <button
                 onClick={() => setShowAuthModal(true)}

@@ -201,8 +201,8 @@ export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
     // Transform data into separate statement arrays
     const incomeStatement: FinancialYear[] = financialsData.map((row) => {
       const revenue = row.revenue || 0;
-      const costOfRevenue = row.cost_of_revenue || 0;
       const grossProfit = row.gross_profit || 0;
+      const costOfRevenue = revenue - grossProfit;
       const operatingIncome = row.operating_income || 0;
       const netIncome = row.net_income || 0;
       const yearMetrics = metricsMap[row.year] || {};

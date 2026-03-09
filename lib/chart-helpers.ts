@@ -59,7 +59,7 @@ function getFilteredYearRange(question: string, availableData: any[]): any[] {
 
   // If no years mentioned, default to last 5 years
   if (mentionedYears.length === 0) {
-    const last5Years = []
+    const last5Years: number[] = []
     for (let i = 0; i < 5; i++) {
       last5Years.push(currentYear - i)
     }

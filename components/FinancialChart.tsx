@@ -248,7 +248,7 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       style: {
         fontFamily: 'inherit', // Use Tailwind font
       },
-      zoomType: isTimeSeries ? 'x' : undefined, // Enable zoom for time-series charts
+      zooming: isTimeSeries ? { type: 'x' } : undefined, // Enable zoom for time-series charts
     },
     title: {
       text: config.title,
@@ -405,7 +405,8 @@ export default function FinancialChart({ config }: FinancialChartProps) {
       {
         type: config.type, // Dynamic: column, line, or candlestick
         name: config.type === 'candlestick' ? displaySymbol : config.yAxisLabel,
-        data: config.data,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: config.data as any,
         // Candlestick-specific colors
         ...(config.type === 'candlestick' ? {
           color: '#ef4444', // Red for down candles (Tailwind red-500)

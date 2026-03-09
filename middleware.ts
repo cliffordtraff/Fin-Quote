@@ -71,13 +71,6 @@ export async function middleware(req: NextRequest) {
   //   return NextResponse.redirect(url)
   // }
 
-  // Legacy route: /market3 → /market
-  if (pathname === '/market3' || pathname === '/market3/') {
-    const url = req.nextUrl.clone()
-    url.pathname = '/market'
-    return NextResponse.redirect(url)
-  }
-
   // Consolidate: /company/:symbol → /stock/:symbol
   if (pathname.startsWith('/company/')) {
     const sym = pathname.split('/')[2]
@@ -93,10 +86,6 @@ export async function middleware(req: NextRequest) {
   // Exclude known top-level routes.
   const topLevelReserved = new Set([
     '',
-    'market',
-    'market2',
-    'market-sunday',
-    'market-dexter',
     'dashboard',
     'stock',
     'company',

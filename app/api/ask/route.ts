@@ -291,7 +291,7 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            const priceParams: PriceParams = to ? { from, to } : { from }
+            const priceParams: PriceParams = { symbol: 'AAPL', from, ...(to ? { to } : {}) }
             const chartLabel = `${from} to ${to || 'today'}`
 
             const toolResult = await getAaplPrices(priceParams)
@@ -385,7 +385,7 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            const toolResult = await getRecentFilings({ limit })
+            const toolResult = await getRecentFilings({ ticker: 'AAPL', limit })
 
             if (toolResult.error || !toolResult.data) {
               flow.failStep('tool_execution', {
@@ -520,7 +520,7 @@ export async function POST(req: NextRequest) {
               const category = firstRow.metric_category
               const metricName = firstRow.metric_name
 
-              if (shouldGenerateChart(category, metricName)) {
+              if (category && shouldGenerateChart(category, metricName)) {
                 flow.startStep({
                   step: 'chart_generation',
                   group: 'answering',

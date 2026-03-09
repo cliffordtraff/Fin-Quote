@@ -244,7 +244,7 @@ export default function SegmentChart({
             textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
           },
           formatter: function() {
-            const val = this.point.y ?? 0
+            const val = this.y ?? 0
             return val >= 10 ? `$${val.toFixed(0)}B` : `$${val.toFixed(1)}B`
           },
         },
@@ -393,25 +393,25 @@ export default function SegmentChart({
             {showExportMenu && (
               <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'image/png' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PNG
                 </button>
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'image/jpeg' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download JPEG
                 </button>
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'application/pdf' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download PDF
                 </button>
                 <button
-                  onClick={() => { chartRef.current?.exportChart({ type: 'image/svg+xml' }, {}); setShowExportMenu(false) }}
+                  onClick={() => { (chartRef.current as any)?.exportChart({ type: 'image/svg+xml' }, {}); setShowExportMenu(false) }}
                   className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
                 >
                   Download SVG

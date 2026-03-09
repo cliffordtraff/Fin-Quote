@@ -578,7 +578,7 @@ export default function ConceptChartPage() {
   }, [distributionData, axisRange])
 
   // Handle KDE slice hover
-  const handleKDESliceHover = (event: React.MouseEvent<SVGRectElement>, sliceIndex: number) => {
+  const handleKDESliceHover = (event: React.MouseEvent<SVGElement>, sliceIndex: number) => {
     const slice = kdeSliceBins[sliceIndex]
     if (!slice) return
 

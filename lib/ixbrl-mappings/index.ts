@@ -8,8 +8,9 @@
  * - Fiscal year end month for period calculations
  */
 
-export * from './aapl'
-export * from './googl'
+export type { SegmentType, SegmentMemberMapping, MetricCategory, MetricMapping, CompanyMappings } from './aapl'
+export { AAPL_MAPPINGS } from './aapl'
+export { GOOGL_MAPPINGS } from './googl'
 
 import { AAPL_MAPPINGS, type CompanyMappings } from './aapl'
 import { GOOGL_MAPPINGS } from './googl'

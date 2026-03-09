@@ -386,7 +386,7 @@ export default function EvaluationsPage() {
                   claudeAnalysis={claudeAnalyses[question.question_id]}
                   onUpdate={updateAnnotation}
                   onDone={handleDone}
-                  ref={(el) => (questionRefs.current[question.question_id] = el)}
+                  ref={(el) => { questionRefs.current[question.question_id] = el }}
                   isFirst={index === 0}
                 />
               ))}

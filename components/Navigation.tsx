@@ -2,17 +2,63 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import UserMenu from './UserMenu'
 import StockSearch from './StockSearch'
 import TimezoneSelector from './TimezoneSelector'
 
+interface NavLink {
+  href: string
+  label: string
+  match?: string
+  external?: boolean
+  icon?: React.ReactNode
+}
+
 export default function Navigation() {
   const pathname = usePathname()
 
-  // Extract current stock symbol from path if on a stock page
   const stockMatch = pathname?.match(/^\/stock\/([^/]+)/)
   const currentSymbol = stockMatch ? stockMatch[1].toUpperCase() : null
+
+  const navLinks: NavLink[] = [
+    { href: '/dashboard', label: 'Dashboard' },
+    { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
+    { href: '/charts', label: 'Charting' },
+    { href: '/concept', label: 'Market Internals' },
+    { href: '/calendar', label: 'Calendar' },
+    { href: '/insiders', label: 'Insiders' },
+  ]
+
+  if (process.env.NEXT_PUBLIC_CHARTING_URL) {
+    navLinks.splice(3, 0, {
+      href: `${process.env.NEXT_PUBLIC_CHARTING_URL}/tos/${currentSymbol || 'AAPL'}`,
+      label: 'Workspace',
+      external: true,
+      icon: (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      ),
+    })
+  }
+
+  if (process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true') {
+    navLinks.push({ href: '/chatbot', label: 'Chat' })
+  }
+
+  const linkClass = (link: NavLink) => {
+    const isActive = link.match
+      ? pathname?.startsWith(link.match)
+      : pathname === link.href
+
+    return `px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+      isActive
+        ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
+        : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
+    }`
+  }
 
   return (
     <nav className="bg-white dark:bg-gray-900 border-b-2 border-sage-500">
@@ -20,15 +66,7 @@ export default function Navigation() {
       <div className="w-full border-b border-gray-100 dark:border-gray-800">
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-sage-500 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 3v18h18" />
-                  <path d="M18 9l-5 5-4-4-3 3" />
-                </svg>
-              </div>
-              <span className="text-lg font-medium text-gray-900 dark:text-white">The Intraday</span>
-            </Link>
+            <Logo size="md" />
             <StockSearch />
           </div>
         </div>
@@ -37,158 +75,29 @@ export default function Navigation() {
       {/* Navigation Tabs Row */}
       <div className="w-full bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
-          {/* Navigation Tabs */}
           <div className="flex items-center">
             <div className="flex items-center space-x-1">
-              {process.env.NEXT_PUBLIC_ENABLE_MARKET === 'true' && (
-                <Link
-                  href="/"
-                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                    pathname === '/'
-                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  Market Test
-                </Link>
-              )}
-
-              {process.env.NEXT_PUBLIC_ENABLE_MARKET2 === 'true' && (
-                <Link
-                  href="/market2"
-                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                    pathname === '/market2'
-                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  Market 2
-                </Link>
-              )}
-
-              {process.env.NEXT_PUBLIC_ENABLE_MARKET3 === 'true' && (
-                <Link
-                  href="/market"
-                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                    pathname === '/market'
-                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  Market
-                </Link>
-              )}
-
-              <Link
-                href="/dashboard"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/dashboard'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Dashboard
-              </Link>
-
-
-              {process.env.NEXT_PUBLIC_ENABLE_DEXTER === 'true' && (
-                <Link
-                  href="/market-dexter"
-                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                    pathname === '/market-dexter'
-                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  Market Dexter
-                </Link>
-              )}
-
-              <Link
-                href={currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL'}
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname?.startsWith('/stock')
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Financials
-              </Link>
-
-              <Link
-                href="/charts"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/charts'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Charting
-              </Link>
-
-              {process.env.NEXT_PUBLIC_CHARTING_URL && (
-                <a
-                  href={`${process.env.NEXT_PUBLIC_CHARTING_URL}/tos/${currentSymbol || 'AAPL'}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 text-xs font-medium rounded-lg transition-colors text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800 inline-flex items-center gap-1"
-                >
-                  Workspace
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )}
-
-              <Link
-                href="/concept"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/concept'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Market Internals
-              </Link>
-
-              <Link
-                href="/calendar"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/calendar'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Calendar
-              </Link>
-
-              <Link
-                href="/insiders"
-                className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  pathname === '/insiders'
-                    ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                }`}
-              >
-                Insiders
-              </Link>
-
-              {process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true' && (
-                <Link
-                  href="/chatbot"
-                  className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                    pathname === '/chatbot'
-                      ? 'bg-sage-500/20 text-sage-700 dark:bg-sage-500/30 dark:text-sage-300'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-sage-500/10 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  Chat
-                </Link>
+              {navLinks.map((link) =>
+                link.external ? (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${linkClass(link)} inline-flex items-center gap-1`}
+                  >
+                    {link.label}
+                    {link.icon}
+                  </a>
+                ) : (
+                  <Link key={link.href} href={link.href} className={linkClass(link)}>
+                    {link.label}
+                  </Link>
+                )
               )}
             </div>
           </div>
 
-          {/* Right side: Timezone, Theme toggle, and User menu */}
           <div className="flex items-center space-x-2">
             <TimezoneSelector />
             <ThemeToggle />

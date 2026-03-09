@@ -72,17 +72,15 @@ npm run generate:catalog            # Regenerate metrics catalog
 The middleware handles several routing patterns:
 - **Auth protection**: `/profile` and `/admin/*` require Supabase session; redirects to `/auth` if unauthenticated
 - **Ticker shortcuts**: Single-segment paths that look like tickers redirect to `/stock/TICKER` (e.g., `/AAPL` → `/stock/AAPL`)
-- **Legacy redirects**: `/market3` → `/market`, `/company/AAPL` → `/stock/AAPL`
-- **Reserved top-level routes**: `market`, `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile` (won't be treated as tickers)
+- **Legacy redirects**: `/company/AAPL` → `/stock/AAPL`
+- **Reserved top-level routes**: `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile` (won't be treated as tickers)
 
 ### Key Routes
 
 | Route | Nav Component | Rendering | Purpose |
 |-------|---------------|-----------|---------|
 | `/` | LandingNav | Static | Landing/marketing page |
-| `/dashboard` | AppNavigation | ISR (60s) | Main market dashboard (sage/cream theme) |
-| `/dashboard2` | Navigation | ISR (60s) | Experimental card-based dashboard layout |
-| `/market-sunday` | Navigation | Dynamic | Dashboard with force-dynamic rendering |
+| `/dashboard` | Navigation | ISR (60s) | Main market dashboard (sage/cream theme) |
 | `/stock/[symbol]` | Navigation | Dynamic | Individual stock pages |
 | `/charts` | Navigation | - | Multi-stock financial charts |
 | `/multi-charts` | Navigation | - | Alternative multi-chart layout |
@@ -92,10 +90,9 @@ The middleware handles several routing patterns:
 | `/chatbot` | Sidebar | - | AI chatbot (feature-flagged) |
 | `/auth` | - | - | Login/signup (Google OAuth via Supabase) |
 
-### Two Navigation Components
+### Navigation Components
 
-- **`Navigation.tsx`** — Used by most app pages. Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
-- **`AppNavigation.tsx`** — Used by `/dashboard`. Similar structure but styled for the sage/cream theme.
+- **`Navigation.tsx`** — Used by all app pages (dashboard, stock, charts, calendar, insiders). Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
 - **`LandingNav`** (`components/landing/LandingNav.tsx`) — Marketing page nav with sign-in/sign-up CTAs.
 
 ### Theme System
@@ -109,7 +106,7 @@ Custom color tokens in `tailwind.config.ts`, dark mode via `class` strategy:
 ### Rendering Strategies
 
 - **ISR (60s)**: `/dashboard` — `export const revalidate = 60` — Server-fetches market data, regenerates every 60s
-- **Dynamic**: `/market-sunday`, stock pages — `export const dynamic = 'force-dynamic'` — Fresh data on every request
+- **Dynamic**: Stock pages — `export const dynamic = 'force-dynamic'` — Fresh data on every request
 - **Static**: Landing page, pricing — No data fetching at build time
 
 ---
@@ -191,13 +188,11 @@ Defined in `lib/tools.ts` (TOOL_MENU):
 ### Market Dashboard
 | Path | Purpose |
 |------|---------|
-| `app/dashboard/page.tsx` | Main dashboard (AppNavigation + MarketDashboardSunday, ISR 60s) |
-| `app/dashboard2/page.tsx` | Experimental dashboard (Navigation + Dashboard2Content, card layout) |
+| `app/dashboard/page.tsx` | Main dashboard (Navigation + MarketDashboardSunday, ISR 60s) |
 | `components/MarketDashboardSunday.tsx` | Primary dashboard component with all market widgets |
-| `components/Dashboard2Content.tsx` | Experimental card-based dashboard layout |
 | `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
 | `components/SectorHeatmap.tsx` | Sector performance visualization |
-| `lib/fetch-market-data.ts` | Server-side market data fetching (shared by dashboard variants) |
+| `lib/fetch-market-data.ts` | Server-side market data fetching |
 
 ### Chatbot (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
 | Path | Purpose |
@@ -252,8 +247,6 @@ FMP_API_KEY=your-fmp-key
 | Flag | Default | Description |
 |------|---------|-------------|
 | `NEXT_PUBLIC_ENABLE_CHAT` | `false` | Enables the AI chatbot feature (Chat tab in navigation + `/chatbot` route) |
-| `NEXT_PUBLIC_ENABLE_MARKET` | `false` | Enables the Market tab in navigation |
-| `NEXT_PUBLIC_ENABLE_MARKET2` | `false` | Enables the Market 2 tab in navigation |
 
 Feature flags control navigation tab visibility only. Backend code (server actions, tools, database tables) remains in place when disabled. Set to `true` in `.env.local` and restart the dev server.
 
