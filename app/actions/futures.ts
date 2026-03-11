@@ -1,5 +1,7 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+
 interface FutureData {
   symbol: string
   name: string
@@ -32,12 +34,6 @@ const FUTURES_SYMBOLS = [
 ]
 
 export async function getFuturesData() {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   // Futures symbols with their display names
   const futuresSymbols = [
     { symbol: 'CL=F', name: 'Crude Oil' },
@@ -50,39 +46,26 @@ export async function getFuturesData() {
   ]
 
   try {
-    // Fetch all futures data in parallel
-    const futuresData = await Promise.all(
-      futuresSymbols.map(async ({ symbol, name }) => {
-        const url = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`
-        const response = await fetch(url, {
-          next: { revalidate: 60 } // Cache for 1 minute
-        })
+    const provider = getProvider()
+    const symbols = futuresSymbols.map(f => f.symbol)
+    const quotes = await provider.getQuotes(symbols)
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${name}`)
+    // Map quotes back to our format with display names
+    const futuresData: FutureData[] = futuresSymbols
+      .map(({ symbol, name }) => {
+        const quote = quotes.find(q => q.symbol === symbol)
+        if (!quote) return null
+        return {
+          symbol,
+          name,
+          price: quote.price,
+          change: quote.change,
+          changesPercentage: quote.changesPercentage
         }
-
-        const data = await response.json()
-
-        if (Array.isArray(data) && data.length > 0) {
-          const quote = data[0]
-          return {
-            symbol,
-            name,
-            price: quote.price,
-            change: quote.change,
-            changesPercentage: quote.changesPercentage
-          }
-        }
-
-        return null
       })
-    )
+      .filter((f): f is FutureData => f !== null)
 
-    // Filter out any null results
-    const validFutures = futuresData.filter((f): f is FutureData => f !== null)
-
-    return { futures: validFutures }
+    return { futures: futuresData }
   } catch (error) {
     console.error('Error fetching futures data:', error)
     return { error: 'Failed to load futures data' }
@@ -93,46 +76,32 @@ export async function getFuturesData() {
  * Fetch futures data with historical price data for charting
  */
 export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
+    const provider = getProvider()
+    const symbols = FUTURES_SYMBOLS.map(f => f.symbol)
+    const quotes = await provider.getQuotes(symbols)
+
+    // Calculate a from-date ~60 days back to cover 30 trading days
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const fromDate = sixtyDaysAgo.toISOString().split('T')[0]
+
     const futuresData = await Promise.all(
       FUTURES_SYMBOLS.map(async ({ symbol, name }) => {
-        // Fetch quote data
-        const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`
-        const quoteResponse = await fetch(quoteUrl, {
-          next: { revalidate: 60 }
-        })
+        const quote = quotes.find(q => q.symbol === symbol)
+        if (!quote) return null
 
-        if (!quoteResponse.ok) {
-          console.error(`Failed to fetch quote for ${symbol}`)
-          return null
-        }
+        // Fetch daily historical data via provider
+        const candles = await provider.getHistoricalDaily(symbol, fromDate)
 
-        const quoteData = await quoteResponse.json()
-        const quote = quoteData[0]
-
-        if (!quote) {
-          return null
-        }
-
-        // Fetch daily historical data
-        const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}`
-        const historyResponse = await fetch(historyUrl, {
-          next: { revalidate: 3600 } // Cache for 1 hour
-        })
-
-        let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
-
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json()
-          // Get last 30 trading days, reverse for chronological order
-          priceHistory = historyData?.historical?.slice(0, 30).reverse() || []
-        }
+        // Candles come newest-first; take 30, reverse for chronological order
+        const priceHistory = candles.slice(0, 30).reverse().map(c => ({
+          date: c.date,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close
+        }))
 
         const date = priceHistory.length > 0
           ? priceHistory[priceHistory.length - 1].date
@@ -163,12 +132,6 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
  * Fetch futures data with YTD sparkline data
  */
 export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   // Get start of year date
   const currentYear = new Date().getFullYear()
   const yearStart = `${currentYear}-01-01`
@@ -184,51 +147,30 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
   ]
 
   try {
+    const provider = getProvider()
+    const symbols = futuresSymbols.map(f => f.symbol)
+    const quotes = await provider.getQuotes(symbols)
+
     const futuresData = await Promise.all(
       futuresSymbols.map(async ({ symbol, name }) => {
-        // Fetch quote data
-        const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`
-        const quoteResponse = await fetch(quoteUrl, {
-          next: { revalidate: 60 }
-        })
+        const quote = quotes.find(q => q.symbol === symbol)
+        if (!quote) return null
 
-        if (!quoteResponse.ok) {
-          console.error(`Failed to fetch quote for ${symbol}`)
-          return null
-        }
+        // Fetch YTD historical data via provider
+        const candles = await provider.getHistoricalDaily(symbol, yearStart)
 
-        const quoteData = await quoteResponse.json()
-        const quote = quoteData[0]
+        // Candles come newest-first; reverse for chronological order
+        const ytdPriceHistory = candles
+          .slice()
+          .reverse()
+          .map(c => ({ date: c.date, close: c.close }))
 
-        if (!quote) {
-          return null
-        }
-
-        // Fetch YTD historical data
-        const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?from=${yearStart}&apikey=${apiKey}`
-        const historyResponse = await fetch(historyUrl, {
-          next: { revalidate: 3600 } // Cache for 1 hour
-        })
-
-        let ytdPriceHistory: Array<{ date: string; close: number }> = []
+        // Calculate YTD change percentage
         let ytdChangePercent = 0
-
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json()
-          const historical = historyData?.historical || []
-
-          // Reverse to get chronological order and map to just date/close
-          ytdPriceHistory = historical
-            .slice()
-            .reverse()
-            .map((d: { date: string; close: number }) => ({ date: d.date, close: d.close }))
-
-          // Calculate YTD change percentage
-          if (ytdPriceHistory.length >= 2) {
-            const firstClose = ytdPriceHistory[0].close
-            const lastClose = ytdPriceHistory[ytdPriceHistory.length - 1].close
-            ytdChangePercent = ((lastClose - firstClose) / firstClose) * 100
-          }
+        if (ytdPriceHistory.length >= 2) {
+          const firstClose = ytdPriceHistory[0].close
+          const lastClose = ytdPriceHistory[ytdPriceHistory.length - 1].close
+          ytdChangePercent = ((lastClose - firstClose) / firstClose) * 100
         }
 
         return {

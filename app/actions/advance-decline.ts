@@ -2,6 +2,7 @@
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { getProvider } from '@/lib/providers'
 
 export interface AdvanceDeclineSnapshot {
   timestamp: string // ISO timestamp
@@ -42,12 +43,6 @@ async function getSP500Constituents(): Promise<SP500Constituent[]> {
  * Returns the current count of advancing vs declining stocks
  */
 export async function getAdvanceDeclineSnapshot(): Promise<{ data: AdvanceDeclineSnapshot } | { error: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
     const constituents = await getSP500Constituents()
 
@@ -63,29 +58,8 @@ export async function getAdvanceDeclineSnapshot(): Promise<{ data: AdvanceDeclin
       return c.symbol
     })
 
-    // Fetch quotes in batches of 100
-    const chunkSize = 100
-    const allQuotes: any[] = []
-
-    for (let i = 0; i < symbols.length; i += chunkSize) {
-      const chunk = symbols.slice(i, i + chunkSize)
-      const symbolsParam = chunk.join(',')
-      const url = `https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}`
-
-      const response = await fetch(url, {
-        cache: 'no-store' // Always fetch fresh data for snapshots
-      })
-
-      if (!response.ok) {
-        console.error(`FMP batch quote error for chunk ${i}: ${response.status}`)
-        continue
-      }
-
-      const data = await response.json()
-      if (Array.isArray(data)) {
-        allQuotes.push(...data)
-      }
-    }
+    const provider = getProvider()
+    const allQuotes = await provider.getQuotes(symbols)
 
     if (allQuotes.length === 0) {
       return { error: 'Could not fetch stock quotes' }

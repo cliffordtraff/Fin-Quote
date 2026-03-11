@@ -1,5 +1,8 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+import type { CandleTimespan } from '@/lib/providers'
+
 export type PriceRange = '7d' | '30d' | '90d' | '365d' | 'ytd' | '3y' | '5y' | '10y' | '20y' | 'max'
 
 // Timeframe represents the candle interval
@@ -11,22 +14,6 @@ export type PriceParams = {
   to?: string
   range?: PriceRange
   timeframe?: Timeframe // Candle timeframe (1h, 4h, 1d, 1w, 1m)
-}
-
-// Map timeframe to FMP API endpoint path
-function getEndpointForTimeframe(timeframe: Timeframe): string {
-  switch (timeframe) {
-    case '1h':
-      return 'historical-chart/1hour'
-    case '4h':
-      return 'historical-chart/4hour'
-    case '1d':
-    case '1w':
-    case '1m':
-      return 'historical-price-full' // Daily data (we aggregate for weekly/monthly)
-    default:
-      return 'historical-price-full'
-  }
 }
 
 // Get appropriate date range for each timeframe
@@ -233,13 +220,8 @@ export async function getPrices(params: PriceParams): Promise<{
   }
 
   try {
-    const apiKey = process.env.FMP_API_KEY
-    if (!apiKey) {
-      console.error('FMP_API_KEY not found in environment')
-      return { data: null, error: 'API configuration error' }
-    }
+    const provider = getProvider()
 
-    // Build API URL with date parameters
     const fromDate = from
     const toDate = to || new Date().toISOString().split('T')[0]
 
@@ -247,81 +229,39 @@ export async function getPrices(params: PriceParams): Promise<{
     const today = new Date().toISOString().split('T')[0]
     const isAskingForTodayOnly = fromDate === today && toDate === today
 
-    let url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&from=${fromDate}&to=${toDate}`
-
     // Only use fallback if asking for today's data specifically (not for ranges that include today)
+    let actualFrom = fromDate
+    let actualTo: string | undefined = toDate
     if (isAskingForTodayOnly) {
       // Get last 5 trading days to ensure we have data
       const fiveDaysAgo = new Date()
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5)
-      const fallbackFrom = fiveDaysAgo.toISOString().split('T')[0]
-      url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${apiKey}&from=${fallbackFrom}`
+      actualFrom = fiveDaysAgo.toISOString().split('T')[0]
+      actualTo = undefined // No upper bound
     }
 
-    const response = await fetch(url, {
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    })
+    const candles = await provider.getHistoricalDaily(symbol, actualFrom, actualTo)
 
-    if (!response.ok) {
-      console.error('FMP API error:', response.status, response.statusText)
-      return {
-        data: null,
-        error: `API request failed: ${response.status}`,
-      }
+    if (candles.length === 0) {
+      return { data: null, error: 'No price data available for the requested range' }
     }
 
-    const json = await response.json()
-
-    // FMP returns: { symbol: "AAPL", historical: [{date, open, high, low, close, volume}, ...] }
-    if (!json.historical || !Array.isArray(json.historical)) {
-      console.error('Unexpected FMP response format:', json)
-
-      // Check if this is an API error message
-      if (json.error || json['Error Message']) {
-        const errorMsg = json.error || json['Error Message']
-        return { data: null, error: `API error: ${errorMsg}` }
-      }
-
-      // If it's an empty response, it might be because the date is too recent or market is closed
-      if (Object.keys(json).length === 0 || (json.historical && json.historical.length === 0)) {
-        return {
-          data: null,
-          error: 'No price data available for this date. The market may be closed or data may not be available yet for today.'
-        }
-      }
-
-      return { data: null, error: 'Unexpected API response format' }
-    }
-
-    // Map and sort data (API already filtered by date parameters)
-    // Filter out any records with null/invalid OHLC values (including NaN and Infinity)
-    let filteredData: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> = json.historical
-      .filter((item: any) =>
-        item.date &&
-        item.open != null && Number.isFinite(item.open) &&
-        item.high != null && Number.isFinite(item.high) &&
-        item.low != null && Number.isFinite(item.low) &&
-        item.close != null && Number.isFinite(item.close) &&
-        item.volume != null && Number.isFinite(item.volume)
-      )
-      .map((item: any) => ({
-        date: item.date,
-        open: Number(item.open),
-        high: Number(item.high),
-        low: Number(item.low),
-        close: Number(item.close),
-        volume: Number(item.volume),
+    // Map ProviderCandle to output format and sort newest-first
+    let filteredData = candles
+      .map(c => ({
+        date: c.date,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
       }))
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Most recent first
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     // Only filter to single day if explicitly asking for today's data only
     if (isAskingForTodayOnly && filteredData.length > 0) {
       console.log(`Asked for today only (${today}), returning most recent available: ${filteredData[0].date}`)
       filteredData = [filteredData[0]]
-    }
-
-    if (filteredData.length === 0) {
-      return { data: null, error: 'No price data available for the requested range' }
     }
 
     return { data: filteredData, error: null }
@@ -353,94 +293,41 @@ export async function getPricesByTimeframe(params: {
   const { symbol, timeframe } = params
 
   try {
-    const apiKey = process.env.FMP_API_KEY
-    if (!apiKey) {
-      console.error('FMP_API_KEY not found in environment')
-      return { data: null, error: 'API configuration error' }
-    }
-
-    const endpoint = getEndpointForTimeframe(timeframe)
+    const provider = getProvider()
     const { from, to } = getDefaultDateRangeForTimeframe(timeframe)
 
-    let url: string
-    let isIntradayEndpoint = timeframe === '1h' || timeframe === '4h'
+    const isIntradayEndpoint = timeframe === '1h' || timeframe === '4h'
 
+    let candles
     if (isIntradayEndpoint) {
-      // Intraday endpoints have a different format
-      url = `https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&from=${from}&to=${to}`
+      const multiplier = timeframe === '1h' ? 1 : 4
+      const timespan: CandleTimespan = 'hour'
+      candles = await provider.getIntraday(symbol, multiplier, timespan, from, to)
     } else {
-      // Daily endpoint
-      url = `https://financialmodelingprep.com/api/v3/${endpoint}/${symbol}?apikey=${apiKey}&from=${from}&to=${to}`
+      candles = await provider.getHistoricalDaily(symbol, from, to)
     }
 
-    const response = await fetch(url, {
-      next: { revalidate: timeframe === '1h' ? 300 : 3600 }, // Cache 5 min for hourly, 1 hour otherwise
-    })
-
-    if (!response.ok) {
-      console.error('FMP API error:', response.status, response.statusText)
-      return {
-        data: null,
-        error: `API request failed: ${response.status}`,
-      }
+    if (candles.length === 0) {
+      return { data: null, error: 'No price data available for the requested timeframe' }
     }
 
-    const json = await response.json()
-
-    // Handle different response formats
-    let rawData: any[]
-
-    if (isIntradayEndpoint) {
-      // Intraday endpoints return array directly
-      if (!Array.isArray(json)) {
-        if (json.error || json['Error Message']) {
-          return { data: null, error: `API error: ${json.error || json['Error Message']}` }
-        }
-        return { data: null, error: 'Unexpected API response format for intraday data' }
-      }
-      rawData = json
-    } else {
-      // Daily endpoint returns { symbol, historical: [...] }
-      if (!json.historical || !Array.isArray(json.historical)) {
-        if (json.error || json['Error Message']) {
-          return { data: null, error: `API error: ${json.error || json['Error Message']}` }
-        }
-        return { data: null, error: 'Unexpected API response format' }
-      }
-      rawData = json.historical
-    }
-
-    // Filter and map data
-    let filteredData: PriceDataPoint[] = rawData
-      .filter((item: any) =>
-        item.date &&
-        item.open != null && Number.isFinite(item.open) &&
-        item.high != null && Number.isFinite(item.high) &&
-        item.low != null && Number.isFinite(item.low) &&
-        item.close != null && Number.isFinite(item.close) &&
-        item.volume != null && Number.isFinite(item.volume)
-      )
-      .map((item: any) => ({
-        date: item.date,
-        open: Number(item.open),
-        high: Number(item.high),
-        low: Number(item.low),
-        close: Number(item.close),
-        volume: Number(item.volume),
+    // Map ProviderCandle to PriceDataPoint and sort newest-first
+    let filteredData: PriceDataPoint[] = candles
+      .map(c => ({
+        date: c.date,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
       }))
-      .sort((a: PriceDataPoint, b: PriceDataPoint) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
     // Apply aggregation for weekly/monthly
     if (timeframe === '1w') {
       filteredData = aggregateToWeekly(filteredData)
     } else if (timeframe === '1m') {
       filteredData = aggregateToMonthly(filteredData)
-    }
-
-    if (filteredData.length === 0) {
-      return { data: null, error: 'No price data available for the requested timeframe' }
     }
 
     return { data: filteredData, error: null }

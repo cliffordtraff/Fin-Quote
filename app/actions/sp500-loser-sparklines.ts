@@ -1,5 +1,6 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
 import { getSP500Losers } from './sp500-movers'
 
 export interface SP500LoserSparklineData {
@@ -12,12 +13,6 @@ export interface SP500LoserSparklineData {
  * Fetch intraday price data for top 4 S&P 500 losers
  */
 export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500LoserSparklineData[]; error?: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
     // Get the S&P 500 losers (already filtered to S&P 500 stocks)
     const losersResult = await getSP500Losers()
@@ -35,23 +30,22 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
       return { sparklines: [] }
     }
 
+    const provider = getProvider()
+
     // Fetch intraday data for each of the top 4
     const sparklines: SP500LoserSparklineData[] = []
 
     for (const loser of top4) {
-      const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/5min/${loser.symbol}?apikey=${apiKey}`
-      const intradayResponse = await fetch(intradayUrl, { next: { revalidate: 60 } })
+      const intradayData = await provider.getIntraday(loser.symbol, 5, 'minute')
 
-      if (intradayResponse.ok) {
-        const intradayData = await intradayResponse.json()
-
+      if (intradayData.length > 0) {
         // Get the most recent trading day's data
         const mostRecentDate = intradayData[0]?.date?.split(' ')[0]
 
         const todayData = intradayData
-          .filter((d: any) => d.date.startsWith(mostRecentDate))
+          .filter((d) => d.date.startsWith(mostRecentDate))
           .reverse() // Oldest first for charting
-          .map((d: any) => ({
+          .map((d) => ({
             date: d.date,
             close: d.close
           }))

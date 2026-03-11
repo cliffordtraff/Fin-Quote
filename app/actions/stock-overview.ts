@@ -1,5 +1,6 @@
 'use server';
 
+import { getProvider } from '@/lib/providers';
 import { getCurrentMarketSession } from '@/lib/market-utils';
 
 interface StockOverview {
@@ -20,30 +21,13 @@ interface StockOverview {
  * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
 export async function getStockOverview(symbol: string): Promise<StockOverview> {
-  const apiKey = process.env.FMP_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('FMP_API_KEY is not set');
-  }
-
   try {
-    // Fetch current quote from FMP API
-    const quoteResponse = await fetch(
-      `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`,
-      { next: { revalidate: 60 } } // Cache for 60 seconds
-    );
+    const provider = getProvider();
+    const quote = await provider.getQuote(symbol);
 
-    if (!quoteResponse.ok) {
-      throw new Error(`FMP API error: ${quoteResponse.status}`);
+    if (!quote) {
+      throw new Error('No quote data returned');
     }
-
-    const quoteData = await quoteResponse.json();
-
-    if (!quoteData || quoteData.length === 0) {
-      throw new Error('No quote data returned from FMP API');
-    }
-
-    const quote = quoteData[0];
 
     // Get market session status
     const marketSession = getCurrentMarketSession();
@@ -57,8 +41,8 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
       company: {
         name: quote.name || symbol,
         symbol: quote.symbol || symbol,
-        sector: quote.sector || 'N/A',
-        industry: quote.industry || 'N/A',
+        sector: 'N/A',
+        industry: 'N/A',
       },
       currentPrice: quote.price || 0,
       priceChange: quote.change || 0,

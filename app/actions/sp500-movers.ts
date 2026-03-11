@@ -1,5 +1,7 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+
 export interface SP500MoverData {
   symbol: string
   name: string
@@ -58,40 +60,16 @@ const SP500_SYMBOLS = [
  * Fetch S&P 500 gainers - top performers by percentage change
  */
 export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; error?: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
-    // Fetch quotes for all S&P 500 stocks in batches
-    const batchSize = 100
-    const allQuotes: any[] = []
-
-    for (let i = 0; i < SP500_SYMBOLS.length; i += batchSize) {
-      const batch = SP500_SYMBOLS.slice(i, i + batchSize)
-      const symbols = batch.join(',')
-      const url = `https://financialmodelingprep.com/api/v3/quote/${symbols}?apikey=${apiKey}`
-
-      const response = await fetch(url, {
-        next: { revalidate: 60 }
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (Array.isArray(data)) {
-          allQuotes.push(...data)
-        }
-      }
-    }
+    const provider = getProvider()
+    const allQuotes = await provider.getQuotes(SP500_SYMBOLS)
 
     // Sort by percentage change (descending) and take top 15
     const gainers = allQuotes
-      .filter((q: any) => q.changesPercentage > 0 && q.price > 0)
-      .sort((a: any, b: any) => b.changesPercentage - a.changesPercentage)
+      .filter((q) => q.changesPercentage > 0 && q.price > 0)
+      .sort((a, b) => b.changesPercentage - a.changesPercentage)
       .slice(0, 15)
-      .map((q: any) => ({
+      .map((q) => ({
         symbol: q.symbol,
         name: q.name,
         price: q.price,
@@ -110,40 +88,16 @@ export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; e
  * Fetch S&P 500 losers - worst performers by percentage change
  */
 export async function getSP500Losers(): Promise<{ losers?: SP500MoverData[]; error?: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
-    // Fetch quotes for all S&P 500 stocks in batches
-    const batchSize = 100
-    const allQuotes: any[] = []
-
-    for (let i = 0; i < SP500_SYMBOLS.length; i += batchSize) {
-      const batch = SP500_SYMBOLS.slice(i, i + batchSize)
-      const symbols = batch.join(',')
-      const url = `https://financialmodelingprep.com/api/v3/quote/${symbols}?apikey=${apiKey}`
-
-      const response = await fetch(url, {
-        next: { revalidate: 60 }
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (Array.isArray(data)) {
-          allQuotes.push(...data)
-        }
-      }
-    }
+    const provider = getProvider()
+    const allQuotes = await provider.getQuotes(SP500_SYMBOLS)
 
     // Sort by percentage change (ascending) and take bottom 15
     const losers = allQuotes
-      .filter((q: any) => q.changesPercentage < 0 && q.price > 0)
-      .sort((a: any, b: any) => a.changesPercentage - b.changesPercentage)
+      .filter((q) => q.changesPercentage < 0 && q.price > 0)
+      .sort((a, b) => a.changesPercentage - b.changesPercentage)
       .slice(0, 15)
-      .map((q: any) => ({
+      .map((q) => ({
         symbol: q.symbol,
         name: q.name,
         price: q.price,

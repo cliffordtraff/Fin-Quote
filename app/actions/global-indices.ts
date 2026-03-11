@@ -1,5 +1,7 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+
 export interface GlobalIndexQuote {
   market: string
   symbol: string
@@ -36,30 +38,12 @@ export interface FuturesQuote {
 }
 
 export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
-  const apiKey = process.env.FMP_API_KEY
-  if (!apiKey) {
-    console.error('FMP_API_KEY not set')
-    return []
-  }
-
   try {
-    // Fetch all index quotes in parallel
+    const provider = getProvider()
     const symbols = Object.values(MARKET_INDEX_MAP).map(m => m.symbol)
-    const quotesUrl = `https://financialmodelingprep.com/api/v3/quote/${symbols.join(',')}?apikey=${apiKey}`
+    const data = await provider.getQuotes(symbols)
 
-    const response = await fetch(quotesUrl, {
-      next: { revalidate: 60 } // Cache for 1 minute
-    })
-
-    if (!response.ok) {
-      console.error('Failed to fetch global index quotes:', response.status)
-      return []
-    }
-
-    const data = await response.json()
-
-    if (!Array.isArray(data)) {
-      console.error('Unexpected response format from FMP:', data)
+    if (data.length === 0) {
       return []
     }
 
@@ -67,7 +51,7 @@ export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
     const quotes: GlobalIndexQuote[] = []
 
     for (const [market, indexInfo] of Object.entries(MARKET_INDEX_MAP)) {
-      const quote = data.find((q: any) => q.symbol === indexInfo.symbol)
+      const quote = data.find((q) => q.symbol === indexInfo.symbol)
       if (quote) {
         quotes.push({
           market,
@@ -88,35 +72,19 @@ export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
 }
 
 export async function getFuturesQuotes(): Promise<FuturesQuote[]> {
-  const apiKey = process.env.FMP_API_KEY
-  if (!apiKey) {
-    console.error('FMP_API_KEY not set')
-    return []
-  }
-
   try {
+    const provider = getProvider()
     const symbols = Object.values(FUTURES_MAP).map(f => f.symbol)
-    const quotesUrl = `https://financialmodelingprep.com/api/v3/quote/${symbols.join(',')}?apikey=${apiKey}`
+    const data = await provider.getQuotes(symbols)
 
-    const response = await fetch(quotesUrl, {
-      next: { revalidate: 60 }
-    })
-
-    if (!response.ok) {
-      console.error('Failed to fetch futures quotes:', response.status)
-      return []
-    }
-
-    const data = await response.json()
-
-    if (!Array.isArray(data)) {
+    if (data.length === 0) {
       return []
     }
 
     const quotes: FuturesQuote[] = []
 
     for (const [key, futuresInfo] of Object.entries(FUTURES_MAP)) {
-      const quote = data.find((q: any) => q.symbol === futuresInfo.symbol)
+      const quote = data.find((q) => q.symbol === futuresInfo.symbol)
       if (quote) {
         quotes.push({
           symbol: key,

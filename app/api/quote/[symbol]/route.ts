@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getProvider } from '@/lib/providers'
 
 const TTL_MS = 4_000 // 4-second cache per symbol
 const cache = new Map<string, { at: number; data: any }>()
@@ -22,23 +23,9 @@ export async function GET(
     })
   }
 
-  const apiKey = process.env.FMP_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Config error' }, { status: 500 })
-  }
-
   try {
-    const res = await fetch(
-      `https://financialmodelingprep.com/api/v3/quote/${rawSymbol}?apikey=${apiKey}`,
-      { cache: 'no-store' }
-    )
-
-    if (!res.ok) {
-      return NextResponse.json({ error: 'Upstream error' }, { status: 502 })
-    }
-
-    const json = await res.json()
-    const q = json[0]
+    const provider = getProvider()
+    const q = await provider.getQuote(rawSymbol)
 
     if (!q) {
       return NextResponse.json({ error: 'No quote' }, { status: 404 })

@@ -1,5 +1,7 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+
 export interface DiscoverStock {
   symbol: string
   name: string
@@ -46,12 +48,6 @@ export async function getDiscoverStocks(
   error?: string
 }> {
   try {
-    const apiKey = process.env.FMP_API_KEY
-    if (!apiKey) {
-      console.error('FMP_API_KEY not found in environment')
-      return { stocks: [], error: 'API configuration error' }
-    }
-
     // Get all symbols except the current one
     let symbols = Object.keys(DISCOVER_STOCKS)
     if (excludeSymbol) {
@@ -62,37 +58,21 @@ export async function getDiscoverStocks(
 
     // Shuffle and take the first `limit` symbols
     const shuffled = symbols.sort(() => Math.random() - 0.5).slice(0, limit)
-    const symbolsParam = shuffled.join(',')
 
-    // Fetch quotes from FMP
-    const url = `https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}`
+    const provider = getProvider()
+    const quotes = await provider.getQuotes(shuffled)
 
-    const response = await fetch(url, {
-      next: { revalidate: 60 }, // Cache for 1 minute
-    })
-
-    if (!response.ok) {
-      console.error('FMP API error:', response.status, response.statusText)
-      return {
-        stocks: [],
-        error: `API request failed: ${response.status}`,
-      }
-    }
-
-    const data = await response.json()
-
-    if (!Array.isArray(data)) {
-      console.error('Unexpected FMP response format:', data)
-      return { stocks: [], error: 'Unexpected API response format' }
+    if (quotes.length === 0) {
+      return { stocks: [], error: 'No stock data returned' }
     }
 
     // Transform to DiscoverStock format
-    const stocks: DiscoverStock[] = data.map((item: Record<string, unknown>) => ({
-      symbol: item.symbol as string,
-      name: DISCOVER_STOCKS[item.symbol as string] || (item.name as string) || (item.symbol as string),
-      price: item.price as number,
-      change: item.change as number,
-      changePercent: item.changesPercentage as number,
+    const stocks: DiscoverStock[] = quotes.map((q) => ({
+      symbol: q.symbol,
+      name: DISCOVER_STOCKS[q.symbol] || q.name || q.symbol,
+      price: q.price,
+      change: q.change,
+      changePercent: q.changesPercentage,
     }))
 
     return { stocks }

@@ -1,5 +1,6 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
 import { getSP500Gainers } from './sp500-movers'
 
 export interface SP500GainerSparklineData {
@@ -12,12 +13,6 @@ export interface SP500GainerSparklineData {
  * Fetch intraday price data for top 4 S&P 500 gainers
  */
 export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500GainerSparklineData[]; error?: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
     // Get the S&P 500 gainers (already filtered to S&P 500 stocks)
     const gainersResult = await getSP500Gainers()
@@ -35,25 +30,23 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
       return { sparklines: [] }
     }
 
+    const provider = getProvider()
+
     // Fetch intraday data for each of the top 4
     const sparklines: SP500GainerSparklineData[] = []
 
     for (const gainer of top4) {
-      const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/5min/${gainer.symbol}?apikey=${apiKey}`
-      const intradayResponse = await fetch(intradayUrl, { next: { revalidate: 60 } })
+      const intradayData = await provider.getIntraday(gainer.symbol, 5, 'minute')
 
-      if (intradayResponse.ok) {
-        const intradayData = await intradayResponse.json()
-
+      if (intradayData.length > 0) {
         // Get the most recent trading day's data
-        // First, find the most recent date in the data
         const mostRecentDate = intradayData[0]?.date?.split(' ')[0]
         console.log(`SP500 Gainer Sparklines: ${gainer.symbol} most recent date: ${mostRecentDate}`)
 
         const todayData = intradayData
-          .filter((d: any) => d.date.startsWith(mostRecentDate))
+          .filter((d) => d.date.startsWith(mostRecentDate))
           .reverse() // Oldest first for charting
-          .map((d: any) => ({
+          .map((d) => ({
             date: d.date,
             close: d.close
           }))

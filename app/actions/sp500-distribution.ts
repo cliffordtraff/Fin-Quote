@@ -2,6 +2,7 @@
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { getProvider } from '@/lib/providers'
 
 export interface StockReturn {
   symbol: string
@@ -47,15 +48,9 @@ async function getSP500Constituents(): Promise<SP500Constituent[]> {
 
 /**
  * Fetch daily returns for all S&P 500 constituents
- * Uses FMP batch quote endpoint to get current day's return data
+ * Uses provider batch quote to get current day's return data
  */
 export async function getSP500Distribution(): Promise<{ data: SP500DistributionData } | { error: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
     const constituents = await getSP500Constituents()
 
@@ -71,57 +66,28 @@ export async function getSP500Distribution(): Promise<{ data: SP500DistributionD
       return c.symbol
     })
 
-    // FMP supports batch quotes - fetch in chunks of 100 to avoid URL length limits
-    const chunkSize = 100
-    const allQuotes: any[] = []
-
-    for (let i = 0; i < symbols.length; i += chunkSize) {
-      const chunk = symbols.slice(i, i + chunkSize)
-      const symbolsParam = chunk.join(',')
-      const url = `https://financialmodelingprep.com/api/v3/quote/${symbolsParam}?apikey=${apiKey}`
-
-      const response = await fetch(url, {
-        next: { revalidate: 60 } // Cache for 1 minute
-      })
-
-      if (!response.ok) {
-        console.error(`FMP batch quote error for chunk ${i}: ${response.status}`)
-        continue
-      }
-
-      const data = await response.json()
-      if (Array.isArray(data)) {
-        allQuotes.push(...data)
-      }
-    }
+    const provider = getProvider()
+    const allQuotes = await provider.getQuotes(symbols)
 
     if (allQuotes.length === 0) {
       return { error: 'Could not fetch stock quotes' }
     }
 
     // Also fetch SPX (S&P 500 index) return
-    const spxUrl = `https://financialmodelingprep.com/api/v3/quote/%5EGSPC?apikey=${apiKey}`
     let spxReturnPct = 0
-    let tradingDate = new Date().toISOString().split('T')[0]
+    const tradingDate = new Date().toISOString().split('T')[0]
 
     try {
-      const spxResponse = await fetch(spxUrl, { next: { revalidate: 60 } })
-      if (spxResponse.ok) {
-        const spxData = await spxResponse.json()
-        if (Array.isArray(spxData) && spxData.length > 0) {
-          spxReturnPct = spxData[0].changesPercentage || 0
-        }
+      const spxQuote = await provider.getQuote('^GSPC')
+      if (spxQuote) {
+        spxReturnPct = spxQuote.changesPercentage || 0
       }
-    } catch (e) {
+    } catch {
       // Fall back to SPY if ^GSPC doesn't work
       try {
-        const spyUrl = `https://financialmodelingprep.com/api/v3/quote/SPY?apikey=${apiKey}`
-        const spyResponse = await fetch(spyUrl, { next: { revalidate: 60 } })
-        if (spyResponse.ok) {
-          const spyData = await spyResponse.json()
-          if (Array.isArray(spyData) && spyData.length > 0) {
-            spxReturnPct = spyData[0].changesPercentage || 0
-          }
+        const spyQuote = await provider.getQuote('SPY')
+        if (spyQuote) {
+          spxReturnPct = spyQuote.changesPercentage || 0
         }
       } catch {
         console.error('Could not fetch SPX or SPY return')

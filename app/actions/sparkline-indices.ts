@@ -1,5 +1,8 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+import type { ProviderCandle } from '@/lib/providers'
+
 export interface OHLCData {
   date: string
   open: number
@@ -36,38 +39,24 @@ const INDEX_SYMBOLS = [
  * Fetch index data with intraday prices for sparkline charts (previous day + today)
  */
 export async function getSparklineIndicesData(): Promise<{ indices: SparklineIndexData[] } | { error: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
+    const provider = getProvider()
+
+    // Batch-fetch all quotes via provider
+    const allSymbols = INDEX_SYMBOLS.map(i => i.symbol)
+    const quotes = await provider.getQuotes(allSymbols)
+
     const indicesData = await Promise.all(
       INDEX_SYMBOLS.map(async ({ symbol, name }) => {
-        // Fetch quote data
-        const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`
-        const quoteResponse = await fetch(quoteUrl, {
-          next: { revalidate: 60 }
-        })
-
-        if (!quoteResponse.ok) {
-          console.error(`Failed to fetch quote for ${symbol}`)
-          return null
-        }
-
-        const quoteData = await quoteResponse.json()
-        const quote = quoteData[0]
+        // Look up the quote from the batch result
+        const quote = quotes.find(q => q.symbol === symbol)
 
         if (!quote) {
           return null
         }
 
-        // Fetch 1-minute intraday data for sparkline (covers ~2 trading days)
-        const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/1min/${symbol}?apikey=${apiKey}`
-        const intradayResponse = await fetch(intradayUrl, {
-          next: { revalidate: 60 } // Cache for 1 minute
-        })
+        // Fetch 1-minute intraday data for sparkline via provider
+        const intradayData = await provider.getIntraday(symbol, 1, 'minute')
 
         let priceHistory: number[] = []
         let priceTimestamps: string[] = []
@@ -77,83 +66,79 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
         let todayStartIndex: number | null = null
         let yesterdayChangePercent: number | null = null
 
-        if (intradayResponse.ok) {
-          const intradayData = await intradayResponse.json()
+        if (intradayData.length > 0) {
+          // Data comes newest first, so reverse for chronological order
+          // Get unique dates to find today and previous day
+          const uniqueDates = [...new Set(intradayData.map((c) => c.date.split(' ')[0]))] as string[]
+          const today = uniqueDates[0]
+          const previousDay = uniqueDates.length > 1 ? uniqueDates[1] : null
 
-          if (Array.isArray(intradayData) && intradayData.length > 0) {
-            // Data comes newest first, so reverse for chronological order
-            // Get unique dates to find today and previous day
-            const uniqueDates = [...new Set(intradayData.map((c: { date: string }) => c.date.split(' ')[0]))] as string[]
-            const today = uniqueDates[0]
-            const previousDay = uniqueDates.length > 1 ? uniqueDates[1] : null
+          // Filter to only today and previous day
+          const filteredData = intradayData.filter((candle) => {
+            const candleDate = candle.date.split(' ')[0]
+            return candleDate === today || candleDate === previousDay
+          })
 
-            // Filter to only today and previous day
-            const filteredData = intradayData.filter((candle: { date: string }) => {
-              const candleDate = candle.date.split(' ')[0]
-              return candleDate === today || candleDate === previousDay
-            })
+          // Reverse to chronological order
+          const chronological = filteredData.reverse()
 
-            // Reverse to chronological order
-            const chronological = filteredData.reverse()
+          // For yesterday's data: aggregate into 5-minute OHLC candles (same as today)
+          const yesterdayData = chronological.filter((c) => c.date.split(' ')[0] === previousDay)
 
-            // For yesterday's data: aggregate into 5-minute OHLC candles (same as today)
-            const yesterdayData = chronological.filter((c: { date: string }) => c.date.split(' ')[0] === previousDay)
-
-            // Group into 5-minute candles (every 5 1-min bars)
-            for (let i = 0; i < yesterdayData.length; i += 5) {
-              const group = yesterdayData.slice(i, i + 5)
-              if (group.length > 0) {
-                yesterdayOHLC.push({
-                  date: group[0].date,
-                  open: group[0].open,
-                  high: Math.max(...group.map((c: { high: number }) => c.high)),
-                  low: Math.min(...group.map((c: { low: number }) => c.low)),
-                  close: group[group.length - 1].close
-                })
-              }
+          // Group into 5-minute candles (every 5 1-min bars)
+          for (let i = 0; i < yesterdayData.length; i += 5) {
+            const group = yesterdayData.slice(i, i + 5)
+            if (group.length > 0) {
+              yesterdayOHLC.push({
+                date: group[0].date,
+                open: group[0].open,
+                high: Math.max(...group.map((c) => c.high)),
+                low: Math.min(...group.map((c) => c.low)),
+                close: group[group.length - 1].close
+              })
             }
+          }
 
-            // Keep priceHistory for backwards compatibility
-            const sampledYesterday = yesterdayData.filter((_: unknown, i: number) => i % 5 === 0)
-            priceHistory = sampledYesterday.map((d: { close: number }) => d.close)
-            priceTimestamps = sampledYesterday.map((d: { date: string }) => d.date)
+          // Keep priceHistory for backwards compatibility
+          const sampledYesterday = yesterdayData.filter((_: ProviderCandle, i: number) => i % 5 === 0)
+          priceHistory = sampledYesterday.map((d) => d.close)
+          priceTimestamps = sampledYesterday.map((d) => d.date)
 
-            // For today's data: aggregate into 5-minute OHLC candles
-            const todayData = chronological.filter((c: { date: string }) => c.date.split(' ')[0] === today)
+          // For today's data: aggregate into 5-minute OHLC candles
+          const todayData = chronological.filter((c) => c.date.split(' ')[0] === today)
 
-            // Group into 5-minute candles (every 5 1-min bars)
-            for (let i = 0; i < todayData.length; i += 5) {
-              const group = todayData.slice(i, i + 5)
-              if (group.length > 0) {
-                todayOHLC.push({
-                  date: group[0].date,
-                  open: group[0].open,
-                  high: Math.max(...group.map((c: { high: number }) => c.high)),
-                  low: Math.min(...group.map((c: { low: number }) => c.low)),
-                  close: group[group.length - 1].close
-                })
-              }
+          // Group into 5-minute candles (every 5 1-min bars)
+          for (let i = 0; i < todayData.length; i += 5) {
+            const group = todayData.slice(i, i + 5)
+            if (group.length > 0) {
+              todayOHLC.push({
+                date: group[0].date,
+                open: group[0].open,
+                high: Math.max(...group.map((c) => c.high)),
+                low: Math.min(...group.map((c) => c.low)),
+                close: group[group.length - 1].close
+              })
             }
+          }
 
-            // Set todayStartIndex to the length of yesterday's data (where today starts)
-            todayStartIndex = priceHistory.length
+          // Set todayStartIndex to the length of yesterday's data (where today starts)
+          todayStartIndex = priceHistory.length
 
-            // Get previous day's closing price (last candle of the previous day)
-            // Data is newest first, so find first match of previous day = most recent candle of that day
-            if (previousDay) {
-              const prevDayCandle = intradayData.find((c: { date: string }) => c.date.split(' ')[0] === previousDay)
-              if (prevDayCandle) {
-                previousClose = prevDayCandle.close
-              }
+          // Get previous day's closing price (last candle of the previous day)
+          // Data is newest first, so find first match of previous day = most recent candle of that day
+          if (previousDay) {
+            const prevDayCandle = intradayData.find((c) => c.date.split(' ')[0] === previousDay)
+            if (prevDayCandle) {
+              previousClose = prevDayCandle.close
             }
+          }
 
-            // Calculate yesterday's percentage change (from yesterday's open to yesterday's close)
-            if (yesterdayData.length > 0) {
-              const yesterdayOpen = yesterdayData[0].open
-              const yesterdayClose = yesterdayData[yesterdayData.length - 1].close
-              if (yesterdayOpen && yesterdayOpen !== 0) {
-                yesterdayChangePercent = ((yesterdayClose - yesterdayOpen) / yesterdayOpen) * 100
-              }
+          // Calculate yesterday's percentage change (from yesterday's open to yesterday's close)
+          if (yesterdayData.length > 0) {
+            const yesterdayOpen = yesterdayData[0].open
+            const yesterdayClose = yesterdayData[yesterdayData.length - 1].close
+            if (yesterdayOpen && yesterdayOpen !== 0) {
+              yesterdayChangePercent = ((yesterdayClose - yesterdayOpen) / yesterdayOpen) * 100
             }
           }
         }

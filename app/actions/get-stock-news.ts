@@ -1,5 +1,7 @@
 'use server';
 
+import { getProvider } from '@/lib/providers';
+
 export interface NewsItem {
   title: string;
   text: string;
@@ -16,38 +18,18 @@ export interface NewsItem {
  * @param limit - Number of news items to fetch (default: 5)
  */
 export async function getStockNews(symbol: string, limit: number = 5): Promise<NewsItem[]> {
-  const apiKey = process.env.FMP_API_KEY;
-
-  if (!apiKey) {
-    console.error('FMP_API_KEY is not set');
-    return [];
-  }
-
   try {
-    const response = await fetch(
-      `https://financialmodelingprep.com/api/v3/stock_news?tickers=${symbol}&limit=${limit}&apikey=${apiKey}`,
-      { next: { revalidate: 300 } } // Cache for 5 minutes
-    );
+    const provider = getProvider();
+    const articles = await provider.getNews(symbol, limit);
 
-    if (!response.ok) {
-      console.error(`FMP News API error: ${response.status}`);
-      return [];
-    }
-
-    const data = await response.json();
-
-    if (!data || !Array.isArray(data)) {
-      return [];
-    }
-
-    return data.map((item: any) => ({
-      title: item.title || '',
-      text: item.text || '',
-      url: item.url || '',
-      image: item.image || null,
-      publishedDate: item.publishedDate || '',
-      site: item.site || '',
-      symbol: item.symbol || symbol,
+    return articles.map((a) => ({
+      title: a.title,
+      text: a.text,
+      url: a.url,
+      image: a.image,
+      publishedDate: a.publishedDate,
+      site: a.site,
+      symbol: a.symbol,
     }));
   } catch (error) {
     console.error('Error fetching stock news:', error);

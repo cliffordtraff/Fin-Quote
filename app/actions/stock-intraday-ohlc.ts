@@ -1,5 +1,6 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
 import type { OHLCData } from '@/app/actions/sparkline-indices'
 
 export interface StockIntradayOHLC {
@@ -21,35 +22,15 @@ export interface StockIntradayOHLC {
 export async function getStockIntradayOHLC(
   symbol: string
 ): Promise<{ data?: StockIntradayOHLC; error?: string }> {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
+    const provider = getProvider()
+
     // Fetch quote and 5-min candles in parallel
-    const [quoteResponse, intradayResponse] = await Promise.all([
-      fetch(
-        `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`,
-        { cache: 'no-store' }
-      ),
-      fetch(
-        `https://financialmodelingprep.com/api/v3/historical-chart/5min/${symbol}?apikey=${apiKey}`,
-        { cache: 'no-store' }
-      ),
+    const [quote, intradayData] = await Promise.all([
+      provider.getQuote(symbol),
+      provider.getIntraday(symbol, 5, 'minute'),
     ])
 
-    if (!quoteResponse.ok || !intradayResponse.ok) {
-      return { error: `Failed to fetch data for ${symbol}` }
-    }
-
-    const [quoteData, intradayData] = await Promise.all([
-      quoteResponse.json(),
-      intradayResponse.json(),
-    ])
-
-    const quote = quoteData[0]
     if (!quote) {
       return { error: `No quote found for ${symbol}` }
     }
@@ -58,11 +39,11 @@ export async function getStockIntradayOHLC(
     let todayOHLC: OHLCData[] = []
     let previousClose: number | null = null
 
-    if (Array.isArray(intradayData) && intradayData.length > 0) {
+    if (intradayData.length > 0) {
       // Data comes newest first — get unique dates
       const uniqueDates = [
         ...new Set(
-          intradayData.map((c: { date: string }) => c.date.split(' ')[0])
+          intradayData.map((c) => c.date.split(' ')[0])
         ),
       ] as string[]
 
@@ -71,17 +52,17 @@ export async function getStockIntradayOHLC(
 
       // Filter to only today + previous day, then reverse for chronological order
       const filtered = intradayData
-        .filter((c: { date: string }) => {
+        .filter((c) => {
           const d = c.date.split(' ')[0]
           return d === today || d === previousDay
         })
         .reverse()
 
-      // Yesterday candles (already 5-min from FMP, no aggregation needed)
+      // Yesterday candles (already 5-min, no aggregation needed)
       if (previousDay) {
         yesterdayOHLC = filtered
-          .filter((c: { date: string }) => c.date.split(' ')[0] === previousDay)
-          .map((c: { date: string; open: number; high: number; low: number; close: number }) => ({
+          .filter((c) => c.date.split(' ')[0] === previousDay)
+          .map((c) => ({
             date: c.date,
             open: c.open,
             high: c.high,
@@ -91,7 +72,7 @@ export async function getStockIntradayOHLC(
 
         // Previous close = last candle of previous day (newest first in raw data)
         const prevDayCandle = intradayData.find(
-          (c: { date: string }) => c.date.split(' ')[0] === previousDay
+          (c) => c.date.split(' ')[0] === previousDay
         )
         if (prevDayCandle) {
           previousClose = prevDayCandle.close
@@ -100,8 +81,8 @@ export async function getStockIntradayOHLC(
 
       // Today candles
       todayOHLC = filtered
-        .filter((c: { date: string }) => c.date.split(' ')[0] === today)
-        .map((c: { date: string; open: number; high: number; low: number; close: number }) => ({
+        .filter((c) => c.date.split(' ')[0] === today)
+        .map((c) => ({
           date: c.date,
           open: c.open,
           high: c.high,

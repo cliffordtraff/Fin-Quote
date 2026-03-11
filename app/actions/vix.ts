@@ -1,5 +1,7 @@
 'use server'
 
+import { getProvider } from '@/lib/providers'
+
 export interface VIXData {
   symbol: string
   name: string
@@ -14,62 +16,43 @@ export interface VIXData {
 }
 
 export async function getVIXData() {
-  const apiKey = process.env.FMP_API_KEY
-
-  if (!apiKey) {
-    return { error: 'API configuration error' }
-  }
-
   try {
-    // Fetch current quote
-    const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/^VIX?apikey=${apiKey}`
-    const quoteResponse = await fetch(quoteUrl, {
-      next: { revalidate: 60 } // Cache for 1 minute
-    })
+    const provider = getProvider()
 
-    if (!quoteResponse.ok) {
-      throw new Error('Failed to fetch VIX data')
+    // Fetch current quote via provider
+    const quote = await provider.getQuote('^VIX')
+
+    if (!quote) {
+      return { error: 'No VIX data available' }
     }
 
-    const quoteData = await quoteResponse.json()
+    // Fetch 30-day historical data via provider
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const fromDate = sixtyDaysAgo.toISOString().split('T')[0]
 
-    // Fetch 30-day historical data
-    const historyUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/^VIX?apikey=${apiKey}`
-    const historyResponse = await fetch(historyUrl, {
-      next: { revalidate: 300 } // Cache for 5 minutes
-    })
+    const candles = await provider.getHistoricalDaily('^VIX', fromDate)
 
-    let history: Array<{ date: string; close: number }> = []
+    // Candles come newest-first; take 30 most recent, reverse for chronological order
+    const history = candles.slice(0, 30).reverse().map(c => ({
+      date: c.date,
+      close: c.close
+    }))
 
-    if (historyResponse.ok) {
-      const historyData = await historyResponse.json()
-      if (historyData.historical && Array.isArray(historyData.historical)) {
-        // Get last 30 days
-        history = historyData.historical.slice(0, 30).reverse().map((item: any) => ({
-          date: item.date,
-          close: item.close
-        }))
-      }
+    const vixData: VIXData = {
+      symbol: quote.symbol,
+      name: quote.name,
+      price: quote.price,
+      change: quote.change,
+      changesPercentage: quote.changesPercentage,
+      dayLow: quote.dayLow ?? 0,
+      dayHigh: quote.dayHigh ?? 0,
+      yearHigh: quote.yearHigh ?? 0,
+      yearLow: quote.yearLow ?? 0,
+      history
     }
 
-    if (Array.isArray(quoteData) && quoteData.length > 0) {
-      const vixData: VIXData = {
-        symbol: quoteData[0].symbol,
-        name: quoteData[0].name,
-        price: quoteData[0].price,
-        change: quoteData[0].change,
-        changesPercentage: quoteData[0].changesPercentage,
-        dayLow: quoteData[0].dayLow,
-        dayHigh: quoteData[0].dayHigh,
-        yearHigh: quoteData[0].yearHigh,
-        yearLow: quoteData[0].yearLow,
-        history
-      }
-
-      return { vix: vixData }
-    }
-
-    return { error: 'No VIX data available' }
+    return { vix: vixData }
   } catch (error) {
     console.error('Error fetching VIX data:', error)
     return { error: 'Failed to load VIX data' }
