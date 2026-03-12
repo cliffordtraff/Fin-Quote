@@ -35,6 +35,7 @@ export async function GET(
       price: q.price,
       change: q.change,
       changesPercentage: q.changesPercentage,
+      previousClose: q.previousClose ?? null,
     }
 
     cache.set(rawSymbol, { at: now, data })

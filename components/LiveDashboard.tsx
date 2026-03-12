@@ -8,22 +8,47 @@ import type { OHLCData } from '@/app/actions/sparkline-indices'
 import type { MoverData } from '@/app/actions/market-movers'
 import type { StockIntradayOHLC } from '@/app/actions/stock-intraday-ohlc'
 import type { MarketSession } from '@/lib/market-hours'
+import { useLiveStream } from '@/lib/hooks/use-live-stream'
+import { useReplay } from '@/lib/hooks/use-replay'
+import type { ReplayConfig, ReplaySpeed } from '@/lib/hooks/use-replay'
 
-const ES_SYMBOL = 'ES=F'
+type Timeframe = '1s' | '10s' | '1m' | '5m'
+
+const MAG7: { symbol: string; name: string }[] = [
+  { symbol: 'AAPL', name: 'Apple' },
+  { symbol: 'MSFT', name: 'Microsoft' },
+  { symbol: 'GOOGL', name: 'Alphabet' },
+  { symbol: 'AMZN', name: 'Amazon' },
+  { symbol: 'NVDA', name: 'Nvidia' },
+  { symbol: 'META', name: 'Meta' },
+  { symbol: 'TSLA', name: 'Tesla' },
+]
+
+type MoverTab = 'gainers' | 'losers'
 
 interface Props {
-  initialEsData: StockIntradayOHLC | null
   initialGainers: MoverData[]
+  initialLosers: MoverData[]
   initialGainerOHLC: StockIntradayOHLC | null
   initialSession: MarketSession
+  replayConfig?: ReplayConfig | null
 }
 
-const SESSION_LABELS: Record<MarketSession, string> = {
-  premarket: 'Pre-Market Gainers',
-  cash: 'Top Gainers',
-  afterhours: 'After-Hours Gainers',
-  closed: 'Top Gainers',
+const SESSION_LABELS: Record<MarketSession, Record<MoverTab, string>> = {
+  premarket: { gainers: 'Pre-Market Gainers', losers: 'Pre-Market Losers' },
+  cash: { gainers: 'Top Gainers', losers: 'Top Losers' },
+  afterhours: { gainers: 'After-Hours Gainers', losers: 'After-Hours Losers' },
+  closed: { gainers: 'Top Gainers', losers: 'Top Losers' },
 }
+
+const TIMEFRAME_OPTIONS: { value: Timeframe; label: string }[] = [
+  { value: '1s', label: '1s' },
+  { value: '10s', label: '10s' },
+  { value: '1m', label: '1m' },
+  { value: '5m', label: '5m' },
+]
+
+const SPEED_OPTIONS: ReplaySpeed[] = [1, 2, 5, 10]
 
 function ohlcToCandlePoints(ohlcData: OHLCData[]): CandlePoint[] {
   return ohlcData.map((c) => ({
@@ -36,37 +61,62 @@ function ohlcToCandlePoints(ohlcData: OHLCData[]): CandlePoint[] {
 }
 
 export default function LiveDashboard({
-  initialEsData,
   initialGainers,
+  initialLosers,
   initialGainerOHLC,
   initialSession,
+  replayConfig,
 }: Props) {
   const { theme } = useTheme()
-  const [esData, setEsData] = useState<StockIntradayOHLC | null>(initialEsData)
   const [gainers, setGainers] = useState<MoverData[]>(initialGainers)
+  const [losers, setLosers] = useState<MoverData[]>(initialLosers)
+  const [moverTab, setMoverTab] = useState<MoverTab>('gainers')
   const [session, setSession] = useState<MarketSession>(initialSession)
+  const [timeframe, setTimeframe] = useState<Timeframe>('5m')
 
-  // selectedSymbol: null = S&P 500 futures, string = gainer stock
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(
-    initialGainerOHLC?.symbol ?? null
+  // Replay: client-side state (initialized from URL params, or set via UI)
+  const [activeReplayConfig, setActiveReplayConfig] = useState<ReplayConfig | null>(replayConfig ?? null)
+  const [showReplayPanel, setShowReplayPanel] = useState(false)
+  const [replayFormTimeframe, setReplayFormTimeframe] = useState<'1s' | '10s'>('1s')
+
+  const isReplay = !!activeReplayConfig
+
+  // selectedSymbol is always a stock ticker (first gainer by default)
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
+    initialGainerOHLC?.symbol ?? initialGainers[0]?.symbol ?? ''
   )
   const [gainerOHLC, setGainerOHLC] = useState<StockIntradayOHLC | null>(
     initialGainerOHLC
   )
   const [lineMode, setLineMode] = useState(true)
+  const [momentumLineMode, setMomentumLineMode] = useState(true)
   const [loadingOHLC, setLoadingOHLC] = useState(false)
-  // Live price from fast polling (updates every 5s)
+  // Live price from fast polling (updates every 5s) — only used in 5m mode
   const [livePrice, setLivePrice] = useState<number | null>(null)
   const [livePriceChange, setLivePriceChange] = useState<number | null>(null)
   const [livePriceChangePct, setLivePriceChangePct] = useState<number | null>(null)
+  // Previous day's 4 PM close from quote polling (for reference line)
+  const [livePrevClose, setLivePrevClose] = useState<number | null>(null)
 
   const selectedSymbolRef = useRef(selectedSymbol)
   selectedSymbolRef.current = selectedSymbol
 
-  // Fetch OHLC data for any symbol (stocks or futures)
-  const fetchOHLC = useCallback(async (symbol: string) => {
+  const isStreaming = !isReplay && (timeframe === '1s' || timeframe === '10s')
+  const pollingInterval = timeframe === '1m' ? 1 : 5 // minute multiplier for REST candles
+
+  // WebSocket streaming hook — disabled in replay mode
+  const stream = useLiveStream(
+    isStreaming && selectedSymbol ? selectedSymbol : null,
+    timeframe === '10s' ? '10s' : '1s',
+  )
+
+  // Replay hook — only active in replay mode
+  const replay = useReplay(activeReplayConfig)
+
+  // Fetch OHLC data for a stock symbol
+  const fetchOHLC = useCallback(async (symbol: string, interval: number = 5) => {
     try {
-      const res = await fetch(`/api/stock-intraday/${encodeURIComponent(symbol)}`)
+      const res = await fetch(`/api/stock-intraday/${encodeURIComponent(symbol)}?interval=${interval}`)
       if (!res.ok) return null
       return (await res.json()) as StockIntradayOHLC
     } catch {
@@ -74,111 +124,146 @@ export default function LiveDashboard({
     }
   }, [])
 
-  // Handle gainer chip click
-  const handleSelectGainer = useCallback(
+  // Handle chip click (gainers or Mag 7)
+  const handleSelectSymbol = useCallback(
     async (symbol: string) => {
       if (symbol === selectedSymbol) return
       setSelectedSymbol(symbol)
       setLivePrice(null)
+      setLivePrevClose(null)
       setLoadingOHLC(true)
-      const data = await fetchOHLC(symbol)
+      const data = await fetchOHLC(symbol, pollingInterval)
       if (data) setGainerOHLC(data)
       setLoadingOHLC(false)
     },
-    [selectedSymbol, fetchOHLC]
+    [selectedSymbol, fetchOHLC, pollingInterval]
   )
 
-  // Handle clicking "S&P 500" to show ES futures
-  const handleSelectSpx = useCallback(() => {
-    setSelectedSymbol(null)
-    setGainerOHLC(null)
-    setLivePrice(null)
-  }, [])
+  // Check if currently viewing a Mag 7 stock (don't auto-switch away)
+  const isMag7 = MAG7.some((m) => m.symbol === selectedSymbol)
 
-  // Poll 1: Gainers list + ES futures (every 30s)
+  // Helper: pick active movers from AllSessionMoversResult shape
+  const pickActiveMovers = useCallback(
+    (r: { premarket?: MoverData[]; cash?: MoverData[]; afterhours?: MoverData[]; currentSession?: MarketSession }) => {
+      const sess = r.currentSession ?? session
+      if (sess === 'premarket' && r.premarket?.length) return r.premarket
+      if (sess === 'afterhours' && r.afterhours?.length) return r.afterhours
+      if (sess === 'closed') {
+        if (r.afterhours?.length) return r.afterhours
+        if (r.cash?.length) return r.cash
+        if (r.premarket?.length) return r.premarket
+      }
+      return r.cash ?? []
+    },
+    [session]
+  )
+
+  // Poll 1: Gainers + losers list (every 30s) — disabled in replay mode
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        // Update ES futures data
-        const esFresh = await fetchOHLC(ES_SYMBOL)
-        if (esFresh) setEsData(esFresh)
+    if (isReplay) return
 
-        // Update gainers from market snapshot
+    const pollInterval = setInterval(async () => {
+      try {
         const res = await fetch('/api/market-snapshot/fast')
         if (!res.ok) return
         const data = await res.json()
 
-        if (data.gainers && Array.isArray(data.gainers)) {
-          const newGainers: MoverData[] = data.gainers
+        // Update gainers
+        if (data.gainers && typeof data.gainers === 'object') {
+          const newGainers = pickActiveMovers(data.gainers)
+          const sess = data.gainers.currentSession as MarketSession
+
           if (newGainers.length > 0) {
             setGainers(newGainers)
 
+            // If selected gainer fell off the list (and not a Mag 7), switch to new top
             if (
               selectedSymbolRef.current &&
-              selectedSymbolRef.current !== ES_SYMBOL &&
-              !newGainers.find((g) => g.symbol === selectedSymbolRef.current)
+              !isMag7 &&
+              !newGainers.find((m) => m.symbol === selectedSymbolRef.current)
             ) {
               setSelectedSymbol(newGainers[0].symbol)
-              const ohlc = await fetchOHLC(newGainers[0].symbol)
-              if (ohlc) setGainerOHLC(ohlc)
+              if (!isStreaming) {
+                const ohlc = await fetchOHLC(newGainers[0].symbol, pollingInterval)
+                if (ohlc) setGainerOHLC(ohlc)
+              }
             }
           }
+
+          if (sess) setSession(sess)
         }
 
-        if (data.session) setSession(data.session)
+        // Update losers
+        if (data.losers && typeof data.losers === 'object') {
+          const newLosers = pickActiveMovers(data.losers)
+          if (newLosers.length > 0) setLosers(newLosers)
+        }
       } catch {
         // Silently ignore polling errors
       }
     }, 30_000)
 
-    return () => clearInterval(interval)
-  }, [fetchOHLC])
+    return () => clearInterval(pollInterval)
+  }, [isReplay, fetchOHLC, isStreaming, isMag7, pollingInterval, pickActiveMovers])
 
-  // Poll 2: Selected gainer stock OHLC (every 30s, resets on symbol change)
+  // Poll 2: Selected stock OHLC (every 30s) — disabled in replay mode
   useEffect(() => {
-    if (!selectedSymbol) return
+    if (isReplay) return
+    if (!selectedSymbol || isStreaming) return
 
-    const interval = setInterval(async () => {
-      const data = await fetchOHLC(selectedSymbol)
+    const pollInterval = setInterval(async () => {
+      const data = await fetchOHLC(selectedSymbol, pollingInterval)
       if (data) setGainerOHLC(data)
     }, 30_000)
 
-    return () => clearInterval(interval)
-  }, [selectedSymbol, fetchOHLC])
+    return () => clearInterval(pollInterval)
+  }, [isReplay, selectedSymbol, fetchOHLC, isStreaming, pollingInterval])
 
-  // Poll 3: Fast quote poll (every 5s) for live price animation
+  // Refetch candles when switching between 1m and 5m (different resolutions)
+  const prevPollingInterval = useRef(pollingInterval)
   useEffect(() => {
-    const activeSymbol = selectedSymbol ?? ES_SYMBOL
+    if (isReplay) return
+    if (prevPollingInterval.current !== pollingInterval && !isStreaming && selectedSymbol) {
+      prevPollingInterval.current = pollingInterval
+      fetchOHLC(selectedSymbol, pollingInterval).then((data) => {
+        if (data) setGainerOHLC(data)
+      })
+    }
+  }, [isReplay, pollingInterval, isStreaming, selectedSymbol, fetchOHLC])
+
+  // Poll 3: Fast quote poll (every 5s) — disabled in replay mode
+  useEffect(() => {
+    if (isReplay) return
+    if (isStreaming || !selectedSymbol) return
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/quote/${encodeURIComponent(activeSymbol)}`)
+        const res = await fetch(`/api/quote/${encodeURIComponent(selectedSymbol)}`)
         if (!res.ok) return
         const q = await res.json()
         if (typeof q.price === 'number') {
           setLivePrice(q.price)
           setLivePriceChange(q.change)
           setLivePriceChangePct(q.changesPercentage)
+          if (typeof q.previousClose === 'number' && q.previousClose > 0) {
+            setLivePrevClose(q.previousClose)
+          }
         }
       } catch {
         // ignore
       }
     }
 
-    // Fetch immediately, then every 5 seconds
     poll()
     const interval = setInterval(poll, 5_000)
     return () => clearInterval(interval)
-  }, [selectedSymbol])
+  }, [isReplay, selectedSymbol, isStreaming])
 
-  // Determine active data source
-  const isShowingGainer = selectedSymbol !== null && gainerOHLC !== null
-  const activeData: StockIntradayOHLC | null = isShowingGainer
-    ? gainerOHLC
-    : esData
+  // Active data source
+  const activeData: StockIntradayOHLC | null = gainerOHLC
 
-  // Build candle data from OHLC (updates on full data refresh)
-  const { candles, baseLiveCandle, lineData, baseLineValue, windowSecs } = useMemo(() => {
+  // ---------- 5m polling-mode candle data ----------
+  const pollingChartData = useMemo(() => {
     if (!activeData) {
       return {
         candles: [],
@@ -201,12 +286,10 @@ export default function LiveDashboard({
     const lineVal =
       linePts.length > 0 ? linePts[linePts.length - 1].value : undefined
 
-    // Liveline anchors its viewport to `now`. The window must span from
-    // the oldest candle to the current time so all data is visible.
-    const nowSecs = Math.floor(Date.now() / 1000)
+    const lastCandleTime = allCandles.length > 0 ? allCandles[allCandles.length - 1].time : 0
     const windowSecs =
-      allCandles.length > 0
-        ? nowSecs - allCandles[0].time + 600
+      allCandles.length > 1
+        ? lastCandleTime - allCandles[0].time + 600
         : 86400
 
     return {
@@ -218,33 +301,195 @@ export default function LiveDashboard({
     }
   }, [activeData])
 
-  // Merge livePrice into the live candle and line value for real-time updates.
-  // Liveline animates smoothly when these props change.
-  const liveCandle = useMemo(() => {
-    if (!baseLiveCandle) return undefined
-    if (livePrice === null) return baseLiveCandle
-    return {
-      ...baseLiveCandle,
-      close: livePrice,
-      high: Math.max(baseLiveCandle.high, livePrice),
-      low: Math.min(baseLiveCandle.low, livePrice),
+  // ---------- Streaming-mode candle data ----------
+  const streamingChartData = useMemo(() => {
+    if (!isStreaming || stream.candles.length === 0) {
+      return null
     }
-  }, [baseLiveCandle, livePrice])
 
-  const lineValue = livePrice ?? baseLineValue
+    const allCandles: CandlePoint[] = stream.candles.map((c) => ({
+      time: c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }))
+
+    const committed = allCandles.length > 1 ? allCandles.slice(0, -1) : allCandles
+    const streamLive = stream.liveCandle
+      ? {
+          time: stream.liveCandle.time,
+          open: stream.liveCandle.open,
+          high: stream.liveCandle.high,
+          low: stream.liveCandle.low,
+          close: stream.liveCandle.close,
+        }
+      : allCandles.length > 0
+        ? allCandles[allCandles.length - 1]
+        : undefined
+
+    const linePts = allCandles.map((c) => ({ time: c.time, value: c.close }))
+    const lineVal =
+      stream.liveCandle?.close ??
+      (linePts.length > 0 ? linePts[linePts.length - 1].value : undefined)
+
+    // Window sizes based on timeframe
+    const windowSecs = timeframe === '1s' ? 300 : 1800
+
+    return {
+      candles: committed,
+      liveCandle: streamLive,
+      lineData: linePts,
+      lineValue: lineVal,
+      windowSecs,
+    }
+  }, [isStreaming, stream.candles, stream.liveCandle, timeframe])
+
+  // ---------- Replay-mode candle data ----------
+  // Liveline anchors the chart to "now", so we shift historical timestamps
+  // to the present. The latest revealed candle maps to Date.now(); older candles
+  // keep their relative spacing. formatTime reverses the shift for axis labels.
+  const replayChartData = useMemo(() => {
+    if (!isReplay || replay.candles.length === 0) {
+      return null
+    }
+
+    // Compute shift: latest revealed candle → "now"
+    const latestOriginal = replay.liveCandle?.time
+      ?? replay.candles[replay.candles.length - 1].time
+    const nowSecs = Math.floor(Date.now() / 1000)
+    const timeShift = nowSecs - latestOriginal
+
+    const allCandles: CandlePoint[] = replay.candles.map((c) => ({
+      time: c.time + timeShift,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }))
+
+    const replayLive = replay.liveCandle
+      ? {
+          time: replay.liveCandle.time + timeShift,
+          open: replay.liveCandle.open,
+          high: replay.liveCandle.high,
+          low: replay.liveCandle.low,
+          close: replay.liveCandle.close,
+        }
+      : allCandles.length > 0
+        ? allCandles[allCandles.length - 1]
+        : undefined
+
+    const linePts = [
+      ...allCandles.map((c) => ({ time: c.time, value: c.close })),
+      ...(replayLive && replay.liveCandle ? [{ time: replayLive.time, value: replay.liveCandle.close }] : []),
+    ]
+    const lineVal =
+      replay.liveCandle?.close ??
+      (linePts.length > 0 ? linePts[linePts.length - 1].value : undefined)
+
+    const windowSecs = activeReplayConfig?.timeframe === '1s' ? 120 : 600
+
+    return {
+      candles: allCandles,
+      liveCandle: replayLive,
+      lineData: linePts,
+      lineValue: lineVal,
+      windowSecs,
+      timeShift,
+    }
+  }, [isReplay, replay.candles, replay.liveCandle, activeReplayConfig?.timeframe])
+
+  // ---------- Choose data source ----------
+  const chartCandles = isReplay && replayChartData
+    ? replayChartData.candles
+    : isStreaming && streamingChartData
+      ? streamingChartData.candles
+      : pollingChartData.candles
+
+  const chartLineData = isReplay && replayChartData
+    ? replayChartData.lineData
+    : isStreaming && streamingChartData
+      ? streamingChartData.lineData
+      : pollingChartData.lineData
+
+  const chartWindowSecs = isReplay && replayChartData
+    ? replayChartData.windowSecs
+    : isStreaming && streamingChartData
+      ? streamingChartData.windowSecs
+      : pollingChartData.windowSecs
+
+  const replayCandleWidth = activeReplayConfig?.timeframe === '1s' ? 1 : 10
+  const chartCandleWidth = isReplay
+    ? replayCandleWidth
+    : timeframe === '1s' ? 1 : timeframe === '10s' ? 10 : timeframe === '1m' ? 60 : 300
+
+  // Merge livePrice into the live candle for 5m mode
+  const pollingLiveCandle = useMemo(() => {
+    const base = pollingChartData.baseLiveCandle
+    if (!base) return undefined
+    if (livePrice === null) return base
+    return {
+      ...base,
+      close: livePrice,
+      high: Math.max(base.high, livePrice),
+      low: Math.min(base.low, livePrice),
+    }
+  }, [pollingChartData.baseLiveCandle, livePrice])
+
+  const chartLiveCandle = isReplay && replayChartData
+    ? replayChartData.liveCandle
+    : isStreaming && streamingChartData
+      ? streamingChartData.liveCandle
+      : pollingLiveCandle
+
+  const chartLineValue = isReplay && replayChartData
+    ? replayChartData.lineValue
+    : isStreaming && streamingChartData
+      ? streamingChartData.lineValue
+      : (livePrice ?? pollingChartData.baseLineValue)
 
   const handleModeChange = useCallback(() => {
     setLineMode((prev) => !prev)
   }, [])
 
-  // Display info for header — prefer live quote data
-  const displayName = isShowingGainer ? gainerOHLC!.name : 'S&P 500 Futures'
-  const displaySymbol = isShowingGainer ? gainerOHLC!.symbol : ES_SYMBOL
-  const displayPrice = livePrice ?? activeData?.currentPrice ?? 0
-  const displayChange = livePriceChange ?? activeData?.priceChange ?? 0
-  const displayChangePercent = livePriceChangePct ?? activeData?.priceChangePercent ?? 0
-  const refLine = activeData?.previousClose
-    ? { value: activeData.previousClose, label: 'Prev Close' }
+  const handleMomentumModeChange = useCallback(() => {
+    setMomentumLineMode((prev) => !prev)
+  }, [])
+
+  // Display info for header
+  const displaySymbol = isReplay ? activeReplayConfig!.symbol : selectedSymbol
+  const mag7Match = MAG7.find((m) => m.symbol === displaySymbol)
+  const displayName = isReplay
+    ? (mag7Match?.name ?? displaySymbol)
+    : (gainerOHLC?.name ?? mag7Match?.name ?? selectedSymbol)
+
+  const displayPrice = isReplay
+    ? (replay.lastPrice ?? 0)
+    : isStreaming
+      ? (stream.lastPrice ?? activeData?.currentPrice ?? 0)
+      : (livePrice ?? activeData?.currentPrice ?? 0)
+
+  const displayChange = isReplay
+    ? (replay.lastChange ?? 0)
+    : isStreaming
+      ? (stream.lastChange ?? activeData?.priceChange ?? 0)
+      : (livePriceChange ?? activeData?.priceChange ?? 0)
+
+  const displayChangePercent = isReplay
+    ? (replay.lastChangePct ?? 0)
+    : isStreaming
+      ? (stream.lastChangePct ?? activeData?.priceChangePercent ?? 0)
+      : (livePriceChangePct ?? activeData?.priceChangePercent ?? 0)
+
+  // Reference line: previous day's 4 PM ET cash session close
+  const prevClose = isReplay
+    ? replay.previousClose
+    : isStreaming
+      ? stream.previousClose
+      : (livePrevClose ?? activeData?.previousClose ?? null)
+  const refLine = prevClose !== null && prevClose > 0
+    ? { value: prevClose, label: 'Prev Close' }
     : undefined
 
   const isPositive = displayChange >= 0
@@ -253,82 +498,359 @@ export default function LiveDashboard({
     : 'text-red-600 dark:text-red-400'
   const changeSign = isPositive ? '+' : ''
 
-  const hasNoData = !esData && gainers.length === 0
+  const hasData = isReplay
+    ? (replay.candles.length > 0 || replay.status === 'loading')
+    : isStreaming
+      ? (stream.candles.length > 0 || !!activeData)
+      : !!activeData
+
+  const hasNoData = !isReplay && gainers.length === 0 && !gainerOHLC && !isStreaming
 
   if (hasNoData) {
     return (
       <div className="text-center py-20 text-gray-500 dark:text-gray-400">
-        No market data available
+        <p className="mb-4">No market data available</p>
+        <button
+          onClick={() => setShowReplayPanel(p => !p)}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+            showReplayPanel
+              ? 'bg-purple-500 text-white border-purple-500'
+              : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          Replay
+        </button>
+        {showReplayPanel && (
+          <div className="mt-4 mx-auto max-w-md p-3 bg-white dark:bg-gray-800 rounded-xl border border-purple-200 dark:border-purple-800/50">
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-xs text-gray-600 dark:text-gray-300">
+                GOOGL &middot; Mar 11 &middot; 9:30&ndash;9:40 AM ET
+              </span>
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                {(['1s', '10s'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    onClick={() => setReplayFormTimeframe(tf)}
+                    className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      replayFormTimeframe === tf
+                        ? 'bg-purple-500 text-white dark:bg-purple-600'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setActiveReplayConfig({
+                    symbol: 'GOOGL',
+                    date: '2026-03-11',
+                    from: '09:30',
+                    to: '09:40',
+                    timeframe: replayFormTimeframe,
+                  })
+                  setShowReplayPanel(false)
+                }}
+                className="px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+              >
+                Start Replay
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
+  const showSeconds = isReplay || isStreaming
+
   return (
     <div>
-      {/* Session badge + candle/line toggle */}
+      {/* Session badge / Replay controls + timeframe pills + candle/line toggle */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          {gainers.length > 0 && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sage-100 text-sage-800 dark:bg-sage-900/30 dark:text-sage-300">
-              {SESSION_LABELS[session]}
-            </span>
+          {isReplay ? (
+            <>
+              {/* REPLAY badge */}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 15l3-3m0 0l-3-3m3 3h-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                REPLAY {activeReplayConfig!.symbol}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {activeReplayConfig!.date} {activeReplayConfig!.from}&ndash;{activeReplayConfig!.to} ({activeReplayConfig!.timeframe})
+              </span>
+              <button
+                onClick={() => setActiveReplayConfig(null)}
+                className="px-2 py-0.5 text-xs font-medium rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                Exit
+              </button>
+            </>
+          ) : (
+            <>
+              {gainers.length > 0 && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sage-100 text-sage-800 dark:bg-sage-900/30 dark:text-sage-300">
+                  {SESSION_LABELS[session].gainers}
+                </span>
+              )}
+              {/* LIVE indicator */}
+              {isStreaming && stream.connected && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                  </span>
+                  LIVE
+                </span>
+              )}
+            </>
           )}
         </div>
-        <button
-          onClick={handleModeChange}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          {lineMode ? 'Candles' : 'Line'}
-        </button>
+        <div className="flex items-center gap-2">
+          {isReplay ? (
+            <>
+              {/* Static / Animate toggle */}
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                <button
+                  onClick={() => replay.setMode('static')}
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                    replay.mode === 'static'
+                      ? 'bg-purple-500 text-white dark:bg-purple-600'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Static
+                </button>
+                <button
+                  onClick={() => replay.setMode('animated')}
+                  className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                    replay.mode === 'animated'
+                      ? 'bg-purple-500 text-white dark:bg-purple-600'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Animate
+                </button>
+              </div>
+
+              {/* Play/Pause + Skip + Reset (animated mode only) */}
+              {replay.mode === 'animated' && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => replay.skip(-5)}
+                    className="px-2 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="Back 5 seconds"
+                  >
+                    -5s
+                  </button>
+                  {replay.status === 'playing' ? (
+                    <button
+                      onClick={replay.pause}
+                      className="px-2 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title="Pause"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={replay.play}
+                      className="px-2 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title="Play"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => replay.skip(5)}
+                    className="px-2 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="Forward 5 seconds"
+                  >
+                    +5s
+                  </button>
+                  <button
+                    onClick={replay.reset}
+                    className="px-2 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="Reset"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Speed pills (animated mode only) */}
+              {replay.mode === 'animated' && (
+                <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                  {SPEED_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => replay.setSpeed(s)}
+                      className={`px-2 py-1 text-xs font-medium transition-colors ${
+                        replay.speed === s
+                          ? 'bg-purple-500 text-white dark:bg-purple-600'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 1s / 10s timeframe toggle */}
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                {(['1s', '10s'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    onClick={() => {
+                      if (activeReplayConfig && activeReplayConfig.timeframe !== tf) {
+                        setActiveReplayConfig({ ...activeReplayConfig, timeframe: tf })
+                      }
+                    }}
+                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                      activeReplayConfig?.timeframe === tf
+                        ? 'bg-purple-500 text-white dark:bg-purple-600'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Timeframe pills */}
+              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                {TIMEFRAME_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTimeframe(opt.value)}
+                    className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                      timeframe === opt.value
+                        ? 'bg-sage-500 text-white dark:bg-sage-600'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {/* Replay button */}
+              <button
+                onClick={() => setShowReplayPanel(prev => !prev)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                  showReplayPanel
+                    ? 'bg-purple-500 text-white border-purple-500 dark:bg-purple-600 dark:border-purple-600'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+              >
+                Replay
+              </button>
+            </>
+          )}
+          {/* Candle/Line toggle */}
+          <button
+            onClick={handleModeChange}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            {lineMode ? 'Candles' : 'Line'}
+          </button>
+        </div>
       </div>
 
-      {/* Gainer chips - scrollable row */}
-      {gainers.length > 0 && (
+      {/* Replay config panel — hardcoded to GOOGL March 11 open for now */}
+      {showReplayPanel && !isReplay && (
+        <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-purple-200 dark:border-purple-800/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-600 dark:text-gray-300">
+              GOOGL &middot; Mar 11 &middot; 9:30&ndash;9:40 AM ET
+            </span>
+            <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+              {(['1s', '10s'] as const).map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setReplayFormTimeframe(tf)}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    replayFormTimeframe === tf
+                      ? 'bg-purple-500 text-white dark:bg-purple-600'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                setActiveReplayConfig({
+                  symbol: 'GOOGL',
+                  date: '2026-03-11',
+                  from: '09:30',
+                  to: '09:40',
+                  timeframe: replayFormTimeframe,
+                })
+                setShowReplayPanel(false)
+              }}
+              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-500 text-white hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 transition-colors"
+            >
+              Start Replay
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mag 7 chips — hidden in replay mode */}
+      {!isReplay && (
         <div
-          className="flex items-center gap-2 mb-4 overflow-x-auto pb-1"
+          className="flex items-center gap-2 mb-2 overflow-x-auto pb-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {/* S&P 500 Futures chip */}
-          <button
-            onClick={handleSelectSpx}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-              !isShowingGainer
-                ? 'bg-sage-500 text-white border-sage-500 dark:bg-sage-600 dark:border-sage-600'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750'
-            }`}
-          >
-            S&P 500
-          </button>
-
-          {gainers.slice(0, 10).map((g) => {
-            const isSelected = selectedSymbol === g.symbol
-            const chipPositive = g.changesPercentage >= 0
+          {MAG7.map((m) => {
+            const isSelected = selectedSymbol === m.symbol
             return (
               <button
-                key={g.symbol}
-                onClick={() => handleSelectGainer(g.symbol)}
+                key={m.symbol}
+                onClick={() => handleSelectSymbol(m.symbol)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                   isSelected
                     ? 'bg-sage-500 text-white border-sage-500 dark:bg-sage-600 dark:border-sage-600'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750'
                 }`}
               >
-                <span>{g.symbol}</span>
-                <span
-                  className={`ml-1.5 ${
-                    isSelected
-                      ? 'text-white/80'
-                      : chipPositive
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                  }`}
-                >
-                  {chipPositive ? '+' : ''}
-                  {g.changesPercentage.toFixed(1)}%
-                </span>
+                {m.symbol}
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* Replay progress bar */}
+      {isReplay && replay.mode === 'animated' && (
+        <div className="mb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-500 dark:bg-purple-400 rounded-full transition-all duration-150"
+                style={{
+                  width: replay.totalCandles > 0
+                    ? `${(replay.revealedCount / replay.totalCandles) * 100}%`
+                    : '0%',
+                }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums min-w-[60px] text-right">
+              {replay.revealedCount}/{replay.totalCandles}
+            </span>
+          </div>
         </div>
       )}
 
@@ -357,57 +879,276 @@ export default function LiveDashboard({
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden relative">
-        {loadingOHLC && (
-          <div className="absolute inset-0 bg-white/60 dark:bg-gray-800/60 z-10 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
+      {/* Chart + Gainers table grid — side-by-side charts in replay mode */}
+      <div className={`grid gap-4 ${isReplay ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 lg:grid-cols-[1fr_340px]'}`}>
+        {/* Chart 1 — exaggerate OFF in replay */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden relative">
+          {loadingOHLC && !isReplay && (
+            <div className="absolute inset-0 bg-white/60 dark:bg-gray-800/60 z-10 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {isReplay && replay.status === 'loading' && (
+            <div className="absolute inset-0 bg-white/60 dark:bg-gray-800/60 z-10 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {isReplay && replay.error && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
+              {replay.error}
+            </div>
+          )}
+          {!isReplay && isStreaming && stream.error && !stream.connected && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              Reconnecting...
+            </div>
+          )}
+          {isReplay && (
+            <div className="absolute top-2 right-24 z-20 px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+              Normal
+            </div>
+          )}
+          <div style={{ height: 500 }}>
+            {hasData ? (
+              <Liveline
+                data={chartLineData}
+                value={chartLineValue ?? displayPrice}
+                mode="candle"
+                candles={chartCandles}
+                liveCandle={chartLiveCandle}
+                candleWidth={chartCandleWidth}
+                lineMode={lineMode}
+                lineData={chartLineData}
+                lineValue={chartLineValue}
+                onModeChange={handleModeChange}
+                window={chartWindowSecs}
+                theme={theme}
+                color={isReplay ? '#7c3aed' : '#5a6b4a'}
+                grid={true}
+                badge={true}
+                scrub={true}
+                fill={true}
+                pulse={!isReplay}
+                degen={{ scale: 1, downMomentum: true }}
+                momentum={true}
+                exaggerate={false}
+                referenceLine={refLine}
+                padding={{ top: 12, right: 80, bottom: 52, left: 12 }}
+                formatValue={(v: number) =>
+                  v.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                }
+                formatTime={(t: number) => {
+                  const displayTime = isReplay && replayChartData
+                    ? t - replayChartData.timeShift
+                    : t
+                  return new Date(displayTime * 1000).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    ...(showSeconds ? { second: '2-digit' } : {}),
+                    hour12: true,
+                  })
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                {isReplay && replay.status === 'loading' ? 'Loading replay data...' : 'No chart data available'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2 — Zoomed-in momentum view (replay mode: beside main chart; live mode: below) */}
+        {isReplay && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden relative">
+            <div className="absolute top-2 right-28 z-20 px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
+              Momentum
+            </div>
+            <div style={{ height: 500 }}>
+              {hasData ? (
+                <Liveline
+                  data={chartLineData}
+                  value={chartLineValue ?? displayPrice}
+                  mode="candle"
+                  candles={chartCandles}
+                  liveCandle={chartLiveCandle}
+                  candleWidth={chartCandleWidth}
+                  lineMode={momentumLineMode}
+                  lineData={chartLineData}
+                  lineValue={chartLineValue}
+                  onModeChange={handleMomentumModeChange}
+                  window={activeReplayConfig?.timeframe === '10s' ? 300 : 30}
+                  theme="light"
+                  color="#22c55e"
+                  grid={true}
+                  badge={true}
+                  scrub={true}
+                  fill={true}
+                  pulse={true}
+                  degen={{ scale: 1.5, downMomentum: true }}
+                  momentum={true}
+                  exaggerate={true}
+                  referenceLine={refLine}
+                  padding={{ top: 20, right: 100, bottom: 56, left: 16 }}
+                  formatValue={(v: number) =>
+                    v.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  }
+                  formatTime={(t: number) => {
+                    const displayTime = replayChartData
+                      ? t - replayChartData.timeShift
+                      : t
+                    return new Date(displayTime * 1000).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: true,
+                    })
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  Loading replay data...
+                </div>
+              )}
+            </div>
           </div>
         )}
-        <div style={{ height: 500 }}>
-          {activeData ? (
+
+        {/* Movers table (Gainers / Losers tabs) — hidden in replay mode */}
+        {!isReplay && (gainers.length > 0 || losers.length > 0) && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col" style={{ maxHeight: 540 }}>
+            {/* Tab header */}
+            <div className="px-4 py-2.5 border-b border-cream-200 dark:border-gray-700 flex items-center gap-1">
+              {(['gainers', 'losers'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setMoverTab(tab)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    moverTab === tab
+                      ? 'bg-sage-500 text-white dark:bg-sage-600'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {SESSION_LABELS[session][tab]}
+                </button>
+              ))}
+            </div>
+            {/* Table body */}
+            <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin' }}>
+              <table className="w-full">
+                <thead className="sticky top-0 bg-white dark:bg-gray-800">
+                  <tr className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <th className="text-left pl-4 pr-1 py-2 font-semibold">#</th>
+                    <th className="text-left px-2 py-2 font-semibold">Symbol</th>
+                    <th className="text-right px-2 py-2 font-semibold">Price</th>
+                    <th className="text-right pl-2 pr-4 py-2 font-semibold">Chg%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-cream-200 dark:divide-gray-700">
+                  {(moverTab === 'gainers' ? gainers : losers).slice(0, 20).map((m, i) => {
+                    const isSelected = selectedSymbol === m.symbol
+                    const rowPositive = m.changesPercentage >= 0
+                    return (
+                      <tr
+                        key={m.symbol}
+                        onClick={() => handleSelectSymbol(m.symbol)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'bg-sage-50 dark:bg-sage-900/30'
+                            : 'hover:bg-cream-50 dark:hover:bg-gray-800/50'
+                        }`}
+                      >
+                        <td className="pl-4 pr-1 py-2 text-xs text-gray-400 dark:text-gray-500">
+                          {i + 1}
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="text-sm font-medium text-sage-600 dark:text-sage-400">
+                            {m.symbol}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">
+                            {m.name}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-sm text-right text-gray-900 dark:text-white">
+                          {m.price.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td
+                          className={`pl-2 pr-4 py-2 text-sm font-medium text-right ${
+                            rowPositive
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-red-600 dark:text-red-400'
+                          }`}
+                        >
+                          {rowPositive ? '+' : ''}
+                          {m.changesPercentage.toFixed(2)}%
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Momentum chart — below main grid in live mode */}
+      {!isReplay && hasData && (
+        <div className="mt-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden relative">
+          <div className="absolute top-2 right-24 z-20 px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
+            Momentum
+          </div>
+          <div style={{ height: 400 }}>
             <Liveline
-              data={lineData}
-              value={lineValue ?? displayPrice}
+              data={chartLineData}
+              value={chartLineValue ?? displayPrice}
               mode="candle"
-              candles={candles}
-              liveCandle={liveCandle}
-              candleWidth={300}
-              lineMode={lineMode}
-              lineData={lineData}
-              lineValue={lineValue}
-              onModeChange={handleModeChange}
-              window={windowSecs}
-              theme={theme}
-              color="#5a6b4a"
+              candles={chartCandles}
+              liveCandle={chartLiveCandle}
+              candleWidth={chartCandleWidth}
+              lineMode={momentumLineMode}
+              lineData={chartLineData}
+              lineValue={chartLineValue}
+              onModeChange={handleMomentumModeChange}
+              window={timeframe === '1s' ? 30 : timeframe === '10s' ? 300 : timeframe === '1m' ? 1800 : 9000}
+              theme="light"
+              color="#22c55e"
               grid={true}
               badge={true}
               scrub={true}
               fill={true}
               pulse={true}
+              degen={{ scale: 1.5, downMomentum: true }}
+              momentum={true}
+              exaggerate={true}
               referenceLine={refLine}
-              padding={{ top: 12, right: 80, bottom: 52, left: 12 }}
+              padding={{ top: 20, right: 100, bottom: 56, left: 16 }}
               formatValue={(v: number) =>
                 v.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })
               }
-              formatTime={(t: number) =>
-                new Date(t * 1000).toLocaleTimeString('en-US', {
+              formatTime={(t: number) => {
+                return new Date(t * 1000).toLocaleTimeString('en-US', {
                   hour: 'numeric',
                   minute: '2-digit',
+                  ...(isStreaming ? { second: '2-digit' } : {}),
                   hour12: true,
                 })
-              }
+              }}
             />
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-              No chart data available
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

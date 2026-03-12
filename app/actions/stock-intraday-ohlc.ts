@@ -15,20 +15,28 @@ export interface StockIntradayOHLC {
 }
 
 /**
- * Fetch 5-min OHLC candles + current quote for any stock symbol.
+ * Fetch intraday OHLC candles + current quote for any stock symbol.
  * Splits data into yesterday + today using the same date-splitting pattern
  * as sparkline-indices.ts.
+ *
+ * @param symbol  Stock ticker (e.g. "AAPL")
+ * @param minuteMultiplier  Candle interval in minutes (default: 5)
  */
 export async function getStockIntradayOHLC(
-  symbol: string
+  symbol: string,
+  minuteMultiplier: number = 5,
 ): Promise<{ data?: StockIntradayOHLC; error?: string }> {
   try {
     const provider = getProvider()
 
-    // Fetch quote and 5-min candles in parallel
+    // Only need 3 days of data (today + yesterday + buffer for weekends)
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const today = new Date().toISOString().split('T')[0]
+
+    // Fetch quote and candles in parallel
     const [quote, intradayData] = await Promise.all([
       provider.getQuote(symbol),
-      provider.getIntraday(symbol, 5, 'minute'),
+      provider.getIntraday(symbol, minuteMultiplier, 'minute', threeDaysAgo, today),
     ])
 
     if (!quote) {
@@ -40,15 +48,15 @@ export async function getStockIntradayOHLC(
     let previousClose: number | null = null
 
     if (intradayData.length > 0) {
-      // Data comes newest first — get unique dates
+      // Get unique dates — pick the two most recent regardless of sort order
       const uniqueDates = [
         ...new Set(
           intradayData.map((c) => c.date.split(' ')[0])
         ),
-      ] as string[]
+      ].sort() as string[]
 
-      const today = uniqueDates[0]
-      const previousDay = uniqueDates.length > 1 ? uniqueDates[1] : null
+      const today = uniqueDates[uniqueDates.length - 1]
+      const previousDay = uniqueDates.length > 1 ? uniqueDates[uniqueDates.length - 2] : null
 
       // Filter to only today + previous day, then reverse for chronological order
       const filtered = intradayData
@@ -70,12 +78,12 @@ export async function getStockIntradayOHLC(
             close: c.close,
           }))
 
-        // Previous close = last candle of previous day (newest first in raw data)
-        const prevDayCandle = intradayData.find(
+        // Previous close = last candle of previous day (latest timestamp)
+        const prevDayCandles = intradayData.filter(
           (c) => c.date.split(' ')[0] === previousDay
         )
-        if (prevDayCandle) {
-          previousClose = prevDayCandle.close
+        if (prevDayCandles.length > 0) {
+          previousClose = prevDayCandles[prevDayCandles.length - 1].close
         }
       }
 
@@ -100,7 +108,7 @@ export async function getStockIntradayOHLC(
         priceChangePercent: quote.changesPercentage,
         yesterdayOHLC,
         todayOHLC,
-        previousClose,
+        previousClose: quote.previousClose ?? previousClose,
       },
     }
   } catch (error) {

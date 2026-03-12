@@ -126,19 +126,33 @@ interface MultiMetricChartProps {
   metrics: string[]
   customColors?: Record<string, string>
   onReset?: () => void
+  /** Render in clean export mode: hides controls, forces light theme, signals readiness */
+  exportMode?: boolean
+  /** Initial chart type (used by export mode to set without UI interaction) */
+  initialChartType?: 'bar' | 'line' | 'area'
+  /** Initial data labels visibility */
+  initialShowLabels?: boolean
+  /** Initial stacked state */
+  initialStacked?: boolean
+  /** Initial index-to-zero state */
+  initialIndexToZero?: boolean
+  /** Callback fired after Highcharts finishes rendering */
+  onChartReady?: () => void
+  /** Callback to copy a newsletter export URL (shown in export dropdown when provided) */
+  onCopyExportUrl?: () => void
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {}, onReset }: MultiMetricChartProps) {
-  const [showDataLabels, setShowDataLabels] = useState(true)
-  const [isStacked, setIsStacked] = useState(false)
-  const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>('bar')
-  const [indexToZero, setIndexToZero] = useState(false)
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, onChartReady, onCopyExportUrl }: MultiMetricChartProps) {
+  const [showDataLabels, setShowDataLabels] = useState(initialShowLabels ?? true)
+  const [isStacked, setIsStacked] = useState(initialStacked ?? false)
+  const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>(initialChartType ?? 'bar')
+  const [indexToZero, setIndexToZero] = useState(initialIndexToZero ?? false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
-  const isDark = theme === 'dark'
+  const isDark = exportMode ? false : theme === 'dark'
   const [isMounted, setIsMounted] = useState(false)
   const chartRef = useRef<Highcharts.Chart | null>(null)
 
@@ -200,8 +214,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
   if (!isMounted) {
     return (
-      <div className="w-full h-[650px] bg-cream-50 dark:bg-gray-800 animate-pulse rounded flex items-center justify-center">
-        <p className="text-gray-400 dark:text-gray-500">Loading chart...</p>
+      <div className={`w-full ${exportMode ? 'h-[500px] bg-white' : 'h-[650px] bg-cream-50 dark:bg-gray-800'} animate-pulse rounded flex items-center justify-center`}>
+        <p className={exportMode ? 'text-gray-400' : 'text-gray-400 dark:text-gray-500'}>Loading chart...</p>
       </div>
     )
   }
@@ -550,8 +564,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const options: Highcharts.Options = {
     chart: {
       type: 'column',
-      height: 650,
-      backgroundColor: isDark ? 'rgb(45, 45, 45)' : 'transparent',
+      height: exportMode ? 500 : 650,
+      backgroundColor: exportMode ? '#ffffff' : (isDark ? 'rgb(45, 45, 45)' : 'transparent'),
       animation: false,
       style: {
         fontFamily: 'inherit',
@@ -873,13 +887,13 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   return (
     <div
       ref={containerRef}
-      className={`${isFullscreen
+      className={`${!exportMode && isFullscreen
         ? 'fixed inset-0 z-50 bg-white dark:bg-gray-800 p-6 overflow-auto'
         : 'w-full'
       }`}
     >
       {/* Fullscreen close button */}
-      {isFullscreen && (
+      {isFullscreen && !exportMode && (
         <button
           onClick={() => setIsFullscreen(false)}
           className="absolute top-4 right-4 z-50 p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
@@ -891,22 +905,23 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         </button>
       )}
       <HighchartsReact
-        key={`${chartKey}-fullscreen-${isFullscreen}`}
+        key={`${chartKey}-fullscreen-${isFullscreen}-export-${!!exportMode}`}
         highcharts={Highcharts}
         options={{
           ...options,
           chart: {
             ...options.chart,
-            height: isFullscreen ? window.innerHeight - 100 : 650,
+            height: exportMode ? 500 : (isFullscreen ? window.innerHeight - 100 : 650),
           },
         }}
         callback={(chart: Highcharts.Chart) => {
           chartRef.current = chart
+          if (exportMode) onChartReady?.()
         }}
       />
 
       {/* Custom Legend + Controls Row */}
-      <div className="flex items-start justify-between mt-2 mb-4 gap-4">
+      <div className={`flex items-start ${exportMode ? '' : 'justify-between'} mt-2 mb-4 gap-4`}>
         {/* Legend - stacked vertically */}
         <div className="flex flex-col gap-1">
           {legendItems.map((item, index) => (
@@ -915,15 +930,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: item.color }}
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
+              <span className={`text-sm ${exportMode ? 'text-gray-700' : 'text-gray-700 dark:text-gray-300'}`}>
                 {item.label} ({years[0]}-{years[years.length - 1]}: {formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
               </span>
             </div>
           ))}
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center gap-4 flex-shrink-0">
+        {/* Controls - hidden in export mode */}
+        {!exportMode && <div className="flex items-center gap-4 flex-shrink-0">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1040,6 +1055,17 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                 >
                   Download PDF
                 </button>
+                {onCopyExportUrl && (
+                  <>
+                    <div className="border-t border-cream-200 dark:border-gray-600 my-1" />
+                    <button
+                      onClick={() => { onCopyExportUrl(); setShowExportMenu(false) }}
+                      className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-700"
+                    >
+                      Copy Newsletter URL
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1058,11 +1084,11 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
               </svg>
             )}
           </button>
-        </div>
+        </div>}
       </div>
 
-      {/* Data Table - hidden in fullscreen mode */}
-      {!isFullscreen && (
+      {/* Data Table - hidden in fullscreen and export mode */}
+      {!isFullscreen && !exportMode && (
       <div className="bg-cream-50 dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
         <table className="w-full table-fixed divide-y divide-cream-200 dark:divide-gray-700">
           <thead className="bg-cream-50 dark:bg-gray-900">

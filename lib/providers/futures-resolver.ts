@@ -7,7 +7,7 @@
  * contracts endpoint, with a 1-hour in-memory cache (rollovers are quarterly).
  */
 
-const MASSIVE_BASE = 'https://api.polygon.io'
+const MASSIVE_BASE = 'https://api.massive.com'
 
 function getApiKey(): string {
   const key = process.env.MASSIVE_API_KEY
@@ -127,10 +127,16 @@ export async function getFuturesSnapshot(contractTicker: string): Promise<{
     const session = snap.session ?? {}
     const lastTrade = snap.last_trade ?? {}
 
+    const price = lastTrade.price ?? session.c ?? 0
+    const change = session.change ?? 0
+    // Use session.change_percent if available, otherwise calculate from price/change
+    const changePercent = session.change_percent
+      ?? (price && change ? (change / (price - change)) * 100 : 0)
+
     return {
-      price: lastTrade.price ?? session.c ?? 0,
-      change: session.change ?? 0,
-      changePercent: 0, // Massive doesn't provide change_percent directly on futures; calculated by consumer
+      price,
+      change,
+      changePercent,
       volume: session.v ?? 0,
       open: session.o ?? 0,
       high: session.h ?? 0,

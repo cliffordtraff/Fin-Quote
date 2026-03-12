@@ -3,6 +3,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { getMarketStatus, getTradingDate, type MarketSession } from '@/lib/market-hours'
 import { deriveGainers, deriveLosers, type ExtendedHoursStock } from '@/app/actions/scan-extended-hours'
+import { getProvider } from '@/lib/providers'
+import type { ProviderQuote } from '@/lib/providers/types'
 
 // Types
 export interface MoverData {
@@ -356,30 +358,57 @@ async function getExtendedSessionMovers(
 }
 
 /**
+ * Convert ProviderQuote[] → MoverData[]
+ */
+function quotesToMovers(quotes: ProviderQuote[]): MoverData[] {
+  return quotes.map(q => ({
+    symbol: q.symbol,
+    name: q.name,
+    price: q.price,
+    change: q.change,
+    changesPercentage: q.changesPercentage,
+  }))
+}
+
+/**
  * Get all sessions for a direction (for initial page load).
  *
- * Pre-market and after-hours use the bulk scan approach (scan-extended-hours.ts)
- * which fetches all NASDAQ+NYSE quotes and computes movers from extended hours trades.
- * Results are persisted to Supabase so users can view pre-market data later in the day.
+ * Uses Massive (Polygon) as the primary source for gainers/losers.
+ * Polygon's snapshot-based gainers endpoint reflects real-time data
+ * across all sessions (regular + extended hours).
  *
- * Cash/regular session uses the dedicated FMP endpoints + Supabase cache.
+ * Falls back to FMP endpoints + Supabase cache if Massive returns empty.
  */
 export async function getAllSessionMovers(
   direction: Direction
 ): Promise<AllSessionMoversResult> {
   const marketStatus = getMarketStatus()
+  const provider = getProvider()
 
-  const [premarket, cash, afterhours] = await Promise.all([
-    getExtendedSessionMovers('premarket', direction),
-    getMarketMovers('cash', direction),
-    getExtendedSessionMovers('afterhours', direction),
-  ])
+  // Primary: fetch from Massive (Polygon snapshot-based gainers/losers)
+  let movers: MoverData[] = []
+  try {
+    const quotes = direction === 'gainers'
+      ? await provider.getGainers()
+      : await provider.getLosers()
+    movers = quotesToMovers(quotes)
+  } catch (err) {
+    console.error(`[market-movers] Massive ${direction} fetch failed:`, err)
+  }
 
+  // Fallback: FMP endpoints if Massive returned empty
+  if (movers.length === 0) {
+    const cashResult = await getMarketMovers('cash', direction)
+    movers = cashResult.movers
+  }
+
+  // Polygon returns the top movers across all sessions — use the same list
+  // for whichever session is active (the data is always current)
   return {
-    premarket,
-    cash: cash.movers,
-    afterhours,
-    currentSession: marketStatus.session
+    premarket: movers,
+    cash: movers,
+    afterhours: movers,
+    currentSession: marketStatus.session,
   }
 }
 

@@ -22,7 +22,7 @@ import {
 } from './utils'
 import { resolveFrontMonth, getFuturesSnapshot } from './futures-resolver'
 
-const MASSIVE_BASE = 'https://api.polygon.io'
+const MASSIVE_BASE = 'https://api.massive.com'
 
 function getApiKey(): string {
   const key = process.env.MASSIVE_API_KEY
@@ -57,7 +57,7 @@ function mapStockSnapshot(t: any, originalSymbol?: string): ProviderQuote {
   return {
     symbol: originalSymbol ?? t.ticker ?? '',
     name: t.name ?? t.ticker ?? '',
-    price: day.c ?? t.lastTrade?.p ?? 0,
+    price: (day.c && day.c > 0 ? day.c : null) ?? t.lastTrade?.p ?? t.min?.c ?? 0,
     change: t.todaysChange ?? 0,
     changesPercentage: t.todaysChangePerc ?? 0,
     previousClose: prevDay.c ?? undefined,
@@ -256,7 +256,10 @@ export class MassiveProvider implements MarketDataProvider {
       const json = await res.json()
       const tickers: any[] = json?.tickers ?? []
 
-      return tickers.slice(0, 20).map(t => mapStockSnapshot(t))
+      return tickers
+        .map(t => mapStockSnapshot(t))
+        .filter(q => q.price >= 1)
+        .slice(0, 20)
     } catch (err) {
       console.error('[massive] getGainers error:', err)
       return []
@@ -274,7 +277,10 @@ export class MassiveProvider implements MarketDataProvider {
       const json = await res.json()
       const tickers: any[] = json?.tickers ?? []
 
-      return tickers.slice(0, 20).map(t => mapStockSnapshot(t))
+      return tickers
+        .map(t => mapStockSnapshot(t))
+        .filter(q => q.price >= 1)
+        .slice(0, 20)
     } catch (err) {
       console.error('[massive] getLosers error:', err)
       return []
@@ -385,6 +391,7 @@ export class MassiveProvider implements MarketDataProvider {
 
     // Map our CandleTimespan to Massive futures resolution format
     const resolutionMap: Record<CandleTimespan, string> = {
+      second: `${multiplier}sec`,
       minute: `${multiplier}min`,
       hour: `${multiplier}hr`,
       day: '1day',

@@ -55,7 +55,7 @@ export interface ProviderNews {
 // ---------------------------------------------------------------------------
 
 /** Timespan unit for candle aggregation. */
-export type CandleTimespan = 'minute' | 'hour' | 'day' | 'week' | 'month'
+export type CandleTimespan = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
 
 // ---------------------------------------------------------------------------
 // Provider interface

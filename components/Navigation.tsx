@@ -25,6 +25,7 @@ export default function Navigation() {
   const navLinks: NavLink[] = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/dashboard/live', label: 'Live', match: '/dashboard/live' },
+    { href: '/dashboard/pulse', label: 'Pulse', match: '/dashboard/pulse' },
     { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
     { href: '/charts', label: 'Charting' },
     { href: '/concept', label: 'Market Internals' },

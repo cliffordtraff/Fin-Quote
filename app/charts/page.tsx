@@ -10,6 +10,8 @@ import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
 import { getChartPriceData, getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
 import { useTheme } from '@/components/ThemeProvider'
+import { buildExportUrl, parseSpecFromParams } from '@/lib/chart-export'
+import type { ChartExportSpec } from '@/types/chart-export'
 
 // Popular/commonly searched stocks for quick access
 const POPULAR_STOCKS = [
@@ -129,6 +131,9 @@ export default function ChartsPage() {
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
 
+  // Track whether URL params have been applied
+  const [urlParamsApplied, setUrlParamsApplied] = useState(false)
+
   // Load available metrics and stocks on mount
   useEffect(() => {
     async function loadData() {
@@ -143,6 +148,54 @@ export default function ChartsPage() {
     }
     loadData()
   }, [])
+
+  // Initialize from URL params (e.g., ?stocks=AAPL&metrics=revenue,net_income or ?spec=<base64>)
+  useEffect(() => {
+    if (urlParamsApplied || availableMetrics.length === 0) return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.toString() === '') {
+      setUrlParamsApplied(true)
+      return
+    }
+
+    const spec = parseSpecFromParams(params)
+    if (!spec) {
+      setUrlParamsApplied(true)
+      return
+    }
+
+    // Apply stocks
+    setAddedStocks(spec.stocks)
+    setVisibleStocks(spec.stocks)
+
+    // Apply metrics with colors
+    const validMetrics = spec.metrics.filter(m =>
+      availableMetrics.some(am => am.id === m)
+    ) as MetricId[]
+
+    if (validMetrics.length > 0) {
+      const newColors: Record<string, string> = {}
+      validMetrics.forEach((metricId, index) => {
+        newColors[metricId] = spec.colors?.[metricId] ?? COLOR_PALETTE[index % COLOR_PALETTE.length]
+      })
+      setCustomColors(newColors)
+      setAddedMetrics(validMetrics)
+      setVisibleMetrics(validMetrics)
+    }
+
+    // Apply period type
+    if (spec.periodType) setPeriodType(spec.periodType)
+
+    // Apply year range
+    if (spec.minYear) setMinYear(spec.minYear)
+    if (spec.maxYear) setMaxYear(spec.maxYear)
+
+    // Apply stock price toggle
+    if (spec.showStockPrice) setShowStockPrice(true)
+
+    setUrlParamsApplied(true)
+  }, [availableMetrics, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
 
   // Keyboard shortcut: '/' to focus stock search
   useEffect(() => {
@@ -580,6 +633,23 @@ export default function ChartsPage() {
     }
   }
 
+  // Build a ChartExportSpec from current state and copy the export URL to clipboard
+  const handleCopyExportUrl = useCallback(() => {
+    const spec: ChartExportSpec = {
+      stocks: visibleStocks,
+      metrics: visibleMetrics,
+      periodType,
+      minYear: minYear ?? undefined,
+      maxYear: maxYear ?? undefined,
+      showStockPrice,
+      colors: Object.keys(customColors).length > 0 ? customColors : undefined,
+    }
+    const url = buildExportUrl(spec, window.location.origin)
+    navigator.clipboard.writeText(url).then(() => {
+      // Brief visual feedback could be added here if desired
+    })
+  }, [visibleStocks, visibleMetrics, periodType, minYear, maxYear, showStockPrice, customColors])
+
   const handleSliderMinChange = (value: number) => {
     const nextMin = clampToBounds(value)
     const currentMax = maxYear ?? yearBounds?.max ?? nextMin
@@ -917,6 +987,7 @@ export default function ChartsPage() {
                     : customColors
                 }
                 onReset={handleReset}
+                onCopyExportUrl={handleCopyExportUrl}
               />
             ) : (
               <div className="h-[650px] flex items-start justify-center pt-24">

@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {}
+const nextConfig = {
+  serverExternalPackages: ['ws'],
+  devIndicators: false,
+}
 
 module.exports = nextConfig

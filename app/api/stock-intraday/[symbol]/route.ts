@@ -7,7 +7,7 @@ const TTL_MS = 15_000
 const cache = new Map<string, { at: number; data: any }>()
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   const rawSymbol = decodeURIComponent((await params).symbol)
@@ -22,8 +22,13 @@ export async function GET(
 
   const symbol = rawSymbol
 
+  // Optional minute multiplier (default 5)
+  const url = new URL(request.url)
+  const interval = Math.min(Math.max(Number(url.searchParams.get('interval') ?? '5'), 1), 30)
+
+  const cacheKey = `${symbol}:${interval}`
   const now = Date.now()
-  const cached = cache.get(symbol)
+  const cached = cache.get(cacheKey)
 
   if (cached && now - cached.at < TTL_MS) {
     return NextResponse.json(cached.data, {
@@ -34,7 +39,7 @@ export async function GET(
     })
   }
 
-  const result = await getStockIntradayOHLC(symbol)
+  const result = await getStockIntradayOHLC(symbol, interval)
 
   if (result.error) {
     return NextResponse.json(
@@ -43,7 +48,7 @@ export async function GET(
     )
   }
 
-  cache.set(symbol, { at: now, data: result.data })
+  cache.set(cacheKey, { at: now, data: result.data })
 
   // Evict stale entries to prevent unbounded growth
   if (cache.size > 100) {

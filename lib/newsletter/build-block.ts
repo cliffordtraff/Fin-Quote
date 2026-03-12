@@ -1,0 +1,181 @@
+import type { NewsletterBlock, NewsletterBlockContent, SlotName } from './types'
+import { getLayoutTemplate } from './layout-templates'
+
+// ---------------------------------------------------------------------------
+// Brand colors (from tailwind.config.ts sage/cream tokens)
+// ---------------------------------------------------------------------------
+
+const BRAND = {
+  sage500: '#5a6b4a',
+  sage700: '#3d4a30',
+  cream100: '#f5f5f0',
+  cream300: '#e5e5e0',
+  textDark: '#1a1a1a',
+  textMuted: '#6b7280',
+  white: '#ffffff',
+} as const
+
+// ---------------------------------------------------------------------------
+// Content → slot mapping
+// ---------------------------------------------------------------------------
+
+/** Map a slot name to the corresponding field(s) in NewsletterBlockContent. */
+function slotHasContent(
+  slot: SlotName,
+  content: NewsletterBlockContent,
+): boolean {
+  switch (slot) {
+    case 'heading':
+      return !!content.heading
+    case 'body':
+      return !!content.body
+    case 'chart':
+      return !!content.chartImageUrl
+    case 'caption':
+      return !!content.caption
+    case 'cta':
+      return !!content.ctaText && !!content.ctaUrl
+    case 'footer':
+      return !!content.footer
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTML fragment builders (inline styles, table layout for email clients)
+// ---------------------------------------------------------------------------
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function renderHeading(text: string): string {
+  return `<tr><td style="padding:24px 32px 8px 32px;">
+  <h2 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:${BRAND.textDark};line-height:1.3;">
+    ${escapeHtml(text)}
+  </h2>
+</td></tr>`
+}
+
+function renderBody(text: string): string {
+  return `<tr><td style="padding:8px 32px 16px 32px;">
+  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;color:${BRAND.textDark};line-height:1.6;">
+    ${escapeHtml(text)}
+  </p>
+</td></tr>`
+}
+
+function renderChart(imageUrl: string, alt: string): string {
+  return `<tr><td style="padding:8px 32px;">
+  <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="600" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.cream300};" />
+</td></tr>`
+}
+
+function renderCaption(text: string): string {
+  return `<tr><td style="padding:4px 32px 16px 32px;">
+  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:${BRAND.textMuted};line-height:1.4;font-style:italic;">
+    ${escapeHtml(text)}
+  </p>
+</td></tr>`
+}
+
+function renderCta(text: string, url: string): string {
+  // VML fallback for rounded-corner buttons in Outlook
+  return `<tr><td style="padding:16px 32px;" align="center">
+  <!--[if mso]>
+  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeHtml(url)}" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="14%" strokecolor="${BRAND.sage700}" fillcolor="${BRAND.sage500}">
+    <w:anchorlock/>
+    <center style="color:${BRAND.white};font-family:sans-serif;font-size:14px;font-weight:bold;">${escapeHtml(text)}</center>
+  </v:roundrect>
+  <![endif]-->
+  <!--[if !mso]><!-->
+  <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:12px 32px;background-color:${BRAND.sage500};color:${BRAND.white};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;text-decoration:none;border-radius:6px;line-height:1;">
+    ${escapeHtml(text)}
+  </a>
+  <!--<![endif]-->
+</td></tr>`
+}
+
+function renderFooter(text: string): string {
+  return `<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid ${BRAND.cream300};">
+  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:${BRAND.textMuted};line-height:1.4;">
+    ${escapeHtml(text)}
+  </p>
+</td></tr>`
+}
+
+// ---------------------------------------------------------------------------
+// Slot → HTML dispatcher
+// ---------------------------------------------------------------------------
+
+function renderSlot(
+  slot: SlotName,
+  content: NewsletterBlockContent,
+): string {
+  switch (slot) {
+    case 'heading':
+      return content.heading ? renderHeading(content.heading) : ''
+    case 'body':
+      return content.body ? renderBody(content.body) : ''
+    case 'chart':
+      return content.chartImageUrl
+        ? renderChart(content.chartImageUrl, content.chartAlt ?? 'Chart')
+        : ''
+    case 'caption':
+      return content.caption ? renderCaption(content.caption) : ''
+    case 'cta':
+      return content.ctaText && content.ctaUrl
+        ? renderCta(content.ctaText, content.ctaUrl)
+        : ''
+    case 'footer':
+      return content.footer ? renderFooter(content.footer) : ''
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a newsletter block from a layout template and content.
+ *
+ * Returns structured data + an email-safe HTML fragment using table layout
+ * and inline styles for maximum email client compatibility.
+ *
+ * Throws if:
+ *   - Layout ID is unknown
+ *   - A required slot is missing content
+ */
+export function buildNewsletterBlock(
+  layoutId: string,
+  content: NewsletterBlockContent,
+): NewsletterBlock {
+  const layout = getLayoutTemplate(layoutId)
+  if (!layout) {
+    throw new Error(`Unknown newsletter layout: "${layoutId}"`)
+  }
+
+  // Validate required slots
+  for (const slot of layout.slots) {
+    if (slot.required && !slotHasContent(slot.name, content)) {
+      throw new Error(
+        `Layout "${layoutId}" requires slot "${slot.name}" but no content was provided`,
+      )
+    }
+  }
+
+  // Build HTML rows in slot order
+  const rows = layout.slots
+    .map((slot) => renderSlot(slot.name, content))
+    .filter(Boolean)
+    .join('\n')
+
+  const html = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+${rows}
+</table>`
+
+  return { layoutId, data: content, html }
+}
