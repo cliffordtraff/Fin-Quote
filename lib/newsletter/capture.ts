@@ -97,6 +97,30 @@ export async function captureChart(
 }
 
 /**
+ * Capture a full-page screenshot of a local HTML file.
+ * Used to preview the final assembled newsletter.
+ */
+export async function captureFullPage(
+  browser: Browser,
+  htmlFilePath: string,
+  outputPath: string,
+  options?: { width?: number },
+): Promise<string> {
+  const page = await browser.newPage()
+
+  try {
+    await page.setViewport({ width: options?.width ?? 700, height: 800 })
+    await page.goto(`file://${htmlFilePath}`, { waitUntil: 'networkidle0', timeout: 15000 })
+    await new Promise((r) => setTimeout(r, 300))
+    await page.screenshot({ path: outputPath, type: 'png', fullPage: true })
+  } finally {
+    await page.close()
+  }
+
+  return outputPath
+}
+
+/**
  * Convenience wrapper: launches its own browser, captures one chart, closes.
  * Use `captureChart()` with a shared browser when capturing multiple charts.
  */

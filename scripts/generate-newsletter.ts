@@ -1,22 +1,26 @@
 #!/usr/bin/env npx tsx
 /**
- * Generate a complete AI-powered newsletter for a given ticker.
+ * Generate a complete AI-powered newsletter.
+ *
+ * When --ticker is provided, generates for that stock.
+ * When omitted, AI picks today's best story from most-active S&P 500 stocks.
  *
  * Prerequisites:
  *   - Dev server must be running (npm run dev)
- *   - Environment variables in .env.local (Supabase, OpenAI)
+ *   - Environment variables in .env.local (Supabase, OpenAI, FMP)
  *
  * Usage:
- *   npx tsx scripts/generate-newsletter.ts --ticker AAPL
+ *   npx tsx scripts/generate-newsletter.ts                    # AI picks stock
+ *   npx tsx scripts/generate-newsletter.ts --ticker AAPL      # Manual override
  *   npx tsx scripts/generate-newsletter.ts --ticker MSFT --base-url https://theintraday.com
- *   npx tsx scripts/generate-newsletter.ts --ticker GOOGL --output-dir ./newsletters
+ *   npx tsx scripts/generate-newsletter.ts --output-dir ./newsletters
  */
 
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
 interface CliOptions {
-  ticker: string
+  ticker: string | undefined
   baseUrl: string
   outputDir: string
   maxCharts: number
@@ -25,7 +29,7 @@ interface CliOptions {
 function parseArgs(): CliOptions {
   const args = process.argv.slice(2)
   const opts: CliOptions = {
-    ticker: '',
+    ticker: undefined,
     baseUrl: 'http://localhost:3005',
     outputDir: './public/newsletter-charts',
     maxCharts: 3,
@@ -50,20 +54,14 @@ function parseArgs(): CliOptions {
 Usage: npx tsx scripts/generate-newsletter.ts [options]
 
 Options:
-  --ticker <SYMBOL>    Stock ticker (required, e.g., AAPL, MSFT, GOOGL)
-  --base-url <url>     App base URL (default: http://localhost:3000)
+  --ticker <SYMBOL>    Stock ticker (optional — AI picks if omitted)
+  --base-url <url>     App base URL (default: http://localhost:3005)
   --output-dir <path>  Output directory for charts + HTML (default: ./public/newsletter-charts)
   --max-charts <n>     Maximum chart sections (default: 3)
   --help               Show this help
 `)
         process.exit(0)
     }
-  }
-
-  if (!opts.ticker) {
-    console.error('Error: --ticker is required')
-    console.error('Run with --help for usage info')
-    process.exit(1)
   }
 
   return opts
@@ -84,9 +82,13 @@ async function healthCheck(baseUrl: string): Promise<void> {
 
 async function main() {
   const opts = parseArgs()
-  const ticker = opts.ticker.toUpperCase()
 
-  console.log(`\nGenerating newsletter for ${ticker}...`)
+  if (opts.ticker) {
+    const ticker = opts.ticker.toUpperCase()
+    console.log(`\nGenerating newsletter for ${ticker}...`)
+  } else {
+    console.log(`\nNo --ticker provided. AI will pick today's stock...`)
+  }
   console.log(`  Base URL: ${opts.baseUrl}`)
   console.log(`  Output:   ${opts.outputDir}`)
   console.log(`  Max charts: ${opts.maxCharts}\n`)
@@ -97,13 +99,30 @@ async function main() {
   // Dynamic import to avoid loading heavy dependencies until after env + health check
   const { generateNewsletter } = await import('@/lib/newsletter/orchestrate')
 
-  const result = await generateNewsletter(ticker, {
+  const result = await generateNewsletter(opts.ticker, {
     baseUrl: opts.baseUrl,
     outputDir: opts.outputDir,
     maxCharts: opts.maxCharts,
   })
 
   console.log(`\nNewsletter generated successfully!`)
+
+  // Show stock pick details if auto-picked
+  if (result.autoPickedStock && result.stockPickerResult) {
+    const pick = result.stockPickerResult
+    const sign = pick.changesPercentage >= 0 ? '+' : ''
+    console.log(`\n--- AI Stock Pick ---`)
+    console.log(`  Stock: ${pick.ticker} (${pick.name})`)
+    console.log(`  Move:  ${sign}${pick.changesPercentage.toFixed(2)}%`)
+    console.log(`  Hook:  ${pick.editorialHook}`)
+    if (pick.topHeadlines.length > 0) {
+      console.log(`  Headlines:`)
+      for (const h of pick.topHeadlines) {
+        console.log(`    - "${h.title}" (${h.site})`)
+      }
+    }
+  }
+
   console.log(`\n--- Selected Templates ---`)
   for (const sel of result.selections) {
     console.log(`  ${sel.templateId}: ${sel.reason}`)

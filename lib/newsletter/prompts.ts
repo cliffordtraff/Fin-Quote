@@ -1,5 +1,110 @@
 import { EDITORIAL_TEMPLATES } from './editorial-templates'
-import type { NewsletterContext, TemplateSelection, GeneratedCopy } from './types'
+import type {
+  NewsletterContext,
+  TemplateSelection,
+  GeneratedCopy,
+  MarketContext,
+  StockPickerResult,
+} from './types'
+
+// ---------------------------------------------------------------------------
+// Stock picker prompt (Step 0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build messages for the AI stock picker that selects the best stock
+ * for today's newsletter from the most-active S&P 500 stocks.
+ */
+export function buildStockPickerMessages(
+  market: MarketContext,
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const system = [
+    'You are the editor of The Intraday, a financial newsletter.',
+    'Pick ONE stock from the candidates below for today\'s newsletter.',
+    '',
+    'Consider:',
+    '1. Does the news explain the price move?',
+    '2. Is this a company most readers would recognize?',
+    '3. Would financial charts (revenue, margins, cash flow) add context?',
+    '4. Is the price move significant enough to write about?',
+    '',
+    'Avoid: random volume spikes with no news, obscure names, trivial < 2% moves.',
+    '',
+    'Output JSON only:',
+    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick" }',
+  ].join('\n')
+
+  const candidateBlocks = market.candidates.map((c) => {
+    const headlines = (market.newsBySymbol[c.symbol] || [])
+      .slice(0, 5)
+      .map((n, i) => `    ${i + 1}. "${n.title}" — ${n.site}, ${n.publishedDate}`)
+      .join('\n')
+
+    return [
+      `${c.symbol} — ${c.name}`,
+      `  Price: $${c.price.toFixed(2)}, Change: ${c.changesPercentage >= 0 ? '+' : ''}${c.changesPercentage.toFixed(2)}%`,
+      headlines ? `  Headlines:\n${headlines}` : '  Headlines: (none)',
+    ].join('\n')
+  })
+
+  const user = [
+    `Today's most active S&P 500 stocks (${new Date().toISOString().slice(0, 10)}):`,
+    '',
+    ...candidateBlocks,
+  ].join('\n\n')
+
+  return [
+    { role: 'system' as const, content: system },
+    { role: 'user' as const, content: user },
+  ]
+}
+
+/**
+ * Parse and validate the AI stock picker response.
+ * Falls back to the candidate with the biggest absolute % move.
+ */
+export function parseStockPickerResult(
+  responseText: string,
+  market: MarketContext,
+): StockPickerResult {
+  const candidateSymbols = new Set(market.candidates.map((c) => c.symbol))
+
+  let symbol: string | undefined
+  let name: string | undefined
+  let editorialHook = ''
+
+  try {
+    const parsed = JSON.parse(responseText)
+    symbol = parsed.symbol?.toUpperCase()
+    name = parsed.name
+    editorialHook = parsed.editorialHook || ''
+  } catch {
+    // Fall through to fallback
+  }
+
+  // Validate the AI pick exists in candidates
+  if (!symbol || !candidateSymbols.has(symbol)) {
+    // Fallback: biggest absolute mover
+    const sorted = [...market.candidates].sort(
+      (a, b) => Math.abs(b.changesPercentage) - Math.abs(a.changesPercentage),
+    )
+    const fallback = sorted[0]
+    symbol = fallback.symbol
+    name = fallback.name
+    editorialHook = `${fallback.name} moved ${fallback.changesPercentage >= 0 ? '+' : ''}${fallback.changesPercentage.toFixed(1)}% today.`
+  }
+
+  const candidate = market.candidates.find((c) => c.symbol === symbol)!
+  const topHeadlines = (market.newsBySymbol[symbol] || []).slice(0, 3)
+
+  return {
+    ticker: symbol,
+    name: name || candidate.name,
+    changesPercentage: candidate.changesPercentage,
+    editorialHook,
+    topHeadlines,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Template selection prompt
@@ -77,8 +182,9 @@ export function buildCopyGenerationMessages(
   templateId: string,
   templateLabel: string,
   editorialAngle: string,
+  stockPickerResult?: StockPickerResult,
 ): Array<{ role: 'system' | 'user'; content: string }> {
-  const system = [
+  const systemParts = [
     'You are a financial newsletter copywriter for The Intraday.',
     'Write concise, data-grounded copy for one chart section of a newsletter.',
     '',
@@ -89,12 +195,21 @@ export function buildCopyGenerationMessages(
     '- All numbers MUST come from the provided data — never invent figures',
     '- Write in present tense for current state, past tense for trends',
     '- Do not use markdown formatting',
+  ]
+
+  if (stockPickerResult) {
+    systemParts.push(
+      '- Weave the news angle into the body naturally — connect today\'s catalyst to the financial trends',
+    )
+  }
+
+  systemParts.push(
     '',
     'Respond with JSON only:',
     '{ "headline": "...", "body": "...", "caption": "..." }',
-  ].join('\n')
+  )
 
-  const user = [
+  const userParts = [
     `Company: ${context.ticker}`,
     `Chart template: ${templateLabel}`,
     `Editorial angle: ${editorialAngle}`,
@@ -104,11 +219,31 @@ export function buildCopyGenerationMessages(
     '',
     '=== Highlights ===',
     JSON.stringify(context.highlights, null, 2),
-  ].join('\n')
+  ]
+
+  if (stockPickerResult) {
+    const sign = stockPickerResult.changesPercentage >= 0 ? '+' : ''
+    userParts.push(
+      '',
+      '=== Current Market Context ===',
+      `Today's move: ${sign}${stockPickerResult.changesPercentage.toFixed(2)}%`,
+      `Editorial hook: ${stockPickerResult.editorialHook}`,
+    )
+
+    if (stockPickerResult.topHeadlines.length > 0) {
+      userParts.push(
+        '',
+        '=== Recent Headlines ===',
+        ...stockPickerResult.topHeadlines.map(
+          (h) => `- "${h.title}" — ${h.site}, ${h.publishedDate}`,
+        ),
+      )
+    }
+  }
 
   return [
-    { role: 'system' as const, content: system },
-    { role: 'user' as const, content: user },
+    { role: 'system' as const, content: systemParts.join('\n') },
+    { role: 'user' as const, content: userParts.join('\n') },
   ]
 }
 

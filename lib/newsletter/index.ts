@@ -16,6 +16,10 @@ export type {
   NewsletterResult,
   TemplateSelection,
   GeneratedCopy,
+  StockCandidate,
+  StockNewsItem,
+  MarketContext,
+  StockPickerResult,
 } from './types'
 
 // Editorial chart templates
@@ -39,7 +43,7 @@ export { resolveEditorialChart } from './resolve-chart'
 export { buildNewsletterBlock } from './build-block'
 
 // AI orchestration
-export { fetchNewsletterContext } from './fetch-context'
+export { fetchNewsletterContext, fetchMarketContext } from './fetch-context'
 export { captureChart, captureChartStandalone } from './capture'
 export { assembleNewsletterHtml } from './assemble'
 export { generateNewsletter } from './orchestrate'

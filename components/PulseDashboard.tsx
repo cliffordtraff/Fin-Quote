@@ -101,10 +101,21 @@ function useDegenScale(
   }, [lastPrice, dayHigh, dayLow, baseScale])
 }
 
-/** CSS overlay for HOD/LOD dashed reference lines on top of the Liveline chart */
+/**
+ * CSS overlay for HOD/LOD on top of the Liveline chart.
+ *
+ * Three modes per level:
+ *   1. In-range  → dashed horizontal line at correct Y position
+ *   2. Off-screen but within proximity threshold (~1%) → edge indicator
+ *      pinned to top (HOD) or bottom (LOD) with distance %, opacity fading
+ *   3. Far away  → nothing shown
+ */
+const PROXIMITY_THRESHOLD = 0.01 // 1% of price
+
 function PriceOverlay({
   dayHigh,
   dayLow,
+  lastPrice,
   candles,
   liveCandle,
   windowSecs,
@@ -113,14 +124,15 @@ function PriceOverlay({
 }: {
   dayHigh: number | null
   dayLow: number | null
+  lastPrice: number | null
   candles: { time: number; high: number; low: number; close: number }[]
   liveCandle: { high: number; low: number; close: number } | undefined
   windowSecs: number
   padding: { top: number; right: number; bottom: number; left: number }
   chartHeight: number
 }) {
-  const lines = useMemo(() => {
-    if (dayHigh === null || dayLow === null) return null
+  const overlay = useMemo(() => {
+    if (dayHigh === null || dayLow === null || lastPrice === null || lastPrice === 0) return null
     if (candles.length === 0) return null
 
     // Compute visible min/max from candles within the window
@@ -139,13 +151,9 @@ function PriceOverlay({
       if (liveCandle.low < visMin) visMin = liveCandle.low
     }
 
-    // Extend range to include HOD/LOD so lines are always potentially visible
-    visMax = Math.max(visMax, dayHigh)
-    visMin = Math.min(visMin, dayLow)
-
     if (!isFinite(visMin) || !isFinite(visMax) || visMin === visMax) return null
 
-    // Add 5% buffer on each side
+    // Match Liveline's internal scaling
     const range = visMax - visMin
     const buffer = range * 0.05
     const bufferedMin = visMin - buffer
@@ -157,27 +165,65 @@ function PriceOverlay({
     const priceToY = (price: number) =>
       padding.top + (1 - (price - bufferedMin) / bufferedRange) * chartAreaHeight
 
+    const chartTop = padding.top
+    const chartBottom = chartHeight - padding.bottom
+
+    type LineInfo = { price: number; y: number; label: string; color: string }
+    type EdgeInfo = { side: 'top' | 'bottom'; label: string; distPct: string; color: string; bgColor: string; opacity: number }
+
+    const lines: LineInfo[] = []
+    const edges: EdgeInfo[] = []
+
+    // --- HOD ---
     const hodY = priceToY(dayHigh)
+    const hodDistPct = (dayHigh - lastPrice) / lastPrice
+    const hodInRange = hodY >= chartTop - 10 && hodY <= chartBottom + 10
+
+    if (hodInRange) {
+      lines.push({ price: dayHigh, y: hodY, label: `HOD $${formatPrice(dayHigh)}`, color: 'rgba(34, 197, 94, 0.6)' })
+    } else if (hodDistPct > 0 && hodDistPct <= PROXIMITY_THRESHOLD) {
+      // Off-screen above, but close — show edge indicator at top
+      const intensity = 1 - hodDistPct / PROXIMITY_THRESHOLD
+      edges.push({
+        side: 'top',
+        label: `HOD $${formatPrice(dayHigh)}`,
+        distPct: `${(hodDistPct * 100).toFixed(2)}%`,
+        color: 'rgb(34, 197, 94)',
+        bgColor: 'rgba(34, 197, 94, 0.12)',
+        opacity: 0.4 + intensity * 0.6,
+      })
+    }
+
+    // --- LOD ---
     const lodY = priceToY(dayLow)
+    const lodDistPct = (lastPrice - dayLow) / lastPrice
+    const lodInRange = lodY >= chartTop - 10 && lodY <= chartBottom + 10
 
-    const result: { price: number; y: number; label: string; color: string }[] = []
-
-    // Only show if within visible chart area (with some margin)
-    if (hodY >= padding.top - 10 && hodY <= chartHeight - padding.bottom + 10) {
-      result.push({ price: dayHigh, y: hodY, label: `HOD $${formatPrice(dayHigh)}`, color: 'rgba(34, 197, 94, 0.5)' })
+    if (lodInRange) {
+      lines.push({ price: dayLow, y: lodY, label: `LOD $${formatPrice(dayLow)}`, color: 'rgba(239, 68, 68, 0.6)' })
+    } else if (lodDistPct > 0 && lodDistPct <= PROXIMITY_THRESHOLD) {
+      // Off-screen below, but close — show edge indicator at bottom
+      const intensity = 1 - lodDistPct / PROXIMITY_THRESHOLD
+      edges.push({
+        side: 'bottom',
+        label: `LOD $${formatPrice(dayLow)}`,
+        distPct: `${(lodDistPct * 100).toFixed(2)}%`,
+        color: 'rgb(239, 68, 68)',
+        bgColor: 'rgba(239, 68, 68, 0.12)',
+        opacity: 0.4 + intensity * 0.6,
+      })
     }
-    if (lodY >= padding.top - 10 && lodY <= chartHeight - padding.bottom + 10) {
-      result.push({ price: dayLow, y: lodY, label: `LOD $${formatPrice(dayLow)}`, color: 'rgba(239, 68, 68, 0.5)' })
-    }
 
-    return result
-  }, [dayHigh, dayLow, candles, liveCandle, windowSecs, padding, chartHeight])
+    if (lines.length === 0 && edges.length === 0) return null
+    return { lines, edges }
+  }, [dayHigh, dayLow, lastPrice, candles, liveCandle, windowSecs, padding, chartHeight])
 
-  if (!lines || lines.length === 0) return null
+  if (!overlay) return null
 
   return (
     <>
-      {lines.map((line) => (
+      {/* Dashed lines for in-range levels */}
+      {overlay.lines.map((line) => (
         <div
           key={line.label}
           style={{
@@ -205,6 +251,44 @@ function PriceOverlay({
           >
             {line.label}
           </span>
+        </div>
+      ))}
+
+      {/* Edge indicators for off-screen but nearby levels */}
+      {overlay.edges.map((edge) => (
+        <div
+          key={edge.label}
+          style={{
+            position: 'absolute',
+            [edge.side === 'top' ? 'top' : 'bottom']: edge.side === 'top' ? padding.top : padding.bottom,
+            left: padding.left,
+            right: padding.right,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 10,
+            opacity: edge.opacity,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 8px',
+              borderRadius: 4,
+              backgroundColor: edge.bgColor,
+              fontSize: 10,
+              fontWeight: 600,
+              color: edge.color,
+              whiteSpace: 'nowrap',
+              userSelect: 'none',
+            }}
+          >
+            <span>{edge.side === 'top' ? '\u2191' : '\u2193'}</span>
+            <span>{edge.label}</span>
+            <span style={{ opacity: 0.7, fontWeight: 500 }}>({edge.distPct} away)</span>
+          </div>
         </div>
       ))}
     </>
@@ -344,6 +428,7 @@ function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, da
         <PriceOverlay
           dayHigh={dayHigh}
           dayLow={dayLow}
+          lastPrice={stream.lastPrice}
           candles={chartData?.candles ?? []}
           liveCandle={chartData?.liveCandle}
           windowSecs={windowSecs}
@@ -371,7 +456,7 @@ function PulseColumn({ symbol, stream, theme, timeframe, variantWindow }: { symb
         dayHigh={stream.dayHigh}
         dayLow={stream.dayLow}
         label="Exaggerated"
-        color="#22c55e"
+        color={(stream.lastChange ?? 0) >= 0 ? '#22c55e' : '#ef4444'}
       />
       <PulseCard
         symbol={symbol}

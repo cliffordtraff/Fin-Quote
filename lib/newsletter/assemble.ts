@@ -1,4 +1,4 @@
-import type { NewsletterBlock } from './types'
+import type { NewsletterBlock, StockPickerResult } from './types'
 
 // Brand colors (matching build-block.ts)
 const BRAND = {
@@ -45,9 +45,35 @@ export function assembleNewsletterHtml(
   ticker: string,
   blocks: NewsletterBlock[],
   date: Date,
+  stockPickerResult?: StockPickerResult,
 ): string {
   const formattedDate = formatDate(date)
   const tickerUpper = escapeHtml(ticker.toUpperCase())
+
+  // Build intro block when stock was auto-picked
+  let introHtml = ''
+  if (stockPickerResult) {
+    const pct = stockPickerResult.changesPercentage
+    const sign = pct >= 0 ? '+' : ''
+    // Estimate dollar change from percentage and current headlines context
+    const hook = escapeHtml(stockPickerResult.editorialHook)
+    const name = escapeHtml(stockPickerResult.name)
+    const moveColor = pct >= 0 ? '#16a34a' : '#dc2626'
+
+    introHtml = `
+    <!-- Intro -->
+    <tr><td style="padding:0 0 24px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+        <tr><td style="padding:24px 32px;">
+          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
+            <strong>${name}</strong> (<span style="font-weight:600;">${tickerUpper}</span>) is
+            <span style="color:${moveColor};font-weight:600;">${sign}${pct.toFixed(2)}%</span> today.
+            ${hook}
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>`
+  }
 
   const blockHtml = blocks
     .map(
@@ -111,6 +137,7 @@ export function assembleNewsletterHtml(
             </table>
           </td></tr>
 
+${introHtml}
 ${blockHtml}
 
           <!-- Footer -->

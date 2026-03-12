@@ -5,20 +5,23 @@ import OpenAI from 'openai'
 import { resolveEditorialChart } from './resolve-chart'
 import { getEditorialTemplate } from './editorial-templates'
 import { buildNewsletterBlock } from './build-block'
-import { fetchNewsletterContext } from './fetch-context'
+import { fetchNewsletterContext, fetchMarketContext } from './fetch-context'
 import {
+  buildStockPickerMessages,
+  parseStockPickerResult,
   buildTemplateSelectionMessages,
   parseTemplateSelections,
   buildCopyGenerationMessages,
   parseCopyGeneration,
 } from './prompts'
-import { captureChart } from './capture'
+import { captureChart, captureFullPage } from './capture'
 import { assembleNewsletterHtml } from './assemble'
 import type {
   NewsletterOptions,
   NewsletterResult,
   NewsletterBlock,
   GeneratedCopy,
+  StockPickerResult,
 } from './types'
 
 const DEFAULT_BASE_URL = 'http://localhost:3005'
@@ -26,30 +29,31 @@ const DEFAULT_OUTPUT_DIR = './public/newsletter-charts'
 const DEFAULT_MAX_CHARTS = 3
 
 /**
- * Generate a complete newsletter for a given ticker.
+ * Generate a complete newsletter.
+ *
+ * When `ticker` is provided, it's used directly (manual override).
+ * When omitted, the AI stock picker selects the best story from
+ * today's most-active S&P 500 stocks.
  *
  * End-to-end flow:
+ *   0. (Optional) AI stock picker — picks ticker from most-active stocks
  *   1. Fetch financial context
  *   2. AI selects best editorial chart templates
  *   3. Resolve each selection into a ChartExportSpec
  *   4. Puppeteer captures chart screenshots
- *   5. AI generates editorial copy for each chart
+ *   5. AI generates editorial copy (with news context if auto-picked)
  *   6. Build newsletter blocks + assemble full HTML
  *   7. Save to disk and return result
  */
 export async function generateNewsletter(
-  ticker: string,
+  ticker?: string,
   options?: NewsletterOptions,
 ): Promise<NewsletterResult> {
   const baseUrl = options?.baseUrl ?? DEFAULT_BASE_URL
   const outputDir = options?.outputDir ?? DEFAULT_OUTPUT_DIR
   const maxCharts = options?.maxCharts ?? DEFAULT_MAX_CHARTS
-  const tickerUpper = ticker.toUpperCase().trim()
 
-  if (!tickerUpper || !/^[A-Z]{1,5}$/.test(tickerUpper)) {
-    throw new Error(`Invalid ticker: "${ticker}"`)
-  }
-
+  const tStart = Date.now()
   const timings: Record<string, number> = {}
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
@@ -62,11 +66,57 @@ export async function generateNewsletter(
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
   const isGpt5 = model.includes('gpt-5')
 
+  let tickerUpper: string
+  let autoPickedStock = false
+  let stockPickerResult: StockPickerResult | undefined
+
+  // -----------------------------------------------------------------------
+  // Step 0: AI Stock Picker (when no ticker provided)
+  // -----------------------------------------------------------------------
+  if (ticker) {
+    tickerUpper = ticker.toUpperCase().trim()
+    if (!tickerUpper || !/^[A-Z]{1,5}$/.test(tickerUpper)) {
+      throw new Error(`Invalid ticker: "${ticker}"`)
+    }
+  } else {
+    const t0pick = Date.now()
+
+    const market = await fetchMarketContext()
+    timings.fetchMarketContext = Date.now() - t0pick
+
+    const tPick = Date.now()
+    const pickerMessages = buildStockPickerMessages(market)
+
+    const pickerResponse = await openai.responses.create({
+      model,
+      input: pickerMessages.map((m, i) => ({
+        id: `msg_pick_${i}`,
+        role: m.role,
+        content: [{ type: 'input_text' as const, text: m.content }],
+        type: 'message' as const,
+      })),
+      ...(isGpt5 ? {} : { temperature: 0 }),
+      max_output_tokens: isGpt5 ? 20000 : 500,
+      ...(isGpt5 ? { reasoning: { effort: 'minimal' as const } } : {}),
+      text: { format: { type: 'json_object' } },
+    })
+
+    const pickerText = pickerResponse.output_text ?? ''
+    stockPickerResult = parseStockPickerResult(pickerText, market)
+    tickerUpper = stockPickerResult.ticker
+    autoPickedStock = true
+    timings.aiStockPicker = Date.now() - tPick
+  }
+
   // -----------------------------------------------------------------------
   // Step 1: Fetch financial context
   // -----------------------------------------------------------------------
   const t0 = Date.now()
   const context = await fetchNewsletterContext(tickerUpper)
+  // Attach stock picker result if present
+  if (stockPickerResult) {
+    context.stockPickerResult = stockPickerResult
+  }
   timings.fetchContext = Date.now() - t0
 
   // -----------------------------------------------------------------------
@@ -113,27 +163,23 @@ export async function generateNewsletter(
   const browser = await puppeteer.launch({ headless: true })
   const chartPaths: string[] = []
 
-  try {
-    for (let i = 0; i < resolvedCharts.length; i++) {
-      const resolved = resolvedCharts[i]
-      const filename = `${tickerUpper}_${resolved.templateId}_${dateStr}.png`
-      const outputPath = resolve(absOutputDir, filename)
+  for (let i = 0; i < resolvedCharts.length; i++) {
+    const resolved = resolvedCharts[i]
+    const filename = `${tickerUpper}_${resolved.templateId}_${dateStr}.png`
+    const outputPath = resolve(absOutputDir, filename)
 
-      await captureChart(browser, resolved.spec, {
-        outputPath,
-        baseUrl,
-      })
+    await captureChart(browser, resolved.spec, {
+      outputPath,
+      baseUrl,
+    })
 
-      chartPaths.push(outputPath)
-    }
-  } finally {
-    await browser.close()
+    chartPaths.push(outputPath)
   }
 
   timings.chartCapture = Date.now() - t2
 
   // -----------------------------------------------------------------------
-  // Step 5: AI generates copy for each chart
+  // Step 5: AI generates copy for each chart (with news context if auto-picked)
   // -----------------------------------------------------------------------
   const t3 = Date.now()
   const generatedCopies: GeneratedCopy[] = []
@@ -147,6 +193,7 @@ export async function generateNewsletter(
       sel.templateId,
       template.label,
       sel.reason,
+      stockPickerResult,
     )
 
     const copyResponse = await openai.responses.create({
@@ -178,17 +225,14 @@ export async function generateNewsletter(
     const copy = generatedCopies[i]
     const chartPath = chartPaths[i]
 
-    // Use a relative URL for the chart image (relative to public/)
-    const chartImageUrl = chartPath.includes('/public/')
-      ? chartPath.split('/public')[1]
-      : `/newsletter-charts/${chartPath.split('/').pop()}`
+    // Use just the filename — HTML and PNGs live in the same directory
+    const chartImageUrl = chartPath.split('/').pop()!
 
     const block = buildNewsletterBlock('chart_plus_commentary', {
       heading: copy.headline,
       body: copy.body,
       chartImageUrl,
       chartAlt: `${tickerUpper} ${selections[i].templateId.replace(/_/g, ' ')} chart`,
-      caption: copy.caption,
     })
 
     blocks.push(block)
@@ -197,12 +241,20 @@ export async function generateNewsletter(
   // -----------------------------------------------------------------------
   // Step 7: Assemble full email HTML and save
   // -----------------------------------------------------------------------
-  const fullHtml = assembleNewsletterHtml(tickerUpper, blocks, now)
+  const fullHtml = assembleNewsletterHtml(tickerUpper, blocks, now, stockPickerResult)
   const htmlFilename = `${tickerUpper}_newsletter_${dateStr}.html`
   const htmlPath = resolve(absOutputDir, htmlFilename)
   writeFileSync(htmlPath, fullHtml, 'utf-8')
 
-  timings.total = Date.now() - t0
+  // -----------------------------------------------------------------------
+  // Step 8: Full-page preview screenshot
+  // -----------------------------------------------------------------------
+  const previewFilename = `${tickerUpper}_newsletter_preview_${dateStr}.png`
+  const previewPath = resolve(absOutputDir, previewFilename)
+  await captureFullPage(browser, htmlPath, previewPath)
+  await browser.close()
+
+  timings.total = Date.now() - tStart
 
   return {
     ticker: tickerUpper,
@@ -212,6 +264,9 @@ export async function generateNewsletter(
     fullHtml,
     chartPaths,
     htmlPath,
+    previewPath,
     timings,
+    autoPickedStock,
+    stockPickerResult,
   }
 }

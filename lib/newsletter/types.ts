@@ -159,6 +159,43 @@ export interface NewsletterBlock {
 }
 
 // ---------------------------------------------------------------------------
+// AI stock picker types
+// ---------------------------------------------------------------------------
+
+/** A candidate stock from the most-active list */
+export interface StockCandidate {
+  symbol: string
+  name: string
+  price: number
+  change: number
+  changesPercentage: number
+}
+
+/** A single news article for a stock */
+export interface StockNewsItem {
+  title: string
+  text: string
+  url: string
+  publishedDate: string
+  site: string
+}
+
+/** Market context gathered for the AI stock picker */
+export interface MarketContext {
+  candidates: StockCandidate[]
+  newsBySymbol: Record<string, StockNewsItem[]>
+}
+
+/** Result of the AI stock picker step */
+export interface StockPickerResult {
+  ticker: string
+  name: string
+  changesPercentage: number
+  editorialHook: string
+  topHeadlines: StockNewsItem[]
+}
+
+// ---------------------------------------------------------------------------
 // AI orchestration types
 // ---------------------------------------------------------------------------
 
@@ -182,6 +219,8 @@ export interface NewsletterContext {
     operatingMarginLatest: number | null
     fcfLatest: number | null
   }
+  /** Present when the stock was auto-picked (no --ticker override) */
+  stockPickerResult?: StockPickerResult
 }
 
 /** Options for the newsletter generation pipeline */
@@ -204,6 +243,10 @@ export interface NewsletterResult {
   chartPaths: string[]
   htmlPath: string
   timings: Record<string, number>
+  /** True when the stock was auto-picked by AI (no --ticker override) */
+  autoPickedStock: boolean
+  /** Details of the AI stock pick (only present when autoPickedStock is true) */
+  stockPickerResult?: StockPickerResult
 }
 
 /** AI template selection output */
