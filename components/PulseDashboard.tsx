@@ -69,6 +69,148 @@ function useChartData(stream: LiveStreamState): ChartData | null {
   }, [stream.candles, stream.liveCandle])
 }
 
+/** Compute dynamic degen scale based on proximity to HOD/LOD */
+function useDegenScale(
+  lastPrice: number | null,
+  dayHigh: number | null,
+  dayLow: number | null,
+  baseScale = 1.5,
+): { scale: number; downMomentum: boolean } {
+  return useMemo(() => {
+    if (lastPrice === null || dayHigh === null || dayLow === null || dayHigh === 0 || dayLow === 0) {
+      return { scale: baseScale, downMomentum: true }
+    }
+
+    const proximityThreshold = 0.002 // 0.2% of price
+    const distToHigh = Math.abs(lastPrice - dayHigh) / dayHigh
+    const distToLow = Math.abs(lastPrice - dayLow) / dayLow
+    const nearestDist = Math.min(distToHigh, distToLow)
+
+    // Breakout — max intensity
+    if (lastPrice > dayHigh || lastPrice < dayLow) {
+      return { scale: 5, downMomentum: true }
+    }
+
+    // Approaching HOD/LOD — ramp up
+    if (nearestDist < proximityThreshold) {
+      const intensity = 1 - nearestDist / proximityThreshold
+      return { scale: baseScale + intensity * 3.5, downMomentum: true }
+    }
+
+    return { scale: baseScale, downMomentum: true }
+  }, [lastPrice, dayHigh, dayLow, baseScale])
+}
+
+/** CSS overlay for HOD/LOD dashed reference lines on top of the Liveline chart */
+function PriceOverlay({
+  dayHigh,
+  dayLow,
+  candles,
+  liveCandle,
+  windowSecs,
+  padding,
+  chartHeight,
+}: {
+  dayHigh: number | null
+  dayLow: number | null
+  candles: { time: number; high: number; low: number; close: number }[]
+  liveCandle: { high: number; low: number; close: number } | undefined
+  windowSecs: number
+  padding: { top: number; right: number; bottom: number; left: number }
+  chartHeight: number
+}) {
+  const lines = useMemo(() => {
+    if (dayHigh === null || dayLow === null) return null
+    if (candles.length === 0) return null
+
+    // Compute visible min/max from candles within the window
+    const now = candles[candles.length - 1].time
+    const windowStart = now - windowSecs
+    let visMin = Infinity
+    let visMax = -Infinity
+    for (const c of candles) {
+      if (c.time >= windowStart) {
+        if (c.high > visMax) visMax = c.high
+        if (c.low < visMin) visMin = c.low
+      }
+    }
+    if (liveCandle) {
+      if (liveCandle.high > visMax) visMax = liveCandle.high
+      if (liveCandle.low < visMin) visMin = liveCandle.low
+    }
+
+    // Extend range to include HOD/LOD so lines are always potentially visible
+    visMax = Math.max(visMax, dayHigh)
+    visMin = Math.min(visMin, dayLow)
+
+    if (!isFinite(visMin) || !isFinite(visMax) || visMin === visMax) return null
+
+    // Add 5% buffer on each side
+    const range = visMax - visMin
+    const buffer = range * 0.05
+    const bufferedMin = visMin - buffer
+    const bufferedMax = visMax + buffer
+    const bufferedRange = bufferedMax - bufferedMin
+
+    const chartAreaHeight = chartHeight - padding.top - padding.bottom
+
+    const priceToY = (price: number) =>
+      padding.top + (1 - (price - bufferedMin) / bufferedRange) * chartAreaHeight
+
+    const hodY = priceToY(dayHigh)
+    const lodY = priceToY(dayLow)
+
+    const result: { price: number; y: number; label: string; color: string }[] = []
+
+    // Only show if within visible chart area (with some margin)
+    if (hodY >= padding.top - 10 && hodY <= chartHeight - padding.bottom + 10) {
+      result.push({ price: dayHigh, y: hodY, label: `HOD $${formatPrice(dayHigh)}`, color: 'rgba(34, 197, 94, 0.5)' })
+    }
+    if (lodY >= padding.top - 10 && lodY <= chartHeight - padding.bottom + 10) {
+      result.push({ price: dayLow, y: lodY, label: `LOD $${formatPrice(dayLow)}`, color: 'rgba(239, 68, 68, 0.5)' })
+    }
+
+    return result
+  }, [dayHigh, dayLow, candles, liveCandle, windowSecs, padding, chartHeight])
+
+  if (!lines || lines.length === 0) return null
+
+  return (
+    <>
+      {lines.map((line) => (
+        <div
+          key={line.label}
+          style={{
+            position: 'absolute',
+            top: line.y,
+            left: padding.left,
+            right: padding.right,
+            height: 0,
+            borderTop: `1px dashed ${line.color}`,
+            pointerEvents: 'none',
+            zIndex: 10,
+          }}
+        >
+          <span
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: -14,
+              fontSize: 9,
+              fontWeight: 600,
+              color: line.color,
+              whiteSpace: 'nowrap',
+              userSelect: 'none',
+            }}
+          >
+            {line.label}
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
 interface PulseCardProps {
   symbol: string
   stream: LiveStreamState
@@ -76,6 +218,8 @@ interface PulseCardProps {
   theme: ThemeMode
   timeframe: Timeframe
   exaggerate: boolean
+  dayHigh: number | null
+  dayLow: number | null
   label?: string
   color?: string
   /** Use pure line mode (enables momentum arrows) instead of candle engine */
@@ -84,7 +228,7 @@ interface PulseCardProps {
   windowOverride?: number
 }
 
-function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, label, color = '#22c55e', lineOnly = false, windowOverride }: PulseCardProps) {
+function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, dayHigh, dayLow, label, color = '#22c55e', lineOnly = false, windowOverride }: PulseCardProps) {
   const [lineMode, setLineMode] = useState(true)
 
   const handleModeChange = useCallback(() => {
@@ -103,6 +247,10 @@ function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, la
 
   const windowSecs = windowOverride ?? (timeframe === '1s' ? 30 : 300)
   const candleWidth = timeframe === '1s' ? 1 : 10
+
+  const degenOpts = useDegenScale(stream.lastPrice, dayHigh, dayLow)
+  const chartPadding = { top: 8, right: 70, bottom: 64, left: 8 }
+  const chartHeight = 280
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden relative">
@@ -158,7 +306,7 @@ function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, la
       </div>
 
       {/* Chart */}
-      <div style={{ height: 280 }}>
+      <div style={{ height: chartHeight, position: 'relative' }}>
         <Liveline
           data={chartData?.lineData ?? []}
           value={chartData?.lineValue ?? price}
@@ -185,13 +333,22 @@ function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, la
           scrub={true}
           fill={true}
           pulse={true}
-          degen={{ scale: 1.5, downMomentum: true }}
+          degen={degenOpts}
           momentum={true}
           exaggerate={exaggerate}
           referenceLine={lineOnly ? undefined : refLine}
-          padding={{ top: 8, right: 70, bottom: 64, left: 8 }}
+          padding={chartPadding}
           formatValue={formatPrice}
           formatTime={formatTime}
+        />
+        <PriceOverlay
+          dayHigh={dayHigh}
+          dayLow={dayLow}
+          candles={chartData?.candles ?? []}
+          liveCandle={chartData?.liveCandle}
+          windowSecs={windowSecs}
+          padding={chartPadding}
+          chartHeight={chartHeight}
         />
       </div>
     </div>
@@ -211,6 +368,8 @@ function PulseColumn({ symbol, stream, theme, timeframe, variantWindow }: { symb
         theme={theme}
         timeframe={timeframe}
         exaggerate={true}
+        dayHigh={stream.dayHigh}
+        dayLow={stream.dayLow}
         label="Exaggerated"
         color="#22c55e"
       />
@@ -221,6 +380,8 @@ function PulseColumn({ symbol, stream, theme, timeframe, variantWindow }: { symb
         theme={theme}
         timeframe={timeframe}
         exaggerate={false}
+        dayHigh={stream.dayHigh}
+        dayLow={stream.dayLow}
         label="Normal"
         color="#5a6b4a"
       />
@@ -231,6 +392,8 @@ function PulseColumn({ symbol, stream, theme, timeframe, variantWindow }: { symb
         theme={theme}
         timeframe={timeframe}
         exaggerate={false}
+        dayHigh={stream.dayHigh}
+        dayLow={stream.dayLow}
         label={variantWindow ? `Variant ${variantWindow}s` : 'Variant'}
         color="#5a6b4a"
         lineOnly
@@ -283,7 +446,7 @@ export default function PulseDashboard() {
           <PulseColumn
             key={symbol}
             symbol={symbol}
-            stream={streams[symbol] ?? { candles: [], liveCandle: undefined, lastPrice: null, lastChange: null, lastChangePct: null, previousClose: null, connected: false, error: null }}
+            stream={streams[symbol] ?? { candles: [], liveCandle: undefined, lastPrice: null, lastChange: null, lastChangePct: null, previousClose: null, dayHigh: null, dayLow: null, connected: false, error: null }}
             theme={theme}
             timeframe={timeframe}
             variantWindow={i < 2 ? 120 : undefined}
