@@ -20,6 +20,7 @@ export type {
   StockNewsItem,
   MarketContext,
   StockPickerResult,
+  TodayQuote,
 } from './types'
 
 // Editorial chart templates
@@ -43,7 +44,8 @@ export { resolveEditorialChart } from './resolve-chart'
 export { buildNewsletterBlock } from './build-block'
 
 // AI orchestration
-export { fetchNewsletterContext, fetchMarketContext } from './fetch-context'
+export { fetchNewsletterContext, fetchMarketContext, fetchTodayQuote, fetchTickerNews } from './fetch-context'
 export { captureChart, captureChartStandalone } from './capture'
 export { assembleNewsletterHtml } from './assemble'
 export { generateNewsletter } from './orchestrate'
+export { publishChartImages } from './publish'

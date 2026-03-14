@@ -494,7 +494,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       labels: {
         style: {
-          fontSize: '12px',
+          fontSize: exportMode ? '22px' : '12px',
           color: isDark ? '#9ca3af' : '#6b7280',
         },
         formatter: getAxisFormatter(primaryUnit),
@@ -525,7 +525,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       labels: {
         style: {
-          fontSize: '12px',
+          fontSize: exportMode ? '22px' : '12px',
           color: isDark ? '#9ca3af' : '#6b7280',
         },
         formatter: getAxisFormatter(secondaryUnit),
@@ -570,7 +570,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       style: {
         fontFamily: 'inherit',
       },
-      spacingBottom: 20,
+      spacingBottom: exportMode ? 8 : 20,
     },
     title: {
       text: undefined,
@@ -587,7 +587,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       labels: {
         format: isQuarterlyData ? '{value:%Y Q%q}' : '{value:%Y}',
         style: {
-          fontSize: isQuarterlyData ? '10px' : '12px',
+          fontSize: exportMode ? '22px' : (isQuarterlyData ? '10px' : '12px'),
           color: isDark ? '#9ca3af' : '#6b7280',
         },
         rotation: isQuarterlyData && categories.length > 16 ? -45 : 0,
@@ -621,10 +621,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           verticalAlign: isStacked ? 'middle' : 'bottom',
-          y: isStacked ? 0 : -5,
+          y: isStacked ? 0 : (exportMode ? -8 : -5),
           style: {
-            fontSize: '11px',
-            fontWeight: '500',
+            fontSize: exportMode ? '20px' : '11px',
+            fontWeight: exportMode ? '600' : '500',
             color: isStacked ? '#ffffff' : (isDark ? '#e5e7eb' : '#374151'),
             textOutline: isStacked ? '1px rgba(0, 0, 0, 0.3)' : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff'),
           },
@@ -652,12 +652,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       line: {
         animation: false,
-        lineWidth: 2,
+        lineWidth: exportMode ? 3 : 2,
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           style: {
-            fontSize: '11px',
-            fontWeight: '500',
+            fontSize: exportMode ? '20px' : '11px',
+            fontWeight: exportMode ? '600' : '500',
             color: isDark ? '#e5e7eb' : '#374151',
             textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
           },
@@ -683,17 +683,18 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       area: {
         animation: false,
-        lineWidth: 2,
+        lineWidth: exportMode ? 3 : 2,
         fillOpacity: 0.6,
         stacking: 'normal',
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
-          verticalAlign: 'middle',
+          verticalAlign: exportMode ? 'bottom' : 'middle',
+          y: exportMode ? -12 : 0,
           style: {
-            fontSize: '11px',
-            fontWeight: '500',
-            color: '#ffffff',
-            textOutline: '1px rgba(0, 0, 0, 0.3)',
+            fontSize: exportMode ? '20px' : '11px',
+            fontWeight: exportMode ? '600' : '500',
+            color: exportMode ? '#374151' : '#ffffff',
+            textOutline: exportMode ? '2px #ffffff' : '1px rgba(0, 0, 0, 0.3)',
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           formatter: function (this: any) {
@@ -921,16 +922,16 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       />
 
       {/* Custom Legend + Controls Row */}
-      <div className={`flex items-start ${exportMode ? '' : 'justify-between'} mt-2 mb-4 gap-4`}>
+      <div className={`flex items-start ${exportMode ? 'mb-1' : 'justify-between mb-4'} mt-2 gap-4`}>
         {/* Legend - stacked vertically */}
         <div className="flex flex-col gap-1">
           {legendItems.map((item, index) => (
             <div key={index} className="flex items-center gap-2">
               <span
-                className="w-3 h-3 rounded-full flex-shrink-0"
+                className={`${exportMode ? 'w-5 h-5' : 'w-3 h-3'} rounded-full flex-shrink-0`}
                 style={{ backgroundColor: item.color }}
               />
-              <span className={`text-sm ${exportMode ? 'text-gray-700' : 'text-gray-700 dark:text-gray-300'}`}>
+              <span className={`${exportMode ? 'text-xl' : 'text-sm'} ${exportMode ? 'text-gray-700' : 'text-gray-700 dark:text-gray-300'}`}>
                 {item.label} ({years[0]}-{years[years.length - 1]}: {formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
               </span>
             </div>

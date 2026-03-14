@@ -5,10 +5,12 @@ import OpenAI from 'openai'
 import { resolveEditorialChart } from './resolve-chart'
 import { getEditorialTemplate } from './editorial-templates'
 import { buildNewsletterBlock } from './build-block'
-import { fetchNewsletterContext, fetchMarketContext } from './fetch-context'
+import { fetchNewsletterContext, fetchMarketContext, fetchTodayQuote, fetchTickerNews } from './fetch-context'
 import {
   buildStockPickerMessages,
   parseStockPickerResult,
+  buildEditorialHookMessages,
+  parseEditorialHook,
   buildTemplateSelectionMessages,
   parseTemplateSelections,
   buildCopyGenerationMessages,
@@ -16,12 +18,15 @@ import {
 } from './prompts'
 import { captureChart, captureFullPage } from './capture'
 import { assembleNewsletterHtml } from './assemble'
+import { publishChartImages } from './publish'
 import type {
   NewsletterOptions,
   NewsletterResult,
   NewsletterBlock,
   GeneratedCopy,
   StockPickerResult,
+  StockNewsItem,
+  TodayQuote,
 } from './types'
 
 const DEFAULT_BASE_URL = 'http://localhost:3005'
@@ -52,6 +57,7 @@ export async function generateNewsletter(
   const baseUrl = options?.baseUrl ?? DEFAULT_BASE_URL
   const outputDir = options?.outputDir ?? DEFAULT_OUTPUT_DIR
   const maxCharts = options?.maxCharts ?? DEFAULT_MAX_CHARTS
+  const publish = options?.publish ?? false
 
   const tStart = Date.now()
   const timings: Record<string, number> = {}
@@ -109,15 +115,53 @@ export async function generateNewsletter(
   }
 
   // -----------------------------------------------------------------------
-  // Step 1: Fetch financial context
+  // Step 1: Fetch financial context + today's quote (in parallel)
   // -----------------------------------------------------------------------
   const t0 = Date.now()
-  const context = await fetchNewsletterContext(tickerUpper)
+  const [context, todayQuote] = await Promise.all([
+    fetchNewsletterContext(tickerUpper),
+    fetchTodayQuote(tickerUpper),
+  ])
   // Attach stock picker result if present
   if (stockPickerResult) {
     context.stockPickerResult = stockPickerResult
   }
   timings.fetchContext = Date.now() - t0
+
+  // -----------------------------------------------------------------------
+  // Step 1b: Generate editorial hook (for manual tickers without stock picker)
+  // -----------------------------------------------------------------------
+  let editorialHook: string
+  let subjectLine: string
+  let topHeadlines: StockNewsItem[] = []
+  if (stockPickerResult) {
+    editorialHook = stockPickerResult.editorialHook
+    subjectLine = stockPickerResult.subjectLine
+    topHeadlines = stockPickerResult.topHeadlines
+  } else {
+    const tHook = Date.now()
+    topHeadlines = await fetchTickerNews(tickerUpper, 5)
+    const hookMessages = buildEditorialHookMessages(todayQuote, topHeadlines)
+
+    const hookResponse = await openai.responses.create({
+      model,
+      input: hookMessages.map((m, i) => ({
+        id: `msg_hook_${i}`,
+        role: m.role,
+        content: [{ type: 'input_text' as const, text: m.content }],
+        type: 'message' as const,
+      })),
+      ...(isGpt5 ? {} : { temperature: 0.3 }),
+      max_output_tokens: isGpt5 ? 20000 : 300,
+      ...(isGpt5 ? { reasoning: { effort: 'minimal' as const } } : {}),
+      text: { format: { type: 'json_object' } },
+    })
+
+    const hookResult = parseEditorialHook(hookResponse.output_text ?? '', tickerUpper)
+    editorialHook = hookResult.editorialHook
+    subjectLine = hookResult.subjectLine
+    timings.aiEditorialHook = Date.now() - tHook
+  }
 
   // -----------------------------------------------------------------------
   // Step 2: AI selects templates
@@ -227,11 +271,14 @@ export async function generateNewsletter(
 
     // Use just the filename — HTML and PNGs live in the same directory
     const chartImageUrl = chartPath.split('/').pop()!
+    // Link to the interactive /charts page, not the headless /charts/export page
+    const chartExportUrl = `${baseUrl}${resolvedCharts[i].exportUrl.replace('/charts/export', '/charts')}`
 
     const block = buildNewsletterBlock('chart_plus_commentary', {
       heading: copy.headline,
       body: copy.body,
       chartImageUrl,
+      chartExportUrl,
       chartAlt: `${tickerUpper} ${selections[i].templateId.replace(/_/g, ' ')} chart`,
     })
 
@@ -241,7 +288,7 @@ export async function generateNewsletter(
   // -----------------------------------------------------------------------
   // Step 7: Assemble full email HTML and save
   // -----------------------------------------------------------------------
-  const fullHtml = assembleNewsletterHtml(tickerUpper, blocks, now, stockPickerResult)
+  let fullHtml = assembleNewsletterHtml(tickerUpper, blocks, now, todayQuote, editorialHook, subjectLine, topHeadlines)
   const htmlFilename = `${tickerUpper}_newsletter_${dateStr}.html`
   const htmlPath = resolve(absOutputDir, htmlFilename)
   writeFileSync(htmlPath, fullHtml, 'utf-8')
@@ -254,11 +301,44 @@ export async function generateNewsletter(
   await captureFullPage(browser, htmlPath, previewPath)
   await browser.close()
 
+  // -----------------------------------------------------------------------
+  // Step 9 (optional): Upload to Supabase Storage and rewrite image URLs
+  // -----------------------------------------------------------------------
+  let publishedUrls: Record<string, string> | undefined
+
+  if (publish) {
+    const t4 = Date.now()
+    const allImagePaths = [...chartPaths, previewPath]
+    publishedUrls = await publishChartImages(allImagePaths)
+
+    // Rewrite bare filenames in the HTML to absolute public URLs
+    let publishedHtml = fullHtml
+    for (const [localFilename, publicUrl] of Object.entries(publishedUrls)) {
+      publishedHtml = publishedHtml.replaceAll(
+        `src="${localFilename}"`,
+        `src="${publicUrl}"`,
+      )
+    }
+
+    // Rewrite localhost chart click-through links to production URL
+    const prodUrl = 'https://theintraday.com'
+    publishedHtml = publishedHtml.replaceAll(
+      `href="${baseUrl}/charts`,
+      `href="${prodUrl}/charts`,
+    )
+
+    // Overwrite the HTML file with public URLs
+    writeFileSync(htmlPath, publishedHtml, 'utf-8')
+    fullHtml = publishedHtml
+    timings.publish = Date.now() - t4
+  }
+
   timings.total = Date.now() - tStart
 
   return {
     ticker: tickerUpper,
     generatedAt: now.toISOString(),
+    subjectLine,
     selections,
     blocks,
     fullHtml,
@@ -268,5 +348,6 @@ export async function generateNewsletter(
     timings,
     autoPickedStock,
     stockPickerResult,
+    publishedUrls,
   }
 }

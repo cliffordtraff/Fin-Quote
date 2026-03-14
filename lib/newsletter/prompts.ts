@@ -5,6 +5,8 @@ import type {
   GeneratedCopy,
   MarketContext,
   StockPickerResult,
+  TodayQuote,
+  StockNewsItem,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ export function buildStockPickerMessages(
     'Avoid: random volume spikes with no news, obscure names, trivial < 2% moves.',
     '',
     'Output JSON only:',
-    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick" }',
+    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick", "subjectLine": "short punchy email subject < 60 chars" }',
   ].join('\n')
 
   const candidateBlocks = market.candidates.map((c) => {
@@ -72,12 +74,14 @@ export function parseStockPickerResult(
   let symbol: string | undefined
   let name: string | undefined
   let editorialHook = ''
+  let subjectLine = ''
 
   try {
     const parsed = JSON.parse(responseText)
     symbol = parsed.symbol?.toUpperCase()
     name = parsed.name
     editorialHook = parsed.editorialHook || ''
+    subjectLine = parsed.subjectLine || ''
   } catch {
     // Fall through to fallback
   }
@@ -96,13 +100,73 @@ export function parseStockPickerResult(
 
   const candidate = market.candidates.find((c) => c.symbol === symbol)!
   const topHeadlines = (market.newsBySymbol[symbol] || []).slice(0, 3)
+  const resolvedName = name || candidate.name
 
   return {
     ticker: symbol,
-    name: name || candidate.name,
+    name: resolvedName,
     changesPercentage: candidate.changesPercentage,
     editorialHook,
+    subjectLine: subjectLine || `${symbol}: ${editorialHook}`.slice(0, 60),
     topHeadlines,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Editorial hook prompt (for manual tickers without a stock picker result)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build messages for generating an editorial hook for a manually-specified ticker.
+ * Uses today's quote data and recent news.
+ */
+export function buildEditorialHookMessages(
+  quote: TodayQuote,
+  headlines: StockNewsItem[],
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const system = [
+    'You are the editor of The Intraday, a financial newsletter.',
+    'Write a 1-2 sentence editorial hook explaining why this stock is worth reading about today.',
+    'Connect the price move to any available news. If no news explains it, note the move and set up the financial deep-dive.',
+    '',
+    'Output JSON only:',
+    '{ "editorialHook": "1-2 sentences", "subjectLine": "short punchy email subject < 60 chars" }',
+  ].join('\n')
+
+  const sign = quote.changesPercentage >= 0 ? '+' : ''
+  const dollarSign = quote.change >= 0 ? '+' : ''
+
+  const headlineBlock = headlines.length > 0
+    ? ['', 'Recent headlines:', ...headlines.map((h) => `- "${h.title}" — ${h.site}, ${h.publishedDate}`)].join('\n')
+    : '\nNo recent headlines available.'
+
+  const user = [
+    `${quote.ticker} — ${quote.name}`,
+    `Price: $${quote.price.toFixed(2)}, Change: ${dollarSign}$${Math.abs(quote.change).toFixed(2)} (${sign}${quote.changesPercentage.toFixed(2)}%)`,
+    headlineBlock,
+  ].join('\n')
+
+  return [
+    { role: 'system' as const, content: system },
+    { role: 'user' as const, content: user },
+  ]
+}
+
+/**
+ * Parse editorial hook response.
+ */
+export function parseEditorialHook(
+  responseText: string,
+  ticker?: string,
+): { editorialHook: string; subjectLine: string } {
+  try {
+    const parsed = JSON.parse(responseText)
+    const editorialHook = parsed.editorialHook || ''
+    const subjectLine =
+      parsed.subjectLine || (ticker ? `${ticker}: ${editorialHook}`.slice(0, 60) : editorialHook.slice(0, 60))
+    return { editorialHook, subjectLine }
+  } catch {
+    return { editorialHook: '', subjectLine: '' }
   }
 }
 
@@ -189,12 +253,21 @@ export function buildCopyGenerationMessages(
     'Write concise, data-grounded copy for one chart section of a newsletter.',
     '',
     'Rules:',
-    '- headline: 6-12 words, punchy, no ticker symbol',
-    '- body: 2-3 sentences with specific numbers (use $B/$M format)',
+    '- headline: 6-12 words, punchy, no ticker symbol, never abbreviate metric names (write "Free Cash Flow" not "FCF")',
+    '- body: 1-2 sentences maximum. Be punchy.',
+    '- Wrap the 2-3 most important numbers in **bold** markers (e.g. **$416.2B**)',
+    '- Every sentence must contain at least one specific number from the data',
     '- caption: 1 sentence describing what the chart shows',
     '- All numbers MUST come from the provided data — never invent figures',
     '- Write in present tense for current state, past tense for trends',
-    '- Do not use markdown formatting',
+    '- Do not use markdown formatting except for **bold** on key numbers',
+    '',
+    'Number formatting (CRITICAL):',
+    '- Dollar values in the data are in MILLIONS. You MUST convert to human-readable format.',
+    '- Values >= 1,000 → show as billions: 416161 → "$416.2B", 79024 → "$79.0B"',
+    '- Values < 1,000 but >= 1 → show as millions: 823 → "$823M", 56.7 → "$56.7M"',
+    '- Percentages: round to 2 decimal places, e.g. 46.91%',
+    '- NEVER output raw numbers like "$416,161.0M" — always convert to $B first if >= 1,000',
   ]
 
   if (stockPickerResult) {

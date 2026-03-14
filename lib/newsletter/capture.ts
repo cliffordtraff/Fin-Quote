@@ -46,12 +46,12 @@ export async function captureChart(
     // Log browser console messages for debugging
     page.on('console', (msg) => {
       const type = msg.type()
-      if (type === 'error' || type === 'warning') {
+      if (type === 'error' || type === 'warn') {
         console.error(`  [browser ${type}] ${msg.text()}`)
       }
     })
-    page.on('pageerror', (err) => {
-      console.error(`  [browser error] ${err.message}`)
+    page.on('pageerror', (err: unknown) => {
+      console.error(`  [browser error] ${err instanceof Error ? err.message : String(err)}`)
     })
     page.on('requestfailed', (req) => {
       console.error(`  [404] ${req.url().slice(0, 120)}`)

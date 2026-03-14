@@ -26,6 +26,8 @@ export interface ReplayConfig {
 }
 
 export interface ReplayState {
+  /** Full fetched candle set for analysis and chaptering */
+  allCandles: StreamCandle[]
   /** All candles up to revealedIndex (committed) */
   candles: StreamCandle[]
   /** Current in-progress candle (last revealed) */
@@ -57,6 +59,7 @@ export interface ReplayState {
   pause: () => void
   reset: () => void
   skip: (seconds: number) => void
+  seek: (index: number) => void
   setSpeed: (s: ReplaySpeed) => void
   setMode: (m: ReplayMode) => void
 }
@@ -191,6 +194,13 @@ export function useReplay(config: ReplayConfig | null): ReplayState {
     })
   }, [config?.timeframe, allCandles.length, clearTimer])
 
+  const seek = useCallback((index: number) => {
+    const clamped = Math.max(0, Math.min(allCandles.length, index))
+    clearTimer()
+    setRevealedIndex(clamped)
+    setStatus(clamped >= allCandles.length ? 'done' : 'paused')
+  }, [allCandles.length, clearTimer])
+
   const setSpeed = useCallback((s: ReplaySpeed) => {
     setSpeedState(s)
   }, [])
@@ -228,6 +238,7 @@ export function useReplay(config: ReplayConfig | null): ReplayState {
     : null
 
   return {
+    allCandles,
     candles,
     liveCandle,
     lastPrice,
@@ -245,6 +256,7 @@ export function useReplay(config: ReplayConfig | null): ReplayState {
     pause,
     reset,
     skip,
+    seek,
     setSpeed,
     setMode,
   }

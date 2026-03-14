@@ -115,6 +115,7 @@ export default function ChartsPage() {
   const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual')
   // Stock price toggle (separate from metric dropdowns)
   const [showStockPrice, setShowStockPrice] = useState(false)
+  const [initialChartType, setInitialChartType] = useState<'bar' | 'line' | 'area' | undefined>(undefined)
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -193,6 +194,9 @@ export default function ChartsPage() {
 
     // Apply stock price toggle
     if (spec.showStockPrice) setShowStockPrice(true)
+
+    // Apply chart type (bar, line, area)
+    if (spec.chartType) setInitialChartType(spec.chartType)
 
     setUrlParamsApplied(true)
   }, [availableMetrics, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
@@ -698,9 +702,6 @@ export default function ChartsPage() {
           <div className="flex items-center gap-4">
             {/* Stock Selector - wider */}
             <div className="relative w-72">
-              {addedStocks.length === 0 && (
-                <div className="absolute inset-0 ring-2 ring-sage-400 dark:ring-sage-500 rounded-lg animate-pulse-subtle pointer-events-none z-10" />
-              )}
               <StockSelector
                 ref={stockSelectorRef}
                 availableStocks={availableStocks}
@@ -713,9 +714,6 @@ export default function ChartsPage() {
             </div>
             {/* Metric Selector */}
             <div className="relative flex-1">
-              {addedStocks.length > 0 && addedMetrics.length === 0 && (
-                <div className="absolute inset-0 ring-2 ring-sage-400 dark:ring-sage-500 rounded-lg animate-pulse-subtle pointer-events-none" />
-              )}
               <MetricSelector
                 metrics={availableMetrics}
                 selectedMetrics={addedMetrics}
@@ -988,6 +986,7 @@ export default function ChartsPage() {
                 }
                 onReset={handleReset}
                 onCopyExportUrl={handleCopyExportUrl}
+                initialChartType={initialChartType}
               />
             ) : (
               <div className="h-[650px] flex items-start justify-center pt-24">

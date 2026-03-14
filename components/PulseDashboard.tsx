@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Liveline } from 'liveline'
 import type { CandlePoint } from 'liveline'
 import { useTheme } from '@/components/ThemeProvider'
@@ -67,6 +67,225 @@ function useChartData(stream: LiveStreamState): ChartData | null {
 
     return { candles: committed, liveCandle, lineData, lineValue }
   }, [stream.candles, stream.liveCandle])
+}
+
+/* ───────── Day candles hook (1-min intraday for context sparkline) ───────── */
+
+interface DayCandle {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
+interface DayCandleData {
+  candles: DayCandle[]
+  previousClose: number | null
+  changePct: number | null
+}
+
+function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
+  const [data, setData] = useState<Record<string, DayCandleData>>({})
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchAll() {
+      const results = await Promise.allSettled(
+        symbols.map(async (sym) => {
+          const res = await fetch(`/api/stock-intraday/${sym}?interval=1`)
+          if (!res.ok) return null
+          return { sym, json: await res.json() }
+        })
+      )
+
+      if (cancelled) return
+
+      const next: Record<string, DayCandleData> = {}
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          const { sym, json } = r.value
+          const candles: DayCandle[] = json.todayOHLC ?? []
+          const previousClose: number | null = json.previousClose ?? null
+          let changePct: number | null = null
+          if (previousClose && previousClose > 0 && candles.length > 0) {
+            const last = candles[candles.length - 1].close
+            changePct = ((last - previousClose) / previousClose) * 100
+          }
+          next[sym] = { candles, previousClose, changePct }
+        }
+      }
+      setData(next)
+    }
+
+    fetchAll()
+    const id = setInterval(fetchAll, 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [symbols])
+
+  return data
+}
+
+/* ───────── Day sparkline canvas ───────── */
+
+function DaySparkline({
+  candles,
+  previousClose,
+  windowSecs,
+  theme,
+}: {
+  candles: DayCandle[]
+  previousClose: number | null
+  windowSecs: number
+  theme: ThemeMode
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container || candles.length < 2) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    const width = container.clientWidth
+    const height = 40
+
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, width, height)
+
+    const closes = candles.map((c) => c.close)
+    const minP = Math.min(...closes)
+    const maxP = Math.max(...closes)
+    const range = maxP - minP || 1
+    const pad = 2
+
+    const toX = (i: number) => pad + (i / (closes.length - 1)) * (width - pad * 2)
+    const toY = (p: number) => pad + (1 - (p - minP) / range) * (height - pad * 2)
+
+    const isUp = closes[closes.length - 1] >= (previousClose ?? closes[0])
+    const lineColor = isUp ? '#22c55e' : '#ef4444'
+
+    // Previous close dashed line
+    if (previousClose !== null && previousClose >= minP && previousClose <= maxP) {
+      const prevY = toY(previousClose)
+      ctx.save()
+      ctx.setLineDash([3, 3])
+      ctx.strokeStyle = theme === 'dark' ? 'rgba(156,163,175,0.35)' : 'rgba(107,114,128,0.35)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(pad, prevY)
+      ctx.lineTo(width - pad, prevY)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // Price line path
+    ctx.beginPath()
+    closes.forEach((p, i) => {
+      const x = toX(i)
+      const y = toY(p)
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = lineColor
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    // Fill under line
+    ctx.lineTo(toX(closes.length - 1), height)
+    ctx.lineTo(toX(0), height)
+    ctx.closePath()
+    ctx.fillStyle = isUp ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
+    ctx.fill()
+
+    // Viewport rectangle — "minimap" indicator showing where the live chart sits
+    // Each candle = 1 minute = 60s. Use candle count to avoid date-parsing issues.
+    const totalSpanSecs = (candles.length - 1) * 60
+    if (totalSpanSecs > 0) {
+      const drawableW = width - pad * 2
+      const vpFraction = Math.min(windowSecs / totalSpanSecs, 1)
+      // Minimum 8% of sparkline width so it's always clearly visible
+      const vpWidth = Math.max(vpFraction * drawableW, drawableW * 0.08, 20)
+      const vpX = pad + drawableW - vpWidth
+
+      // Fill
+      ctx.fillStyle = theme === 'dark' ? 'rgba(129,140,248,0.20)' : 'rgba(99,102,241,0.12)'
+      ctx.fillRect(vpX, 0, vpWidth, height)
+
+      // Left + right borders only (top/bottom blend with card edge)
+      ctx.strokeStyle = theme === 'dark' ? 'rgba(129,140,248,0.7)' : 'rgba(99,102,241,0.5)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(vpX, 0)
+      ctx.lineTo(vpX, height)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(vpX + vpWidth, 0)
+      ctx.lineTo(vpX + vpWidth, height)
+      ctx.stroke()
+    }
+  }, [candles, previousClose, windowSecs, theme])
+
+  if (candles.length < 2) return null
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <canvas ref={canvasRef} className="w-full" style={{ height: 40, display: 'block' }} />
+    </div>
+  )
+}
+
+/* ───────── Day context card ───────── */
+
+function DayContextCard({
+  symbol,
+  dayData,
+  windowSecs,
+  theme,
+}: {
+  symbol: string
+  dayData: DayCandleData | undefined
+  windowSecs: number
+  theme: ThemeMode
+}) {
+  if (!dayData || dayData.candles.length < 2) return null
+
+  const changePct = dayData.changePct
+  const isUp = changePct !== null && changePct >= 0
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden px-3 py-2">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+            {symbol}
+          </span>
+          <span className="text-[10px] text-gray-400 font-medium">Day</span>
+        </div>
+        {changePct !== null && (
+          <span className={`text-[10px] font-semibold tabular-nums ${
+            isUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+          }`}>
+            {isUp ? '+' : ''}{changePct.toFixed(2)}%
+          </span>
+        )}
+      </div>
+      <DaySparkline
+        candles={dayData.candles}
+        previousClose={dayData.previousClose}
+        windowSecs={windowSecs}
+        theme={theme}
+      />
+    </div>
+  )
 }
 
 /** Compute dynamic degen scale based on proximity to HOD/LOD */
@@ -440,12 +659,19 @@ function PulseCard({ symbol, stream, chartData, theme, timeframe, exaggerate, da
   )
 }
 
-/** One column: exaggerated on top, normal on bottom */
-function PulseColumn({ symbol, stream, theme, timeframe, variantWindow }: { symbol: string; stream: LiveStreamState; theme: ThemeMode; timeframe: Timeframe; variantWindow?: number }) {
+/** One column: day context on top, exaggerated, normal, variant below */
+function PulseColumn({ symbol, stream, theme, timeframe, variantWindow, dayData }: { symbol: string; stream: LiveStreamState; theme: ThemeMode; timeframe: Timeframe; variantWindow?: number; dayData?: DayCandleData }) {
   const chartData = useChartData(stream)
+  const windowSecs = timeframe === '1s' ? 30 : 300
 
   return (
     <div className="flex flex-col gap-4">
+      <DayContextCard
+        symbol={symbol}
+        dayData={dayData}
+        windowSecs={variantWindow ?? windowSecs}
+        theme={theme}
+      />
       <PulseCard
         symbol={symbol}
         stream={stream}
@@ -496,6 +722,9 @@ export default function PulseDashboard() {
   // Single multiplexed SSE connection for all symbols
   const streams = useMultiStream(SYMBOLS as unknown as string[], timeframe)
 
+  // 1-minute day candles for context sparklines
+  const dayCandles = useDayCandles(SYMBOLS)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -535,6 +764,7 @@ export default function PulseDashboard() {
             theme={theme}
             timeframe={timeframe}
             variantWindow={i < 2 ? 120 : undefined}
+            dayData={dayCandles[symbol]}
           />
         ))}
       </div>

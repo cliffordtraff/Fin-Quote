@@ -61,16 +61,22 @@ function renderHeading(text: string): string {
 }
 
 function renderBody(text: string): string {
+  const escaped = escapeHtml(text)
+  const withBold = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   return `<tr><td style="padding:8px 32px 16px 32px;">
   <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;color:${BRAND.textDark};line-height:1.6;">
-    ${escapeHtml(text)}
+    ${withBold}
   </p>
 </td></tr>`
 }
 
-function renderChart(imageUrl: string, alt: string): string {
+function renderChart(imageUrl: string, alt: string, chartUrl?: string): string {
+  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="600" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.cream300};" />`
+  const content = chartUrl
+    ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:block;text-decoration:none;">${img}</a>`
+    : img
   return `<tr><td style="padding:8px 32px;">
-  <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="600" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.cream300};" />
+  ${content}
 </td></tr>`
 }
 
@@ -122,7 +128,7 @@ function renderSlot(
       return content.body ? renderBody(content.body) : ''
     case 'chart':
       return content.chartImageUrl
-        ? renderChart(content.chartImageUrl, content.chartAlt ?? 'Chart')
+        ? renderChart(content.chartImageUrl, content.chartAlt ?? 'Chart', content.chartExportUrl)
         : ''
     case 'caption':
       return content.caption ? renderCaption(content.caption) : ''

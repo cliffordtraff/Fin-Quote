@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       selections: result.selections,
       chartPaths: result.chartPaths,
       htmlPath: result.htmlPath,
+      previewPath: result.previewPath,
       timings: result.timings,
     })
   } catch (err) {

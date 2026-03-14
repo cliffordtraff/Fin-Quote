@@ -220,17 +220,16 @@ function ChartExportContent() {
   return (
     <div
       className="w-[1200px] bg-white"
-      style={{ minHeight: 700 }}
       data-export-ready={ready ? 'true' : 'false'}
     >
       {/* Title area */}
       {(config?.title || config?.subtitle) && (
         <div className="px-8 pt-6 pb-1">
           {config?.title && (
-            <h1 className="text-xl font-bold text-gray-900 leading-tight">{config.title}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 leading-tight">{config.title}</h1>
           )}
           {config?.subtitle && (
-            <p className="text-sm text-gray-500 mt-1">{config.subtitle}</p>
+            <p className="text-lg text-gray-500 mt-1">{config.subtitle}</p>
           )}
         </div>
       )}
@@ -257,8 +256,8 @@ function ChartExportContent() {
       </div>
 
       {/* Branding footer */}
-      <div className="px-8 pb-4 flex justify-end">
-        <span className="text-xs text-gray-400">The Intraday &middot; theintraday.com</span>
+      <div className="px-8 pb-2 flex justify-end">
+        <span className="text-base text-gray-400">The Intraday &middot; theintraday.com</span>
       </div>
     </div>
   )

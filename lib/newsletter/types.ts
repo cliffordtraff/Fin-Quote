@@ -141,6 +141,7 @@ export interface NewsletterBlockContent {
   body?: string
   chartImageUrl?: string
   chartAlt?: string
+  chartExportUrl?: string
   caption?: string
   ctaText?: string
   ctaUrl?: string
@@ -192,7 +193,26 @@ export interface StockPickerResult {
   name: string
   changesPercentage: number
   editorialHook: string
+  subjectLine: string
   topHeadlines: StockNewsItem[]
+}
+
+// ---------------------------------------------------------------------------
+// Today's quote (for intro block)
+// ---------------------------------------------------------------------------
+
+/** Today's trading data for the newsletter intro */
+export interface TodayQuote {
+  ticker: string
+  name: string
+  price: number
+  change: number
+  changesPercentage: number
+  marketCap?: number
+  pe?: number
+  yearHigh?: number
+  yearLow?: number
+  ytdReturn?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -231,22 +251,29 @@ export interface NewsletterOptions {
   outputDir?: string
   /** Maximum number of chart sections (default: 3) */
   maxCharts?: number
+  /** Upload chart PNGs to Supabase Storage and rewrite image URLs to public URLs */
+  publish?: boolean
 }
 
 /** Result returned by generateNewsletter() */
 export interface NewsletterResult {
   ticker: string
   generatedAt: string
+  subjectLine: string
   selections: Array<{ templateId: string; reason: string }>
   blocks: NewsletterBlock[]
   fullHtml: string
   chartPaths: string[]
   htmlPath: string
+  /** Full-page preview screenshot of the assembled newsletter */
+  previewPath: string
   timings: Record<string, number>
   /** True when the stock was auto-picked by AI (no --ticker override) */
   autoPickedStock: boolean
   /** Details of the AI stock pick (only present when autoPickedStock is true) */
   stockPickerResult?: StockPickerResult
+  /** Map of local filename → public Supabase URL (only present when publish: true) */
+  publishedUrls?: Record<string, string>
 }
 
 /** AI template selection output */

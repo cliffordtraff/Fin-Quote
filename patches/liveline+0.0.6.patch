@@ -1,0 +1,371 @@
+diff --git a/node_modules/liveline/dist/index.cjs b/node_modules/liveline/dist/index.cjs
+index 5adaa70..548b596 100644
+--- a/node_modules/liveline/dist/index.cjs
++++ b/node_modules/liveline/dist/index.cjs
+@@ -49,7 +49,7 @@ function resolveTheme(color, mode) {
+   return {
+     // Line
+     line: color,
+-    lineWidth: 2,
++    lineWidth: 3,
+     // Fill gradient
+     fillTop: rgba(r, g, b, isDark ? 0.12 : 0.08),
+     fillBottom: rgba(r, g, b, 0),
+@@ -71,8 +71,8 @@ function resolveTheme(color, mode) {
+     // Dash line
+     dashLine: rgba(r, g, b, 0.4),
+     // Reference line
+-    refLine: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.12)",
+-    refLabel: isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.4)",
++    refLine: isDark ? "rgba(255, 255, 255, 0.35)" : "rgba(0, 0, 0, 0.3)",
++    refLabel: isDark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.55)",
+     // Time axis
+     timeLabel: isDark ? "rgba(255, 255, 255, 0.35)" : "rgba(0, 0, 0, 0.3)",
+     // Crosshair
+@@ -83,9 +83,9 @@ function resolveTheme(color, mode) {
+     // Background
+     bgRgb: isDark ? [10, 10, 10] : [255, 255, 255],
+     // Fonts
+-    labelFont: '11px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
+-    valueFont: '600 11px "SF Mono", Menlo, monospace',
+-    badgeFont: '500 11px "SF Mono", Menlo, monospace'
++    labelFont: '14px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
++    valueFont: '600 14px "SF Mono", Menlo, monospace',
++    badgeFont: '500 13px "SF Mono", Menlo, monospace'
+   };
+ }
+ var SERIES_COLORS = [
+@@ -171,7 +171,7 @@ function detectMomentum(points, lookback = 20) {
+   const first = points[tailStart].value;
+   const last = points[points.length - 1].value;
+   const delta = last - first;
+-  const threshold = range * 0.12;
++  const threshold = range * 0.03;
+   if (delta > threshold) return "up";
+   if (delta < -threshold) return "down";
+   return "flat";
+@@ -476,9 +476,9 @@ function drawLine(ctx, layout, palette, visible, smoothValue, now, showFill, scr
+   if (!skipDashLine) {
+     const realCurrentY = Math.max(pad.top, Math.min(h - pad.bottom, toY(smoothValue)));
+     const currentY = chartReveal < 1 ? centerY + (realCurrentY - centerY) * chartReveal : realCurrentY;
+-    ctx.setLineDash([4, 4]);
++    ctx.setLineDash([8, 6]);
+     ctx.strokeStyle = palette.dashLine;
+-    ctx.lineWidth = 1;
++    ctx.lineWidth = 2;
+     const dashBase = isScrubbing ? 1 - scrubAmount * 0.2 : 1;
+     ctx.globalAlpha = incomingAlpha * (chartReveal < 1 ? dashBase * chartReveal : dashBase);
+     ctx.beginPath();
+@@ -525,13 +525,13 @@ function drawDot(ctx, x, y, palette, pulse = true, scrubAmount = 0, now_ms = per
+   ctx.shadowBlur = 6 * (1 - dim);
+   ctx.shadowOffsetY = 1;
+   ctx.beginPath();
+-  ctx.arc(x, y, 6.5, 0, Math.PI * 2);
++  ctx.arc(x, y, 9, 0, Math.PI * 2);
+   ctx.fillStyle = palette.badgeOuterBg;
+   ctx.fill();
+   ctx.restore();
+   ctx.globalAlpha = baseAlpha;
+   ctx.beginPath();
+-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
++  ctx.arc(x, y, 5, 0, Math.PI * 2);
+   if (dim > 0.01) {
+     const lineRgb = parseColorRgb(palette.line);
+     ctx.fillStyle = lerpColor(lineRgb, outerRgb, dim);
+@@ -756,13 +756,14 @@ function drawReferenceLine(ctx, layout, palette, ref) {
+   const y = toY(ref.value);
+   if (y < pad.top - 10 || y > h - pad.bottom + 10) return;
+   const label = ref.label ?? "";
++  ctx.setLineDash([6, 4]);
+   if (label) {
+-    ctx.font = "500 11px system-ui, sans-serif";
++    ctx.font = "500 13px system-ui, sans-serif";
+     const textW = ctx.measureText(label).width;
+     const centerX = pad.left + chartW / 2;
+     const gapPad = 8;
+-    ctx.strokeStyle = palette.refLine;
+-    ctx.lineWidth = 1;
++    ctx.strokeStyle = ref.color ?? palette.refLine;
++    ctx.lineWidth = 1.5;
+     ctx.beginPath();
+     ctx.moveTo(pad.left, y);
+     ctx.lineTo(centerX - textW / 2 - gapPad, y);
+@@ -771,19 +772,18 @@ function drawReferenceLine(ctx, layout, palette, ref) {
+     ctx.moveTo(centerX + textW / 2 + gapPad, y);
+     ctx.lineTo(w - pad.right, y);
+     ctx.stroke();
+-    ctx.fillStyle = palette.refLabel;
++    ctx.fillStyle = ref.color ?? palette.refLabel;
+     ctx.textAlign = "center";
+     ctx.fillText(label, centerX, y + 4);
+   } else {
+-    ctx.strokeStyle = palette.refLine;
+-    ctx.lineWidth = 1;
+-    ctx.setLineDash([4, 4]);
++    ctx.strokeStyle = ref.color ?? palette.refLine;
++    ctx.lineWidth = 1.5;
+     ctx.beginPath();
+     ctx.moveTo(pad.left, y);
+     ctx.lineTo(w - pad.right, y);
+     ctx.stroke();
+-    ctx.setLineDash([]);
+   }
++  ctx.setLineDash([]);
+ }
+ 
+ // src/math/intervals.ts
+@@ -1054,7 +1054,7 @@ function createParticleState() {
+ var MAX_PARTICLES = 80;
+ var PARTICLE_LIFETIME = 1;
+ var COOLDOWN_MS = 400;
+-var MAGNITUDE_THRESHOLD = 0.08;
++var MAGNITUDE_THRESHOLD = 0.025;
+ var MAX_BURSTS = 3;
+ function spawnOnSwing(state, momentum, dotX, dotY, swingMagnitude, accentColor, dt, options) {
+   state.cooldown = Math.max(0, state.cooldown - dt);
+@@ -1200,7 +1200,7 @@ function drawCandlesticks(ctx, layout, candles, candleWidthSecs, liveTime, now_m
+     ctx.globalAlpha = baseAlpha * candleAlpha;
+     const bodyTop = toY(Math.max(c.open, c.close));
+     const bodyBottom = toY(Math.min(c.open, c.close));
+-    const bodyH = Math.max(1, bodyBottom - bodyTop);
++    const bodyH = Math.max(3, bodyBottom - bodyTop);
+     const wickTop = toY(c.high);
+     const wickBottom = toY(c.low);
+     ctx.lineCap = "round";
+@@ -1768,9 +1768,9 @@ function drawCandleFrame(ctx, layout, palette, opts) {
+       const dashY = layout.toY(closeSource.close);
+       if (dashY >= pad.top && dashY <= h - pad.bottom) {
+         ctx.save();
+-        ctx.setLineDash([4, 4]);
++        ctx.setLineDash([8, 6]);
+         ctx.strokeStyle = palette.dashLine;
+-        ctx.lineWidth = 1;
++        ctx.lineWidth = 2;
+         ctx.globalAlpha = closeAlpha * lp * (1 - opts.scrubAmount * 0.2);
+         ctx.beginPath();
+         ctx.moveTo(pad.left, dashY);
+diff --git a/node_modules/liveline/dist/index.d.cts b/node_modules/liveline/dist/index.d.cts
+index c5c3f60..3e3d116 100644
+--- a/node_modules/liveline/dist/index.d.cts
++++ b/node_modules/liveline/dist/index.d.cts
+@@ -12,6 +12,7 @@ type BadgeVariant = 'default' | 'minimal';
+ interface ReferenceLine {
+     value: number;
+     label?: string;
++    color?: string;
+ }
+ interface HoverPoint {
+     time: number;
+diff --git a/node_modules/liveline/dist/index.d.ts b/node_modules/liveline/dist/index.d.ts
+index c5c3f60..f24c2e5 100644
+--- a/node_modules/liveline/dist/index.d.ts
++++ b/node_modules/liveline/dist/index.d.ts
+@@ -12,6 +12,7 @@ type BadgeVariant = 'default' | 'minimal';
+ interface ReferenceLine {
+     value: number;
+     label?: string;
++    color?: string;
+ }
+ interface HoverPoint {
+     time: number;
+@@ -93,6 +94,7 @@ interface LivelineProps {
+     seriesToggleCompact?: boolean;
+     className?: string;
+     style?: CSSProperties;
++    labelFontSize?: number;
+ }
+ interface CandlePoint {
+     time: number;
+@@ -102,7 +104,7 @@ interface CandlePoint {
+     close: number;
+ }
+ 
+-declare function Liveline({ data, value, series: seriesProp, theme, color, window: windowSecs, grid, badge, momentum, fill, scrub, loading, paused, emptyText, exaggerate, degen: degenProp, badgeTail, badgeVariant, showValue, valueMomentumColor, windows, onWindowChange, windowStyle, tooltipY, tooltipOutline, orderbook, referenceLine, formatValue, formatTime, lerpSpeed, padding: paddingOverride, onHover, cursor, pulse, mode, candles, candleWidth, liveCandle, lineMode, lineData, lineValue, onModeChange, onSeriesToggle, seriesToggleCompact, className, style, }: LivelineProps): react_jsx_runtime.JSX.Element;
++declare function Liveline({ data, value, series: seriesProp, theme, color, window: windowSecs, grid, badge, momentum, fill, scrub, loading, paused, emptyText, exaggerate, degen: degenProp, badgeTail, badgeVariant, showValue, valueMomentumColor, windows, onWindowChange, windowStyle, tooltipY, tooltipOutline, orderbook, referenceLine, formatValue, formatTime, lerpSpeed, padding: paddingOverride, onHover, cursor, pulse, mode, candles, candleWidth, liveCandle, lineMode, lineData, lineValue, onModeChange, onSeriesToggle, seriesToggleCompact, className, style, labelFontSize, }: LivelineProps): react_jsx_runtime.JSX.Element;
+ 
+ interface LivelineTransitionProps {
+     /** Key of the active child to display. Must match a child's `key` prop. */
+diff --git a/node_modules/liveline/dist/index.js b/node_modules/liveline/dist/index.js
+index 78ec748..4e62236 100644
+--- a/node_modules/liveline/dist/index.js
++++ b/node_modules/liveline/dist/index.js
+@@ -22,7 +22,7 @@ function resolveTheme(color, mode) {
+   return {
+     // Line
+     line: color,
+-    lineWidth: 2,
++    lineWidth: 3,
+     // Fill gradient
+     fillTop: rgba(r, g, b, isDark ? 0.12 : 0.08),
+     fillBottom: rgba(r, g, b, 0),
+@@ -44,8 +44,8 @@ function resolveTheme(color, mode) {
+     // Dash line
+     dashLine: rgba(r, g, b, 0.4),
+     // Reference line
+-    refLine: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.12)",
+-    refLabel: isDark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.4)",
++    refLine: isDark ? "rgba(255, 255, 255, 0.35)" : "rgba(0, 0, 0, 0.3)",
++    refLabel: isDark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.55)",
+     // Time axis
+     timeLabel: isDark ? "rgba(255, 255, 255, 0.35)" : "rgba(0, 0, 0, 0.3)",
+     // Crosshair
+@@ -56,9 +56,9 @@ function resolveTheme(color, mode) {
+     // Background
+     bgRgb: isDark ? [10, 10, 10] : [255, 255, 255],
+     // Fonts
+-    labelFont: '11px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
+-    valueFont: '600 11px "SF Mono", Menlo, monospace',
+-    badgeFont: '500 11px "SF Mono", Menlo, monospace'
++    labelFont: '14px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
++    valueFont: '600 14px "SF Mono", Menlo, monospace',
++    badgeFont: '500 13px "SF Mono", Menlo, monospace'
+   };
+ }
+ var SERIES_COLORS = [
+@@ -144,7 +144,7 @@ function detectMomentum(points, lookback = 20) {
+   const first = points[tailStart].value;
+   const last = points[points.length - 1].value;
+   const delta = last - first;
+-  const threshold = range * 0.12;
++  const threshold = range * 0.03;
+   if (delta > threshold) return "up";
+   if (delta < -threshold) return "down";
+   return "flat";
+@@ -449,9 +449,9 @@ function drawLine(ctx, layout, palette, visible, smoothValue, now, showFill, scr
+   if (!skipDashLine) {
+     const realCurrentY = Math.max(pad.top, Math.min(h - pad.bottom, toY(smoothValue)));
+     const currentY = chartReveal < 1 ? centerY + (realCurrentY - centerY) * chartReveal : realCurrentY;
+-    ctx.setLineDash([4, 4]);
++    ctx.setLineDash([8, 6]);
+     ctx.strokeStyle = palette.dashLine;
+-    ctx.lineWidth = 1;
++    ctx.lineWidth = 2;
+     const dashBase = isScrubbing ? 1 - scrubAmount * 0.2 : 1;
+     ctx.globalAlpha = incomingAlpha * (chartReveal < 1 ? dashBase * chartReveal : dashBase);
+     ctx.beginPath();
+@@ -498,13 +498,13 @@ function drawDot(ctx, x, y, palette, pulse = true, scrubAmount = 0, now_ms = per
+   ctx.shadowBlur = 6 * (1 - dim);
+   ctx.shadowOffsetY = 1;
+   ctx.beginPath();
+-  ctx.arc(x, y, 6.5, 0, Math.PI * 2);
++  ctx.arc(x, y, 9, 0, Math.PI * 2);
+   ctx.fillStyle = palette.badgeOuterBg;
+   ctx.fill();
+   ctx.restore();
+   ctx.globalAlpha = baseAlpha;
+   ctx.beginPath();
+-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
++  ctx.arc(x, y, 5, 0, Math.PI * 2);
+   if (dim > 0.01) {
+     const lineRgb = parseColorRgb(palette.line);
+     ctx.fillStyle = lerpColor(lineRgb, outerRgb, dim);
+@@ -729,13 +729,14 @@ function drawReferenceLine(ctx, layout, palette, ref) {
+   const y = toY(ref.value);
+   if (y < pad.top - 10 || y > h - pad.bottom + 10) return;
+   const label = ref.label ?? "";
++  ctx.setLineDash([6, 4]);
+   if (label) {
+-    ctx.font = "500 11px system-ui, sans-serif";
++    ctx.font = "500 13px system-ui, sans-serif";
+     const textW = ctx.measureText(label).width;
+     const centerX = pad.left + chartW / 2;
+     const gapPad = 8;
+-    ctx.strokeStyle = palette.refLine;
+-    ctx.lineWidth = 1;
++    ctx.strokeStyle = ref.color ?? palette.refLine;
++    ctx.lineWidth = 1.5;
+     ctx.beginPath();
+     ctx.moveTo(pad.left, y);
+     ctx.lineTo(centerX - textW / 2 - gapPad, y);
+@@ -744,19 +745,18 @@ function drawReferenceLine(ctx, layout, palette, ref) {
+     ctx.moveTo(centerX + textW / 2 + gapPad, y);
+     ctx.lineTo(w - pad.right, y);
+     ctx.stroke();
+-    ctx.fillStyle = palette.refLabel;
++    ctx.fillStyle = ref.color ?? palette.refLabel;
+     ctx.textAlign = "center";
+     ctx.fillText(label, centerX, y + 4);
+   } else {
+-    ctx.strokeStyle = palette.refLine;
+-    ctx.lineWidth = 1;
+-    ctx.setLineDash([4, 4]);
++    ctx.strokeStyle = ref.color ?? palette.refLine;
++    ctx.lineWidth = 1.5;
+     ctx.beginPath();
+     ctx.moveTo(pad.left, y);
+     ctx.lineTo(w - pad.right, y);
+     ctx.stroke();
+-    ctx.setLineDash([]);
+   }
++  ctx.setLineDash([]);
+ }
+ 
+ // src/math/intervals.ts
+@@ -1027,7 +1027,7 @@ function createParticleState() {
+ var MAX_PARTICLES = 80;
+ var PARTICLE_LIFETIME = 1;
+ var COOLDOWN_MS = 400;
+-var MAGNITUDE_THRESHOLD = 0.08;
++var MAGNITUDE_THRESHOLD = 0.025;
+ var MAX_BURSTS = 3;
+ function spawnOnSwing(state, momentum, dotX, dotY, swingMagnitude, accentColor, dt, options) {
+   state.cooldown = Math.max(0, state.cooldown - dt);
+@@ -1173,7 +1173,7 @@ function drawCandlesticks(ctx, layout, candles, candleWidthSecs, liveTime, now_m
+     ctx.globalAlpha = baseAlpha * candleAlpha;
+     const bodyTop = toY(Math.max(c.open, c.close));
+     const bodyBottom = toY(Math.min(c.open, c.close));
+-    const bodyH = Math.max(1, bodyBottom - bodyTop);
++    const bodyH = Math.max(3, bodyBottom - bodyTop);
+     const wickTop = toY(c.high);
+     const wickBottom = toY(c.low);
+     ctx.lineCap = "round";
+@@ -1315,11 +1315,6 @@ function drawLineModeCrosshair(ctx, layout, palette, hoverX, value, hoverTime, f
+   ctx.moveTo(hoverX, pad.top);
+   ctx.lineTo(hoverX, h - pad.bottom);
+   ctx.stroke();
+-  ctx.globalAlpha = opacity * 0.3;
+-  ctx.beginPath();
+-  ctx.moveTo(pad.left, y);
+-  ctx.lineTo(layout.w - pad.right, y);
+-  ctx.stroke();
+   ctx.restore();
+   if (opacity < 0.1 || layout.w < 200) return;
+   const val = formatValue(value);
+@@ -1741,9 +1736,9 @@ function drawCandleFrame(ctx, layout, palette, opts) {
+       const dashY = layout.toY(closeSource.close);
+       if (dashY >= pad.top && dashY <= h - pad.bottom) {
+         ctx.save();
+-        ctx.setLineDash([4, 4]);
++        ctx.setLineDash([8, 6]);
+         ctx.strokeStyle = palette.dashLine;
+-        ctx.lineWidth = 1;
++        ctx.lineWidth = 2;
+         ctx.globalAlpha = closeAlpha * lp * (1 - opts.scrubAmount * 0.2);
+         ctx.beginPath();
+         ctx.moveTo(pad.left, dashY);
+@@ -3530,7 +3525,8 @@ function Liveline({
+   onSeriesToggle,
+   seriesToggleCompact = false,
+   className,
+-  style
++  style,
++  labelFontSize
+ }) {
+   const canvasRef = useRef2(null);
+   const containerRef = useRef2(null);
+@@ -3544,7 +3540,14 @@ function Liveline({
+   const [hiddenSeries, setHiddenSeries] = useState(/* @__PURE__ */ new Set());
+   const lastSeriesPropRef = useRef2(seriesProp);
+   if (seriesProp && seriesProp.length > 0) lastSeriesPropRef.current = seriesProp;
+-  const palette = useMemo(() => resolveTheme(color, theme), [color, theme]);
++  const palette = useMemo(() => {
++    const p = resolveTheme(color, theme);
++    if (labelFontSize) {
++      p.labelFont = labelFontSize + 'px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace';
++      p.badgeFont = '500 ' + labelFontSize + 'px "SF Mono", Menlo, monospace';
++    }
++    return p;
++  }, [color, theme, labelFontSize]);
+   const isDark = theme === "dark";
+   const isMultiSeries = seriesProp != null && seriesProp.length > 0;
+   const showSeriesToggle = (lastSeriesPropRef.current?.length ?? 0) > 1;

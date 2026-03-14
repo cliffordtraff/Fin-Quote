@@ -4,6 +4,7 @@ import type {
   MarketContext,
   StockCandidate,
   StockNewsItem,
+  TodayQuote,
 } from './types'
 
 /**
@@ -229,6 +230,90 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   }
 
   return { candidates, newsBySymbol }
+}
+
+// ---------------------------------------------------------------------------
+// Today's quote (for newsletter intro)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch today's quote for a ticker from FMP.
+ * Returns price, $ change, and % change.
+ */
+export async function fetchTodayQuote(ticker: string): Promise<TodayQuote> {
+  const apiKey = process.env.FMP_API_KEY
+  if (!apiKey) {
+    throw new Error('Missing FMP_API_KEY environment variable')
+  }
+
+  const symbol = ticker.toUpperCase()
+
+  // Fetch quote and YTD price change in parallel
+  const [quoteRes, changeRes] = await Promise.all([
+    fetch(`https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`),
+    fetch(`https://financialmodelingprep.com/api/v3/stock-price-change/${symbol}?apikey=${apiKey}`),
+  ])
+
+  if (!quoteRes.ok) {
+    throw new Error(`FMP quote API returned ${quoteRes.status} for ${symbol}`)
+  }
+
+  const data = await quoteRes.json()
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error(`No quote data returned for ${symbol}`)
+  }
+
+  let ytdReturn: number | undefined
+  if (changeRes.ok) {
+    const changeData = await changeRes.json()
+    if (Array.isArray(changeData) && changeData.length > 0) {
+      ytdReturn = changeData[0].ytd ?? undefined
+    }
+  }
+
+  const q = data[0]
+  return {
+    ticker: symbol,
+    name: q.name || symbol,
+    price: q.price ?? 0,
+    change: q.change ?? 0,
+    changesPercentage: q.changesPercentage ?? 0,
+    marketCap: q.marketCap ?? undefined,
+    pe: q.pe ?? undefined,
+    yearHigh: q.yearHigh ?? undefined,
+    yearLow: q.yearLow ?? undefined,
+    ytdReturn,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Today's news (for manual ticker editorial hook)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch recent news headlines for a single ticker.
+ */
+export async function fetchTickerNews(
+  ticker: string,
+  limit = 5,
+): Promise<StockNewsItem[]> {
+  const apiKey = process.env.FMP_API_KEY
+  if (!apiKey) return []
+
+  const url = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${ticker.toUpperCase()}&limit=${limit}&apikey=${apiKey}`
+  const res = await fetch(url)
+  if (!res.ok) return []
+
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+
+  return data.map((item: any) => ({
+    title: item.title || '',
+    text: item.text || '',
+    url: item.url || '',
+    publishedDate: item.publishedDate || '',
+    site: item.site || '',
+  }))
 }
 
 // ---------------------------------------------------------------------------
