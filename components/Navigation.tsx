@@ -34,6 +34,7 @@ export default function Navigation() {
     { href: '/dashboard/review-day', label: 'Review Day', match: '/dashboard/review-day' },
     { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
     { href: '/charts', label: 'Charting' },
+    { href: '/charts-experiment', label: 'Charting Experiment', match: '/charts-experiment' },
     { href: '/concept', label: 'Market Internals' },
     { href: '/calendar', label: 'Calendar' },
     { href: '/insiders', label: 'Insiders' },
