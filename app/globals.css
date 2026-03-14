@@ -36,8 +36,33 @@
   background: #e5e5e0;
 }
 
+.range-slider-track::before,
+.range-slider-track::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: #c5c5c0;
+}
+
+.range-slider-track::before {
+  left: 0;
+}
+
+.range-slider-track::after {
+  right: 0;
+}
+
 html.dark .range-slider-track {
   background: rgb(55, 55, 55);
+}
+
+html.dark .range-slider-track::before,
+html.dark .range-slider-track::after {
+  background: rgb(85, 85, 85);
 }
 
 .range-slider-range {

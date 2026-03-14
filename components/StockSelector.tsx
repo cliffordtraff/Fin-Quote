@@ -143,7 +143,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search stocks..."
+            placeholder="Add stocks..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value)
@@ -176,7 +176,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
       ) : (
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
           <span className="font-semibold text-sage-600 dark:text-sage-400">
             {displayInfo.symbol}
@@ -185,7 +185,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
             {displayInfo.name}
           </span>
           <svg
-            className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-gray-500 transition-transform ml-auto ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -197,7 +197,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-full min-w-[384px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[280px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
           {/* Search Input - only show in non-autoFocus mode */}
           {!autoFocus && (
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
@@ -218,7 +218,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search stocks..."
+                  placeholder="Add stocks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-sm bg-cream-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
@@ -261,7 +261,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                     index === popularStocks.length
 
                   return (
-                    <div key={stock.symbol}>
+                    <div key={stock.symbol} className="border-b border-gray-100 dark:border-gray-700/50 last:border-b-0">
                       {showRestHeader && (
                         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1 mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
                           All Stocks
@@ -271,54 +271,14 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                         onClick={() => handleStockToggle(stock.symbol)}
                         className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-left transition-colors ${
                           isSelected
-                            ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300'
+                            ? 'bg-sage-100/50 dark:bg-sage-900/20'
                             : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                         }`}
                       >
-                        {allowMultiple ? (
-                          // Checkbox for multi-select
-                          <div
-                            className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                              isSelected
-                                ? 'bg-sage-500 border-sage-500'
-                                : 'border-gray-300 dark:border-gray-600'
-                            }`}
-                          >
-                            {isSelected && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                        ) : (
-                          // Radio dot for single-select
-                          <div
-                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              isSelected
-                                ? 'bg-sage-500'
-                                : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
-                          />
-                        )}
                         <div className="min-w-0 flex-1 flex items-center gap-2">
-                          <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{stock.symbol}</span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{stock.name}</span>
+                          <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{stock.name}</span>
+                          <span className={`text-[13px] font-light flex-shrink-0 ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{stock.symbol}</span>
                         </div>
-                        {!allowMultiple && isSelected && (
-                          <svg
-                            className="w-4 h-4 text-sage-500 flex-shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
                       </button>
                     </div>
                   )

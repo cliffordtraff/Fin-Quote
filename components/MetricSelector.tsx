@@ -23,6 +23,8 @@ interface MetricSelectorProps {
   maxSelections?: number
   selectedStock?: string  // Currently selected stock symbol for filtering (primary stock)
   selectedStocks?: string[]  // All selected stocks for multi-stock filtering
+  layout?: 'horizontal' | 'vertical'  // 'horizontal' = grid-cols-5 (default), 'vertical' = stacked column
+  renderChip?: (metricId: string) => React.ReactNode  // Render a chip for a selected metric (shown under its dropdown)
 }
 
 const STATEMENT_LABELS: Record<StatementType | 'stock', string> = {
@@ -90,52 +92,24 @@ function CollapsibleSection({
 
   return (
     <div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-cream-50 dark:bg-gray-700 hover:bg-gray-150 dark:hover:bg-gray-600 transition-colors">
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="flex items-center gap-2 flex-1 text-left text-sm font-medium"
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-cream-50 dark:bg-gray-700 hover:bg-gray-150 dark:hover:bg-gray-600 transition-colors text-left"
+      >
+        <svg
+          className={`w-3 h-3 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <svg
-            className={`w-3 h-3 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="text-gray-700 dark:text-gray-200">{title}</span>
-          {selectedInSection > 0 && (
-            <span className="text-sage-600 dark:text-sage-400 text-xs">({selectedInSection})</span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={handleToggleAll}
-          className="flex-shrink-0"
-          title={allSelected ? 'Deselect all' : 'Select all'}
-        >
-          <div
-            className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-              allSelected
-                ? 'bg-sage-500 border-sage-500'
-                : someSelected
-                ? 'bg-sage-300 border-sage-400'
-                : 'border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            {(allSelected || someSelected) && (
-              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {allSelected ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 12h14" />
-                )}
-              </svg>
-            )}
-          </div>
-        </button>
-      </div>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="text-[15px] font-medium text-gray-700 dark:text-gray-200">{title}</span>
+        {selectedInSection > 0 && (
+          <span className="text-sage-600 dark:text-sage-400 text-xs">({selectedInSection})</span>
+        )}
+      </button>
       {isExpanded && (
         <div className="pl-2">
           {metrics.map((metric) => {
@@ -153,26 +127,13 @@ function CollapsibleSection({
                 }}
                 disabled={isDisabled}
                 title={metric.definition}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors text-sm ${
+                className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${
                   isDisabled
                     ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
                     : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                 }`}
               >
-                <div
-                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                    isSelected
-                      ? 'bg-sage-500 border-sage-500'
-                      : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  {isSelected && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <span className="text-gray-900 dark:text-white truncate">{metric.label}</span>
+                <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{metric.label}</span>
               </button>
             )
           })}
@@ -272,7 +233,7 @@ function StockSpecificDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-sm"
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
       >
         <span className="truncate text-left">
           {label}
@@ -356,7 +317,7 @@ function StatementDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-sm"
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
       >
         <span className="truncate text-left">
           {label}
@@ -392,26 +353,13 @@ function StatementDropdown({
                   }}
                   disabled={isDisabled}
                   title={metric.definition}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors text-sm ${
+                  className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
                       : 'hover:bg-cream-50 dark:hover:bg-gray-700'
                   }`}
                 >
-                  <div
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                      isSelected
-                        ? 'bg-sage-500 border-sage-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}
-                  >
-                    {isSelected && (
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                  <span className="text-gray-900 dark:text-white truncate">{metric.label}</span>
+                  <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{metric.label}</span>
                 </button>
               )
             })}
@@ -430,6 +378,8 @@ export default function MetricSelector({
   maxSelections = 4,
   selectedStock,
   selectedStocks,
+  layout = 'horizontal',
+  renderChip,
 }: MetricSelectorProps) {
   // Group metrics by statement type
   const incomeMetrics = metrics.filter((m) => m.statement === 'income')
@@ -452,49 +402,51 @@ export default function MetricSelector({
 
   const totalSelected = selectedMetrics.length
 
+  const groups: { key: string; metrics: Metric[]; component: 'statement' | 'stock'; label: string }[] = [
+    { key: 'income', metrics: incomeMetrics as Metric[], component: 'statement', label: STATEMENT_LABELS.income },
+    { key: 'balance', metrics: balanceMetrics as Metric[], component: 'statement', label: STATEMENT_LABELS.balance },
+    { key: 'cashflow', metrics: cashflowMetrics as Metric[], component: 'statement', label: STATEMENT_LABELS.cashflow },
+    { key: 'ratios', metrics: ratioMetrics as Metric[], component: 'statement', label: STATEMENT_LABELS.ratios },
+    { key: 'stock', metrics: stockMetrics as Metric[], component: 'stock', label: STATEMENT_LABELS.stock },
+  ]
+
   return (
     <div>
-      <div className="grid grid-cols-5 gap-2">
-        <StatementDropdown
-          label={STATEMENT_LABELS.income}
-          metrics={incomeMetrics as Metric[]}
-          selectedMetrics={selectedMetrics}
-          onToggle={onToggle}
-          maxSelections={maxSelections}
-          totalSelected={totalSelected}
-        />
-        <StatementDropdown
-          label={STATEMENT_LABELS.balance}
-          metrics={balanceMetrics as Metric[]}
-          selectedMetrics={selectedMetrics}
-          onToggle={onToggle}
-          maxSelections={maxSelections}
-          totalSelected={totalSelected}
-        />
-        <StatementDropdown
-          label={STATEMENT_LABELS.cashflow}
-          metrics={cashflowMetrics as Metric[]}
-          selectedMetrics={selectedMetrics}
-          onToggle={onToggle}
-          maxSelections={maxSelections}
-          totalSelected={totalSelected}
-        />
-        <StatementDropdown
-          label={STATEMENT_LABELS.ratios}
-          metrics={ratioMetrics as Metric[]}
-          selectedMetrics={selectedMetrics}
-          onToggle={onToggle}
-          maxSelections={maxSelections}
-          totalSelected={totalSelected}
-        />
-        <StockSpecificDropdown
-          label={STATEMENT_LABELS.stock}
-          metrics={stockMetrics as Metric[]}
-          selectedMetrics={selectedMetrics}
-          onToggle={onToggle}
-          maxSelections={maxSelections}
-          totalSelected={totalSelected}
-        />
+      <div className={layout === 'vertical' ? 'flex flex-col gap-2' : 'grid grid-cols-5 gap-2'}>
+        {groups.map((group) => {
+          const selectedInGroup = group.metrics
+            .filter((m) => selectedMetrics.includes(m.id))
+            .map((m) => m.id)
+
+          return (
+            <div key={group.key}>
+              {group.component === 'stock' ? (
+                <StockSpecificDropdown
+                  label={group.label}
+                  metrics={group.metrics}
+                  selectedMetrics={selectedMetrics}
+                  onToggle={onToggle}
+                  maxSelections={maxSelections}
+                  totalSelected={totalSelected}
+                />
+              ) : (
+                <StatementDropdown
+                  label={group.label}
+                  metrics={group.metrics}
+                  selectedMetrics={selectedMetrics}
+                  onToggle={onToggle}
+                  maxSelections={maxSelections}
+                  totalSelected={totalSelected}
+                />
+              )}
+              {renderChip && selectedInGroup.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {selectedInGroup.map((id) => renderChip(id))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

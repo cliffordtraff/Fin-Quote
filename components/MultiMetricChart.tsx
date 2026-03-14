@@ -749,7 +749,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       borderColor: isDark ? '#374151' : '#e5e7eb',
       borderRadius: 8,
       borderWidth: 1,
-      shared: true,
+      shared: false,
       style: {
         fontSize: '12px',
         color: isDark ? '#f9fafb' : '#1f2937',
@@ -767,57 +767,49 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         return { x, y }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter: function (this: any) {
-        const points = this.points || []
-        // With datetime axis, this.x is a timestamp - format it appropriately
+      formatter: function (this: any) {
+        const point = this.point || this
+        const seriesName = this.series?.name || ''
+        // With datetime axis, this.x is a timestamp
         const timestamp = this.x as number
         const date = new Date(timestamp)
         const year = date.getUTCFullYear()
         const month = date.getUTCMonth()
-        // For price data with monthly granularity, show month; for financials show FY
-        const hasMonthlyPrice = points.some((p: { series: { name: string } }) => {
-          const metricInfo = filteredData.find((d) => d.label === p.series.name)
-          return metricInfo && isPriceMetric(metricInfo.metric) && metricInfo.data.length > 20
-        })
+        const metricInfo = filteredData.find((d) => d.label === seriesName)
+        const isMonthlyPrice = metricInfo && isPriceMetric(metricInfo.metric) && metricInfo.data.length > 20
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        const periodLabel = hasMonthlyPrice
+        const periodLabel = isMonthlyPrice
           ? `${monthNames[month]} ${year}`
           : isQuarterlyData
             ? `Q${Math.floor(month / 3) + 1} ${year}`
             : `FY ${year}`
-        let html = `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>`
 
-        points.forEach((point: { series: { name: string; color: string }; y: number | null; color: string }) => {
-          const metricInfo = filteredData.find((d) => d.label === point.series.name)
-          const unit = metricInfo?.unit
-          const val = point.y ?? 0
-          // Format based on unit type (or indexed mode)
-          let displayValue: string
-          if (indexToZero) {
-            const sign = val >= 0 ? '+' : ''
-            displayValue = `${sign}${val.toFixed(1)}%`
-          } else if (unit === 'currency') {
-            displayValue = `$${val.toFixed(1)}B`
-          } else if (unit === 'shares') {
-            displayValue = `${val.toFixed(2)}B shares`
-          } else if (unit === 'percent') {
-            displayValue = `${val.toFixed(1)}%`
-          } else if (unit === 'price') {
-            displayValue = `$${val.toFixed(2)}`
-          } else {
-            displayValue = val.toFixed(2)
-          }
+        const unit = metricInfo?.unit
+        const val = point.y ?? 0
+        let displayValue: string
+        if (indexToZero) {
+          const sign = val >= 0 ? '+' : ''
+          displayValue = `${sign}${val.toFixed(1)}%`
+        } else if (unit === 'currency') {
+          displayValue = `$${val.toFixed(1)}B`
+        } else if (unit === 'shares') {
+          displayValue = `${val.toFixed(2)}B shares`
+        } else if (unit === 'percent') {
+          displayValue = `${val.toFixed(1)}%`
+        } else if (unit === 'price') {
+          displayValue = `$${val.toFixed(2)}`
+        } else {
+          displayValue = val.toFixed(2)
+        }
 
-          // Use just the metric label in tooltip (without stats suffix)
-          const tooltipLabel = metricInfo ? metricInfo.label : point.series.name
+        const tooltipLabel = metricInfo ? metricInfo.label : seriesName
+        const color = point.color || this.series?.color || '#888'
 
-          html += `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="width: 10px; height: 10px; background-color: ${point.color}; border-radius: 50%;"></span>
+        return `<div style="font-weight: 600; margin-bottom: 8px;">${periodLabel}</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 10px; height: 10px; background-color: ${color}; border-radius: 50%; flex-shrink: 0;"></span>
             <span>${tooltipLabel}: <strong>${displayValue}</strong></span>
           </div>`
-        })
-
-        return html
       },
       useHTML: true,
     },

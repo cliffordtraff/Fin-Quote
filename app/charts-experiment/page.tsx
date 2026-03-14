@@ -127,10 +127,12 @@ export default function ChartsPage() {
   const [sliderWidth, setSliderWidth] = useState(0)
   const sliderRef = useRef<HTMLDivElement | null>(null)
   const stockSelectorRef = useRef<StockSelectorHandle>(null)
-  const thumbEffectivePx = 24 // matches CSS width + borders + shadow
+  const thumbEffectivePx = 18 // matches CSS --thumb-width (border-box)
   // Custom colors for metrics (overrides default colors)
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Track whether URL params have been applied
   const [urlParamsApplied, setUrlParamsApplied] = useState(false)
@@ -201,7 +203,7 @@ export default function ChartsPage() {
     setUrlParamsApplied(true)
   }, [availableMetrics, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
 
-  // Keyboard shortcut: '/' to focus stock search
+  // Keyboard shortcut: '/' to focus stock search (opens sidebar if closed)
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Ignore if user is typing in an input or textarea
@@ -210,12 +212,18 @@ export default function ChartsPage() {
       }
       if (event.key === '/') {
         event.preventDefault()
-        stockSelectorRef.current?.focus()
+        if (!sidebarOpen) {
+          setSidebarOpen(true)
+          // Wait for transition to finish before focusing
+          setTimeout(() => stockSelectorRef.current?.focus(), 350)
+        } else {
+          stockSelectorRef.current?.focus()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [sidebarOpen])
 
   // Reset year bounds and initial range when period type changes
   // (Don't reset on stock changes to avoid slider flashing)
@@ -455,6 +463,19 @@ export default function ChartsPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Fire resize event when sidebar transition ends so chart + slider recalculate widths
+  useEffect(() => {
+    const el = sidebarRef.current
+    if (!el) return
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      if (e.propertyName === 'width') {
+        window.dispatchEvent(new Event('resize'))
+      }
+    }
+    el.addEventListener('transitionend', handleTransitionEnd)
+    return () => el.removeEventListener('transitionend', handleTransitionEnd)
+  }, [])
+
   const updateRange = (nextMin: number, nextMax: number) => {
     setMinYear(nextMin)
     setMaxYear(nextMax)
@@ -670,14 +691,16 @@ export default function ChartsPage() {
     <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       <Navigation />
 
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-cream-300 dark:border-gray-700">
-          {/* Controls */}
-          <div className="px-4 py-2 select-none">
-          {/* Stock Selector + Metric Selectors */}
-          <div className="flex items-center gap-4">
-            {/* Stock Selector - wider */}
-            <div className="relative w-72">
+      <div className="flex">
+        {/* SIDEBAR — page-level, outside the card */}
+        <div
+          ref={sidebarRef}
+          className={`${sidebarOpen ? 'w-[300px]' : 'w-0'} overflow-hidden transition-[width] duration-300 ease-in-out flex-shrink-0`}
+        >
+          <div className="w-[300px] h-[calc(100vh-64px)] overflow-y-auto bg-white dark:bg-gray-800 border-r border-cream-300 dark:border-gray-700 p-4 space-y-7 select-none">
+            {/* Stocks */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Stocks</p>
               <StockSelector
                 ref={stockSelectorRef}
                 availableStocks={availableStocks}
@@ -687,53 +710,26 @@ export default function ChartsPage() {
                 popularStocks={POPULAR_STOCKS}
                 autoFocus={true}
               />
-            </div>
-            {/* Metric Selector */}
-            <div className="relative flex-1">
-              <MetricSelector
-                metrics={availableMetrics}
-                selectedMetrics={addedMetrics}
-                onToggle={handleMetricToggle}
-                onClear={handleClearAll}
-                maxSelections={10}
-                selectedStock={selectedStock}
-                selectedStocks={selectedStocks}
-              />
-            </div>
-          </div>
-
-          {/* Stock and metric checkboxes + Time Range Slider - same row */}
-          <div className="flex items-start gap-6 mt-2">
-            {/* Stock and Metric checkboxes - left half */}
-            <div className="flex-1 min-w-0 space-y-2">
-              {/* Stock checkboxes */}
+              {/* Added stock chips */}
               {addedStocks.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 mt-2">
                   {addedStocks.map((symbol) => {
                     const stock = availableStocks.find((s) => s.symbol === symbol)
-                    const isVisible = visibleStocks.includes(symbol)
 
                     return (
                       <div
                         key={symbol}
-                        className="inline-flex items-center gap-2 bg-cream-50 dark:bg-gray-700 px-2 py-1 rounded-md h-[32px]"
+                        className="inline-flex items-center gap-1.5 bg-cream-100 dark:bg-gray-700/60 px-2.5 py-1 rounded-md"
                       >
-                        <input
-                          type="checkbox"
-                          checked={isVisible}
-                          onChange={() => handleStockVisibilityToggle(symbol)}
-                          title={`Toggle ${symbol} visibility`}
-                          className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2 flex-shrink-0"
-                        />
-                        <span className="text-sm font-semibold text-sage-600 dark:text-sage-400">{symbol}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">{stock?.name}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px]">{stock?.name}</span>
+                        <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{symbol}</span>
                         <button
                           type="button"
                           onClick={() => handleRemoveStock(symbol)}
-                          className="ml-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                          className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
                           title="Remove stock"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -742,37 +738,38 @@ export default function ChartsPage() {
                   })}
                 </div>
               )}
-              {/* Metric checkboxes */}
-              <div className="flex flex-wrap gap-2 min-h-[32px]">
-                {addedMetrics.map((metricId) => {
+            </div>
+
+            {/* Metrics */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Metrics</p>
+              <MetricSelector
+                metrics={availableMetrics}
+                selectedMetrics={addedMetrics}
+                onToggle={handleMetricToggle}
+                onClear={handleClearAll}
+                maxSelections={10}
+                selectedStock={selectedStock}
+                selectedStocks={selectedStocks}
+                layout="vertical"
+                renderChip={(metricId) => {
                   const metric = availableMetrics.find((m) => m.id === metricId)
-                  const isVisible = visibleMetrics.includes(metricId)
-                  const isOnlyVisible = visibleMetrics.length === 1 && isVisible
-                  const currentColor = customColors[metricId] ?? DEFAULT_METRIC_COLORS[metricId] ?? '#3b82f6'
+                  const isVisible = visibleMetrics.includes(metricId as MetricId)
+                  const currentColor = customColors[metricId] ?? DEFAULT_METRIC_COLORS[metricId as MetricId] ?? '#3b82f6'
 
                   return (
                     <div
                       key={metricId}
-                      className="inline-flex items-center gap-2 bg-cream-50 dark:bg-gray-700 px-2 py-1 rounded-md relative h-[32px]"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md relative transition-opacity ${isVisible ? 'bg-cream-100 dark:bg-gray-700/60' : 'bg-cream-100/50 dark:bg-gray-700/30 opacity-50'}`}
                       title={metric?.definition}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isVisible}
-                        onChange={() => handleVisibilityToggle(metricId)}
-                        disabled={isOnlyVisible}
-                        title={isOnlyVisible ? 'At least one metric must be visible' : metric?.definition}
-                        className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2 flex-shrink-0"
-                      />
-                      {/* Color swatch button */}
                       <button
                         type="button"
                         onClick={() => setColorPickerOpen(colorPickerOpen === metricId ? null : metricId)}
-                        className="w-4 h-4 rounded border border-gray-300 dark:border-gray-500 flex-shrink-0"
+                        className="w-3 h-3 rounded-sm border border-gray-300 dark:border-gray-500 flex-shrink-0"
                         style={{ backgroundColor: currentColor }}
                         title="Change color"
                       />
-                      {/* Color picker dropdown */}
                       {colorPickerOpen === metricId && (
                         <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
                           <div className="grid grid-cols-4 gap-1">
@@ -792,222 +789,292 @@ export default function ChartsPage() {
                           </div>
                         </div>
                       )}
-                      <span className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                      <span className={`text-sm font-medium truncate ${isVisible ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500 line-through'}`}>
                         {metric?.label}
                       </span>
+                      {/* Hide/Show toggle */}
                       <button
                         type="button"
-                        onClick={() => handleRemoveMetric(metricId)}
-                        className="ml-auto text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                        onClick={() => handleVisibilityToggle(metricId as MetricId)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+                        title={isVisible ? 'Hide from chart' : 'Show on chart'}
+                      >
+                        {isVisible ? (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        )}
+                      </button>
+                      {/* Remove */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMetric(metricId as MetricId)}
+                        className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
                         title="Remove metric"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
                   )
-                })}
-              </div>
+                }}
+              />
             </div>
 
-            {/* Period Toggle + Stock Price + Time Range Slider - right half */}
-            <div className="flex items-start gap-4 flex-shrink-0">
-              {/* Period Toggle */}
-              <div className="flex items-center gap-1 bg-cream-50 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  type="button"
-                  onClick={() => setPeriodType('annual')}
-                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    periodType === 'annual'
-                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  Annual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPeriodType('quarterly')}
-                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    periodType === 'quarterly'
-                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  Quarterly
-                </button>
-              </div>
-              {/* Stock Price Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer bg-cream-50 dark:bg-gray-700 rounded-lg px-3 py-1.5">
-                <input
-                  type="checkbox"
-                  checked={showStockPrice}
-                  onChange={(e) => setShowStockPrice(e.target.checked)}
-                  className="w-4 h-4 text-green-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-green-500 focus:ring-2"
-                />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Price</span>
-              </label>
-              {/* Time Range Slider */}
-              <div className="w-[900px] space-y-2 range-slider-wrap">
-              <div className="range-slider" ref={sliderRef}>
-                <div className="range-slider-track" />
-                <div
-                  className="range-slider-range"
-                  style={{
-                    left: `${Math.min(minPercent, maxPercent)}%`,
-                    width: `${Math.max(maxPercent - minPercent, 0)}%`,
-                  }}
-                />
-                <input
-                  type="range"
-                  min={yearBounds?.min ?? 0}
-                  max={yearBounds?.max ?? 0}
-                  step={1}
-                  value={minSliderValue}
-                  onChange={(e) => handleSliderMinChange(Number(e.target.value))}
-                  disabled={!yearBounds}
-                  className="range-slider-input"
-                  style={{ zIndex: minThumbOnTop ? 5 : 4 }}
-                />
-                <input
-                  type="range"
-                  min={yearBounds?.min ?? 0}
-                  max={yearBounds?.max ?? 0}
-                  step={1}
-                  value={maxSliderValue}
-                  onChange={(e) => handleSliderMaxChange(Number(e.target.value))}
-                  disabled={!yearBounds}
-                  className="range-slider-input"
-                  style={{ zIndex: minThumbOnTop ? 4 : 5 }}
-                />
-              </div>
-              {yearBounds && sliderYears.length > 0 && (
-                <div className="range-slider-scale relative h-2">
-                  {sliderYears.map((year) => (
-                    <span
-                      key={`tick-${year}`}
-                      className="absolute -translate-x-1/2 h-2 w-px bg-gray-400/70 dark:bg-gray-500/70"
-                      style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
-                    />
-                  ))}
-                </div>
-              )}
-              {yearBounds && sliderYears.length > 0 && (
-                <div className="range-slider-scale relative h-4 text-[10px] text-gray-500 dark:text-gray-400 leading-none mt-1">
-                  {sliderYears.map((year) => (
-                    <span
-                      key={year}
-                      className="absolute -translate-x-1/2 whitespace-nowrap"
-                      style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
-                    >
-                      {year}
-                    </span>
-                  ))}
-                </div>
-              )}
-              </div>
-            </div>
-          </div>
-          </div>
-
-          {/* Chart */}
-          <div className="p-4 pb-2">
-            <div className="relative min-h-[650px]">
-            {/* Chart content */}
-            {error ? (
-              <div className="h-[650px] flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-red-600 dark:text-red-400 font-medium mb-2">Error loading data</p>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">{error}</p>
+            {/* Display */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Display</p>
+              <div className="space-y-3">
+                {/* Period Toggle */}
+                <div className="flex items-center gap-1 bg-cream-50 dark:bg-gray-700 rounded-lg p-1">
                   <button
-                    onClick={fetchData}
-                    className="mt-4 px-4 py-2 bg-sage-500 text-white rounded-lg hover:bg-sage-600 transition-colors"
+                    type="button"
+                    onClick={() => setPeriodType('annual')}
+                    className={`flex-1 px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      periodType === 'annual'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
                   >
-                    Try Again
+                    Annual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodType('quarterly')}
+                    className={`flex-1 px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      periodType === 'quarterly'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Quarterly
                   </button>
                 </div>
+                {/* Stock Price Toggle */}
+                <label className="flex items-center gap-2 cursor-pointer bg-cream-50 dark:bg-gray-700 rounded-lg px-3 py-1.5">
+                  <input
+                    type="checkbox"
+                    checked={showStockPrice}
+                    onChange={(e) => setShowStockPrice(e.target.checked)}
+                    className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-0"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Price</span>
+                </label>
               </div>
-            ) : metricsData.length > 0 ? (
-              <MultiMetricChart
-                data={metricsData}
-                metrics={metricsData.map(d => d.metric)}
-                customColors={
-                  // Use stock-based color families for multi-stock comparison
-                  selectedStocks.length > 1
-                    ? Object.fromEntries(
-                        (() => {
-                          // Track metric index per stock for color assignment
-                          const stockMetricIndex: Record<string, number> = {}
-                          const stockColorFamilies = isDark ? STOCK_COLOR_FAMILIES_DARK : STOCK_COLOR_FAMILIES_LIGHT
+            </div>
 
-                          return metricsData.map((d) => {
-                            // Extract stock symbol from prefixed ID (e.g., "AAPL:revenue" -> "AAPL")
-                            const stockSymbol = d.metric.includes(':') ? d.metric.split(':')[0] : selectedStocks[0]
-
-                            // Get the color family for this stock
-                            const colorFamily = stockColorFamilies[stockSymbol] ?? COLOR_PALETTE
-
-                            // Get the next color index for this stock
-                            const metricIndex = stockMetricIndex[stockSymbol] ?? 0
-                            stockMetricIndex[stockSymbol] = metricIndex + 1
-
-                            // Assign color from the stock's color family
-                            const color = colorFamily[metricIndex % colorFamily.length]
-                            return [d.metric, color]
-                          })
-                        })()
-                      )
-                    : customColors
+            {/* Clear All */}
+            <button
+              type="button"
+              onClick={() => {
+                setAddedStocks([])
+                setVisibleStocks([])
+                setAddedMetrics([])
+                setVisibleMetrics([])
+                setCustomColors({})
+                setShowStockPrice(false)
+                if (yearBounds) {
+                  setMinYear(yearBounds.min)
+                  setMaxYear(yearBounds.max)
                 }
-                onReset={handleReset}
-                onCopyExportUrl={handleCopyExportUrl}
-                initialChartType={initialChartType}
-              />
-            ) : (
-              <div className="h-[650px] flex items-start justify-center pt-24">
-                <div className="text-center max-w-lg">
-                  {/* Guided steps */}
-                  {addedStocks.length === 0 ? (
-                    <>
-                      <div className="mb-8">
-                        <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Pick a stock</p>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Use the dropdown above to select a stock</p>
-                      </div>
+              }}
+              disabled={addedStocks.length === 0 && addedMetrics.length === 0 && !showStockPrice}
+              className="w-full px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
 
-                      {/* Divider */}
-                      <div className="flex items-center gap-4 mb-6">
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">try a preset</span>
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                      </div>
+        {/* TOGGLE BUTTON — page-level strip */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className="w-5 flex-shrink-0 flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-cream-100 dark:hover:bg-gray-700 transition-colors border-r border-cream-300 dark:border-gray-700 cursor-pointer"
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          <svg
+            className={`w-3 h-3 text-gray-500 transition-transform duration-300 ${sidebarOpen ? '' : 'rotate-180'}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
 
-                      {/* Preset buttons */}
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {CHART_PRESETS.map((preset) => (
-                          <button
-                            key={preset.label}
-                            onClick={() => handleApplyPreset(preset)}
-                            className="px-4 py-2 text-sm font-medium bg-cream-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-sage-100 dark:hover:bg-sage-900/20 hover:text-sage-700 dark:hover:text-sage-300 transition-colors border border-gray-200 dark:border-gray-700"
-                          >
-                            {preset.label}
-                          </button>
+        {/* MAIN CONTENT */}
+        <main className="flex-1 min-w-0 px-6 py-8">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-cream-300 dark:border-gray-700">
+            {/* Controls */}
+            {addedStocks.length > 0 && (
+            <div className="px-4 py-2 select-none">
+              {/* Time Range Slider — full width */}
+              <div className="space-y-2 range-slider-wrap">
+                    <div className="range-slider" ref={sliderRef}>
+                      <div className="range-slider-track" />
+                      <div
+                        className="range-slider-range"
+                        style={{
+                          left: `${Math.min(minPercent, maxPercent)}%`,
+                          width: `${Math.max(maxPercent - minPercent, 0)}%`,
+                        }}
+                      />
+                      <input
+                        type="range"
+                        min={yearBounds?.min ?? 0}
+                        max={yearBounds?.max ?? 0}
+                        step={1}
+                        value={minSliderValue}
+                        onChange={(e) => handleSliderMinChange(Number(e.target.value))}
+                        disabled={!yearBounds}
+                        className="range-slider-input"
+                        style={{ zIndex: minThumbOnTop ? 5 : 4 }}
+                      />
+                      <input
+                        type="range"
+                        min={yearBounds?.min ?? 0}
+                        max={yearBounds?.max ?? 0}
+                        step={1}
+                        value={maxSliderValue}
+                        onChange={(e) => handleSliderMaxChange(Number(e.target.value))}
+                        disabled={!yearBounds}
+                        className="range-slider-input"
+                        style={{ zIndex: minThumbOnTop ? 4 : 5 }}
+                      />
+                    </div>
+                    {yearBounds && sliderYears.length > 0 && (
+                      <div className="range-slider-scale relative h-2">
+                        {sliderYears.map((year) => (
+                          <span
+                            key={`tick-${year}`}
+                            className="absolute -translate-x-1/2 h-2 w-px bg-gray-400/70 dark:bg-gray-500/70"
+                            style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
+                          />
                         ))}
                       </div>
-                    </>
+                    )}
+                    {yearBounds && sliderYears.length > 0 && (
+                      <div className="range-slider-scale relative h-4 text-[10px] text-gray-500 dark:text-gray-400 leading-none mt-1">
+                        {sliderYears.map((year) => (
+                          <span
+                            key={year}
+                            className="absolute -translate-x-1/2 whitespace-nowrap"
+                            style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
+                          >
+                            {year}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+              </div>
+            </div>
+            )}
+
+            {/* Chart */}
+              <div className="p-4 pb-2">
+                <div className="relative min-h-[650px]">
+                  {/* Chart content */}
+                  {error ? (
+                    <div className="h-[650px] flex items-center justify-center">
+                      <div className="text-center">
+                        <p className="text-red-600 dark:text-red-400 font-medium mb-2">Error loading data</p>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">{error}</p>
+                        <button
+                          onClick={fetchData}
+                          className="mt-4 px-4 py-2 bg-sage-500 text-white rounded-lg hover:bg-sage-600 transition-colors"
+                        >
+                          Try Again
+                        </button>
+                      </div>
+                    </div>
+                  ) : metricsData.length > 0 ? (
+                    <MultiMetricChart
+                      data={metricsData}
+                      metrics={metricsData.map(d => d.metric)}
+                      customColors={
+                        // Use stock-based color families for multi-stock comparison
+                        selectedStocks.length > 1
+                          ? Object.fromEntries(
+                              (() => {
+                                // Track metric index per stock for color assignment
+                                const stockMetricIndex: Record<string, number> = {}
+                                const stockColorFamilies = isDark ? STOCK_COLOR_FAMILIES_DARK : STOCK_COLOR_FAMILIES_LIGHT
+
+                                return metricsData.map((d) => {
+                                  // Extract stock symbol from prefixed ID (e.g., "AAPL:revenue" -> "AAPL")
+                                  const stockSymbol = d.metric.includes(':') ? d.metric.split(':')[0] : selectedStocks[0]
+
+                                  // Get the color family for this stock
+                                  const colorFamily = stockColorFamilies[stockSymbol] ?? COLOR_PALETTE
+
+                                  // Get the next color index for this stock
+                                  const metricIndex = stockMetricIndex[stockSymbol] ?? 0
+                                  stockMetricIndex[stockSymbol] = metricIndex + 1
+
+                                  // Assign color from the stock's color family
+                                  const color = colorFamily[metricIndex % colorFamily.length]
+                                  return [d.metric, color]
+                                })
+                              })()
+                            )
+                          : customColors
+                      }
+                      onReset={handleReset}
+                      onCopyExportUrl={handleCopyExportUrl}
+                      initialChartType={initialChartType}
+                    />
                   ) : (
-                    <div>
-                      <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Choose metrics to compare</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">Use the metrics dropdown to add data to your chart</p>
+                    <div className="h-[650px] flex items-start justify-center pt-24">
+                      <div className="text-center max-w-lg">
+                        {/* Guided steps */}
+                        {addedStocks.length === 0 ? (
+                          <>
+                            <div className="mb-8">
+                              <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Pick a stock</p>
+                              <p className="text-gray-500 dark:text-gray-400 text-sm">Use the sidebar to select a stock</p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-4 mb-6">
+                              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">try a preset</span>
+                              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                            </div>
+
+                            {/* Preset buttons */}
+                            <div className="flex flex-wrap justify-center gap-2">
+                              {CHART_PRESETS.map((preset) => (
+                                <button
+                                  key={preset.label}
+                                  onClick={() => handleApplyPreset(preset)}
+                                  className="px-4 py-2 text-sm font-medium bg-cream-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-sage-100 dark:hover:bg-sage-900/20 hover:text-sage-700 dark:hover:text-sage-300 transition-colors border border-gray-200 dark:border-gray-700"
+                                >
+                                  {preset.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Choose metrics to compare</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">Use the sidebar to add metrics to your chart</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-            )}
             </div>
-          </div>
+          </main>
         </div>
-      </main>
-    </div>
-  )
-}
+      </div>
+    )
+  }
