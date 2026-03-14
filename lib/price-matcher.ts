@@ -152,17 +152,22 @@ export function generateCalendarDates(
   periodType: 'annual' | 'quarterly'
 ): string[] {
   const dates: string[] = []
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   for (let year = startYear; year <= endYear; year++) {
     if (periodType === 'annual') {
-      // Use December 31 for annual data
-      dates.push(`${year}-12-31`)
+      const dateStr = `${year}-12-31`
+      // Skip future dates
+      if (dateStr > todayStr) break
+      dates.push(dateStr)
     } else {
       // Use quarter-end dates for quarterly data
-      dates.push(`${year}-03-31`) // Q1
-      dates.push(`${year}-06-30`) // Q2
-      dates.push(`${year}-09-30`) // Q3
-      dates.push(`${year}-12-31`) // Q4
+      const quarterDates = [`${year}-03-31`, `${year}-06-30`, `${year}-09-30`, `${year}-12-31`]
+      for (const dateStr of quarterDates) {
+        if (dateStr > todayStr) return dates
+        dates.push(dateStr)
+      }
     }
   }
 
@@ -182,14 +187,56 @@ export function generateMonthlyDates(
   endYear: number
 ): string[] {
   const dates: string[] = []
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   for (let year = startYear; year <= endYear; year++) {
     for (let month = 0; month < 12; month++) {
       // Get last day of each month
       const lastDay = new Date(year, month + 1, 0).getDate()
       const monthStr = String(month + 1).padStart(2, '0')
-      dates.push(`${year}-${monthStr}-${lastDay}`)
+      const dateStr = `${year}-${monthStr}-${lastDay}`
+      // Skip future dates to avoid flat-line artifacts
+      if (dateStr > todayStr) return dates
+      dates.push(dateStr)
     }
+  }
+
+  return dates
+}
+
+/**
+ * Generates weekly dates (every Friday) for high-density price line display.
+ * Creates ~52 data points per year for very smooth visualization.
+ *
+ * @param startYear - The starting year (earliest)
+ * @param endYear - The ending year (most recent)
+ * @returns Array of date strings in YYYY-MM-DD format (Fridays)
+ */
+export function generateWeeklyDates(
+  startYear: number,
+  endYear: number
+): string[] {
+  const dates: string[] = []
+
+  // Start from Jan 1 of startYear, find first Friday
+  const start = new Date(startYear, 0, 1)
+  const dayOfWeek = start.getDay()
+  // Advance to first Friday (day 5)
+  const daysUntilFriday = (5 - dayOfWeek + 7) % 7
+  start.setDate(start.getDate() + daysUntilFriday)
+
+  // Cap at today's date to avoid generating future dates (which cause flat-line artifacts)
+  const today = new Date()
+  const end = new Date(Math.min(new Date(endYear, 11, 31).getTime(), today.getTime()))
+
+  const current = new Date(start)
+  while (current <= end) {
+    const y = current.getFullYear()
+    const m = String(current.getMonth() + 1).padStart(2, '0')
+    const d = String(current.getDate()).padStart(2, '0')
+    dates.push(`${y}-${m}-${d}`)
+    current.setDate(current.getDate() + 7) // next Friday
   }
 
   return dates

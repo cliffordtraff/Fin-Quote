@@ -254,3 +254,27 @@ html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   0%, 100% { opacity: 0.55; transform: translateX(0); }
   50% { opacity: 0.85; transform: translateX(-6px); }
 }
+
+@keyframes pulse-text-cycle {
+  0%, 10% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+  }
+  16%, 40% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  48%, 100% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(1.01);
+  }
+}
+
+.pulse-text-cycle {
+  opacity: 0;
+  animation-name: pulse-text-cycle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  will-change: opacity, transform;
+}

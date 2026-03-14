@@ -23,6 +23,10 @@ export interface ReplayConfig {
   from: string       // "HH:MM" ET
   to: string         // "HH:MM" ET
   timeframe: '1s' | '10s'
+  /** When false, fetches candles but waits in 'ready' state instead of auto-playing */
+  autoPlay?: boolean
+  /** Optional nonce to force a refetch even when the replay window is unchanged */
+  requestId?: number
 }
 
 export interface ReplayState {
@@ -115,10 +119,14 @@ export function useReplay(config: ReplayConfig | null): ReplayState {
         setAllCandles(candles)
         setPreviousClose(data.previousClose || null)
 
-        // Auto-play in animated mode, show all in static mode
+        // Auto-play in animated mode unless autoPlay is explicitly false
         setRevealedIndex(0)
         setModeState('animated')
-        setStatus('playing')
+        if (config!.autoPlay === false) {
+          setStatus('ready')
+        } else {
+          setStatus('playing')
+        }
       } catch (err) {
         if (cancelled) return
         console.error('[useReplay] Fetch error:', err)
@@ -129,7 +137,7 @@ export function useReplay(config: ReplayConfig | null): ReplayState {
 
     fetchReplay()
     return () => { cancelled = true; clearTimer() }
-  }, [config?.symbol, config?.date, config?.from, config?.to, config?.timeframe, clearTimer])
+  }, [config?.symbol, config?.date, config?.from, config?.to, config?.timeframe, config?.requestId, clearTimer])
 
   // Timer for animated mode
   const startTimer = useCallback(() => {

@@ -1,7 +1,7 @@
 'use server'
 
 import { getPrices } from './prices'
-import { matchPricesToDates, generateCalendarDates, generateMonthlyDates, type PriceDataPoint } from '@/lib/price-matcher'
+import { matchPricesToDates, generateCalendarDates, generateMonthlyDates, generateWeeklyDates, type PriceDataPoint } from '@/lib/price-matcher'
 import type { MetricData, MetricDataPoint, PeriodType } from './chart-metrics'
 
 /**
@@ -152,35 +152,41 @@ export async function getChartPriceData(params: {
 }
 
 /**
- * Fetches monthly stock price data for smooth line display.
- * Returns ~12 data points per year instead of 1, creating a smoother visualization.
+ * Fetches high-density stock price data for smooth line display.
+ *
+ * - Annual mode ('weekly'): ~52 data points per year (every Friday)
+ * - Quarterly mode ('monthly'): ~12 data points per year (month-end)
  *
  * @param symbol - Stock ticker symbol (e.g., 'AAPL', 'MSFT')
  * @param minYear - Starting year (optional, defaults to current year - 9)
  * @param maxYear - Ending year (optional, defaults to current year)
+ * @param granularity - 'weekly' for annual charts, 'monthly' for quarterly charts
  */
 export async function getMonthlyChartPriceData(params: {
   symbol: string
   minYear?: number
   maxYear?: number
+  granularity?: 'weekly' | 'monthly'
 }): Promise<{
   data: MetricData | null
   error: string | null
 }> {
   const currentYear = new Date().getFullYear()
-  const { symbol, minYear = currentYear - 9, maxYear = currentYear } = params
+  const { symbol, minYear = currentYear - 9, maxYear = currentYear, granularity = 'weekly' } = params
 
   try {
-    // Generate monthly dates for the year range
-    const monthlyDates = generateMonthlyDates(minYear, maxYear)
+    // Generate target dates based on granularity
+    const targetDates = granularity === 'weekly'
+      ? generateWeeklyDates(minYear, maxYear)
+      : generateMonthlyDates(minYear, maxYear)
 
-    if (monthlyDates.length === 0) {
+    if (targetDates.length === 0) {
       return { data: null, error: 'No dates to fetch prices for' }
     }
 
     // Determine the date range we need to fetch
-    const earliestDate = monthlyDates[0]
-    const latestDate = monthlyDates[monthlyDates.length - 1]
+    const earliestDate = targetDates[0]
+    const latestDate = targetDates[targetDates.length - 1]
 
     // Add buffer to ensure we have data for nearest trading day lookup
     const fromDate = new Date(earliestDate)
@@ -212,16 +218,15 @@ export async function getMonthlyChartPriceData(params: {
       volume: p.volume,
     }))
 
-    // Match prices to monthly dates
-    const matchedPrices = matchPricesToDates(priceData, monthlyDates)
+    // Match prices to target dates
+    const matchedPrices = matchPricesToDates(priceData, targetDates)
 
-    // Build MetricDataPoint array with monthly granularity
+    // Build MetricDataPoint array
     const dataPoints: MetricDataPoint[] = matchedPrices
       .filter(m => m.price !== null)  // Only include dates with valid prices
       .map((matched) => {
         const d = new Date(matched.targetDate)
         const year = d.getFullYear()
-        const month = d.getMonth()  // 0-indexed
 
         return {
           year,
@@ -246,7 +251,7 @@ export async function getMonthlyChartPriceData(params: {
 
     return { data: result, error: null }
   } catch (err) {
-    console.error(`Error fetching monthly chart price data for ${symbol}:`, err)
+    console.error(`Error fetching chart price data for ${symbol}:`, err)
     return {
       data: null,
       error: err instanceof Error ? err.message : 'An unexpected error occurred',

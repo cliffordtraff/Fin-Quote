@@ -149,6 +149,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const [indexToZero, setIndexToZero] = useState(initialIndexToZero ?? false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [exportColors, setExportColors] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
@@ -457,6 +458,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       marker: markerOptions,
       // Ensure price line renders on top of bars
       zIndex: isThisPriceMetric ? 10 : 1,
+      // Never show data labels on price series (too many points, clutters the chart)
+      ...(isThisPriceMetric && { dataLabels: { enabled: false } }),
     }
   })
 
@@ -565,7 +568,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     chart: {
       type: 'column',
       height: exportMode ? 500 : 650,
-      backgroundColor: exportMode ? '#ffffff' : (isDark ? 'rgb(45, 45, 45)' : 'transparent'),
+      backgroundColor: exportMode ? '#ffffff' : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : 'transparent',
       animation: false,
       style: {
         fontFamily: 'inherit',
@@ -870,7 +873,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   }
 
   // Create a stable key based on the metrics being displayed and options
-  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}-type-${chartType}-indexed-${indexToZero}`
+  const chartKey = `${[...metrics].sort().join('-')}-labels-${showDataLabels}-stacked-${isStacked}-type-${chartType}-indexed-${indexToZero}-exportColors-${exportColors}`
 
   // Build legend data with stats
   const legendItems = sortedFilteredData.map((metricData, index) => {
@@ -940,6 +943,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
         {/* Controls - hidden in export mode */}
         {!exportMode && <div className="flex items-center gap-4 flex-shrink-0">
+          <label className="flex items-center gap-2 cursor-pointer" title="Switch to white background with export-friendly colors">
+            <input
+              type="checkbox"
+              checked={exportColors}
+              onChange={(e) => setExportColors(e.target.checked)}
+              className="w-4 h-4 text-sage-600 bg-cream-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-sage-500 focus:ring-2"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Export Colors</span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1088,8 +1100,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         </div>}
       </div>
 
-      {/* Data Table - hidden in fullscreen and export mode */}
-      {!isFullscreen && !exportMode && (
+      {/* Data Table - hidden in fullscreen, export mode, and when only stock price is shown */}
+      {!isFullscreen && !exportMode && !filteredData.every(d => isPriceMetric(d.metric)) && (
       <div className="bg-cream-50 dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
         <table className="w-full table-fixed divide-y divide-cream-200 dark:divide-gray-700">
           <thead className="bg-cream-50 dark:bg-gray-900">

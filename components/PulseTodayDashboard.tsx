@@ -13,7 +13,7 @@ const SYMBOLS = ['GOOGL'] as const
 
 type ThemeMode = 'light' | 'dark'
 
-function formatPrice(v: number) {
+export function formatPrice(v: number) {
   return v.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -104,7 +104,7 @@ function useDegenScale(
 
 /* ───────── Day candles types & hooks (same as PulseLabDashboard) ───────── */
 
-interface DayCandle {
+export interface DayCandle {
   date: string
   open: number
   high: number
@@ -112,7 +112,7 @@ interface DayCandle {
   close: number
 }
 
-interface DayCandleData {
+export interface DayCandleData {
   candles: DayCandle[]
   previousClose: number | null
   changePct: number | null
@@ -154,15 +154,22 @@ function aggregateTo5Min(candles: DayCandle[]): Candle5Min[] {
   return bars
 }
 
-function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
+function sortCandles(candles: DayCandle[]) {
+  return [...candles].sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
   const [data, setData] = useState<Record<string, DayCandleData>>({})
+  const normalizedSymbols = Array.from(new Set(symbols.map((symbol) => symbol.toUpperCase()))).sort()
+  const symbolsKey = normalizedSymbols.join(',')
 
   useEffect(() => {
     let cancelled = false
+    const activeSymbols = normalizedSymbols
 
     async function fetchAll() {
       const results = await Promise.allSettled(
-        symbols.map(async (sym) => {
+        activeSymbols.map(async (sym) => {
           const res = await fetch(`/api/stock-intraday/${sym}?interval=1`)
           if (!res.ok) return null
           return { sym, json: await res.json() }
@@ -175,7 +182,7 @@ function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData
       for (const r of results) {
         if (r.status === 'fulfilled' && r.value) {
           const { sym, json } = r.value
-          const candles: DayCandle[] = json.todayOHLC ?? []
+          const candles = sortCandles((json.todayOHLC ?? []) as DayCandle[])
           const previousClose: number | null = json.previousClose ?? null
           let changePct: number | null = null
           if (previousClose && previousClose > 0 && candles.length > 0) {
@@ -191,16 +198,16 @@ function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData
     fetchAll()
     const id = setInterval(fetchAll, 60_000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [symbols])
+  }, [symbolsKey])
 
   return data
 }
 
 /* ───────── Candle time parsing helpers ───────── */
 
-const MARKET_OPEN_MINUTES = 9 * 60 + 30 // 9:30 AM
+export const MARKET_OPEN_MINUTES = 9 * 60 + 30 // 9:30 AM
 
-function candleMinutesSinceOpen(candle: { date: string }): number {
+export function candleMinutesSinceOpen(candle: { date: string }): number {
   const parts = candle.date.split(' ')
   const timeParts = (parts[1] ?? '00:00:00').split(':')
   const h = parseInt(timeParts[0] ?? '0', 10)
@@ -208,7 +215,7 @@ function candleMinutesSinceOpen(candle: { date: string }): number {
   return h * 60 + m - MARKET_OPEN_MINUTES
 }
 
-function candleSecondsSinceOpen(candle: { date: string }): number {
+export function candleSecondsSinceOpen(candle: { date: string }): number {
   const parts = candle.date.split(' ')
   const tp = (parts[1] ?? '00:00:00').split(':')
   const h = parseInt(tp[0] ?? '0', 10)
@@ -219,18 +226,20 @@ function candleSecondsSinceOpen(candle: { date: string }): number {
 
 /* ───────── FullDayCanvas ───────── */
 
-interface FullDayCanvasProps {
+export interface FullDayCanvasProps {
   candles: DayCandle[]
   previousClose: number | null
   lastPrice: number | null
   dayHigh: number | null
   dayLow: number | null
   lineMode: boolean
-  aggregation: '10s' | '1min' | '5min'
+  aggregation: '1s' | '10s' | '1min' | '5min'
   theme: ThemeMode
   chartHeight: number
   /** When true, X-axis scales to fit only the visible candles instead of the full 390-min day */
   dynamicXAxis?: boolean
+  /** Optional explicit X-axis slot ceiling for anchored zoom sequences. */
+  xAxisMaxSlots?: number | null
   /** 0 = fully current aggregation, 1 = fully morphed to target candles */
   morphProgress?: number
   /** The 1min candles to morph into */
@@ -244,7 +253,7 @@ interface CrosshairData {
   time: string
 }
 
-function FullDayCanvas({
+export function FullDayCanvas({
   candles: rawCandles,
   previousClose,
   lastPrice,
@@ -255,6 +264,7 @@ function FullDayCanvas({
   theme,
   chartHeight,
   dynamicXAxis = false,
+  xAxisMaxSlots = null,
   morphProgress = 0,
   morphTargetCandles,
 }: FullDayCanvasProps) {
@@ -265,18 +275,19 @@ function FullDayCanvas({
 
   const candles = useMemo(() => {
     if (aggregation === '5min') return aggregateTo5Min(rawCandles)
-    // '10s' and '1min' pass through raw candles (10s data is pre-bucketed by the hook)
+    // 1s, 10s, and 1min pass through raw candles (second data is pre-bucketed upstream)
     return rawCandles
   }, [rawCandles, aggregation])
 
-  const intervalSecs = aggregation === '10s' ? 10 : aggregation === '1min' ? 60 : 300
+  const intervalSecs = aggregation === '1s' ? 1 : aggregation === '10s' ? 10 : aggregation === '1min' ? 60 : 300
 
   // Precompute slot positions for each candle
   const slotMap = useMemo(() => {
-    if (aggregation === '10s') {
+    if (aggregation === '1s' || aggregation === '10s') {
+      const bucketSize = aggregation === '1s' ? 1 : 10
       return candles.map((c) => {
         const secs = candleSecondsSinceOpen(c)
-        return Math.floor(secs / 10)
+        return Math.floor(secs / bucketSize)
       })
     }
     const intervalMinutes = aggregation === '1min' ? 1 : 5
@@ -289,19 +300,22 @@ function FullDayCanvas({
   // Dynamic X-axis: starts at full-day width and never goes below
   // the visible candles × 4, so candles stay compact on the left ~25% at first,
   // then naturally fill more of the chart as the day progresses.
-  // 10s: 6.5hrs × 360 = 2340 slots; 1min: 390; 5min: 78
-  const fullDaySlots = aggregation === '10s' ? 2340 : aggregation === '1min' ? 390 : 78
+  // 1s: 6.5hrs × 3600 = 23400 slots; 10s: 2340; 1min: 390; 5min: 78
+  const fullDaySlots = aggregation === '1s' ? 23400 : aggregation === '10s' ? 2340 : aggregation === '1min' ? 390 : 78
   const totalSlots = useMemo(() => {
+    if (xAxisMaxSlots !== null) {
+      return Math.min(Math.max(xAxisMaxSlots, 1), fullDaySlots)
+    }
     if (!dynamicXAxis || slotMap.length === 0) {
       return fullDaySlots
     }
     const maxSlot = Math.max(...slotMap)
-    // For 10s mode, floor at 100 slots so each slot is ~13px (tight candles);
-    // 1min/5min use 4× multiplier with floor of 40
-    const multiplier = aggregation === '10s' ? 1.15 : 4
-    const minSlots = aggregation === '10s' ? 100 : 40
+    // Second-based modes keep a compact dynamic window so the active replay
+    // candles stay visually readable instead of stretching across the full panel.
+    const multiplier = aggregation === '1s' ? 1.05 : aggregation === '10s' ? 1.15 : 4
+    const minSlots = aggregation === '1s' ? 60 : aggregation === '10s' ? 100 : 40
     return Math.min(Math.max(Math.ceil(maxSlot * multiplier), minSlots), fullDaySlots)
-  }, [dynamicXAxis, slotMap, fullDaySlots])
+  }, [dynamicXAxis, slotMap, fullDaySlots, xAxisMaxSlots])
 
   // Morph: precompute 1min target slot map and totalSlots
   const isMorphing = morphProgress > 0 && morphProgress < 1 && !!morphTargetCandles && morphTargetCandles.length > 0
@@ -425,18 +439,35 @@ function FullDayCanvas({
       const labelIntervalSecs = isMorphing ? 60 : intervalSecs
       const maxSlot = isMorphing && targetSlotMap.length > 0
         ? Math.max(...targetSlotMap)
-        : Math.max(...slotMap)
+        : Math.max(xAxisMaxSlots ?? 0, ...slotMap)
       const visibleMins = isMorphing
         ? maxSlot // already in minute-slots
         : (maxSlot * intervalSecs) / 60
       // Choose label spacing in seconds — granular for short durations
-      const labelStepSecs = visibleMins <= 2 ? 30
-        : visibleMins <= 5 ? 60
-        : visibleMins <= 15 ? 300
-        : visibleMins <= 60 ? 900
-        : visibleMins <= 120 ? 1800
-        : visibleMins <= 240 ? 3600
-        : 7200
+      const labelStepSecs = aggregation === '1s'
+        ? visibleMins <= 0.5 ? 5
+          : visibleMins <= 2 ? 10
+          : visibleMins <= 5 ? 30
+          : visibleMins <= 15 ? 60
+          : visibleMins <= 60 ? 300
+          : visibleMins <= 120 ? 900
+          : visibleMins <= 240 ? 1800
+          : 3600
+        : aggregation === '10s'
+        ? visibleMins <= 2 ? 10
+          : visibleMins <= 5 ? 30
+          : visibleMins <= 15 ? 60
+          : visibleMins <= 60 ? 300
+          : visibleMins <= 120 ? 900
+          : visibleMins <= 240 ? 1800
+          : 3600
+        : visibleMins <= 2 ? 30
+          : visibleMins <= 5 ? 60
+          : visibleMins <= 15 ? 300
+          : visibleMins <= 60 ? 900
+          : visibleMins <= 120 ? 1800
+          : visibleMins <= 240 ? 3600
+          : 7200
       const labelStepSlots = Math.max(1, Math.floor(labelStepSecs / labelIntervalSecs))
 
       for (let slot = labelStepSlots; slot <= maxSlot; slot += labelStepSlots) {
@@ -644,9 +675,9 @@ function FullDayCanvas({
         ctx.fillRect(cx - bw / 2, bodyTop, bw, bodyH)
       }
     } else {
-      // Candle mode — wider bodies for 10s candles, tighter for 1min/5min
+      // Candle mode — wider bodies for 10s candles, tighter for 1s/1min/5min
       const barSpacing = drawW / renderTotalSlots
-      const maxBody = aggregation === '10s' ? 16 : 10
+      const maxBody = aggregation === '1s' ? 8 : aggregation === '10s' ? 16 : 10
       const bodyWidth = Math.min(Math.max(barSpacing * 0.7, 2), maxBody)
 
       for (let i = 0; i < candles.length; i++) {
@@ -764,7 +795,7 @@ function FullDayCanvas({
       ctx.textAlign = 'center'
       ctx.fillText(priceLabel, crosshair.x, labelY + 13)
     }
-  }, [candles, slotMap, previousClose, lastPrice, dayHigh, dayLow, lineMode, aggregation, theme, chartHeight, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots])
+  }, [candles, slotMap, previousClose, lastPrice, dayHigh, dayLow, lineMode, aggregation, theme, chartHeight, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, xAxisMaxSlots, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots])
 
   // Mouse handlers
   const handleMouseMove = useCallback(
@@ -808,15 +839,18 @@ function FullDayCanvas({
         const tp = timePart.split(':')
         let h = parseInt(tp[0], 10)
         const m = tp[1] ?? '00'
+        const s = tp[2] ?? '00'
         const ampm = h >= 12 ? 'PM' : 'AM'
         if (h > 12) h -= 12
         if (h === 0) h = 12
-        const timeStr = `${h}:${m} ${ampm}`
+        const timeStr = aggregation === '1s' || aggregation === '10s'
+          ? `${h}:${m}:${s} ${ampm}`
+          : `${h}:${m} ${ampm}`
 
         setCrosshair({ x, y: mouseY, candle: c, time: timeStr })
       })
     },
-    [candles, slotMap, totalSlots, padding.left, padding.right, isMorphing, effectiveTotalSlots]
+    [candles, slotMap, totalSlots, padding.left, padding.right, isMorphing, effectiveTotalSlots, aggregation]
   )
 
   const handleMouseLeave = useCallback(() => {
@@ -1672,7 +1706,7 @@ function useReplayAggregatedCandles(replay: ReturnType<typeof useReplay>): DayCa
 
 /* ───────── Replay 1s → adaptive 10s/1min candles ───────── */
 
-function bucketCandles(
+export function bucketCandles(
   revealed: { time: number; open: number; high: number; low: number; close: number }[],
   bucketSize: number,
   etFmt: Intl.DateTimeFormat,
@@ -1704,7 +1738,7 @@ function bucketCandles(
   })
 }
 
-function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): {
+export function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): {
   dayData10s: DayCandleData | undefined
   dayData1min: DayCandleData | undefined
   mode: '10s' | '1min'

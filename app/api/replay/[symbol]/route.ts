@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getProvider } from '@/lib/providers'
 import type { CandleTimespan } from '@/lib/providers/types'
+import { getTradingDate } from '@/lib/market-hours'
 
 interface CacheEntry {
   candles: { time: number; open: number; high: number; low: number; close: number; volume?: number }[]
@@ -77,8 +78,7 @@ export async function GET(
   }
 
   // Resolve date, from, to
-  const today = new Date().toISOString().split('T')[0]
-  const date = dateParam ?? today
+  const date = dateParam ?? getTradingDate()
 
   // Support both full ISO and short HH:MM format
   let fromIso: string

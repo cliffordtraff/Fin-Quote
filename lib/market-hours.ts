@@ -26,6 +26,49 @@ function getEasternTime(): Date {
   return new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
 }
 
+function getEasternParts(referenceDate: Date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(referenceDate)
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+  }
+}
+
+function formatDateString(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function shiftDateString(dateStr: string, deltaDays: number): string {
+  const shifted = new Date(`${dateStr}T12:00:00Z`)
+  shifted.setUTCDate(shifted.getUTCDate() + deltaDays)
+  return formatDateString(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth() + 1,
+    shifted.getUTCDate(),
+  )
+}
+
+function isWeekendDateString(dateStr: string): boolean {
+  const d = new Date(`${dateStr}T12:00:00Z`)
+  const weekday = d.getUTCDay()
+  return weekday === 0 || weekday === 6
+}
+
 /**
  * Determine current market session based on Eastern Time
  */
@@ -108,20 +151,19 @@ export function getMarketStatus(): MarketStatus {
  * Get the current trading date (handles after-midnight edge case)
  * Before 4am ET, we consider it the previous trading day
  */
-export function getTradingDate(): string {
-  const et = getEasternTime()
+export function getTradingDate(referenceDate: Date = new Date()): string {
+  const { year, month, day, hour } = getEasternParts(referenceDate)
+  let tradingDate = formatDateString(year, month, day)
 
-  // If before 4am ET, consider it previous trading day
-  if (et.getHours() < 4) {
-    et.setDate(et.getDate() - 1)
+  if (hour < 4) {
+    tradingDate = shiftDateString(tradingDate, -1)
   }
 
-  // Skip weekends (go back to Friday)
-  while (et.getDay() === 0 || et.getDay() === 6) {
-    et.setDate(et.getDate() - 1)
+  while (isWeekendDateString(tradingDate)) {
+    tradingDate = shiftDateString(tradingDate, -1)
   }
 
-  return et.toISOString().split('T')[0] // YYYY-MM-DD
+  return tradingDate
 }
 
 /**

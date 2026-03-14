@@ -7,7 +7,7 @@ import StockSelector, { type StockSelectorHandle } from '@/components/StockSelec
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
-import { getChartPriceData, getMonthlyChartPriceData } from '@/app/actions/chart-price'
+import { getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
 import { useTheme } from '@/components/ThemeProvider'
 import { buildExportUrl, parseSpecFromParams } from '@/lib/chart-export'
@@ -370,47 +370,23 @@ export default function ChartsPage() {
       // For quarterly mode, use period-aligned data (quarterly granularity)
       if (showStockPrice) {
         const priceFetchPromises = selectedStocks.map(async (symbol) => {
-          // For annual mode, use monthly price data for smooth line
-          // For quarterly mode, align with fiscal quarters
-          if (periodType === 'annual') {
-            const priceResult = await getMonthlyChartPriceData({
-              symbol,
-              minYear: minYearParam,
-              maxYear: maxYearParam,
-            })
+          // Annual mode: weekly data (~52 points/year) for smooth line
+          // Quarterly mode: monthly data (~12 points/year) for good density
+          const priceResult = await getMonthlyChartPriceData({
+            symbol,
+            minYear: minYearParam,
+            maxYear: maxYearParam,
+            granularity: periodType === 'annual' ? 'weekly' : 'monthly',
+          })
 
-            if (priceResult.data) {
-              // For multi-stock, prefix metric ID and label with stock symbol
-              const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-              const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
+          if (priceResult.data) {
+            const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
+            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
 
-              return {
-                ...priceResult.data,
-                metric: prefixedId as MetricId,
-                label: prefixedLabel,
-              }
-            }
-          } else {
-            // Quarterly mode: use period-aligned data
-            const periodEndDates = periodEndDatesByStock[symbol]
-            const priceResult = await getChartPriceData({
-              symbol,
-              periodEndDates,
-              periodType: periodType as PeriodType,
-              minYear: minYearParam,
-              maxYear: maxYearParam,
-            })
-
-            if (priceResult.data) {
-              // For multi-stock, prefix metric ID and label with stock symbol
-              const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-              const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
-
-              return {
-                ...priceResult.data,
-                metric: prefixedId as MetricId,
-                label: prefixedLabel,
-              }
+            return {
+              ...priceResult.data,
+              metric: prefixedId as MetricId,
+              label: prefixedLabel,
             }
           }
           return null
@@ -697,7 +673,7 @@ export default function ChartsPage() {
       <main className="max-w-[1600px] mx-auto px-6 py-8">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-cream-300 dark:border-gray-700">
           {/* Controls */}
-          <div className="px-4 py-2">
+          <div className="px-4 py-2 select-none">
           {/* Stock Selector + Metric Selectors */}
           <div className="flex items-center gap-4">
             {/* Stock Selector - wider */}
@@ -767,7 +743,7 @@ export default function ChartsPage() {
                 </div>
               )}
               {/* Metric checkboxes */}
-              <div className="grid grid-cols-4 gap-2 min-h-[32px]">
+              <div className="flex flex-wrap gap-2 min-h-[32px]">
                 {addedMetrics.map((metricId) => {
                   const metric = availableMetrics.find((m) => m.id === metricId)
                   const isVisible = visibleMetrics.includes(metricId)
@@ -873,7 +849,7 @@ export default function ChartsPage() {
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Stock Price</span>
               </label>
               {/* Time Range Slider */}
-              <div className="w-[550px] space-y-2 range-slider-wrap">
+              <div className="w-[900px] space-y-2 range-slider-wrap">
               <div className="range-slider" ref={sliderRef}>
                 <div className="range-slider-track" />
                 <div

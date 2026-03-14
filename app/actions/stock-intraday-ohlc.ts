@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { getTradingDate } from '@/lib/market-hours'
 import type { OHLCData } from '@/app/actions/sparkline-indices'
 
 export interface StockIntradayOHLC {
@@ -12,6 +13,16 @@ export interface StockIntradayOHLC {
   yesterdayOHLC: OHLCData[]
   todayOHLC: OHLCData[]
   previousClose: number | null
+}
+
+function shiftDateString(dateStr: string, deltaDays: number): string {
+  const shifted = new Date(`${dateStr}T12:00:00Z`)
+  shifted.setUTCDate(shifted.getUTCDate() + deltaDays)
+  return shifted.toISOString().split('T')[0]
+}
+
+function compareByDateAsc(a: { date: string }, b: { date: string }) {
+  return a.date.localeCompare(b.date)
 }
 
 /**
@@ -29,14 +40,14 @@ export async function getStockIntradayOHLC(
   try {
     const provider = getProvider()
 
-    // Only need 3 days of data (today + yesterday + buffer for weekends)
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    const today = new Date().toISOString().split('T')[0]
+    // Fetch a narrow ET-aligned window and let the split logic choose the latest session.
+    const marketDate = getTradingDate()
+    const lookbackStart = shiftDateString(marketDate, -4)
 
     // Fetch quote and candles in parallel
     const [quote, intradayData] = await Promise.all([
       provider.getQuote(symbol),
-      provider.getIntraday(symbol, minuteMultiplier, 'minute', threeDaysAgo, today),
+      provider.getIntraday(symbol, minuteMultiplier, 'minute', lookbackStart, marketDate),
     ])
 
     if (!quote) {
@@ -58,18 +69,18 @@ export async function getStockIntradayOHLC(
       const today = uniqueDates[uniqueDates.length - 1]
       const previousDay = uniqueDates.length > 1 ? uniqueDates[uniqueDates.length - 2] : null
 
-      // Filter to only today + previous day, then reverse for chronological order
+      // Normalize to chronological order regardless of provider response ordering.
       const filtered = intradayData
         .filter((c) => {
           const d = c.date.split(' ')[0]
           return d === today || d === previousDay
         })
-        .reverse()
+        .sort(compareByDateAsc)
 
       // Yesterday candles (already 5-min, no aggregation needed)
       if (previousDay) {
-        yesterdayOHLC = filtered
-          .filter((c) => c.date.split(' ')[0] === previousDay)
+        const prevDayCandles = filtered.filter((c) => c.date.split(' ')[0] === previousDay)
+        yesterdayOHLC = prevDayCandles
           .map((c) => ({
             date: c.date,
             open: c.open,
@@ -79,9 +90,6 @@ export async function getStockIntradayOHLC(
           }))
 
         // Previous close = last candle of previous day (latest timestamp)
-        const prevDayCandles = intradayData.filter(
-          (c) => c.date.split(' ')[0] === previousDay
-        )
         if (prevDayCandles.length > 0) {
           previousClose = prevDayCandles[prevDayCandles.length - 1].close
         }

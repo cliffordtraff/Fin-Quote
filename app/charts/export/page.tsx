@@ -27,7 +27,7 @@ import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
 import { getMultipleMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
-import { getChartPriceData, getMonthlyChartPriceData } from '@/app/actions/chart-price'
+import { getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
 import { parseSpecFromParams } from '@/lib/chart-export'
 import { CHART_EXPORT_DEFAULTS } from '@/types/chart-export'
@@ -127,27 +127,16 @@ function ChartExportContent() {
         // Fetch price data if requested
         if (showStockPrice) {
           const priceFetchPromises = stocks.map(async symbol => {
-            if (periodType === 'annual') {
-              const priceResult = await getMonthlyChartPriceData({ symbol, minYear, maxYear })
-              if (priceResult.data) {
-                const prefixedId = stocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-                const prefixedLabel = stocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
-                return { ...priceResult.data, metric: prefixedId as MetricId, label: prefixedLabel }
-              }
-            } else {
-              const periodEndDates = periodEndDatesByStock[symbol]
-              const priceResult = await getChartPriceData({
-                symbol,
-                periodEndDates,
-                periodType: periodType!,
-                minYear,
-                maxYear,
-              })
-              if (priceResult.data) {
-                const prefixedId = stocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-                const prefixedLabel = stocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
-                return { ...priceResult.data, metric: prefixedId as MetricId, label: prefixedLabel }
-              }
+            const priceResult = await getMonthlyChartPriceData({
+              symbol,
+              minYear,
+              maxYear,
+              granularity: periodType === 'annual' ? 'weekly' : 'monthly',
+            })
+            if (priceResult.data) {
+              const prefixedId = stocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
+              const prefixedLabel = stocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
+              return { ...priceResult.data, metric: prefixedId as MetricId, label: prefixedLabel }
             }
             return null
           })
