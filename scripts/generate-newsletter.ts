@@ -31,7 +31,7 @@ function parseArgs(): CliOptions {
   const args = process.argv.slice(2)
   const opts: CliOptions = {
     ticker: undefined,
-    baseUrl: 'http://localhost:3005',
+    baseUrl: 'http://localhost:3000',
     outputDir: './public/newsletter-charts',
     maxCharts: 3,
     publish: false,

@@ -1,18 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Navigation from '@/components/Navigation'
-import MetricSelector from '@/components/MetricSelector'
-import StockSelector, { type StockSelectorHandle } from '@/components/StockSelector'
+import ChartSidebar from '@/components/ChartSidebar'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
-import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
-import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
+import { getMultipleMetrics, prewarmStockCaches, type MetricData, type MetricId, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
+import type { Stock } from '@/app/actions/get-stocks'
 import { getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
 import { useTheme } from '@/components/ThemeProvider'
 import { buildExportUrl, parseSpecFromParams } from '@/lib/chart-export'
 import type { ChartExportSpec } from '@/types/chart-export'
-import { THEMES, cx, type ChartThemeName } from './chart-themes'
 
 // Popular/commonly searched stocks for quick access
 const POPULAR_STOCKS = [
@@ -20,44 +18,79 @@ const POPULAR_STOCKS = [
   'UNH', 'XOM', 'MA', 'JNJ', 'PG', 'HD', 'AVGO', 'CVX', 'MRK', 'COST',
 ]
 
-// Stock-specific color families for multi-stock comparison
-// AAPL: Blue family, GOOGL: Green/Teal family
-const STOCK_COLOR_FAMILIES_LIGHT: Record<string, string[]> = {
-  AAPL: [
-    '#1a3a5c', // Dark navy blue
-    '#2a4a6c', // Navy blue
-    '#3a5a7c', // Medium blue
-    '#4a6a8c', // Steel blue
-    '#5a7a9c', // Light steel blue
-    '#6a8aac', // Soft blue
-  ],
-  GOOGL: [
-    '#1a4a3a', // Dark teal
-    '#2a5a4a', // Forest teal
-    '#3a6a5a', // Medium teal
-    '#4a7a6a', // Sea green
-    '#5a8a7a', // Sage
-    '#6a9a8a', // Light sage
-  ],
+// Generate a deterministic hue from a stock symbol string
+function symbolToHue(symbol: string): number {
+  let hash = 0
+  for (let i = 0; i < symbol.length; i++) {
+    hash = symbol.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return ((hash % 360) + 360) % 360
 }
 
-const STOCK_COLOR_FAMILIES_DARK: Record<string, string[]> = {
-  AAPL: [
-    '#6b8cce', // Soft blue
-    '#7b9cde', // Light blue
-    '#8bacee', // Sky blue
-    '#5b7cbe', // Medium blue
-    '#4b6cae', // Steel blue
-    '#9bbcfe', // Pale blue
-  ],
-  GOOGL: [
-    '#7ab08a', // Sage green
-    '#8ac09a', // Light sage
-    '#9ad0aa', // Pale green
-    '#6aa07a', // Medium green
-    '#5a906a', // Forest green
-    '#aae0ba', // Mint
-  ],
+// HSL to hex conversion
+function hslToHex(h: number, s: number, l: number): string {
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+    return Math.round(255 * color).toString(16).padStart(2, '0')
+  }
+  return `#${f(0)}${f(8)}${f(4)}`
+}
+
+// Generate a color family for any stock symbol
+function generateColorFamily(symbol: string, isDark: boolean, count: number = 6): string[] {
+  const hue = symbolToHue(symbol)
+  const colors: string[] = []
+  for (let i = 0; i < count; i++) {
+    if (isDark) {
+      // Dark mode: lighter, softer colors (high lightness, moderate saturation)
+      const lightness = 0.62 + i * 0.04
+      const saturation = 0.45 - i * 0.03
+      colors.push(hslToHex(hue, saturation, lightness))
+    } else {
+      // Light mode: darker, bolder colors (low lightness, moderate saturation)
+      const lightness = 0.22 + i * 0.05
+      const saturation = 0.40 - i * 0.02
+      colors.push(hslToHex(hue, saturation, lightness))
+    }
+  }
+  return colors
+}
+
+// Spread hues apart for multi-stock so adjacent stocks don't look similar
+function getSpreadHues(symbols: string[], count: number): Map<string, number> {
+  const baseHues = symbols.map((s) => ({ symbol: s, hue: symbolToHue(s) }))
+  // Use golden angle spacing to spread hues evenly
+  const hueMap = new Map<string, number>()
+  for (let i = 0; i < count; i++) {
+    const spreadHue = (i * 137.508) % 360 // golden angle
+    hueMap.set(baseHues[i].symbol, spreadHue)
+  }
+  return hueMap
+}
+
+function generateStockColorFamilies(symbols: string[], isDark: boolean): Record<string, string[]> {
+  if (symbols.length <= 1) {
+    const result: Record<string, string[]> = {}
+    symbols.forEach((s) => { result[s] = generateColorFamily(s, isDark) })
+    return result
+  }
+  // Spread hues apart for multi-stock charts
+  const hueMap = getSpreadHues(symbols, symbols.length)
+  const result: Record<string, string[]> = {}
+  hueMap.forEach((hue, symbol) => {
+    const colors: string[] = []
+    for (let i = 0; i < 6; i++) {
+      if (isDark) {
+        colors.push(hslToHex(hue, 0.45 - i * 0.03, 0.62 + i * 0.04))
+      } else {
+        colors.push(hslToHex(hue, 0.40 - i * 0.02, 0.22 + i * 0.05))
+      }
+    }
+    result[symbol] = colors
+  })
+  return result
 }
 
 // Dual color palettes for light/dark mode
@@ -91,15 +124,41 @@ const COLOR_PALETTE_DARK = [
   '#8888a8', // Light slate (tertiary)
 ]
 
-export default function ChartsPage() {
+type AvailableMetric = {
+  id: MetricId
+  label: string
+  unit: string
+  statement: StatementType
+  definition: string
+  segmentCategory?: SegmentCategory
+  stock?: string
+}
+
+interface ChartsPageClientProps {
+  initialAvailableMetrics: AvailableMetric[]
+  initialAvailableStocks: Stock[]
+}
+
+function getMetricCacheKey(periodType: 'annual' | 'quarterly', symbol: string, metricId: string) {
+  return `${periodType}:${symbol}:${metricId}`
+}
+
+function getPriceCacheKey(periodType: 'annual' | 'quarterly', symbol: string) {
+  return `${periodType}:${symbol}:stock_price`
+}
+
+export default function ChartsPageClient({
+  initialAvailableMetrics,
+  initialAvailableStocks,
+}: ChartsPageClientProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const COLOR_PALETTE = isDark ? COLOR_PALETTE_DARK : COLOR_PALETTE_LIGHT
   const DEFAULT_METRIC_COLORS = getMetricColors(isDark)
 
-  const [availableMetrics, setAvailableMetrics] = useState<{ id: MetricId; label: string; unit: string; statement: StatementType; definition: string; segmentCategory?: SegmentCategory; stock?: string }[]>([])
+  const [availableMetrics] = useState<AvailableMetric[]>(initialAvailableMetrics)
   // Available stocks from database
-  const [availableStocks, setAvailableStocks] = useState<Stock[]>([])
+  const [availableStocks] = useState<Stock[]>(initialAvailableStocks)
   // Stocks added to the page (from dropdown)
   const [addedStocks, setAddedStocks] = useState<string[]>([])
   // Stocks visible on chart (subset of addedStocks, controlled by checkboxes)
@@ -117,43 +176,30 @@ export default function ChartsPage() {
   // Stock price toggle (separate from metric dropdowns)
   const [showStockPrice, setShowStockPrice] = useState(false)
   const [initialChartType, setInitialChartType] = useState<'bar' | 'line' | 'area' | undefined>(undefined)
-  const [metricsData, setMetricsData] = useState<MetricData[]>([])
+  const [fullData, setFullData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const DEFAULT_MIN_YEAR = 2018
+  const DEFAULT_PRICE_MIN_YEAR = 2006
   const [minYear, setMinYear] = useState<number | null>(null)
   const [maxYear, setMaxYear] = useState<number | null>(null)
   const [yearBounds, setYearBounds] = useState<{ min: number; max: number } | null>(null)
-  const [initialRangeSet, setInitialRangeSet] = useState(false)
+  const initialRangeSetRef = useRef(false)
   const [sliderWidth, setSliderWidth] = useState(0)
   const sliderRef = useRef<HTMLDivElement | null>(null)
-  const stockSelectorRef = useRef<StockSelectorHandle>(null)
-  const thumbEffectivePx = 22 // --thumb-width(18) + --thumb-border(2)*2 — pseudo-elements default to content-box
+  const thumbEffectivePx = 18 // matches CSS --thumb-width (border-box)
   // Custom colors for metrics (overrides default colors)
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
-  const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [metricModalOpen, setMetricModalOpen] = useState(false)
+  const [stockModalOpen, setStockModalOpen] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
-  const [chartTheme, setChartTheme] = useState<ChartThemeName>('playful')
-  const t = THEMES[chartTheme]
+  const metricCacheRef = useRef<Record<string, MetricData>>({})
+  const priceCacheRef = useRef<Record<string, MetricData>>({})
+  const fetchRequestRef = useRef(0)
 
   // Track whether URL params have been applied
   const [urlParamsApplied, setUrlParamsApplied] = useState(false)
-
-  // Load available metrics and stocks on mount
-  useEffect(() => {
-    async function loadData() {
-      const [metrics, stocksResult] = await Promise.all([
-        getAvailableMetrics(),
-        getAvailableStocks(),
-      ])
-      setAvailableMetrics(metrics)
-      if (stocksResult.data) {
-        setAvailableStocks(stocksResult.data)
-      }
-    }
-    loadData()
-  }, [])
 
   // Initialize from URL params (e.g., ?stocks=AAPL&metrics=revenue,net_income or ?spec=<base64>)
   useEffect(() => {
@@ -206,7 +252,7 @@ export default function ChartsPage() {
     setUrlParamsApplied(true)
   }, [availableMetrics, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
 
-  // Keyboard shortcut: '/' to focus stock search (opens sidebar if closed)
+  // Keyboard shortcut: '/' to open stock selector modal
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Ignore if user is typing in an input or textarea
@@ -215,25 +261,29 @@ export default function ChartsPage() {
       }
       if (event.key === '/') {
         event.preventDefault()
-        if (!sidebarOpen) {
-          setSidebarOpen(true)
-          // Wait for transition to finish before focusing
-          setTimeout(() => stockSelectorRef.current?.focus(), 350)
-        } else {
-          stockSelectorRef.current?.focus()
-        }
+        setStockModalOpen(true)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [sidebarOpen])
+  }, [])
 
   // Reset year bounds and initial range when period type changes
   // (Don't reset on stock changes to avoid slider flashing)
   useEffect(() => {
     setYearBounds(null)
-    setInitialRangeSet(false)
+    initialRangeSetRef.current = false
   }, [periodType])
+
+  // Prewarm all three Supabase caches in parallel when a stock is added.
+  // This fires std + ext + segment concurrently so the cache is warm
+  // by the time the user picks a metric (~3-5s later).
+  useEffect(() => {
+    if (addedStocks.length === 0) return
+    addedStocks.forEach((symbol) => {
+      prewarmStockCaches(symbol, periodType).catch(() => {})
+    })
+  }, [addedStocks, periodType])
 
   // Remove segment metrics that don't match any selected stock when stocks change
   useEffect(() => {
@@ -271,153 +321,237 @@ export default function ChartsPage() {
     }
   }, [yearBounds, minYear, maxYear])
 
-  // Fetch data when visible metrics or year range changes
+  const metricsData = useMemo(() => {
+    if (fullData.length === 0) return []
+
+    const resolvedMin = minYear ?? yearBounds?.min ?? Number.NEGATIVE_INFINITY
+    const resolvedMax = maxYear ?? yearBounds?.max ?? Number.POSITIVE_INFINITY
+
+    return fullData
+      .map((metric) => ({
+        ...metric,
+        data: metric.data.filter((point) => {
+          if (metric.unit === 'price' && point.date) {
+            const pointYear = new Date(point.date).getFullYear()
+            return pointYear >= resolvedMin && pointYear <= resolvedMax
+          }
+          return point.year >= resolvedMin && point.year <= resolvedMax
+        }),
+      }))
+      .filter((metric) => metric.data.length > 0)
+  }, [fullData, minYear, maxYear, yearBounds])
+
+  // Fetch data when visible metrics, stocks, period type, or price toggle changes
   const fetchData = useCallback(async () => {
     // Need at least one metric OR stock price enabled, and at least one stock
     if ((visibleMetrics.length === 0 && !showStockPrice) || selectedStocks.length === 0) {
-      setMetricsData([])
+      setFullData([])
+      setError(null)
+      setLoading(false)
       return
     }
 
-    let minYearParam: number | undefined
-    let maxYearParam: number | undefined
-
-    if (yearBounds) {
-      const clampYear = (value: number) => Math.min(Math.max(value, yearBounds.min), yearBounds.max)
-      const resolvedMin = minYear ?? yearBounds.min
-      const resolvedMax = maxYear ?? yearBounds.max
-      minYearParam = clampYear(resolvedMin)
-      maxYearParam = clampYear(resolvedMax)
-    } else {
-      minYearParam = minYear ?? undefined
-      maxYearParam = maxYear ?? undefined
-    }
-
-    if (typeof minYearParam === 'number' && typeof maxYearParam === 'number' && minYearParam > maxYearParam) {
-      const correctedMin = Math.min(minYearParam, maxYearParam)
-      const correctedMax = Math.max(minYearParam, maxYearParam)
-      updateRange(correctedMin, correctedMax)
-      minYearParam = correctedMin
-      maxYearParam = correctedMax
-    }
-
-    setLoading(true)
+    const requestId = ++fetchRequestRef.current
     setError(null)
 
     try {
+      const currentYear = new Date().getFullYear()
+      const fetchMinYear = DEFAULT_PRICE_MIN_YEAR
+      const fetchMaxYear = currentYear
+
       // All visible metrics (price is handled separately via showStockPrice toggle)
       const otherMetrics = visibleMetrics.filter(m => !isPriceMetric(m))
 
+      const prefixMetricData = (metricData: MetricData, symbol: string): MetricData => {
+        const prefixedId = selectedStocks.length > 1 ? `${symbol}:${metricData.metric}` : metricData.metric
+        const prefixedLabel = selectedStocks.length > 1 ? `${symbol} ${metricData.label}` : metricData.label
+
+        return {
+          ...metricData,
+          metric: prefixedId as MetricId,
+          label: prefixedLabel,
+        }
+      }
+
+      const buildCombinedBounds = (
+        dataByStock: Record<string, MetricData[]>
+      ): { min: number; max: number } | null => {
+        let combinedBounds: { min: number; max: number } | null = null
+
+        selectedStocks.forEach((symbol) => {
+          const stockData = dataByStock[symbol] ?? []
+          const years = stockData.flatMap((metricData) => metricData.data.map((point) => point.year))
+
+          if (years.length === 0) return
+
+          const stockBounds = {
+            min: Math.min(...years),
+            max: Math.max(...years),
+          }
+
+          if (!combinedBounds) {
+            combinedBounds = stockBounds
+          } else {
+            combinedBounds.min = Math.max(combinedBounds.min, stockBounds.min)
+            combinedBounds.max = Math.min(combinedBounds.max, stockBounds.max)
+          }
+        })
+
+        return combinedBounds
+      }
+
+      const buildFullDataFromCache = () => {
+        const mergedData: MetricData[] = []
+        const financialDataByStock: Record<string, MetricData[]> = {}
+
+        selectedStocks.forEach((symbol) => {
+          const stockMetricData = otherMetrics
+            .map((metricId) => metricCacheRef.current[getMetricCacheKey(periodType, symbol, metricId)])
+            .filter((metricData): metricData is MetricData => Boolean(metricData))
+
+          financialDataByStock[symbol] = stockMetricData
+          stockMetricData.forEach((metricData) => {
+            mergedData.push(prefixMetricData(metricData, symbol))
+          })
+        })
+
+        if (showStockPrice) {
+          selectedStocks.forEach((symbol) => {
+            const priceData = priceCacheRef.current[getPriceCacheKey(periodType, symbol)]
+            if (priceData) {
+              mergedData.push(prefixMetricData(priceData, symbol))
+            }
+          })
+        }
+
+        return {
+          mergedData,
+          combinedBounds: buildCombinedBounds(financialDataByStock),
+        }
+      }
+
+      const missingMetricsByStock = selectedStocks
+        .map((symbol) => ({
+          symbol,
+          metrics: otherMetrics.filter(
+            (metricId) => !metricCacheRef.current[getMetricCacheKey(periodType, symbol, metricId)]
+          ),
+        }))
+        .filter((entry) => entry.metrics.length > 0)
+
+      const missingPriceSymbols = showStockPrice
+        ? selectedStocks.filter((symbol) => !priceCacheRef.current[getPriceCacheKey(periodType, symbol)])
+        : []
+
+      if (missingMetricsByStock.length === 0 && missingPriceSymbols.length === 0) {
+        if (requestId !== fetchRequestRef.current) return
+
+        const { mergedData, combinedBounds } = buildFullDataFromCache()
+
+        setError(null)
+        setFullData(mergedData)
+        setLoading(false)
+
+        if (combinedBounds) {
+          setYearBounds((prev) => {
+            if (prev && prev.min === combinedBounds.min && prev.max === combinedBounds.max) return prev
+            return combinedBounds
+          })
+          if (!initialRangeSetRef.current) {
+            const effectiveMin = Math.max(combinedBounds.min, DEFAULT_MIN_YEAR)
+            setMinYear(effectiveMin)
+            setMaxYear(combinedBounds.max)
+            initialRangeSetRef.current = true
+          }
+        } else if (showStockPrice && otherMetrics.length === 0) {
+          const defaultBounds = { min: DEFAULT_PRICE_MIN_YEAR, max: currentYear }
+          setYearBounds((prev) => {
+            if (prev && prev.min === defaultBounds.min && prev.max === defaultBounds.max) return prev
+            return defaultBounds
+          })
+          if (!initialRangeSetRef.current) {
+            setMinYear(DEFAULT_MIN_YEAR)
+            setMaxYear(currentYear)
+            initialRangeSetRef.current = true
+          }
+        }
+
+        return
+      }
+
+      setLoading(true)
+
       // Fetch non-price data for all selected stocks
-      const fetchPromises = selectedStocks.map((symbol) =>
-        otherMetrics.length > 0
-          ? getMultipleMetrics({
-              symbol,
-              metrics: otherMetrics,
-              minYear: minYearParam,
-              maxYear: maxYearParam,
-              period: periodType,
-            })
-          : Promise.resolve({ data: [], error: null, yearBounds: null })
+      const results = await Promise.all(
+        missingMetricsByStock.map(async ({ symbol, metrics }) => ({
+          symbol,
+          result: await getMultipleMetrics({
+            symbol,
+            metrics,
+            minYear: fetchMinYear,
+            maxYear: fetchMaxYear,
+            period: periodType,
+          }),
+        }))
       )
 
-      const results = await Promise.all(fetchPromises)
+      if (requestId !== fetchRequestRef.current) return
 
-      // Merge data from all stocks
-      const mergedData: MetricData[] = []
-      let combinedBounds: { min: number; max: number } | null = null
       let firstError: string | null = null
 
-      // Collect period_end_dates from financial data for price matching
-      const periodEndDatesByStock: Record<string, Array<{ date: string; year: number; fiscal_quarter?: number | null; fiscal_label?: string | null }>> = {}
-
-      results.forEach((result, index) => {
-        const symbol = selectedStocks[index]
-
+      results.forEach(({ symbol, result }) => {
         if (result.error && !firstError) {
           firstError = result.error
         }
 
         if (result.data) {
           result.data.forEach((metricData) => {
-            // For multi-stock, prefix metric ID with stock symbol
-            const prefixedId = selectedStocks.length > 1 ? `${symbol}:${metricData.metric}` : metricData.metric
-            // Use stock symbol (AAPL, GOOGL) as prefix for cleaner labels
-            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} ${metricData.label}` : metricData.label
-
-            mergedData.push({
-              ...metricData,
-              metric: prefixedId as MetricId,
-              label: prefixedLabel,
-            })
-
-            // Collect period_end_dates for price matching (use first metric with dates)
-            if (!periodEndDatesByStock[symbol] && metricData.data.length > 0) {
-              periodEndDatesByStock[symbol] = metricData.data
-                .filter(d => d.date)
-                .map(d => ({
-                  date: d.date!,
-                  year: d.year,
-                  fiscal_quarter: d.fiscal_quarter,
-                  fiscal_label: d.fiscal_label,
-                }))
-            }
+            metricCacheRef.current[getMetricCacheKey(periodType, symbol, metricData.metric)] = metricData
           })
-        }
-
-        if (result.yearBounds) {
-          if (!combinedBounds) {
-            combinedBounds = { ...result.yearBounds }
-          } else {
-            // Combine bounds across all stocks (use intersection for tighter range)
-            combinedBounds.min = Math.max(combinedBounds.min, result.yearBounds.min)
-            combinedBounds.max = Math.min(combinedBounds.max, result.yearBounds.max)
-          }
         }
       })
 
       // Fetch price data if stock price toggle is enabled
       // For annual mode, use monthly data for smooth line visualization
       // For quarterly mode, use period-aligned data (quarterly granularity)
-      if (showStockPrice) {
-        const priceFetchPromises = selectedStocks.map(async (symbol) => {
+      if (missingPriceSymbols.length > 0) {
+        const priceFetchPromises = missingPriceSymbols.map(async (symbol) => {
           // Annual mode: weekly data (~52 points/year) for smooth line
           // Quarterly mode: monthly data (~12 points/year) for good density
           const priceResult = await getMonthlyChartPriceData({
             symbol,
-            minYear: minYearParam,
-            maxYear: maxYearParam,
+            minYear: DEFAULT_PRICE_MIN_YEAR,
+            maxYear: currentYear,
             granularity: periodType === 'annual' ? 'weekly' : 'monthly',
           })
 
-          if (priceResult.data) {
-            const prefixedId = selectedStocks.length > 1 ? `${symbol}:stock_price` : 'stock_price'
-            const prefixedLabel = selectedStocks.length > 1 ? `${symbol} Stock Price` : 'Stock Price'
-
-            return {
-              ...priceResult.data,
-              metric: prefixedId as MetricId,
-              label: prefixedLabel,
-            }
-          }
-          return null
+          return { symbol, priceResult }
         })
 
         const priceResults = await Promise.all(priceFetchPromises)
 
-        // Add price data to merged results
-        priceResults.forEach(priceData => {
-          if (priceData) {
-            mergedData.push(priceData)
+        if (requestId !== fetchRequestRef.current) return
+
+        priceResults.forEach(({ symbol, priceResult }) => {
+          if (priceResult.error && !firstError) {
+            firstError = priceResult.error
+          }
+
+          if (priceResult.data) {
+            priceCacheRef.current[getPriceCacheKey(periodType, symbol)] = priceResult.data
           }
         })
       }
 
+      if (requestId !== fetchRequestRef.current) return
+
+      const { mergedData, combinedBounds } = buildFullDataFromCache()
+
       if (firstError && mergedData.length === 0) {
         setError(firstError)
-        setMetricsData([])
+        setFullData([])
       } else {
-        setMetricsData(mergedData)
+        setFullData(mergedData)
       }
 
       // Set up year bounds - either from financial data or use defaults for price-only
@@ -428,43 +562,35 @@ export default function ChartsPage() {
           return bounds
         })
         // Set initial range to DEFAULT_MIN_YEAR-present on first load
-        if (!initialRangeSet) {
+        if (!initialRangeSetRef.current) {
           const effectiveMin = Math.max(bounds.min, DEFAULT_MIN_YEAR)
           setMinYear(effectiveMin)
           setMaxYear(bounds.max)
-          setInitialRangeSet(true)
+          initialRangeSetRef.current = true
         }
-      } else if (showStockPrice && visibleMetrics.length === 0 && !initialRangeSet) {
+      } else if (showStockPrice && visibleMetrics.length === 0 && !initialRangeSetRef.current) {
         // Price-only mode with no financial metrics - set default year bounds
         const currentYear = new Date().getFullYear()
-        const defaultBounds = { min: 2006, max: currentYear }
+        const defaultBounds = { min: DEFAULT_PRICE_MIN_YEAR, max: currentYear }
         setYearBounds(defaultBounds)
         setMinYear(DEFAULT_MIN_YEAR)
         setMaxYear(currentYear)
-        setInitialRangeSet(true)
+        initialRangeSetRef.current = true
       }
     } catch (err) {
+      if (requestId !== fetchRequestRef.current) return
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
-      setMetricsData([])
+      setFullData([])
     } finally {
-      setLoading(false)
+      if (requestId === fetchRequestRef.current) {
+        setLoading(false)
+      }
     }
-  }, [visibleMetrics, minYear, maxYear, yearBounds, periodType, selectedStocks, showStockPrice])
+  }, [visibleMetrics, periodType, selectedStocks, showStockPrice])
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (sliderRef.current) {
-        setSliderWidth(sliderRef.current.clientWidth)
-      }
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // Fire resize event when sidebar transition ends so chart + slider recalculate widths
   useEffect(() => {
@@ -501,23 +627,14 @@ export default function ChartsPage() {
     return COLOR_PALETTE[metricsInUse.length % COLOR_PALETTE.length]
   }
 
-  // Handle stock selection from dropdown (add to page)
-  const handleStockSelect = (symbols: string[]) => {
-    // Find newly added stocks (in symbols but not in addedStocks)
-    const newStocks = symbols.filter((s) => !addedStocks.includes(s))
-    // Find removed stocks (in addedStocks but not in symbols)
-    const removedStocks = addedStocks.filter((s) => !symbols.includes(s))
-
-    if (newStocks.length > 0) {
-      // Add new stocks to both added and visible
-      setAddedStocks((prev) => [...prev, ...newStocks])
-      setVisibleStocks((prev) => [...prev, ...newStocks])
-    }
-
-    if (removedStocks.length > 0) {
-      // Remove stocks from both added and visible
-      setAddedStocks((prev) => prev.filter((s) => !removedStocks.includes(s)))
-      setVisibleStocks((prev) => prev.filter((s) => !removedStocks.includes(s)))
+  // Toggle a single stock in/out (for modal)
+  const handleStockToggle = (symbol: string) => {
+    if (addedStocks.includes(symbol)) {
+      setAddedStocks((prev) => prev.filter((s) => s !== symbol))
+      setVisibleStocks((prev) => prev.filter((s) => s !== symbol))
+    } else {
+      setAddedStocks((prev) => [...prev, symbol])
+      setVisibleStocks((prev) => [...prev, symbol])
     }
   }
 
@@ -579,11 +696,6 @@ export default function ChartsPage() {
   const handleRemoveMetric = (metricId: MetricId) => {
     setAddedMetrics((prev) => prev.filter((m) => m !== metricId))
     setVisibleMetrics((prev) => prev.filter((m) => m !== metricId))
-  }
-
-  const handleClearAll = () => {
-    setAddedMetrics([])
-    setVisibleMetrics([])
   }
 
   // Preset configurations for quick start
@@ -683,43 +795,8 @@ export default function ChartsPage() {
     if (!yearBounds) return 0
     return ((year - yearBounds.min) / sliderSpan) * 100
   }
-  const getYearPositionPx = (year: number) => {
-    if (!yearBounds || sliderWidth <= 0) return 0
-    const percent = (year - yearBounds.min) / sliderSpan
-    const trackWidth = Math.max(sliderWidth - thumbEffectivePx, 0)
-    return percent * trackWidth + thumbEffectivePx / 2
-  }
-
-  // Build theme-class helpers for child components
-  const stockSelectorTheme = {
-    inputBg: cx(t, 'inputBg'),
-    inputBorder: cx(t, 'inputBorder'),
-    inputText: cx(t, 'inputText'),
-    dropdownBg: cx(t, 'dropdownBg'),
-    dropdownBorder: cx(t, 'dropdownBorder'),
-    dropdownItemHover: cx(t, 'dropdownItemHover'),
-    dropdownItemText: cx(t, 'dropdownItemText'),
-    dropdownItemTextSelected: cx(t, 'dropdownItemTextSelected'),
-    dropdownFooterBorder: cx(t, 'dropdownFooterBorder'),
-    dropdownFooterText: cx(t, 'dropdownFooterText'),
-    dropdownSectionBg: cx(t, 'dropdownSectionBg'),
-  }
-
-  const metricSelectorTheme = {
-    inputBg: cx(t, 'inputBg'),
-    inputBorder: cx(t, 'inputBorder'),
-    inputText: cx(t, 'inputText'),
-    dropdownBg: cx(t, 'dropdownBg'),
-    dropdownBorder: cx(t, 'dropdownBorder'),
-    dropdownItemHover: cx(t, 'dropdownItemHover'),
-    dropdownSectionBg: cx(t, 'dropdownSectionBg'),
-    dropdownSectionHover: cx(t, 'dropdownSectionHover'),
-    dropdownItemText: cx(t, 'dropdownItemText'),
-    dropdownItemTextSelected: cx(t, 'dropdownItemTextSelected'),
-  }
-
   return (
-    <div className={`min-h-screen ${cx(t, 'pageBg')} ${cx(t, 'font')}`} data-chart-theme={chartTheme} style={{ fontFamily: t.font || undefined }}>
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       <Navigation />
 
       <div className="flex">
@@ -728,223 +805,53 @@ export default function ChartsPage() {
           ref={sidebarRef}
           className={`${sidebarOpen ? 'w-[300px]' : 'w-0'} overflow-hidden transition-[width] duration-300 ease-in-out flex-shrink-0`}
         >
-          <div className={`w-[300px] h-[calc(100vh-64px)] overflow-y-auto ${cx(t, 'sidebarBg')} p-4 space-y-7 select-none`}>
-            {/* Theme Toggle */}
-            <div>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${cx(t, 'sidebarLabel')} mb-2`}>Theme</p>
-              <div className={`flex items-center gap-1 ${cx(t, 'buttonGroupBg')} p-1`}>
-                {(Object.keys(THEMES) as ChartThemeName[]).map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setChartTheme(name)}
-                    className={`flex-1 px-3 py-1 text-sm font-medium ${
-                      chartTheme === name ? cx(t, 'buttonActive') : cx(t, 'buttonInactive')
-                    }`}
-                  >
-                    {THEMES[name].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Stocks */}
-            <div>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${cx(t, 'sidebarLabel')} mb-2`}>Stocks</p>
-              <StockSelector
-                ref={stockSelectorRef}
-                availableStocks={availableStocks}
-                selectedStocks={addedStocks}
-                onSelect={handleStockSelect}
-                allowMultiple={true}
-                popularStocks={POPULAR_STOCKS}
-                autoFocus={true}
-                themeClasses={stockSelectorTheme}
-              />
-              {/* Added stock chips */}
-              {addedStocks.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {addedStocks.map((symbol) => {
-                    const stock = availableStocks.find((s) => s.symbol === symbol)
-
-                    return (
-                      <div
-                        key={symbol}
-                        className={`inline-flex items-center gap-1.5 ${cx(t, 'chipBg')} px-2.5 py-1 rounded-md`}
-                      >
-                        <span className={`text-xs ${cx(t, 'chipTextMuted')} truncate max-w-[120px]`}>{stock?.name}</span>
-                        <span className={`text-sm font-semibold ${cx(t, 'chipText')}`}>{symbol}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveStock(symbol)}
-                          className={`${cx(t, 'chipClose')} flex-shrink-0`}
-                          title="Remove stock"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Metrics */}
-            <div>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${cx(t, 'sidebarLabel')} mb-2`}>Metrics</p>
-              <MetricSelector
-                metrics={availableMetrics}
-                selectedMetrics={addedMetrics}
-                onToggle={handleMetricToggle}
-                onClear={handleClearAll}
-                maxSelections={10}
-                selectedStock={selectedStock}
-                selectedStocks={selectedStocks}
-                layout="vertical"
-                themeClasses={metricSelectorTheme}
-                renderChip={(metricId) => {
-                  const metric = availableMetrics.find((m) => m.id === metricId)
-                  const isVisible = visibleMetrics.includes(metricId as MetricId)
-                  const currentColor = customColors[metricId] ?? DEFAULT_METRIC_COLORS[metricId as MetricId] ?? '#3b82f6'
-
-                  return (
-                    <div
-                      key={metricId}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md relative transition-opacity ${isVisible ? cx(t, 'chipBg') : `${cx(t, 'chipBgMuted')} opacity-50`}`}
-                      title={metric?.definition}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setColorPickerOpen(colorPickerOpen === metricId ? null : metricId)}
-                        className="w-3 h-3 rounded-sm border border-gray-300 dark:border-gray-500 flex-shrink-0"
-                        style={{ backgroundColor: currentColor }}
-                        title="Change color"
-                      />
-                      {colorPickerOpen === metricId && (
-                        <div className={`absolute top-full left-0 mt-1 p-2 ${cx(t, 'dropdownBg')} ${cx(t, 'dropdownBorder')} rounded-lg shadow-lg z-50`}>
-                          <div className="grid grid-cols-4 gap-1">
-                            {COLOR_PALETTE.map((color) => (
-                              <button
-                                key={color}
-                                type="button"
-                                onClick={() => {
-                                  setCustomColors((prev) => ({ ...prev, [metricId]: color }))
-                                  setColorPickerOpen(null)
-                                }}
-                                className={`w-6 h-6 rounded border-2 ${currentColor === color ? 'border-gray-900 dark:border-white' : 'border-transparent'}`}
-                                style={{ backgroundColor: color }}
-                                title={color}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <span className={`text-sm font-medium truncate ${isVisible ? cx(t, 'chipText') : `${cx(t, 'chipTextMuted')} line-through`}`}>
-                        {metric?.label}
-                      </span>
-                      {/* Hide/Show toggle */}
-                      <button
-                        type="button"
-                        onClick={() => handleVisibilityToggle(metricId as MetricId)}
-                        className={`${cx(t, 'chipClose')} flex-shrink-0`}
-                        title={isVisible ? 'Hide from chart' : 'Show on chart'}
-                      >
-                        {isVisible ? (
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
-                        )}
-                      </button>
-                      {/* Remove */}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMetric(metricId as MetricId)}
-                        className={`${cx(t, 'chipClose')} flex-shrink-0`}
-                        title="Remove metric"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )
-                }}
-              />
-            </div>
-
-            {/* Display */}
-            <div>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${cx(t, 'sidebarLabel')} mb-2`}>Display</p>
-              <div className="space-y-3">
-                {/* Period Toggle */}
-                <div className={`flex items-center gap-1 ${cx(t, 'buttonGroupBg')} p-1`}>
-                  <button
-                    type="button"
-                    onClick={() => setPeriodType('annual')}
-                    className={`flex-1 px-3 py-1 text-sm font-medium ${
-                      periodType === 'annual' ? cx(t, 'buttonActive') : cx(t, 'buttonInactive')
-                    }`}
-                  >
-                    Annual
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPeriodType('quarterly')}
-                    className={`flex-1 px-3 py-1 text-sm font-medium ${
-                      periodType === 'quarterly' ? cx(t, 'buttonActive') : cx(t, 'buttonInactive')
-                    }`}
-                  >
-                    Quarterly
-                  </button>
-                </div>
-                {/* Stock Price Toggle */}
-                <label className={`flex items-center gap-2 cursor-pointer ${cx(t, 'toggleBg')} px-3 py-1.5`}>
-                  <input
-                    type="checkbox"
-                    checked={showStockPrice}
-                    onChange={(e) => setShowStockPrice(e.target.checked)}
-                    className={cx(t, 'checkboxClass')}
-                  />
-                  <span className={`text-sm font-medium ${cx(t, 'chipText')}`}>Stock Price</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Clear All */}
-            <button
-              type="button"
-              onClick={() => {
-                setAddedStocks([])
-                setVisibleStocks([])
-                setAddedMetrics([])
-                setVisibleMetrics([])
-                setCustomColors({})
-                setShowStockPrice(false)
-                if (yearBounds) {
-                  setMinYear(yearBounds.min)
-                  setMaxYear(yearBounds.max)
-                }
-              }}
-              disabled={addedStocks.length === 0 && addedMetrics.length === 0 && !showStockPrice}
-              className={`w-full px-3 py-1.5 text-sm font-medium ${cx(t, 'clearButton')} disabled:opacity-30 disabled:pointer-events-none`}
-            >
-              Clear All
-            </button>
-          </div>
+          <ChartSidebar
+            availableStocks={availableStocks}
+            addedStocks={addedStocks}
+            popularStocks={POPULAR_STOCKS}
+            onStockToggle={handleStockToggle}
+            onRemoveStock={handleRemoveStock}
+            stockModalOpen={stockModalOpen}
+            onStockModalChange={setStockModalOpen}
+            availableMetrics={availableMetrics}
+            addedMetrics={addedMetrics}
+            visibleMetrics={visibleMetrics}
+            customColors={customColors}
+            colorPalette={COLOR_PALETTE}
+            defaultMetricColors={DEFAULT_METRIC_COLORS}
+            onMetricToggle={handleMetricToggle}
+            onVisibilityToggle={handleVisibilityToggle}
+            onRemoveMetric={handleRemoveMetric}
+            onColorChange={(metricId, color) => setCustomColors((prev) => ({ ...prev, [metricId]: color }))}
+            metricModalOpen={metricModalOpen}
+            onMetricModalChange={setMetricModalOpen}
+            selectedStock={selectedStock}
+            selectedStocks={selectedStocks}
+            periodType={periodType}
+            onPeriodTypeChange={setPeriodType}
+            showStockPrice={showStockPrice}
+            onShowStockPriceChange={setShowStockPrice}
+            onClearAll={() => {
+              setAddedStocks([])
+              setVisibleStocks([])
+              setAddedMetrics([])
+              setVisibleMetrics([])
+              setCustomColors({})
+              setShowStockPrice(false)
+              if (yearBounds) {
+                setMinYear(yearBounds.min)
+                setMaxYear(yearBounds.max)
+              }
+            }}
+            canClear={addedStocks.length > 0 || addedMetrics.length > 0 || showStockPrice}
+          />
         </div>
 
         {/* TOGGLE BUTTON — page-level strip */}
         <button
           type="button"
           onClick={() => setSidebarOpen((prev) => !prev)}
-          className={`w-5 flex-shrink-0 flex items-center justify-center ${cx(t, 'sidebarToggleBg')} ${cx(t, 'sidebarToggleHover')} transition-colors ${cx(t, 'sidebarToggleBorder')} cursor-pointer`}
+          className="w-5 flex-shrink-0 flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-cream-100 dark:hover:bg-gray-700 transition-colors border-r border-cream-300 dark:border-gray-700 cursor-pointer"
           title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           <svg
@@ -959,13 +866,13 @@ export default function ChartsPage() {
 
         {/* MAIN CONTENT */}
         <main className="flex-1 min-w-0 px-6 py-8">
-          <div className={`${cx(t, 'cardBg')} ${cx(t, 'cardRounding')} ${cx(t, 'cardBorder')}`}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-cream-300 dark:border-gray-700">
             {/* Controls */}
             {addedStocks.length > 0 && (
             <div className="px-4 py-2 select-none">
               {/* Time Range Slider — full width */}
               <div className="space-y-2 range-slider-wrap">
-                    <div className="range-slider" ref={sliderRef}>
+                    <div className="range-slider">
                       <div className="range-slider-track" />
                       <div
                         className="range-slider-range"
@@ -1002,19 +909,19 @@ export default function ChartsPage() {
                         {sliderYears.map((year) => (
                           <span
                             key={`tick-${year}`}
-                            className={`absolute -translate-x-1/2 h-2 w-px ${cx(t, 'sliderTickColor')}`}
-                            style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
+                            className="absolute -translate-x-1/2 h-2 w-px bg-gray-400/70 dark:bg-gray-500/70"
+                            style={{ left: `${getYearPercent(year)}%` }}
                           />
                         ))}
                       </div>
                     )}
                     {yearBounds && sliderYears.length > 0 && (
-                      <div className={`range-slider-scale relative h-4 text-[10px] ${cx(t, 'sliderLabelText')} leading-none mt-1`}>
+                      <div className="range-slider-scale relative h-4 text-[10px] text-gray-500 dark:text-gray-400 leading-none mt-1">
                         {sliderYears.map((year) => (
                           <span
                             key={year}
                             className="absolute -translate-x-1/2 whitespace-nowrap"
-                            style={{ left: sliderWidth ? `${getYearPositionPx(year)}px` : `${getYearPercent(year)}%` }}
+                            style={{ left: `${getYearPercent(year)}%` }}
                           >
                             {year}
                           </span>
@@ -1033,10 +940,10 @@ export default function ChartsPage() {
                     <div className="h-[650px] flex items-center justify-center">
                       <div className="text-center">
                         <p className="text-red-600 dark:text-red-400 font-medium mb-2">Error loading data</p>
-                        <p className={`${cx(t, 'emptySubtitle')} text-sm`}>{error}</p>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm">{error}</p>
                         <button
                           onClick={fetchData}
-                          className="mt-4 px-4 py-2 bg-sage-500 text-white rounded-lg hover:bg-sage-600 transition-colors"
+                          className="mt-4 px-4 py-2 bg-sage-500 text-white rounded-md hover:bg-sage-600 transition-colors"
                         >
                           Try Again
                         </button>
@@ -1051,22 +958,14 @@ export default function ChartsPage() {
                         selectedStocks.length > 1
                           ? Object.fromEntries(
                               (() => {
-                                // Track metric index per stock for color assignment
                                 const stockMetricIndex: Record<string, number> = {}
-                                const stockColorFamilies = isDark ? STOCK_COLOR_FAMILIES_DARK : STOCK_COLOR_FAMILIES_LIGHT
+                                const stockColorFamilies = generateStockColorFamilies(selectedStocks, isDark)
 
                                 return metricsData.map((d) => {
-                                  // Extract stock symbol from prefixed ID (e.g., "AAPL:revenue" -> "AAPL")
                                   const stockSymbol = d.metric.includes(':') ? d.metric.split(':')[0] : selectedStocks[0]
-
-                                  // Get the color family for this stock
                                   const colorFamily = stockColorFamilies[stockSymbol] ?? COLOR_PALETTE
-
-                                  // Get the next color index for this stock
                                   const metricIndex = stockMetricIndex[stockSymbol] ?? 0
                                   stockMetricIndex[stockSymbol] = metricIndex + 1
-
-                                  // Assign color from the stock's color family
                                   const color = colorFamily[metricIndex % colorFamily.length]
                                   return [d.metric, color]
                                 })
@@ -1077,7 +976,6 @@ export default function ChartsPage() {
                       onReset={handleReset}
                       onCopyExportUrl={handleCopyExportUrl}
                       initialChartType={initialChartType}
-                      highchartsTheme={t.highcharts}
                     />
                   ) : (
                     <div className="h-[650px] flex items-start justify-center pt-24">
@@ -1086,15 +984,15 @@ export default function ChartsPage() {
                         {addedStocks.length === 0 ? (
                           <>
                             <div className="mb-8">
-                              <p className={`text-lg font-medium ${cx(t, 'emptyTitle')} mb-2`}>Pick a stock</p>
-                              <p className={`${cx(t, 'emptySubtitle')} text-sm`}>Use the sidebar to select a stock</p>
+                              <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Pick a stock</p>
+                              <p className="text-gray-500 dark:text-gray-400 text-sm">Use the sidebar to select a stock</p>
                             </div>
 
                             {/* Divider */}
                             <div className="flex items-center gap-4 mb-6">
-                              <div className={`flex-1 h-px ${cx(t, 'emptyDivider')}`} />
-                              <span className={`text-xs ${cx(t, 'emptySubtitle')} uppercase tracking-wider`}>try a preset</span>
-                              <div className={`flex-1 h-px ${cx(t, 'emptyDivider')}`} />
+                              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">try a preset</span>
+                              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
                             </div>
 
                             {/* Preset buttons */}
@@ -1103,7 +1001,7 @@ export default function ChartsPage() {
                                 <button
                                   key={preset.label}
                                   onClick={() => handleApplyPreset(preset)}
-                                  className={`px-4 py-2 text-sm font-medium ${cx(t, 'presetButton')}`}
+                                  className="px-4 py-2 text-sm font-medium bg-cream-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-sage-100 dark:hover:bg-sage-900/20 hover:text-sage-700 dark:hover:text-sage-300 transition-colors border border-gray-200 dark:border-gray-700"
                                 >
                                   {preset.label}
                                 </button>
@@ -1112,8 +1010,8 @@ export default function ChartsPage() {
                           </>
                         ) : (
                           <div>
-                            <p className={`text-lg font-medium ${cx(t, 'emptyTitle')} mb-2`}>Choose metrics to compare</p>
-                            <p className={`${cx(t, 'emptySubtitle')} text-sm`}>Use the sidebar to add metrics to your chart</p>
+                            <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">Choose metrics to compare</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">Use the sidebar to add metrics to your chart</p>
                           </div>
                         )}
                       </div>

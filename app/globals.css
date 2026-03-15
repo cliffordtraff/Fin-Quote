@@ -163,9 +163,10 @@ html.dark .range-slider-input::-moz-range-thumb {
 }
 
 .range-slider-scale {
-  width: calc(100% + var(--thumb-overhang-start) + var(--thumb-overhang-end));
-  margin-left: calc(-1 * var(--thumb-overhang-start));
-  margin-right: calc(-1 * var(--thumb-overhang-end));
+  /* Inset by half the thumb's full rendered width on each side
+     so %-positioned ticks land exactly where the browser places the thumb center */
+  width: calc(100% - var(--thumb-width) - var(--thumb-border) * 2);
+  margin-left: calc((var(--thumb-width) + var(--thumb-border) * 2) / 2);
 }
 
 /* Subtle pulse animation for onboarding guidance */
@@ -212,6 +213,34 @@ html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb {
 
 html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   background: #5a6b4a;
+}
+
+/* ---- Terminal chart theme: range slider overrides ---- */
+[data-chart-theme="terminal"] .range-slider-track {
+  background: #1f2937;
+  border-radius: 0;
+}
+
+[data-chart-theme="terminal"] .range-slider-track::before,
+[data-chart-theme="terminal"] .range-slider-track::after {
+  background: #166534;
+}
+
+[data-chart-theme="terminal"] .range-slider-range {
+  background: #22c55e;
+  border-radius: 0;
+}
+
+[data-chart-theme="terminal"] .range-slider-input::-webkit-slider-thumb {
+  border-radius: 0;
+  background: #22c55e;
+  border-color: #111827;
+}
+
+[data-chart-theme="terminal"] .range-slider-input::-moz-range-thumb {
+  border-radius: 0;
+  background: #22c55e;
+  border-color: #111827;
 }
 
 /* Staggered animation delays for landing page elements */

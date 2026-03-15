@@ -15,6 +15,19 @@ interface Metric {
   stock?: string  // Stock symbol this metric belongs to (for segment metrics)
 }
 
+export interface MetricSelectorThemeClasses {
+  inputBg?: string
+  inputBorder?: string
+  inputText?: string
+  dropdownBg?: string
+  dropdownBorder?: string
+  dropdownItemHover?: string
+  dropdownSectionBg?: string
+  dropdownSectionHover?: string
+  dropdownItemText?: string
+  dropdownItemTextSelected?: string
+}
+
 interface MetricSelectorProps {
   metrics: readonly Metric[]
   selectedMetrics: string[]
@@ -25,6 +38,7 @@ interface MetricSelectorProps {
   selectedStocks?: string[]  // All selected stocks for multi-stock filtering
   layout?: 'horizontal' | 'vertical'  // 'horizontal' = grid-cols-5 (default), 'vertical' = stacked column
   renderChip?: (metricId: string) => React.ReactNode  // Render a chip for a selected metric (shown under its dropdown)
+  themeClasses?: MetricSelectorThemeClasses
 }
 
 const STATEMENT_LABELS: Record<StatementType | 'stock', string> = {
@@ -43,6 +57,7 @@ interface DropdownProps {
   onToggle: (metricId: string) => void
   maxSelections: number
   totalSelected: number
+  tc?: MetricSelectorThemeClasses
 }
 
 // Collapsible section within a dropdown
@@ -56,6 +71,7 @@ function CollapsibleSection({
   totalSelected,
   isExpanded,
   onToggleExpand,
+  tc,
 }: {
   title: string
   metrics: Metric[]
@@ -66,6 +82,7 @@ function CollapsibleSection({
   totalSelected: number
   isExpanded: boolean
   onToggleExpand: () => void
+  tc?: MetricSelectorThemeClasses
 }) {
   const selectedInSection = metrics.filter((m) => selectedMetrics.includes(m.id)).length
   const allSelected = selectedInSection === metrics.length && metrics.length > 0
@@ -95,7 +112,7 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={onToggleExpand}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-cream-50 dark:bg-gray-700 hover:bg-gray-150 dark:hover:bg-gray-600 transition-colors text-left"
+        className={`w-full flex items-center gap-2 px-3 py-2 ${tc?.dropdownSectionBg ?? 'bg-cream-50 dark:bg-gray-700'} ${tc?.dropdownSectionHover ?? 'hover:bg-gray-150 dark:hover:bg-gray-600'} transition-colors text-left`}
       >
         <svg
           className={`w-3 h-3 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
@@ -105,7 +122,7 @@ function CollapsibleSection({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        <span className="text-[15px] font-medium text-gray-700 dark:text-gray-200">{title}</span>
+        <span className={`text-[15px] font-medium ${tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200'}`}>{title}</span>
         {selectedInSection > 0 && (
           <span className="text-sage-600 dark:text-sage-400 text-xs">({selectedInSection})</span>
         )}
@@ -130,10 +147,10 @@ function CollapsibleSection({
                 className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${
                   isDisabled
                     ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
-                    : 'hover:bg-cream-50 dark:hover:bg-gray-700'
+                    : (tc?.dropdownItemHover ?? 'hover:bg-cream-50 dark:hover:bg-gray-700')
                 }`}
               >
-                <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{metric.label}</span>
+                <span className={`text-[13px] font-light truncate ${isSelected ? (tc?.dropdownItemTextSelected ?? 'text-gray-400 dark:text-gray-500') : (tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200')}`}>{metric.label}</span>
               </button>
             )
           })}
@@ -161,6 +178,7 @@ function StockSpecificDropdown({
   onToggle,
   maxSelections,
   totalSelected,
+  tc,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -233,7 +251,7 @@ function StockSpecificDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+        className={`w-full flex items-center justify-between px-3 py-1.5 ${tc?.inputBg ?? 'bg-cream-50 dark:bg-gray-800'} ${tc?.inputBorder ?? 'border border-gray-300 dark:border-gray-600'} rounded-lg ${tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200'} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-light`}
       >
         <span className="truncate text-left">
           {label}
@@ -252,7 +270,7 @@ function StockSpecificDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+        <div className={`absolute z-50 w-full min-w-[280px] mt-1 ${tc?.dropdownBg ?? 'bg-white dark:bg-gray-800'} ${tc?.dropdownBorder ?? 'border border-gray-200 dark:border-gray-700'} rounded-lg shadow-lg overflow-hidden`}>
           <div className="max-h-[500px] overflow-y-auto">
             {metricsByCategory.map(({ key, title, metrics: sectionMetrics }) => (
               <CollapsibleSection
@@ -266,6 +284,7 @@ function StockSpecificDropdown({
                 totalSelected={totalSelected}
                 isExpanded={expandedSections[key]}
                 onToggleExpand={() => toggleSection(key)}
+                tc={tc}
               />
             ))}
           </div>
@@ -282,6 +301,7 @@ function StatementDropdown({
   onToggle,
   maxSelections,
   totalSelected,
+  tc,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -317,7 +337,7 @@ function StatementDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+        className={`w-full flex items-center justify-between px-3 py-1.5 ${tc?.inputBg ?? 'bg-cream-50 dark:bg-gray-800'} ${tc?.inputBorder ?? 'border border-gray-300 dark:border-gray-600'} rounded-lg ${tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200'} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-light`}
       >
         <span className="truncate text-left">
           {label}
@@ -336,7 +356,7 @@ function StatementDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full min-w-[280px] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+        <div className={`absolute z-50 w-full min-w-[280px] mt-1 ${tc?.dropdownBg ?? 'bg-white dark:bg-gray-800'} ${tc?.dropdownBorder ?? 'border border-gray-200 dark:border-gray-700'} rounded-lg shadow-lg overflow-hidden`}>
           <div className="max-h-[500px] overflow-y-auto">
             {metrics.map((metric) => {
               const isSelected = selectedMetrics.includes(metric.id)
@@ -356,10 +376,10 @@ function StatementDropdown({
                   className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 ${
                     isDisabled
                       ? 'opacity-50 cursor-not-allowed bg-cream-50 dark:bg-gray-800'
-                      : 'hover:bg-cream-50 dark:hover:bg-gray-700'
+                      : (tc?.dropdownItemHover ?? 'hover:bg-cream-50 dark:hover:bg-gray-700')
                   }`}
                 >
-                  <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{metric.label}</span>
+                  <span className={`text-[13px] font-light truncate ${isSelected ? (tc?.dropdownItemTextSelected ?? 'text-gray-400 dark:text-gray-500') : (tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200')}`}>{metric.label}</span>
                 </button>
               )
             })}
@@ -380,6 +400,7 @@ export default function MetricSelector({
   selectedStocks,
   layout = 'horizontal',
   renderChip,
+  themeClasses: tc,
 }: MetricSelectorProps) {
   // Group metrics by statement type
   const incomeMetrics = metrics.filter((m) => m.statement === 'income')
@@ -428,6 +449,7 @@ export default function MetricSelector({
                   onToggle={onToggle}
                   maxSelections={maxSelections}
                   totalSelected={totalSelected}
+                  tc={tc}
                 />
               ) : (
                 <StatementDropdown
@@ -437,6 +459,7 @@ export default function MetricSelector({
                   onToggle={onToggle}
                   maxSelections={maxSelections}
                   totalSelected={totalSelected}
+                  tc={tc}
                 />
               )}
               {renderChip && selectedInGroup.length > 0 && (

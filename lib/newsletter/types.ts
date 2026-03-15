@@ -181,10 +181,33 @@ export interface StockNewsItem {
   site: string
 }
 
+/** A stock that was previously picked for a newsletter */
+export interface RecentPick {
+  ticker: string
+  name: string
+  pickedAt: string
+}
+
+/** A company that recently reported earnings */
+export interface EarningsCandidate {
+  symbol: string
+  date: string
+  time: string
+  eps: number | null
+  epsEstimated: number | null
+  revenue: number | null
+  revenueEstimated: number | null
+  /** Negative = reported N hours ago, positive = reports in N hours */
+  hoursAgo: number
+}
+
 /** Market context gathered for the AI stock picker */
 export interface MarketContext {
   candidates: StockCandidate[]
   newsBySymbol: Record<string, StockNewsItem[]>
+  recentPicks?: RecentPick[]
+  earningsReports?: EarningsCandidate[]
+  gainersLosers?: StockCandidate[]
 }
 
 /** Result of the AI stock picker step */
@@ -195,6 +218,7 @@ export interface StockPickerResult {
   editorialHook: string
   subjectLine: string
   topHeadlines: StockNewsItem[]
+  pickSource?: 'earnings' | 'big_mover' | 'news_catalyst' | 'fallback'
 }
 
 // ---------------------------------------------------------------------------

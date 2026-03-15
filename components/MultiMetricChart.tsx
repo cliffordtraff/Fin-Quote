@@ -140,9 +140,22 @@ interface MultiMetricChartProps {
   onChartReady?: () => void
   /** Callback to copy a newsletter export URL (shown in export dropdown when provided) */
   onCopyExportUrl?: () => void
+  /** Optional Highcharts theme overrides (backward-compatible — callers without this prop are unaffected) */
+  highchartsTheme?: {
+    backgroundColor?: string
+    textColor?: string
+    gridLineColor?: string
+    lineColor?: string
+    tooltipBg?: string
+    tooltipBorder?: string
+    tooltipText?: string
+    tooltipBorderRadius?: number
+    columnBorderRadius?: number
+    fontFamily?: string
+  }
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, onChartReady, onCopyExportUrl }: MultiMetricChartProps) {
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(initialShowLabels ?? true)
   const [isStacked, setIsStacked] = useState(initialStacked ?? false)
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>(initialChartType ?? 'bar')
@@ -498,14 +511,14 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       labels: {
         style: {
           fontSize: exportMode ? '22px' : '12px',
-          color: isDark ? '#9ca3af' : '#6b7280',
+          color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         formatter: getAxisFormatter(primaryUnit),
       },
-      gridLineColor: isDark ? 'rgb(75, 75, 75)' : '#d1d5db',
+      gridLineColor: ht?.gridLineColor ?? (isDark ? 'rgb(75, 75, 75)' : '#d1d5db'),
       opposite: true,
       lineWidth: 2,
-      lineColor: isDark ? '#6b7280' : '#374151',
+      lineColor: ht?.lineColor ?? (isDark ? '#6b7280' : '#374151'),
     },
   ]
 
@@ -529,14 +542,14 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       labels: {
         style: {
           fontSize: exportMode ? '22px' : '12px',
-          color: isDark ? '#9ca3af' : '#6b7280',
+          color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         formatter: getAxisFormatter(secondaryUnit),
       },
       opposite: false,
       gridLineWidth: 0,
       lineWidth: 2,
-      lineColor: isDark ? '#6b7280' : '#374151',
+      lineColor: ht?.lineColor ?? (isDark ? '#6b7280' : '#374151'),
     })
   }
 
@@ -564,16 +577,61 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     ? Math.max(...barTimestamps) + halfBarWidth
     : undefined
 
+  // Smart y-axis floor: limit negative space when data is mostly positive
+  // For each axis, if the minimum value is only slightly negative relative to the
+  // max, clamp the axis floor so the chart doesn't waste half the space below zero.
+  yAxis.forEach((axis, axisIndex) => {
+    const axisValues: number[] = []
+    sortedFilteredData.forEach((metricData) => {
+      const metricUnit = metricData.unit
+      const isSecondaryUnit = axisIndex === 1
+      const isPrimary = axisIndex === 0
+
+      // Determine which axis this metric belongs to
+      const metricOnPrimary = metricUnit === primaryUnit || (metricUnit === 'shares' && primaryUnit === 'shares')
+      if ((isPrimary && !metricOnPrimary && needsDualAxis) || (isSecondaryUnit && metricOnPrimary)) return
+
+      metricData.data.forEach((d) => {
+        if (d.value != null) axisValues.push(d.value)
+      })
+    })
+
+    if (axisValues.length === 0) return
+
+    const minVal = Math.min(...axisValues)
+    const maxVal = Math.max(...axisValues)
+
+    // Only adjust when data is mostly positive but has small negative values
+    if (minVal < 0 && maxVal > 0) {
+      const range = maxVal - minVal
+      const negativeRatio = Math.abs(minVal) / range
+
+      // If negative values are less than 15% of the total range,
+      // set a tight floor with just a small buffer below the min
+      if (negativeRatio < 0.15) {
+        const buffer = Math.abs(minVal) * 0.5
+        axis.floor = minVal - buffer
+        axis.softMin = minVal - buffer
+      }
+    }
+  })
+
   const options: Highcharts.Options = {
     chart: {
       type: 'column',
       height: exportMode ? 500 : 650,
-      backgroundColor: exportMode ? '#ffffff' : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : 'transparent',
+      backgroundColor: exportMode ? '#ffffff' : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : (ht?.backgroundColor ?? 'transparent'),
       animation: false,
       style: {
-        fontFamily: 'inherit',
+        fontFamily: ht?.fontFamily ?? 'inherit',
       },
       spacingBottom: exportMode ? 8 : 20,
+      zooming: {
+        type: 'x',
+        mouseWheel: { enabled: true },
+      },
+      panning: { enabled: true, type: 'x' },
+      panKey: 'shift',
     },
     title: {
       text: undefined,
@@ -591,13 +649,13 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         format: isQuarterlyData ? '{value:%Y Q%q}' : '{value:%Y}',
         style: {
           fontSize: exportMode ? '22px' : (isQuarterlyData ? '10px' : '12px'),
-          color: isDark ? '#9ca3af' : '#6b7280',
+          color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         rotation: isQuarterlyData && categories.length > 16 ? -45 : 0,
       },
       gridLineWidth: 0,
       lineWidth: 2,
-      lineColor: isDark ? '#6b7280' : '#374151',
+      lineColor: ht?.lineColor ?? (isDark ? '#6b7280' : '#374151'),
       // Set explicit min/max to prevent bars from being cut off at edges
       // Buffer accounts for bar width (bars are centered on their timestamp)
       min: xAxisMin,
@@ -610,7 +668,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     plotOptions: {
       column: {
         animation: false,
-        borderRadius: isStacked ? 0 : 4,
+        borderRadius: isStacked ? 0 : (ht?.columnBorderRadius ?? 4),
         borderWidth: 0,
         groupPadding: isStacked ? 0.2 : 0.15,
         pointPadding: isStacked ? 0.1 : 0.05,
@@ -745,14 +803,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       filename: 'financials_chart',
     },
     tooltip: {
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      borderColor: isDark ? '#374151' : '#e5e7eb',
-      borderRadius: 8,
+      backgroundColor: ht?.tooltipBg ?? (isDark ? '#1f2937' : '#ffffff'),
+      borderColor: ht?.tooltipBorder ?? (isDark ? '#374151' : '#e5e7eb'),
+      borderRadius: ht?.tooltipBorderRadius ?? 8,
       borderWidth: 1,
       shared: false,
       style: {
         fontSize: '12px',
-        color: isDark ? '#f9fafb' : '#1f2937',
+        fontFamily: ht?.fontFamily ?? undefined,
+        color: ht?.tooltipText ?? (isDark ? '#f9fafb' : '#1f2937'),
       },
       positioner: function (labelWidth, labelHeight, point) {
         // Position tooltip above the point

@@ -5,7 +5,7 @@ import OpenAI from 'openai'
 import { resolveEditorialChart } from './resolve-chart'
 import { getEditorialTemplate } from './editorial-templates'
 import { buildNewsletterBlock } from './build-block'
-import { fetchNewsletterContext, fetchMarketContext, fetchTodayQuote, fetchTickerNews } from './fetch-context'
+import { fetchNewsletterContext, fetchMarketContext, fetchTodayQuote, fetchTickerNews, fetchRecentPicks, recordPick } from './fetch-context'
 import {
   buildStockPickerMessages,
   parseStockPickerResult,
@@ -29,7 +29,7 @@ import type {
   TodayQuote,
 } from './types'
 
-const DEFAULT_BASE_URL = 'http://localhost:3005'
+const DEFAULT_BASE_URL = 'http://localhost:3000'
 const DEFAULT_OUTPUT_DIR = './public/newsletter-charts'
 const DEFAULT_MAX_CHARTS = 3
 
@@ -87,8 +87,15 @@ export async function generateNewsletter(
   } else {
     const t0pick = Date.now()
 
-    const market = await fetchMarketContext()
+    // Fetch market context and recent picks in parallel
+    const [market, recentPicks] = await Promise.all([
+      fetchMarketContext(),
+      fetchRecentPicks(),
+    ])
     timings.fetchMarketContext = Date.now() - t0pick
+
+    // Attach recent picks to market context before building prompt
+    market.recentPicks = recentPicks
 
     const tPick = Date.now()
     const pickerMessages = buildStockPickerMessages(market)
@@ -112,6 +119,9 @@ export async function generateNewsletter(
     tickerUpper = stockPickerResult.ticker
     autoPickedStock = true
     timings.aiStockPicker = Date.now() - tPick
+
+    // Record the pick (fire and forget)
+    recordPick(stockPickerResult).catch(console.warn)
   }
 
   // -----------------------------------------------------------------------

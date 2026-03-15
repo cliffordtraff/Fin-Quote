@@ -5,6 +5,9 @@ import type {
   StockCandidate,
   StockNewsItem,
   TodayQuote,
+  EarningsCandidate,
+  RecentPick,
+  StockPickerResult,
 } from './types'
 
 /**
@@ -164,12 +167,158 @@ const SP500_SYMBOLS = new Set([
 ])
 
 // ---------------------------------------------------------------------------
+// Earnings calendar fetcher
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch recent earnings reports from FMP's earnings calendar.
+ * Looks 2 days back + today + 1 day forward, filters to S&P 500.
+ */
+export async function fetchEarningsContext(): Promise<EarningsCandidate[]> {
+  const apiKey = process.env.FMP_API_KEY
+  if (!apiKey) return []
+
+  const now = new Date()
+  const from = new Date(now)
+  from.setDate(from.getDate() - 2)
+  const to = new Date(now)
+  to.setDate(to.getDate() + 1)
+
+  const fromStr = from.toISOString().slice(0, 10)
+  const toStr = to.toISOString().slice(0, 10)
+
+  const url = `https://financialmodelingprep.com/api/v3/earning_calendar?from=${fromStr}&to=${toStr}&apikey=${apiKey}`
+
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return []
+
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+
+    return data
+      .filter((e: any) => SP500_SYMBOLS.has(e.symbol))
+      .map((e: any) => {
+        const reportDate = new Date(e.date)
+        const hoursAgo = (now.getTime() - reportDate.getTime()) / (1000 * 60 * 60)
+
+        return {
+          symbol: e.symbol,
+          date: e.date,
+          time: e.time || 'unknown',
+          eps: e.eps ?? null,
+          epsEstimated: e.epsEstimated ?? null,
+          revenue: e.revenue ?? null,
+          revenueEstimated: e.revenueEstimated ?? null,
+          hoursAgo: Math.round(hoursAgo),
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gainers / losers fetcher
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch today's biggest gainers and losers from FMP, filtered to S&P 500.
+ */
+export async function fetchGainersLosers(): Promise<StockCandidate[]> {
+  const apiKey = process.env.FMP_API_KEY
+  if (!apiKey) return []
+
+  try {
+    const [gainersRes, losersRes] = await Promise.all([
+      fetch(`https://financialmodelingprep.com/api/v3/stock_market/gainers?apikey=${apiKey}`),
+      fetch(`https://financialmodelingprep.com/api/v3/stock_market/losers?apikey=${apiKey}`),
+    ])
+
+    const gainersData = gainersRes.ok ? await gainersRes.json() : []
+    const losersData = losersRes.ok ? await losersRes.json() : []
+
+    const all = [...(Array.isArray(gainersData) ? gainersData : []), ...(Array.isArray(losersData) ? losersData : [])]
+
+    return all
+      .filter((s: any) => SP500_SYMBOLS.has(s.symbol) && s.price > 0)
+      .sort((a: any, b: any) => Math.abs(b.changesPercentage) - Math.abs(a.changesPercentage))
+      .map((s: any) => ({
+        symbol: s.symbol,
+        name: s.name,
+        price: s.price,
+        change: s.change,
+        changesPercentage: s.changesPercentage,
+      }))
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recent picks (Supabase)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch recent stock picks from the newsletter_picks table.
+ * Returns empty array if table doesn't exist or query fails.
+ */
+export async function fetchRecentPicks(days = 14): Promise<RecentPick[]> {
+  try {
+    const supabase = createDirectClient()
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+
+    const { data, error } = await supabase
+      .from('newsletter_picks')
+      .select('ticker, name, picked_at')
+      .gte('picked_at', since.toISOString())
+      .order('picked_at', { ascending: false })
+
+    if (error || !data) return []
+
+    return data.map((row: any) => ({
+      ticker: row.ticker,
+      name: row.name,
+      pickedAt: row.picked_at,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Record a stock pick in the newsletter_picks table.
+ * Non-fatal: logs a warning on failure.
+ */
+export async function recordPick(result: StockPickerResult): Promise<void> {
+  try {
+    const supabase = createDirectClient()
+
+    await supabase.from('newsletter_picks').insert({
+      ticker: result.ticker,
+      name: result.name,
+      editorial_hook: result.editorialHook,
+      subject_line: result.subjectLine,
+      changes_percentage: result.changesPercentage,
+      picked_at: new Date().toISOString(),
+      pick_source: result.pickSource || null,
+    })
+  } catch (err) {
+    console.warn('Failed to record pick:', err)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Market context fetcher (for AI stock picker)
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch most-active stocks from FMP, filter to S&P 500, and gather news.
- * Works in CLI scripts (no Next.js server actions needed).
+ * Fetch most-active stocks from FMP, merge with earnings & gainers/losers,
+ * filter to S&P 500, and gather news.
+ *
+ * On quiet days (fewer than 3 candidates with >2% moves), widens the
+ * candidate pool from top 10 to top 20 actives.
  */
 export async function fetchMarketContext(): Promise<MarketContext> {
   const apiKey = process.env.FMP_API_KEY
@@ -177,9 +326,13 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     throw new Error('Missing FMP_API_KEY environment variable')
   }
 
-  // Fetch most active stocks
-  const activesUrl = `https://financialmodelingprep.com/api/v3/stock_market/actives?apikey=${apiKey}`
-  const activesRes = await fetch(activesUrl)
+  // Fetch actives, earnings, and gainers/losers in parallel
+  const [activesRes, earningsReports, gainersLosers] = await Promise.all([
+    fetch(`https://financialmodelingprep.com/api/v3/stock_market/actives?apikey=${apiKey}`),
+    fetchEarningsContext(),
+    fetchGainersLosers(),
+  ])
+
   if (!activesRes.ok) {
     throw new Error(`FMP actives API returned ${activesRes.status}`)
   }
@@ -189,25 +342,85 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     throw new Error('No active stocks returned from FMP')
   }
 
-  // Filter to S&P 500 and take top 10
-  const candidates: StockCandidate[] = activesData
-    .filter((s: any) => SP500_SYMBOLS.has(s.symbol) && s.price > 0)
+  // Filter actives to S&P 500 — start with top 10
+  const sp500Actives = activesData.filter(
+    (s: any) => SP500_SYMBOLS.has(s.symbol) && s.price > 0,
+  )
+  let initialSlice = 10
+
+  // Quiet day expansion: if fewer than 3 candidates have >2% absolute moves, widen pool
+  const bigMovers = sp500Actives
     .slice(0, 10)
-    .map((s: any) => ({
+    .filter((s: any) => Math.abs(s.changesPercentage) > 2)
+  if (bigMovers.length < 3) {
+    initialSlice = 20
+  }
+
+  // Build deduplicated candidate map: actives first, then gainers/losers, then earnings
+  const candidateMap = new Map<string, StockCandidate>()
+
+  for (const s of sp500Actives.slice(0, initialSlice)) {
+    candidateMap.set(s.symbol, {
       symbol: s.symbol,
       name: s.name,
       price: s.price,
       change: s.change,
       changesPercentage: s.changesPercentage,
-    }))
-
-  if (candidates.length === 0) {
-    throw new Error('No S&P 500 stocks found in most-active list')
+    })
   }
 
-  // Fetch news for all candidates in one call
-  const symbols = candidates.map((c) => c.symbol).join(',')
-  const newsUrl = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${symbols}&limit=30&apikey=${apiKey}`
+  for (const gl of gainersLosers) {
+    if (!candidateMap.has(gl.symbol)) {
+      candidateMap.set(gl.symbol, gl)
+    }
+  }
+
+  // For earnings reporters not already in map, fetch batch quote
+  const earningsSymbolsMissing = earningsReports
+    .map((e) => e.symbol)
+    .filter((sym) => !candidateMap.has(sym))
+
+  if (earningsSymbolsMissing.length > 0) {
+    const batchSymbols = earningsSymbolsMissing.join(',')
+    try {
+      const quoteRes = await fetch(
+        `https://financialmodelingprep.com/api/v3/quote/${batchSymbols}?apikey=${apiKey}`,
+      )
+      if (quoteRes.ok) {
+        const quoteData = await quoteRes.json()
+        if (Array.isArray(quoteData)) {
+          for (const q of quoteData) {
+            if (q.symbol && q.price > 0) {
+              candidateMap.set(q.symbol, {
+                symbol: q.symbol,
+                name: q.name || q.symbol,
+                price: q.price,
+                change: q.change ?? 0,
+                changesPercentage: q.changesPercentage ?? 0,
+              })
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal: earnings candidates just won't have quote data
+    }
+  }
+
+  const candidates = Array.from(candidateMap.values())
+
+  if (candidates.length === 0) {
+    throw new Error('No S&P 500 stocks found in candidate pool')
+  }
+
+  // Fetch news for top 15 candidates by absolute % move (cap for URL length)
+  const newsSymbols = [...candidates]
+    .sort((a, b) => Math.abs(b.changesPercentage) - Math.abs(a.changesPercentage))
+    .slice(0, 15)
+    .map((c) => c.symbol)
+    .join(',')
+
+  const newsUrl = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${newsSymbols}&limit=50&apikey=${apiKey}`
   const newsRes = await fetch(newsUrl)
   const newsData = newsRes.ok ? await newsRes.json() : []
 
@@ -229,7 +442,7 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     }
   }
 
-  return { candidates, newsBySymbol }
+  return { candidates, newsBySymbol, earningsReports, gainersLosers }
 }
 
 // ---------------------------------------------------------------------------

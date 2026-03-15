@@ -91,6 +91,7 @@ export async function middleware(req: NextRequest) {
     'company',
     'charts',
     'charts-experiment',
+    'charts-experiment-2',
     'concept',
     'calendar',
     'insiders',

@@ -8,6 +8,20 @@ interface Stock {
   sector?: string
 }
 
+export interface StockSelectorThemeClasses {
+  inputBg?: string
+  inputBorder?: string
+  inputText?: string
+  dropdownBg?: string
+  dropdownBorder?: string
+  dropdownItemHover?: string
+  dropdownItemText?: string
+  dropdownItemTextSelected?: string
+  dropdownFooterBorder?: string
+  dropdownFooterText?: string
+  dropdownSectionBg?: string
+}
+
 interface StockSelectorProps {
   availableStocks: Stock[]
   selectedStocks: string[]
@@ -15,6 +29,7 @@ interface StockSelectorProps {
   allowMultiple?: boolean
   popularStocks?: string[]  // Popular stocks to show at the top
   autoFocus?: boolean  // Show as search input that opens dropdown on focus/type
+  themeClasses?: StockSelectorThemeClasses
 }
 
 export interface StockSelectorHandle {
@@ -28,6 +43,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
   allowMultiple = false,
   popularStocks = [],
   autoFocus = false,
+  themeClasses: tc,
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -150,7 +166,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
               setIsOpen(true)
             }}
             onFocus={() => setIsOpen(true)}
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-cream-50 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent cursor-pointer"
+            className={`w-full pl-9 pr-8 py-1.5 text-sm ${tc?.inputBg ?? 'bg-cream-50 dark:bg-gray-800'} ${tc?.inputText ?? 'text-gray-900 dark:text-white'} ${tc?.inputBorder ?? 'border border-gray-300 dark:border-gray-600'} rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent cursor-pointer`}
           />
           {/* Down/Up arrow button */}
           <button
@@ -176,7 +192,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
       ) : (
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 bg-cream-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className={`w-full flex items-center gap-2 px-3 py-1.5 ${tc?.inputBg ?? 'bg-cream-50 dark:bg-gray-800'} ${tc?.inputBorder ?? 'border border-gray-300 dark:border-gray-600'} rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors`}
         >
           <span className="font-semibold text-sage-600 dark:text-sage-400">
             {displayInfo.symbol}
@@ -197,7 +213,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-full min-w-[280px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+        <div className={`absolute top-full left-0 mt-1 w-full min-w-[280px] ${tc?.dropdownBg ?? 'bg-white dark:bg-gray-800'} ${tc?.dropdownBorder ?? 'border border-gray-200 dark:border-gray-700'} rounded-lg shadow-lg z-50`}>
           {/* Search Input - only show in non-autoFocus mode */}
           {!autoFocus && (
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
@@ -221,7 +237,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                   placeholder="Add stocks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-cream-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  className={`w-full pl-8 pr-3 py-1.5 text-sm ${tc?.inputBg ?? 'bg-cream-50 dark:bg-gray-900'} ${tc?.inputBorder ?? 'border border-gray-200 dark:border-gray-700'} ${tc?.inputText ?? ''} rounded-md focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent`}
                 />
                 {searchQuery && (
                   <button
@@ -240,7 +256,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
           {/* Stock List */}
           <div className="max-h-[600px] overflow-y-auto p-2 stock-dropdown-scroll">
             {!searchQuery && popularStocks.length > 0 && (
-              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1">
+              <div className={`text-xs font-semibold ${tc?.dropdownFooterText ?? 'text-gray-500 dark:text-gray-400'} uppercase tracking-wider px-2 py-1`}>
                 Popular
               </div>
             )}
@@ -263,7 +279,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                   return (
                     <div key={stock.symbol} className="border-b border-gray-100 dark:border-gray-700/50 last:border-b-0">
                       {showRestHeader && (
-                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 py-1 mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+                        <div className={`text-xs font-semibold ${tc?.dropdownFooterText ?? 'text-gray-500 dark:text-gray-400'} uppercase tracking-wider px-2 py-1 mt-2 ${tc?.dropdownFooterBorder ?? 'border-t border-gray-200 dark:border-gray-700'} pt-2`}>
                           All Stocks
                         </div>
                       )}
@@ -272,12 +288,12 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
                         className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-md text-left transition-colors ${
                           isSelected
                             ? 'bg-sage-100/50 dark:bg-sage-900/20'
-                            : 'hover:bg-cream-50 dark:hover:bg-gray-700'
+                            : (tc?.dropdownItemHover ?? 'hover:bg-cream-50 dark:hover:bg-gray-700')
                         }`}
                       >
                         <div className="min-w-0 flex-1 flex items-center gap-2">
-                          <span className={`text-[13px] font-light truncate ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{stock.name}</span>
-                          <span className={`text-[13px] font-light flex-shrink-0 ${isSelected ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>{stock.symbol}</span>
+                          <span className={`text-[13px] font-light truncate ${isSelected ? (tc?.dropdownItemTextSelected ?? 'text-gray-400 dark:text-gray-500') : (tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200')}`}>{stock.name}</span>
+                          <span className={`text-[13px] font-light flex-shrink-0 ${isSelected ? (tc?.dropdownItemTextSelected ?? 'text-gray-400 dark:text-gray-500') : (tc?.dropdownItemText ?? 'text-gray-700 dark:text-gray-200')}`}>{stock.symbol}</span>
                         </div>
                       </button>
                     </div>
@@ -288,7 +304,7 @@ const StockSelector = forwardRef<StockSelectorHandle, StockSelectorProps>(({
           </div>
 
           {/* Footer with count */}
-          <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+          <div className={`px-3 py-2 ${tc?.dropdownFooterBorder ?? 'border-t border-gray-200 dark:border-gray-700'} text-xs ${tc?.dropdownFooterText ?? 'text-gray-500 dark:text-gray-400'}`}>
             {searchQuery
               ? `${filteredStocks.length} of ${availableStocks.length} stocks`
               : `${availableStocks.length} stocks available`}

@@ -16,25 +16,84 @@ import type {
 /**
  * Build messages for the AI stock picker that selects the best stock
  * for today's newsletter from the most-active S&P 500 stocks.
+ *
+ * Uses a priority hierarchy:
+ *   P1: Earnings in last 48h
+ *   P2: Big move (>5%) + news catalyst
+ *   P3: Trend/milestone/reversal
+ *   P4: Biggest mover (fallback)
+ *
+ * Injects recent picks to avoid repetition and earnings data for context.
  */
 export function buildStockPickerMessages(
   market: MarketContext,
 ): Array<{ role: 'system' | 'user'; content: string }> {
-  const system = [
+  const systemParts = [
     'You are the editor of The Intraday, a financial newsletter.',
     'Pick ONE stock from the candidates below for today\'s newsletter.',
     '',
-    'Consider:',
-    '1. Does the news explain the price move?',
-    '2. Is this a company most readers would recognize?',
-    '3. Would financial charts (revenue, margins, cash flow) add context?',
-    '4. Is the price move significant enough to write about?',
+    '=== PRIORITY HIERARCHY (follow this order) ===',
+    'P1 — EARNINGS: A company that reported earnings in the last 48 hours. Earnings are the strongest editorial hook — readers expect coverage of major reports.',
+    'P2 — BIG MOVE + NEWS: A stock moving >5% with clear news explaining it (analyst upgrade/downgrade, product launch, regulation, M&A, etc.)',
+    'P3 — TREND / MILESTONE: A well-known company hitting a notable price level, sector rotation story, or market-wide theme with a clear narrative.',
+    'P4 — FALLBACK: If nothing above applies, pick the biggest absolute mover with any news. Avoid stocks with zero headlines.',
     '',
-    'Avoid: random volume spikes with no news, obscure names, trivial < 2% moves.',
+    'Additional rules:',
+    '- Pick a company most readers would recognize',
+    '- Financial charts (revenue, margins, cash flow) should add context to the story',
+    '- Avoid: random volume spikes with no news, obscure names, trivial <2% moves on no news',
     '',
+  ]
+
+  // Recent picks section
+  if (market.recentPicks && market.recentPicks.length > 0) {
+    systemParts.push('=== RECENT PICKS (avoid repeats) ===')
+    systemParts.push('These stocks were recently featured. Do NOT pick them again unless an extraordinary event (earnings, >10% move, major news) justifies it:')
+    const now = new Date()
+    for (const pick of market.recentPicks) {
+      const daysAgo = Math.round(
+        (now.getTime() - new Date(pick.pickedAt).getTime()) / (1000 * 60 * 60 * 24),
+      )
+      systemParts.push(`  - ${pick.ticker} (${pick.name}) — ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`)
+    }
+    systemParts.push('')
+  }
+
+  systemParts.push(
     'Output JSON only:',
-    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick", "subjectLine": "short punchy email subject < 60 chars" }',
-  ].join('\n')
+    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick", "subjectLine": "short punchy email subject < 60 chars", "pickSource": "earnings|big_mover|news_catalyst|fallback" }',
+  )
+
+  // User message: earnings section first, then candidates
+  const userParts: string[] = []
+
+  // Earnings section
+  if (market.earningsReports && market.earningsReports.length > 0) {
+    userParts.push('=== RECENT EARNINGS REPORTS ===')
+    for (const e of market.earningsReports) {
+      const label = e.hoursAgo > 0 ? `reported ~${e.hoursAgo}h ago` : `reports in ~${Math.abs(e.hoursAgo)}h`
+
+      let resultStr = ''
+      if (e.eps !== null && e.epsEstimated !== null) {
+        const epsBeat = e.eps >= e.epsEstimated ? 'BEAT' : 'MISSED'
+        resultStr += `EPS: $${e.eps} vs $${e.epsEstimated} est (${epsBeat})`
+      }
+      if (e.revenue !== null && e.revenueEstimated !== null) {
+        const revBeat = e.revenue >= e.revenueEstimated ? 'BEAT' : 'MISSED'
+        const revB = (e.revenue / 1e9).toFixed(2)
+        const revEstB = (e.revenueEstimated / 1e9).toFixed(2)
+        if (resultStr) resultStr += ', '
+        resultStr += `Revenue: $${revB}B vs $${revEstB}B est (${revBeat})`
+      }
+
+      userParts.push(`${e.symbol} — ${label}${resultStr ? ` | ${resultStr}` : ''}`)
+    }
+    userParts.push('')
+  }
+
+  // Candidates section
+  userParts.push(`=== TODAY'S CANDIDATES (${new Date().toISOString().slice(0, 10)}) ===`)
+  userParts.push('')
 
   const candidateBlocks = market.candidates.map((c) => {
     const headlines = (market.newsBySymbol[c.symbol] || [])
@@ -49,15 +108,11 @@ export function buildStockPickerMessages(
     ].join('\n')
   })
 
-  const user = [
-    `Today's most active S&P 500 stocks (${new Date().toISOString().slice(0, 10)}):`,
-    '',
-    ...candidateBlocks,
-  ].join('\n\n')
+  userParts.push(...candidateBlocks)
 
   return [
-    { role: 'system' as const, content: system },
-    { role: 'user' as const, content: user },
+    { role: 'system' as const, content: systemParts.join('\n') },
+    { role: 'user' as const, content: userParts.join('\n\n') },
   ]
 }
 
@@ -75,6 +130,7 @@ export function parseStockPickerResult(
   let name: string | undefined
   let editorialHook = ''
   let subjectLine = ''
+  let pickSource: StockPickerResult['pickSource']
 
   try {
     const parsed = JSON.parse(responseText)
@@ -82,6 +138,9 @@ export function parseStockPickerResult(
     name = parsed.name
     editorialHook = parsed.editorialHook || ''
     subjectLine = parsed.subjectLine || ''
+    if (['earnings', 'big_mover', 'news_catalyst', 'fallback'].includes(parsed.pickSource)) {
+      pickSource = parsed.pickSource
+    }
   } catch {
     // Fall through to fallback
   }
@@ -96,6 +155,7 @@ export function parseStockPickerResult(
     symbol = fallback.symbol
     name = fallback.name
     editorialHook = `${fallback.name} moved ${fallback.changesPercentage >= 0 ? '+' : ''}${fallback.changesPercentage.toFixed(1)}% today.`
+    pickSource = 'fallback'
   }
 
   const candidate = market.candidates.find((c) => c.symbol === symbol)!
@@ -109,6 +169,7 @@ export function parseStockPickerResult(
     editorialHook,
     subjectLine: subjectLine || `${symbol}: ${editorialHook}`.slice(0, 60),
     topHeadlines,
+    pickSource,
   }
 }
 

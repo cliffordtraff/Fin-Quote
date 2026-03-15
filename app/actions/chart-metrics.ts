@@ -1,7 +1,8 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
-import { Financial } from '@/lib/database.types'
+import fs from 'node:fs'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { Database, Financial } from '@/lib/database.types'
 
 // Statement types for categorization
 export type StatementType = 'income' | 'balance' | 'cashflow' | 'ratios' | 'stock' | 'price'
@@ -143,6 +144,278 @@ type ChartFinancialRow = Pick<Financial, 'year' | 'revenue' | 'gross_profit' | '
   period_end_date?: string | null
 }
 
+type FinancialMetricRow = {
+  year: number
+  period: string | null
+  metric_name: string
+  metric_value: number | null
+}
+
+type SegmentDataRow = {
+  year: number
+  period: string
+  metric_name: string
+  dimension_type: string
+  dimension_value: string
+  metric_value: number | null
+}
+
+type CacheEntry<T> = {
+  timestamp: number
+  data: T
+}
+
+const CHART_DATA_CACHE_TTL_MS = 15 * 60 * 1000
+const PERIODS_BY_TYPE: Record<PeriodType, string[]> = {
+  annual: ['FY'],
+  quarterly: ['Q1', 'Q2', 'Q3', 'Q4'],
+}
+
+const stdRowsCache = new Map<string, CacheEntry<ChartFinancialRow[]>>()
+const extendedRowsCache = new Map<string, CacheEntry<FinancialMetricRow[]>>()
+const segmentRowsCache = new Map<string, CacheEntry<SegmentDataRow[]>>()
+const stdRowsPendingCache = new Map<string, Promise<ChartFinancialRow[]>>()
+const extendedRowsPendingCache = new Map<string, Promise<FinancialMetricRow[]>>()
+const segmentRowsPendingCache = new Map<string, Promise<SegmentDataRow[]>>()
+
+let supabasePublicClient: ReturnType<typeof createSupabaseClient<Database>> | null = null
+
+function logChartMetricDebug(message: string) {
+  if (process.env.NODE_ENV === 'production') return
+  try {
+    fs.appendFileSync('/tmp/chart-metrics-debug.log', `${new Date().toISOString()} ${message}\n`)
+  } catch {}
+}
+
+function getPublicSupabaseClient() {
+  if (supabasePublicClient) {
+    return supabasePublicClient
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // Use service role key to bypass RLS — these are read-only server actions
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !key) {
+    throw new Error('Missing Supabase configuration')
+  }
+
+  supabasePublicClient = createSupabaseClient<Database>(url, key)
+  return supabasePublicClient
+}
+
+function getCacheKey(symbol: string, period: PeriodType) {
+  return `${symbol}:${period}`
+}
+
+function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key)
+  if (!entry) return null
+
+  if (Date.now() - entry.timestamp > CHART_DATA_CACHE_TTL_MS) {
+    cache.delete(key)
+    return null
+  }
+
+  return entry.data
+}
+
+function writeCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): T {
+  cache.set(key, {
+    timestamp: Date.now(),
+    data,
+  })
+  return data
+}
+
+function sortAndDedupeStdRows(rows: ChartFinancialRow[]) {
+  const sortedRows = [...rows].sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year
+    return (a.fiscal_quarter ?? 0) - (b.fiscal_quarter ?? 0)
+  })
+
+  const seenKeys = new Set<string>()
+  return sortedRows.filter((row) => {
+    const key = `${row.year}-${row.fiscal_quarter ?? 'FY'}`
+    if (seenKeys.has(key)) return false
+    seenKeys.add(key)
+    return true
+  })
+}
+
+function filterStdRows(
+  rows: ChartFinancialRow[],
+  params: {
+    minYear?: number
+    maxYear?: number
+    limit?: number
+  }
+) {
+  let filteredRows = rows
+
+  if (typeof params.minYear === 'number') {
+    filteredRows = filteredRows.filter((row) => row.year >= params.minYear!)
+  }
+
+  if (typeof params.maxYear === 'number') {
+    filteredRows = filteredRows.filter((row) => row.year <= params.maxYear!)
+  }
+
+  if (params.limit) {
+    filteredRows = filteredRows.slice(-params.limit)
+  }
+
+  return filteredRows
+}
+
+function filterRowsByYear<T extends { year: number }>(
+  rows: T[],
+  params: {
+    minYear?: number
+    maxYear?: number
+  }
+) {
+  return rows.filter((row) => {
+    if (typeof params.minYear === 'number' && row.year < params.minYear) return false
+    if (typeof params.maxYear === 'number' && row.year > params.maxYear) return false
+    return true
+  })
+}
+
+function getSortedUniqueYears(rows: Array<{ year: number }>) {
+  return [...new Set(rows.map((row) => row.year))].sort((a, b) => a - b)
+}
+
+async function getCachedStdRows(symbol: string, period: PeriodType) {
+  const cacheKey = getCacheKey(symbol, period)
+  const cached = readCache(stdRowsCache, cacheKey)
+  if (cached) {
+    logChartMetricDebug(`[std cache hit] ${cacheKey} rows=${cached.length}`)
+    return cached
+  }
+
+  const pending = stdRowsPendingCache.get(cacheKey)
+  if (pending) {
+    logChartMetricDebug(`[std pending hit] ${cacheKey}`)
+    return pending
+  }
+
+  const fetchPromise = (async () => {
+    const startedAt = Date.now()
+    const supabase = getPublicSupabaseClient()
+    const { data, error } = await supabase
+      .from('financials_std')
+      .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label, period_end_date')
+      .eq('symbol', symbol)
+      .eq('period_type', period)
+      .order('year', { ascending: true })
+      .order('fiscal_quarter', { ascending: true, nullsFirst: false })
+
+    if (error) {
+      logChartMetricDebug(`[std fetch error] ${cacheKey} ms=${Date.now() - startedAt} error=${error.message}`)
+      throw new Error(error.message)
+    }
+
+    const rows = sortAndDedupeStdRows((data ?? []) as ChartFinancialRow[])
+    logChartMetricDebug(`[std fetch] ${cacheKey} ms=${Date.now() - startedAt} rows=${rows.length}`)
+    return writeCache(stdRowsCache, cacheKey, rows)
+  })()
+
+  stdRowsPendingCache.set(cacheKey, fetchPromise)
+
+  try {
+    return await fetchPromise
+  } finally {
+    stdRowsPendingCache.delete(cacheKey)
+  }
+}
+
+async function getCachedExtendedRows(symbol: string, period: PeriodType) {
+  const cacheKey = getCacheKey(symbol, period)
+  const cached = readCache(extendedRowsCache, cacheKey)
+  if (cached) {
+    logChartMetricDebug(`[ext cache hit] ${cacheKey} rows=${cached.length}`)
+    return cached
+  }
+
+  const pending = extendedRowsPendingCache.get(cacheKey)
+  if (pending) {
+    logChartMetricDebug(`[ext pending hit] ${cacheKey}`)
+    return pending
+  }
+
+  const fetchPromise = (async () => {
+    const startedAt = Date.now()
+    const supabase = getPublicSupabaseClient()
+    const { data, error } = await supabase
+      .from('financial_metrics')
+      .select('year, period, metric_name, metric_value')
+      .eq('symbol', symbol)
+      .in('period', PERIODS_BY_TYPE[period] as never)
+
+    if (error) {
+      logChartMetricDebug(`[ext fetch error] ${cacheKey} ms=${Date.now() - startedAt} error=${error.message}`)
+      throw new Error(error.message)
+    }
+
+    const rows = (data ?? []) as FinancialMetricRow[]
+    logChartMetricDebug(`[ext fetch] ${cacheKey} ms=${Date.now() - startedAt} rows=${rows.length}`)
+    return writeCache(extendedRowsCache, cacheKey, rows)
+  })()
+
+  extendedRowsPendingCache.set(cacheKey, fetchPromise)
+
+  try {
+    return await fetchPromise
+  } finally {
+    extendedRowsPendingCache.delete(cacheKey)
+  }
+}
+
+async function getCachedSegmentRows(symbol: string, period: PeriodType) {
+  const cacheKey = getCacheKey(symbol, period)
+  const cached = readCache(segmentRowsCache, cacheKey)
+  if (cached) {
+    logChartMetricDebug(`[seg cache hit] ${cacheKey} rows=${cached.length}`)
+    return cached
+  }
+
+  const pending = segmentRowsPendingCache.get(cacheKey)
+  if (pending) {
+    logChartMetricDebug(`[seg pending hit] ${cacheKey}`)
+    return pending
+  }
+
+  const fetchPromise = (async () => {
+    const startedAt = Date.now()
+    const supabase = getPublicSupabaseClient()
+    const { data, error } = await supabase
+      .from('company_metrics')
+      .select('year, period, metric_name, dimension_type, dimension_value, metric_value')
+      .eq('symbol', symbol as never)
+      .in('period', PERIODS_BY_TYPE[period] as never)
+      .order('year', { ascending: true })
+      .order('period', { ascending: true })
+
+    if (error) {
+      logChartMetricDebug(`[seg fetch error] ${cacheKey} ms=${Date.now() - startedAt} error=${error.message}`)
+      throw new Error(error.message)
+    }
+
+    const rows = (data ?? []) as unknown as SegmentDataRow[]
+    logChartMetricDebug(`[seg fetch] ${cacheKey} ms=${Date.now() - startedAt} rows=${rows.length}`)
+    return writeCache(segmentRowsCache, cacheKey, rows)
+  })()
+
+  segmentRowsPendingCache.set(cacheKey, fetchPromise)
+
+  try {
+    return await fetchPromise
+  } finally {
+    segmentRowsPendingCache.delete(cacheKey)
+  }
+}
+
 // Validate that requested metrics are in the whitelist
 function validateMetrics(metrics: string[]): metrics is MetricId[] {
   const validMetrics = Object.keys(METRIC_CONFIG)
@@ -222,7 +495,7 @@ export async function getMultipleMetrics(params: {
 }> {
   // Deduplicate metrics
   const metrics = [...new Set(params.metrics)]
-  const symbol = params.symbol ?? 'AAPL'
+  const symbol = (params.symbol ?? 'AAPL').toUpperCase()
   const period = params.period ?? 'annual'
   const hasCustomRange = typeof params.minYear === 'number' || typeof params.maxYear === 'number'
   // Default limit: 12 quarters or 10 years; max limit: 40 quarters or 20 years
@@ -249,80 +522,64 @@ export async function getMultipleMetrics(params: {
   const segmentMetrics = metrics.filter((m) => isSegmentMetric(m))
 
   try {
-    const supabase = await createServerClient()
+    const startedAt = Date.now()
+    logChartMetricDebug(`[getMultipleMetrics start] symbol=${symbol} period=${period} metrics=${metrics.join(',')} minYear=${params.minYear ?? 'na'} maxYear=${params.maxYear ?? 'na'}`)
+    // Fire all needed Supabase fetches in PARALLEL (the cache layer deduplicates)
+    const needStd = stdMetrics.length > 0 || extendedMetrics.length > 0
+    const needExt = extendedMetrics.length > 0
+    const needSeg = segmentMetrics.length > 0
 
-    // Fetch from financials_std if needed (for std metrics, extended metrics, or as year reference)
+    const [stdResult, extResult, segResult] = await Promise.allSettled([
+      needStd ? getCachedStdRows(symbol, period) : Promise.resolve([] as ChartFinancialRow[]),
+      needExt ? getCachedExtendedRows(symbol, period) : Promise.resolve([] as FinancialMetricRow[]),
+      needSeg ? getCachedSegmentRows(symbol, period) : Promise.resolve([] as SegmentDataRow[]),
+    ])
+
+    let allStdRows: ChartFinancialRow[] = stdResult.status === 'fulfilled' ? stdResult.value : []
+    const allExtRows: FinancialMetricRow[] = extResult.status === 'fulfilled' ? extResult.value : []
+    let allSegmentRows: SegmentDataRow[] = segResult.status === 'fulfilled' ? segResult.value : []
+
+    if (stdResult.status === 'rejected') {
+      logChartMetricDebug(`[getMultipleMetrics std failed] ${symbol}:${period} ${stdResult.reason}`)
+    }
+    if (extResult.status === 'rejected') {
+      logChartMetricDebug(`[getMultipleMetrics ext failed, continuing with partial data] ${symbol}:${period} ${extResult.reason}`)
+    }
+    if (segResult.status === 'rejected') {
+      logChartMetricDebug(`[getMultipleMetrics seg failed, continuing with partial data] ${symbol}:${period} ${segResult.reason}`)
+    }
+
     let stdRows: ChartFinancialRow[] = []
     let years: number[] = []
+    const periodKeys = new Set<string>()
 
-    if (stdMetrics.length > 0 || extendedMetrics.length > 0) {
-      // Fetch std data for year reference and standard metrics
-      let query = supabase
-        .from('financials_std')
-        .select('year, revenue, gross_profit, net_income, operating_income, total_assets, total_liabilities, shareholders_equity, operating_cash_flow, eps, fiscal_quarter, fiscal_label, period_end_date')
-        .eq('symbol', symbol)
-        .eq('period_type', period)
-        .order('year', { ascending: false })
-        .order('fiscal_quarter', { ascending: false, nullsFirst: false })
-
-      if (typeof params.minYear === 'number') {
-        query = query.gte('year', params.minYear)
-      }
-      if (typeof params.maxYear === 'number') {
-        query = query.lte('year', params.maxYear)
-      }
-      if (limit) {
-        query = query.limit(limit)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Error fetching metrics:', error)
-        return { data: null, error: error.message }
-      }
-
-      stdRows = (data ?? []) as ChartFinancialRow[]
-      // Sort by year ascending for chart display (and by quarter for quarterly data)
-      stdRows = [...stdRows].sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year
-        // For quarterly data, sort by fiscal quarter
-        return (a.fiscal_quarter ?? 0) - (b.fiscal_quarter ?? 0)
+    if (needStd && allStdRows.length > 0) {
+      stdRows = filterStdRows(allStdRows, {
+        minYear: params.minYear,
+        maxYear: params.maxYear,
+        limit,
       })
-      // Deduplicate rows by year+quarter combination (in case of data issues)
-      const seenKeys = new Set<string>()
-      stdRows = stdRows.filter((row) => {
-        const key = `${row.year}-${row.fiscal_quarter ?? 'FY'}`
-        if (seenKeys.has(key)) return false
-        seenKeys.add(key)
-        return true
+      years = getSortedUniqueYears(stdRows)
+      stdRows.forEach((row) => {
+        periodKeys.add(
+          period === 'quarterly' && row.fiscal_quarter
+            ? `${row.year}-Q${row.fiscal_quarter}`
+            : String(row.year)
+        )
       })
-      years = stdRows.map((row) => row.year)
     }
 
-    // For segment-only queries, get years from company_metrics
+    // For segment-only queries, get years from cached company_metrics rows
     if (segmentMetrics.length > 0 && years.length === 0) {
-      let yearQuery = supabase
-        .from('company_metrics')
-        .select('year')
-        .eq('symbol', symbol)
-        .eq('metric_name', 'segment_revenue')
-        .order('year', { ascending: true })
-
-      if (typeof params.minYear === 'number') {
-        yearQuery = yearQuery.gte('year', params.minYear)
-      }
-      if (typeof params.maxYear === 'number') {
-        yearQuery = yearQuery.lte('year', params.maxYear)
-      }
-
-      const { data: yearData } = await yearQuery
-      if (yearData) {
-        years = [...new Set(yearData.map((r) => r.year))].sort((a, b) => a - b)
-      }
+      years = getSortedUniqueYears(
+        filterRowsByYear(allSegmentRows, {
+          minYear: params.minYear,
+          maxYear: params.maxYear,
+        })
+      )
     }
 
-    if (years.length === 0 && stdRows.length === 0) {
+    if (years.length === 0 && stdRows.length === 0 && allSegmentRows.length === 0) {
       return { data: null, error: 'No data found' }
     }
 
@@ -336,38 +593,23 @@ export async function getMultipleMetrics(params: {
       const dbMetricNames = extendedMetrics.map((m) => getDbMetricName(m)).filter(Boolean) as string[]
 
       if (dbMetricNames.length > 0) {
-        // Determine which periods to fetch based on periodType
-        const periodsToFetch = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
+        const cachedExtendedRows = filterRowsByYear(allExtRows, {
+          minYear: params.minYear,
+          maxYear: params.maxYear,
+        })
 
-        let extQuery = supabase
-          .from('financial_metrics')
-          .select('year, period, metric_name, metric_value')
-          .eq('symbol', symbol)
-          .in('metric_name', dbMetricNames)
-          .in('period', periodsToFetch)
+        // Organize extended metric data by metric name and year(-quarter)
+        for (const row of cachedExtendedRows) {
+          if (!dbMetricNames.includes(row.metric_name)) continue
 
-        // Apply year filters
-        if (typeof params.minYear === 'number') {
-          extQuery = extQuery.gte('year', params.minYear)
-        }
-        if (typeof params.maxYear === 'number') {
-          extQuery = extQuery.lte('year', params.maxYear)
-        }
+          const key = period === 'quarterly' && row.period ? `${row.year}-${row.period}` : String(row.year)
+          if (periodKeys.size > 0 && !periodKeys.has(key)) continue
 
-        const { data: extData, error: extError } = await extQuery
-
-        if (extError) {
-          console.error('Error fetching extended metrics:', extError)
-        } else if (extData) {
-          // Organize extended metric data by metric name and year(-quarter)
-          for (const row of extData) {
-            if (!extendedMetricData[row.metric_name]) {
-              extendedMetricData[row.metric_name] = {}
-            }
-            // Use year-quarter key for quarterly, just year for annual
-            const key = period === 'quarterly' && row.period ? `${row.year}-${row.period}` : String(row.year)
-            extendedMetricData[row.metric_name][key] = row.metric_value ?? 0
+          if (!extendedMetricData[row.metric_name]) {
+            extendedMetricData[row.metric_name] = {}
           }
+
+          extendedMetricData[row.metric_name][key] = row.metric_value ?? 0
         }
       }
     }
@@ -375,7 +617,6 @@ export async function getMultipleMetrics(params: {
     // Fetch segment metrics from company_metrics if needed
     // For quarterly: key -> "year-quarter" -> value
     // For annual: key -> "year" -> value
-    type SegmentDataRow = { year: number; period: string; metric_name: string; dimension_type: string; dimension_value: string; metric_value: number }
     const segmentMetricData: Record<string, Record<string, number>> = {}
     let segmentRows: SegmentDataRow[] = []
 
@@ -386,47 +627,28 @@ export async function getMultipleMetrics(params: {
         .filter(Boolean) as { dimensionType: string; dimensionValue: string; metricName: string }[]
 
       if (dimensionQueries.length > 0) {
-        // Get unique metric names we need to fetch
-        const metricNames = [...new Set(dimensionQueries.map((d) => d.metricName))]
+        const requestedDimensionKeys = new Set(
+          dimensionQueries.map(
+            (dimension) => `${dimension.metricName}:${dimension.dimensionType}:${dimension.dimensionValue}`
+          )
+        )
 
-        // Determine which periods to fetch based on periodType
-        const periodsToFetch = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
+        segmentRows = filterRowsByYear(allSegmentRows, {
+          minYear: params.minYear,
+          maxYear: params.maxYear,
+        }).filter((row) => requestedDimensionKeys.has(
+          `${row.metric_name}:${row.dimension_type}:${row.dimension_value}`
+        ))
 
-        // Build segment query with period filter
-        let segQuery = supabase
-          .from('company_metrics')
-          .select('year, period, metric_name, dimension_type, dimension_value, metric_value')
-          .eq('symbol', symbol as never)
-          .in('metric_name', metricNames as never)
-          .in('period', periodsToFetch as never)
-          .order('year', { ascending: true })
-          .order('period', { ascending: true })
-
-        // Apply year filters
-        if (typeof params.minYear === 'number') {
-          segQuery = segQuery.gte('year', params.minYear)
-        }
-        if (typeof params.maxYear === 'number') {
-          segQuery = segQuery.lte('year', params.maxYear)
-        }
-
-        const { data: segData, error: segError } = await segQuery
-
-        if (segError) {
-          console.error('Error fetching segment metrics:', segError)
-        } else if (segData) {
-          segmentRows = segData as unknown as SegmentDataRow[]
-
-          // Organize segment metric data by metric+dimension key and year(-quarter)
-          for (const row of segmentRows) {
-            const key = `${row.metric_name}:${row.dimension_type}:${row.dimension_value}`
-            if (!segmentMetricData[key]) {
-              segmentMetricData[key] = {}
-            }
-            // For quarterly, use year-quarter as key; for annual, just year
-            const dataKey = period === 'quarterly' ? `${row.year}-${row.period}` : `${row.year}`
-            segmentMetricData[key][dataKey] = row.metric_value ?? 0
+        // Organize segment metric data by metric+dimension key and year(-quarter)
+        for (const row of segmentRows) {
+          const key = `${row.metric_name}:${row.dimension_type}:${row.dimension_value}`
+          if (!segmentMetricData[key]) {
+            segmentMetricData[key] = {}
           }
+          // For quarterly, use year-quarter as key; for annual, just year
+          const dataKey = period === 'quarterly' ? `${row.year}-${row.period}` : `${row.year}`
+          segmentMetricData[key][dataKey] = row.metric_value ?? 0
         }
       }
     }
@@ -538,47 +760,28 @@ export async function getMultipleMetrics(params: {
     let yearBounds: { min: number; max: number } | undefined
 
     if (segmentMetrics.length > 0 && stdMetrics.length === 0 && extendedMetrics.length === 0) {
-      // Only segment metrics - get bounds from company_metrics filtered by period
-      const periodsForBounds = period === 'annual' ? ['FY'] : ['Q1', 'Q2', 'Q3', 'Q4']
-      const { data: boundsData, error: boundsError } = await supabase
-        .from('company_metrics')
-        .select('year')
-        .eq('symbol', symbol as never)
-        .eq('metric_name', 'segment_revenue' as never)
-        .in('period', periodsForBounds as never)
-        .order('year', { ascending: true })
-
-      if (!boundsError && boundsData && boundsData.length > 0) {
-        const uniqueYears = [...new Set((boundsData as unknown as { year: number }[]).map((r) => r.year))].sort((a, b) => a - b)
+      const uniqueYears = getSortedUniqueYears(allSegmentRows)
+      if (uniqueYears.length > 0) {
         yearBounds = {
           min: uniqueYears[0],
           max: uniqueYears[uniqueYears.length - 1],
         }
       }
     } else {
-      // Standard/extended metrics - get bounds from financials_std filtered by period
-      const { data: boundsData, error: boundsError } = await supabase
-        .from('financials_std')
-        .select('year')
-        .eq('symbol', symbol)
-        .eq('period_type', period)
-        .order('year', { ascending: true })
-
-      if (!boundsError && boundsData && boundsData.length > 0) {
-        const uniqueYears = [...new Set(boundsData.map((r) => r.year))].sort((a, b) => a - b)
+      const boundsSourceRows = allStdRows.length > 0 ? allStdRows : await getCachedStdRows(symbol, period)
+      const uniqueYears = getSortedUniqueYears(boundsSourceRows)
+      if (uniqueYears.length > 0) {
         yearBounds = {
           min: uniqueYears[0],
           max: uniqueYears[uniqueYears.length - 1],
         }
       }
-
-      if (boundsError) {
-        console.error('Error fetching year bounds:', boundsError)
-      }
     }
 
+    logChartMetricDebug(`[getMultipleMetrics done] symbol=${symbol} period=${period} metrics=${metrics.join(',')} ms=${Date.now() - startedAt} series=${result.length}`)
     return { data: result, error: null, yearBounds }
   } catch (err) {
+    logChartMetricDebug(`[getMultipleMetrics error] symbol=${symbol} period=${period} metrics=${metrics.join(',')} error=${err instanceof Error ? err.message : 'unknown'}`)
     console.error('Unexpected error in getMultipleMetrics:', err)
     return {
       data: null,
@@ -617,6 +820,31 @@ function getSegmentCategory(metricId: string): SegmentCategory | undefined {
 function getMetricStock(metricId: string): string | undefined {
   const config = METRIC_CONFIG[metricId as MetricId] as { stock?: string }
   return config?.stock
+}
+
+// Fire all three Supabase cache-warming queries in parallel.
+// Uses allSettled so a timeout on one table doesn't block the others.
+export async function prewarmStockCaches(symbol: string, period: PeriodType = 'annual') {
+  const s = symbol.toUpperCase()
+  const startedAt = Date.now()
+  logChartMetricDebug(`[prewarm start] ${s} ${period}`)
+
+  const results = await Promise.allSettled([
+    getCachedStdRows(s, period),
+    getCachedExtendedRows(s, period),
+    getCachedSegmentRows(s, period),
+  ])
+
+  const labels = ['std', 'ext', 'seg']
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      logChartMetricDebug(`[prewarm ${labels[i]} ok] ${s}:${period} rows=${r.value.length}`)
+    } else {
+      logChartMetricDebug(`[prewarm ${labels[i]} fail] ${s}:${period} ${r.reason}`)
+    }
+  })
+
+  logChartMetricDebug(`[prewarm done] ${s}:${period} ms=${Date.now() - startedAt}`)
 }
 
 export async function getAvailableMetrics() {
