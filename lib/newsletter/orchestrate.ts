@@ -63,6 +63,7 @@ export async function generateNewsletter(
   const timings: Record<string, number> = {}
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
+  const runStamp = now.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
 
   // Ensure output directory exists
   const absOutputDir = resolve(outputDir)
@@ -219,7 +220,7 @@ export async function generateNewsletter(
 
   for (let i = 0; i < resolvedCharts.length; i++) {
     const resolved = resolvedCharts[i]
-    const filename = `${tickerUpper}_${resolved.templateId}_${dateStr}.png`
+    const filename = `${tickerUpper}_${resolved.templateId}_${runStamp}.png`
     const outputPath = resolve(absOutputDir, filename)
 
     await captureChart(browser, resolved.spec, {
@@ -299,14 +300,14 @@ export async function generateNewsletter(
   // Step 7: Assemble full email HTML and save
   // -----------------------------------------------------------------------
   let fullHtml = assembleNewsletterHtml(tickerUpper, blocks, now, todayQuote, editorialHook, subjectLine, topHeadlines)
-  const htmlFilename = `${tickerUpper}_newsletter_${dateStr}.html`
+  const htmlFilename = `${tickerUpper}_newsletter_${runStamp}.html`
   const htmlPath = resolve(absOutputDir, htmlFilename)
   writeFileSync(htmlPath, fullHtml, 'utf-8')
 
   // -----------------------------------------------------------------------
   // Step 8: Full-page preview screenshot
   // -----------------------------------------------------------------------
-  const previewFilename = `${tickerUpper}_newsletter_preview_${dateStr}.png`
+  const previewFilename = `${tickerUpper}_newsletter_preview_${runStamp}.png`
   const previewPath = resolve(absOutputDir, previewFilename)
   await captureFullPage(browser, htmlPath, previewPath)
   await browser.close()
