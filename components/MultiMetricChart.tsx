@@ -592,7 +592,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       if ((isPrimary && !metricOnPrimary && needsDualAxis) || (isSecondaryUnit && metricOnPrimary)) return
 
       metricData.data.forEach((d) => {
-        if (d.value != null) axisValues.push(d.value)
+        if (d.value != null) {
+          const scaledValue = (metricUnit === 'currency' || metricUnit === 'shares')
+            ? d.value / 1_000_000_000
+            : d.value
+          axisValues.push(scaledValue)
+        }
       })
     })
 
