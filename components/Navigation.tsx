@@ -44,7 +44,7 @@ export default function Navigation() {
   if (process.env.NEXT_PUBLIC_CHARTING_URL) {
     navLinks.splice(3, 0, {
       href: `${process.env.NEXT_PUBLIC_CHARTING_URL}/tos/${currentSymbol || 'AAPL'}`,
-      label: 'Workspace',
+      label: 'Workspace (Beta)',
       external: true,
       icon: (
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

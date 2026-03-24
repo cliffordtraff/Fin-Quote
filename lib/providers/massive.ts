@@ -258,7 +258,7 @@ export class MassiveProvider implements MarketDataProvider {
 
       return tickers
         .map(t => mapStockSnapshot(t))
-        .filter(q => q.price >= 1)
+        .filter(q => q.price >= 0.10)
         .slice(0, 20)
     } catch (err) {
       console.error('[massive] getGainers error:', err)
@@ -279,7 +279,7 @@ export class MassiveProvider implements MarketDataProvider {
 
       return tickers
         .map(t => mapStockSnapshot(t))
-        .filter(q => q.price >= 1)
+        .filter(q => q.price >= 0.10)
         .slice(0, 20)
     } catch (err) {
       console.error('[massive] getLosers error:', err)
