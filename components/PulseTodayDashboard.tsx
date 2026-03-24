@@ -273,11 +273,21 @@ export function FullDayCanvas({
   const [crosshair, setCrosshair] = useState<CrosshairData | null>(null)
   const rafRef = useRef<number>(0)
 
+  // Filter out candles at or after 4:00 PM (closing auction creates extreme wicks)
+  const marketHoursCandles = useMemo(() => {
+    return rawCandles.filter((c) => {
+      const parts = c.date.split(' ')
+      const timeParts = (parts[1] ?? '00:00:00').split(':')
+      const totalMins = parseInt(timeParts[0] ?? '0', 10) * 60 + parseInt(timeParts[1] ?? '0', 10)
+      return totalMins < 960 // before 4:00 PM
+    })
+  }, [rawCandles])
+
   const candles = useMemo(() => {
-    if (aggregation === '5min') return aggregateTo5Min(rawCandles)
+    if (aggregation === '5min') return aggregateTo5Min(marketHoursCandles)
     // 1s, 10s, and 1min pass through raw candles (second data is pre-bucketed upstream)
-    return rawCandles
-  }, [rawCandles, aggregation])
+    return marketHoursCandles
+  }, [marketHoursCandles, aggregation])
 
   const intervalSecs = aggregation === '1s' ? 1 : aggregation === '10s' ? 10 : aggregation === '1min' ? 60 : 300
 
@@ -340,7 +350,8 @@ export function FullDayCanvas({
   // Chart padding
   const padding = { top: 12, right: 64, bottom: 28, left: 8 }
 
-  // Price range
+  // Price range — only expands, never contracts, to keep HOD/LOD lines stable
+  const stableRangeRef = useRef<{ yMin: number; yMax: number } | null>(null)
   const { yMin, yMax } = useMemo(() => {
     if (candles.length === 0) return { yMin: 0, yMax: 1 }
     const allPrices: number[] = []
@@ -355,7 +366,19 @@ export function FullDayCanvas({
     const max = Math.max(...allPrices)
     const range = max - min || 1
     const buffer = range * 0.05
-    return { yMin: min - buffer, yMax: max + buffer }
+    const newMin = min - buffer
+    const newMax = max + buffer
+
+    const prev = stableRangeRef.current
+    if (prev === null || prev.yMin === 0 && prev.yMax === 1) {
+      stableRangeRef.current = { yMin: newMin, yMax: newMax }
+      return { yMin: newMin, yMax: newMax }
+    }
+
+    const stableMin = Math.min(prev.yMin, newMin)
+    const stableMax = Math.max(prev.yMax, newMax)
+    stableRangeRef.current = { yMin: stableMin, yMax: stableMax }
+    return { yMin: stableMin, yMax: stableMax }
   }, [candles, previousClose, lastPrice, dayHigh, dayLow])
 
   // Y-axis label interval (adapted from SimpleCanvasChart)
@@ -522,7 +545,7 @@ export function FullDayCanvas({
         ctx.restore()
         // Label
         ctx.fillStyle = isDark ? 'rgba(239,68,68,0.7)' : 'rgba(239,68,68,0.6)'
-        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         ctx.textAlign = 'right'
         ctx.fillText(`Prev $${formatPrice(previousClose)}`, drawRight - 4, prevY - 4)
         ctx.textAlign = 'center'
@@ -543,9 +566,9 @@ export function FullDayCanvas({
         ctx.stroke()
         ctx.restore()
         ctx.fillStyle = isDark ? 'rgba(34,197,94,0.7)' : 'rgba(34,197,94,0.6)'
-        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        ctx.textAlign = 'left'
-        ctx.fillText(`HOD $${formatPrice(dayHigh)}`, drawLeft + 4, hodY - 4)
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.textAlign = 'right'
+        ctx.fillText(`HOD $${formatPrice(dayHigh)}`, drawRight - 4, hodY - 4)
       }
     }
     if (dayLow !== null) {
@@ -583,9 +606,9 @@ export function FullDayCanvas({
           ? 0.5 + (Math.sin(Date.now() / 600) * 0.5 + 0.5) * 0.5
           : (isDark ? 0.7 : 0.6)
         ctx.fillStyle = `rgba(239,68,68,${labelAlpha})`
-        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        ctx.textAlign = 'left'
-        ctx.fillText(`LOD $${formatPrice(dayLow)}`, drawLeft + 4, lodY + 12)
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.textAlign = 'right'
+        ctx.fillText(`LOD $${formatPrice(dayLow)}`, drawRight - 4, lodY + 12)
       }
     }
 
@@ -1089,7 +1112,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const [internalAgg, setInternalAgg] = useState<'1min' | '5min'>('1min')
   const aggregation = forceAggregation ?? internalAgg
   const [pipVisible, setPipVisible] = useState(true)
-  const [pipTimeframe, setPipTimeframe] = useState<PipTimeframe>('1s')
+  const [pipTimeframe, setPipTimeframe] = useState<PipTimeframe>('10s')
   const [pipLineMode, setPipLineMode] = useState(true)
   const [pipZoom, setPipZoom] = useState<number>(2)
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
@@ -1258,12 +1281,13 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
               {isPositive ? '+' : ''}{changePct.toFixed(2)}%
             </span>
           )}
-          {stream.connected && (
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600" />
-            </span>
-          )}
+          <span className={`text-[10px] font-semibold tabular-nums ${
+            isPositive
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
+          }`}>
+            {isPositive ? '+' : ''}{change.toFixed(2)}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
           {/* Aggregation: forced badge (with morph indicator) or interactive toggle */}
@@ -1304,17 +1328,6 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       <div className="px-3 pb-2">
         <span className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
           ${formatPrice(price)}
-        </span>
-        <span
-          className={`ml-2 text-xs font-medium tabular-nums ${
-            isPositive
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-red-600 dark:text-red-400'
-          }`}
-        >
-          {isPositive ? '+' : ''}
-          {change.toFixed(2)} ({isPositive ? '+' : ''}
-          {changePct.toFixed(2)}%)
         </span>
       </div>
 
@@ -1579,6 +1592,435 @@ const EMPTY_STREAM: LiveStreamState = {
   connected: false,
   error: null,
 }
+
+/* ───────── Gradient meta for GOOGL (from PulseTextDashboard SYMBOL_META) ───────── */
+
+const GOOGL_GRADIENT = {
+  accent: '#2563eb',
+  glow: 'rgba(37, 99, 235, 0.28)',
+  gradient: 'linear-gradient(135deg, rgba(15,25,60,0.92), rgba(10,22,50,0.85) 45%, rgba(8,18,42,0.80))',
+}
+
+/* ───────── GradientPulseTodayCard ───────── */
+
+interface GradientPulseTodayCardProps {
+  symbol: string
+  dayData: DayCandleData | undefined
+  stream1s: LiveStreamState
+  stream10s: LiveStreamState
+  theme: ThemeMode
+  chartHeight?: number
+}
+
+const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
+  symbol,
+  dayData,
+  stream1s,
+  stream10s,
+  theme,
+  chartHeight = 420,
+}: GradientPulseTodayCardProps) {
+  const [lineMode, setLineMode] = useState(false)
+  const [aggregation, setAggregation] = useState<'1min' | '5min'>('1min')
+  const [pipVisible, setPipVisible] = useState(true)
+  const [pipTimeframe, setPipTimeframe] = useState<'1s' | '10s'>('10s')
+  const [pipLineMode, setPipLineMode] = useState(true)
+  const [pipZoom, setPipZoom] = useState<number>(2)
+  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const pipContainerRef = useRef<HTMLDivElement>(null)
+
+  // Drag handlers for PIP
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const pipEl = (e.currentTarget as HTMLElement).parentElement
+    const container = pipContainerRef.current
+    if (!pipEl || !container) return
+
+    const containerRect = container.getBoundingClientRect()
+    const pipRect = pipEl.getBoundingClientRect()
+    const currentX = pipRect.left - containerRect.left
+    const currentY = pipRect.top - containerRect.top
+
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: currentX, origY: currentY }
+
+    const handleMove = (ev: MouseEvent) => {
+      if (!dragRef.current || !container) return
+      const dx = ev.clientX - dragRef.current.startX
+      const dy = ev.clientY - dragRef.current.startY
+      const cr = container.getBoundingClientRect()
+      const maxX = cr.width - 300
+      const maxY = cr.height - 180
+      setPipPos({
+        x: Math.max(0, Math.min(maxX, dragRef.current.origX + dx)),
+        y: Math.max(0, Math.min(maxY, dragRef.current.origY + dy)),
+      })
+    }
+
+    const handleUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }, [])
+
+  const stream = stream1s
+  const pipStream = pipTimeframe === '1s' ? stream1s : stream10s
+  const chartData = useChartData(pipStream)
+  const degenOpts = useDegenScale(stream.lastPrice, stream.dayHigh, stream.dayLow)
+
+  const price = stream.lastPrice ?? (dayData?.candles.length ? dayData.candles[dayData.candles.length - 1].close : 0)
+  const change = stream.lastChange ?? 0
+  const changePct = stream.lastChangePct ?? dayData?.changePct ?? 0
+  const isPositive = changePct >= 0
+  const isDark = theme === 'dark'
+
+  const pipBaseWindow = pipTimeframe === '1s' ? 30 : 300
+  const pipWindowSecs = pipBaseWindow * pipZoom
+
+  // Reference line (HOD/LOD) for PIP
+  const pipRefLine = useMemo(() => {
+    const lp = stream.lastPrice
+    const hod = stream.dayHigh
+    const lod = stream.dayLow
+    if (lp === null || (hod === null && lod === null)) return undefined
+    const threshold = 0.01
+    const distToHod = hod !== null ? Math.abs(lp - hod) / lp : Infinity
+    const distToLod = lod !== null ? Math.abs(lp - lod) / lp : Infinity
+    if (distToLod <= distToHod && distToLod <= threshold && lod !== null) {
+      return { value: lod, label: `LOD $${formatPrice(lod)}` }
+    }
+    if (distToHod < distToLod && distToHod <= threshold && hod !== null) {
+      return { value: hod, label: `HOD $${formatPrice(hod)}` }
+    }
+    return undefined
+  }, [stream.lastPrice, stream.dayHigh, stream.dayLow])
+
+  // LOD blink
+  const isNearLOD = useMemo(() => {
+    const lp = stream.lastPrice
+    const lod = stream.dayLow
+    if (lp === null || lod === null || lod === 0) return false
+    return Math.abs(lp - lod) / lod < 0.005
+  }, [stream.lastPrice, stream.dayLow])
+
+  const [lodBlinkRed, setLodBlinkRed] = useState(false)
+  useEffect(() => {
+    if (!isNearLOD) { setLodBlinkRed(false); return }
+    const id = setInterval(() => setLodBlinkRed((v) => !v), 800)
+    return () => clearInterval(id)
+  }, [isNearLOD])
+
+  const coloredRefLine = useMemo(() => {
+    if (!pipRefLine) return undefined
+    if (isNearLOD && pipRefLine.value === stream.dayLow && lodBlinkRed) {
+      return { ...pipRefLine, color: 'rgba(239, 68, 68, 0.9)' }
+    }
+    return pipRefLine
+  }, [pipRefLine, isNearLOD, lodBlinkRed, stream.dayLow])
+
+  const pipColor = isPositive ? '#22c55e' : '#ef4444'
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-gray-200/80 bg-white dark:border-gray-700 dark:bg-gray-900">
+      {/* Glow */}
+      <div
+        className="pointer-events-none absolute inset-x-6 top-6 z-10 h-24 rounded-full blur-3xl"
+        style={{ background: GOOGL_GRADIENT.glow, opacity: isDark ? 0.5 : 0.24 }}
+      />
+      {/* Scrim overlay */}
+      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_22%,transparent_72%,rgba(15,23,42,0.12))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_24%,transparent_74%,rgba(2,6,23,0.42))]" />
+
+      {/* Content (above overlays) */}
+      <div className="relative z-20">
+        {/* Header */}
+        <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm">
+              {symbol}
+            </span>
+            {changePct !== null && (
+              <span className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded backdrop-blur-sm ${
+                isPositive
+                  ? 'bg-green-500/20 text-green-800 dark:text-green-300'
+                  : 'bg-red-500/20 text-red-800 dark:text-red-300'
+              }`}>
+                {isPositive ? '+' : ''}{changePct.toFixed(2)}%
+              </span>
+            )}
+            <span className={`text-[10px] font-semibold tabular-nums ${
+              isPositive
+                ? 'text-green-700 dark:text-green-300'
+                : 'text-red-700 dark:text-red-300'
+            }`}>
+              {isPositive ? '+' : ''}{change.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="flex rounded border border-white/20 dark:border-white/10 overflow-hidden backdrop-blur-sm">
+              {(['1min', '5min'] as const).map((agg) => (
+                <button
+                  key={agg}
+                  onClick={() => setAggregation(agg)}
+                  className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                    aggregation === agg
+                      ? 'bg-white/30 dark:bg-white/20 text-gray-900 dark:text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  {agg === '1min' ? '1m' : '5m'}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setLineMode((prev) => !prev)}
+              className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-white/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-white/10 transition-colors backdrop-blur-sm"
+            >
+              {lineMode ? 'Candles' : 'Line'}
+            </button>
+          </div>
+        </div>
+
+        {/* Price */}
+        <div className="px-3 pb-2">
+          <span className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
+            ${formatPrice(price)}
+          </span>
+        </div>
+
+        {/* Chart area with PIP overlay */}
+        <div ref={pipContainerRef} style={{ position: 'relative' }}>
+          <FullDayCanvas
+            candles={dayData?.candles ?? []}
+            previousClose={dayData?.previousClose ?? null}
+            lastPrice={stream.lastPrice}
+            dayHigh={stream.dayHigh}
+            dayLow={stream.dayLow}
+            lineMode={lineMode}
+            aggregation={aggregation}
+            theme={theme}
+            chartHeight={chartHeight}
+          />
+
+          {/* Picture-in-picture: exaggerated Liveline */}
+          {pipVisible && (
+            <div
+              style={{
+                position: 'absolute',
+                ...(pipPos
+                  ? { left: pipPos.x, top: pipPos.y }
+                  : { top: 8, right: 68 }),
+                width: 300,
+                height: 180,
+                borderRadius: 8,
+                overflow: 'hidden',
+                border: isDark ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
+                boxShadow: isDark
+                  ? '0 4px 12px rgba(0,0,0,0.4)'
+                  : '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 20,
+                background: isDark ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.92)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              {/* PIP header — draggable thumb */}
+              <div
+                onMouseDown={handleDragStart}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '3px 6px',
+                  borderBottom: isDark ? '1px solid rgba(75,85,99,0.4)' : '1px solid rgba(229,231,235,0.8)',
+                  cursor: 'grab',
+                  userSelect: 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <svg width="8" height="10" viewBox="0 0 8 10" style={{ opacity: 0.4 }}>
+                    <circle cx="2" cy="2" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                    <circle cx="6" cy="2" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                    <circle cx="2" cy="5" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                    <circle cx="6" cy="5" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                    <circle cx="2" cy="8" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                    <circle cx="6" cy="8" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
+                  </svg>
+                  <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
+                    {(['1s', '10s'] as const).map((tf) => (
+                      <button
+                        key={tf}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setPipTimeframe(tf) }}
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: pipTimeframe === tf
+                            ? (isDark ? '#4b5563' : '#d1d5db')
+                            : 'transparent',
+                          color: pipTimeframe === tf
+                            ? (isDark ? '#f3f4f6' : '#111827')
+                            : (isDark ? '#9ca3af' : '#6b7280'),
+                        }}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
+                    Live
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
+                    {([1, 2, 4, 8, 16] as const).map((z) => (
+                      <button
+                        key={z}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setPipZoom(z) }}
+                        style={{
+                          fontSize: 8,
+                          fontWeight: 600,
+                          padding: '1px 4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: pipZoom === z
+                            ? (isDark ? '#4b5563' : '#d1d5db')
+                            : 'transparent',
+                          color: pipZoom === z
+                            ? (isDark ? '#f3f4f6' : '#111827')
+                            : (isDark ? '#9ca3af' : '#6b7280'),
+                        }}
+                      >
+                        {z}x
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setPipLineMode((prev) => !prev) }}
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 600,
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      color: isDark ? '#9ca3af' : '#6b7280',
+                    }}
+                  >
+                    {pipLineMode ? 'Candles' : 'Line'}
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setPipVisible(false) }}
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 600,
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      cursor: 'pointer',
+                      border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
+                      background: 'transparent',
+                      color: isDark ? '#9ca3af' : '#6b7280',
+                    }}
+                  >
+                    Collapse
+                  </button>
+                </div>
+              </div>
+              {/* PIP Liveline chart */}
+              <div style={{ height: 156, position: 'relative' }}>
+                <Liveline
+                  data={chartData?.lineData ?? []}
+                  value={chartData?.lineValue ?? price}
+                  {...(pipLineMode
+                    ? {}
+                    : {
+                        mode: 'candle' as const,
+                        candles: chartData?.candles ?? [],
+                        liveCandle: chartData?.liveCandle,
+                        candleWidth: pipTimeframe === '1s' ? 1 : 10,
+                        lineMode: pipLineMode,
+                        lineData: chartData?.lineData ?? [],
+                        lineValue: chartData?.lineValue,
+                        onModeChange: () => setPipLineMode((prev) => !prev),
+                      }
+                  )}
+                  loading={!chartData}
+                  window={pipWindowSecs}
+                  theme={theme}
+                  color={pipColor}
+                  grid={true}
+                  badge={true}
+                  scrub={true}
+                  fill={true}
+                  pulse={true}
+                  momentum={true}
+                  degen={degenOpts}
+                  exaggerate={false}
+                  referenceLine={coloredRefLine}
+                  labelFontSize={10}
+                  padding={{ top: 6, right: 56, bottom: 20, left: 6 }}
+                  formatValue={formatPrice}
+                  formatTime={() => ''}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Toggle to re-show PIP if hidden */}
+          {!pipVisible && (
+            <button
+              onClick={() => setPipVisible(true)}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 68,
+                zIndex: 20,
+                fontSize: 9,
+                fontWeight: 600,
+                padding: '3px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                border: isDark ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
+                background: isDark ? 'rgba(31,41,55,0.9)' : 'rgba(255,255,255,0.9)',
+                color: isDark ? '#d1d5db' : '#374151',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              PIP
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}, (prev, next) => {
+  return (
+    prev.symbol === next.symbol &&
+    prev.theme === next.theme &&
+    prev.chartHeight === next.chartHeight &&
+    prev.dayData === next.dayData &&
+    prev.stream1s.candles === next.stream1s.candles &&
+    prev.stream1s.liveCandle === next.stream1s.liveCandle &&
+    prev.stream1s.lastPrice === next.stream1s.lastPrice &&
+    prev.stream1s.dayHigh === next.stream1s.dayHigh &&
+    prev.stream1s.dayLow === next.stream1s.dayLow &&
+    prev.stream1s.connected === next.stream1s.connected &&
+    prev.stream10s.candles === next.stream10s.candles &&
+    prev.stream10s.liveCandle === next.stream10s.liveCandle &&
+    prev.stream10s.lastPrice === next.stream10s.lastPrice &&
+    prev.stream10s.dayHigh === next.stream10s.dayHigh &&
+    prev.stream10s.dayLow === next.stream10s.dayLow
+  )
+})
 
 /**
  * Converts ReplayState output into a LiveStreamState-compatible object.
@@ -2090,8 +2532,15 @@ export default function PulseTodayDashboard() {
       )}
 
       {!isReplay && (
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-4">
           <PulseTodayCard
+            symbol="GOOGL"
+            dayData={dayCandles['GOOGL']}
+            stream1s={streams1s['GOOGL'] ?? EMPTY_STREAM}
+            stream10s={streams10s['GOOGL'] ?? EMPTY_STREAM}
+            theme={theme}
+          />
+          <GradientPulseTodayCard
             symbol="GOOGL"
             dayData={dayCandles['GOOGL']}
             stream1s={streams1s['GOOGL'] ?? EMPTY_STREAM}

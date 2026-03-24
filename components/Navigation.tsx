@@ -24,15 +24,9 @@ export default function Navigation() {
 
   const navLinks: NavLink[] = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/dashboard/live', label: 'Live', match: '/dashboard/live' },
-    { href: '/dashboard/pulse', label: 'Pulse', match: '/dashboard/pulse' },
-    { href: '/dashboard/pulse-lab', label: 'Pulse Lab', match: '/dashboard/pulse-lab' },
-    { href: '/dashboard/pulse-lab-2', label: 'Lab 2', match: '/dashboard/pulse-lab-2' },
+    { href: '/dashboard/live', label: 'Most Active', match: '/dashboard/live' },
     { href: '/dashboard/pulse-today', label: 'Pulse Today', match: '/dashboard/pulse-today' },
-    { href: '/dashboard/pulse-text', label: 'Pulse Text', match: '/dashboard/pulse-text' },
-    { href: '/dashboard/pulse-testing', label: 'Pulse Testing', match: '/dashboard/pulse-testing' },
-    { href: '/dashboard/review-day', label: 'Review Day', match: '/dashboard/review-day' },
-    { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
+{ href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
     { href: '/charts', label: 'Charting' },
     { href: '/charts-experiment', label: 'Charting Experiment', match: '/charts-experiment' },
     { href: '/charts-experiment-2', label: 'Charting Experiment 2', match: '/charts-experiment-2' },

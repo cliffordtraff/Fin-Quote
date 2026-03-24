@@ -440,19 +440,6 @@ function ExperimentCardShell({
       className={`rounded-[28px] border border-gray-200/80 bg-white/90 p-4 shadow-[0_20px_70px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-gray-900/80 ${className}`}
       style={{ boxShadow: `0 24px 90px color-mix(in srgb, ${accent} 16%, transparent)` }}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">
-            {eyebrow}
-          </div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
-        </div>
-        <div
-          className="mt-1 h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: accent, boxShadow: `0 0 18px ${accent}` }}
-        />
-      </div>
-      <p className="mb-4 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">{body}</p>
       {children}
     </section>
   )
@@ -539,6 +526,7 @@ function buildEditorialVariants(narrative: ReturnType<typeof useSymbolNarrative>
   const moreNews = narrative.news.slice(1).map((item) => `${item.site || 'News'}: ${shorten(item.title, 68)}`)
   const commonRail = [
     { label: 'Last', value: formatPrice(narrative.lastPrice) },
+    { label: 'Change', value: formatPct(narrative.changePct) },
     { label: 'Prev Close', value: formatPrice(narrative.previousClose) },
     { label: 'Range', value: narrative.rangePct !== null ? `${narrative.rangePct.toFixed(2)}%` : '--' },
   ]
@@ -560,8 +548,6 @@ function buildEditorialVariants(narrative: ReturnType<typeof useSymbolNarrative>
       ],
       footer: 'Use this when the copy is the product and the chart is there to keep the prose honest.',
       notes: [
-        `Change ${formatPct(narrative.changePct)}`,
-        `Day high ${formatPrice(narrative.dayHigh)}`,
         `Day low ${formatPrice(narrative.dayLow)}`,
       ],
       rotationLabel: 'Supporting lines',
@@ -601,114 +587,6 @@ function buildEditorialVariants(narrative: ReturnType<typeof useSymbolNarrative>
       align: 'top',
       minHeight: 420,
     },
-    {
-      id: 'transcript-voice',
-      eyebrow: 'Version 03',
-      cardTitle: 'Transcript Voice',
-      cardBody: 'This version imagines earnings-call excerpts embedded into the editorial system. The quote gets the hero slot, and the explanatory context moves into the deck and side rail.',
-      word: 'Voice',
-      heroTag: 'Call Mode',
-      heroTitle: 'Management language can become the headline',
-      heroBody: 'Instead of treating transcript excerpts like annotations, this layout promotes them into cover copy. Guidance, demand, margin, and capex can each own a different card.',
-      railTitle: 'Transcript Slots',
-      railItems: [
-        { label: 'Open', value: 'Prepared remarks' },
-        { label: 'Middle', value: 'Guidance change' },
-        { label: 'Close', value: 'Q&A tension' },
-        { label: 'Backdrop', value: narrative.positionLabel },
-      ],
-      footer: 'Use the chart as emotional context while the quote itself carries the narrative weight.',
-      notes: [
-        'Prepared remarks as headline',
-        'Guidance line as deck',
-        'Analyst question as sidebar',
-      ],
-      rotationLabel: 'Quote treatments',
-      chartAggregation: '5min',
-      chartLineMode: false,
-      chip: `${symbol} Call`,
-      quote: narrative.profileDescription,
-      align: 'bottom',
-      minHeight: 440,
-    },
-    {
-      id: 'numbers-issue',
-      eyebrow: 'Version 04',
-      cardTitle: 'Numbers Issue',
-      cardBody: 'This is the stat-led editorial take. One big number anchors the story, then the deck explains why that number matters to the session.',
-      word: 'Data',
-      heroTag: 'Numbers',
-      heroTitle: 'Let the tape be summarized by one hard number',
-      heroBody: 'Good for sessions where one metric should own the story: range expansion, open drift, distance to HOD, or where price is sitting inside the day range.',
-      railTitle: 'Data Rail',
-      railItems: [
-        { label: 'Open Drift', value: formatPct(narrative.sessionDriftPct) },
-        { label: 'To HOD', value: narrative.distanceToHighPct !== null ? `${narrative.distanceToHighPct.toFixed(2)}%` : '--' },
-        { label: 'To LOD', value: narrative.distanceToLowPct !== null ? `${narrative.distanceToLowPct.toFixed(2)}%` : '--' },
-        { label: 'Position', value: narrative.positionLabel },
-      ],
-      footer: 'This is the version to use when you want the editorial treatment without losing analytical density.',
-      notes: narrative.metricBlocks.map((block) => `${block.kicker}: ${block.title}`),
-      rotationLabel: 'Metric overlays',
-      chartAggregation: '1min',
-      chartLineMode: false,
-      chip: `${symbol} Metrics`,
-      stat: narrative.rangePct !== null ? `${narrative.rangePct.toFixed(2)}%` : formatPct(narrative.changePct),
-      align: 'top',
-      minHeight: 430,
-    },
-    {
-      id: 'tape-brief',
-      eyebrow: 'Version 05',
-      cardTitle: 'Tape Brief',
-      cardBody: 'A market-brief version of the editorial style. Instead of company identity or headlines, the card is driven by what the stock is doing right now.',
-      word: 'Tape',
-      heroTag: 'Market Brief',
-      heroTitle: `${symbol} is trading in the ${narrative.positionLabel}`,
-      heroBody: narrative.rangePct !== null
-        ? `The session has stretched ${narrative.rangePct.toFixed(2)}% so far. Price is ${narrative.distanceToHighPct?.toFixed(2) ?? '--'}% from HOD and ${narrative.distanceToLowPct?.toFixed(2) ?? '--'}% from LOD.`
-        : 'The tape is still forming, so this version should stay sparse until the structure becomes real.',
-      railTitle: 'Tape Read',
-      railItems: [
-        { label: 'Last', value: formatPrice(narrative.lastPrice) },
-        { label: 'Change', value: formatPct(narrative.changePct) },
-        { label: 'High', value: formatPrice(narrative.dayHigh) },
-        { label: 'Low', value: formatPrice(narrative.dayLow) },
-      ],
-      footer: 'Best for intraday storytelling, market summaries, and “what matters right now” overlays.',
-      notes: narrative.tradingFacts.map((block) => `${block.kicker}: ${block.title}`),
-      rotationLabel: 'Live observations',
-      chartAggregation: '1min',
-      chartLineMode: true,
-      chip: `${symbol} Brief`,
-      align: 'bottom',
-      minHeight: 430,
-    },
-    {
-      id: 'identity-feature',
-      eyebrow: 'Version 06',
-      cardTitle: 'Identity Feature',
-      cardBody: 'This turns company context into the editorial system. It is less about what happened in the last fifteen minutes and more about what kind of story this symbol naturally wants to tell.',
-      word: 'Lore',
-      heroTag: 'Identity',
-      heroTitle: `${narrative.companyName} as a chart-story canvas`,
-      heroBody: narrative.profileDescription,
-      railTitle: 'Company File',
-      railItems: [
-        { label: 'Theme', value: narrative.meta.name },
-        { label: 'Sector', value: narrative.profileBits[0]?.replace('Sector: ', '') || '--' },
-        { label: 'Industry', value: narrative.profileBits[1]?.replace('Industry: ', '') || '--' },
-        { label: 'IPO', value: narrative.profileBits.find((bit) => bit.startsWith('IPO '))?.replace('IPO ', '') || '--' },
-      ],
-      footer: 'This is the slower, more atmospheric version for fun facts, company identity, and long-lived explanatory copy.',
-      notes: narrative.funFacts,
-      rotationLabel: 'Ambient context',
-      chartAggregation: '5min',
-      chartLineMode: true,
-      chip: `${symbol} Identity`,
-      align: 'top',
-      minHeight: 420,
-    },
   ]
 }
 
@@ -728,7 +606,7 @@ const EDITORIAL_OVERLAY_LAYOUTS: Record<string, EditorialOverlayLayout> = {
   'cover-story': {
     badges: 'left-5 top-5 sm:left-8 sm:top-8',
     ghost: 'left-4 top-14 sm:left-8 sm:top-16 text-[clamp(74px,15vw,210px)]',
-    hero: 'left-5 right-5 bottom-5 sm:left-8 sm:right-[292px] sm:bottom-8 lg:max-w-[620px]',
+    hero: 'left-5 right-5 top-12 sm:left-8 sm:right-[292px] sm:top-14 lg:max-w-[620px]',
     rail: 'hidden lg:block right-6 top-6 w-[224px]',
     notes: 'hidden md:block left-5 top-24 sm:left-8 sm:top-28 w-[260px]',
     footer: 'hidden lg:block right-6 bottom-6 w-[220px]',
@@ -742,44 +620,6 @@ const EDITORIAL_OVERLAY_LAYOUTS: Record<string, EditorialOverlayLayout> = {
     notes: 'left-5 right-5 bottom-6 sm:left-8 sm:right-auto sm:w-[320px]',
     footer: 'hidden md:block right-5 bottom-6 sm:right-8 sm:w-[220px]',
     scrim: 'bg-[linear-gradient(150deg,rgba(255,255,255,0.54)_0%,rgba(255,255,255,0.16)_35%,transparent_66%)] dark:bg-[linear-gradient(150deg,rgba(8,12,20,0.84)_0%,rgba(8,12,20,0.36)_36%,transparent_70%)]',
-  },
-  'transcript-voice': {
-    badges: 'left-5 top-5 sm:left-8 sm:top-8',
-    ghost: 'left-1/2 top-8 -translate-x-1/2 text-[clamp(70px,14vw,174px)]',
-    hero: 'left-5 right-5 bottom-6 sm:left-8 sm:right-[292px] sm:bottom-8 lg:max-w-[560px]',
-    rail: 'hidden lg:block right-6 top-1/2 w-[220px] -translate-y-1/2',
-    notes: 'hidden md:block right-6 top-24 w-[240px]',
-    footer: 'hidden lg:block right-6 bottom-6 w-[220px]',
-    quote: 'left-5 right-5 top-20 sm:left-8 sm:right-auto sm:w-[360px]',
-    scrim: 'bg-[linear-gradient(180deg,rgba(255,255,255,0.34)_0%,transparent_34%,rgba(255,255,255,0.16)_100%)] dark:bg-[linear-gradient(180deg,rgba(8,12,20,0.80)_0%,transparent_34%,rgba(8,12,20,0.34)_100%)]',
-  },
-  'numbers-issue': {
-    badges: 'right-5 top-5 sm:right-8 sm:top-8',
-    ghost: 'left-4 top-12 sm:left-8 sm:top-16 text-[clamp(64px,14vw,164px)]',
-    hero: 'left-5 right-5 bottom-6 sm:left-8 sm:right-[286px] sm:bottom-8 lg:max-w-[520px]',
-    rail: 'hidden lg:block right-5 top-20 sm:right-8 sm:top-24 w-[220px]',
-    notes: 'hidden md:block md:right-8 md:bottom-8 md:w-[252px]',
-    footer: 'hidden md:block left-5 top-5 sm:left-8 sm:top-8 w-[200px]',
-    stat: 'left-5 top-20 sm:left-8 sm:top-24',
-    scrim: 'bg-[linear-gradient(140deg,rgba(255,255,255,0.46)_0%,rgba(255,255,255,0.10)_32%,transparent_64%)] dark:bg-[linear-gradient(140deg,rgba(8,12,20,0.82)_0%,rgba(8,12,20,0.24)_34%,transparent_66%)]',
-  },
-  'tape-brief': {
-    badges: 'left-5 top-5 sm:left-8 sm:top-8',
-    ghost: 'right-4 bottom-8 sm:right-8 sm:bottom-10 text-[clamp(72px,14vw,186px)]',
-    hero: 'left-5 right-5 bottom-6 sm:left-8 sm:right-[292px] sm:bottom-8',
-    rail: 'hidden lg:block right-6 top-6 w-[220px]',
-    notes: 'left-5 right-5 top-24 sm:left-8 sm:right-auto sm:w-[300px]',
-    footer: 'hidden lg:block right-6 bottom-6 w-[220px]',
-    scrim: 'bg-[linear-gradient(180deg,rgba(255,255,255,0.42)_0%,transparent_38%,rgba(255,255,255,0.24)_100%)] dark:bg-[linear-gradient(180deg,rgba(8,12,20,0.76)_0%,transparent_40%,rgba(8,12,20,0.40)_100%)]',
-  },
-  'identity-feature': {
-    badges: 'right-5 top-5 sm:right-8 sm:top-8',
-    ghost: 'left-5 top-16 sm:left-8 sm:top-20 text-[clamp(68px,14vw,170px)]',
-    hero: 'left-5 right-5 top-24 sm:left-8 sm:right-[302px] sm:top-28 lg:max-w-[520px]',
-    rail: 'hidden lg:block right-6 bottom-6 w-[230px]',
-    notes: 'left-5 right-5 bottom-6 sm:left-8 sm:right-auto sm:w-[320px]',
-    footer: 'hidden md:block right-5 top-20 sm:right-8 sm:top-24 w-[220px]',
-    scrim: 'bg-[linear-gradient(145deg,rgba(255,255,255,0.50)_0%,rgba(255,255,255,0.16)_34%,transparent_66%)] dark:bg-[linear-gradient(145deg,rgba(8,12,20,0.82)_0%,rgba(8,12,20,0.30)_34%,transparent_68%)]',
   },
 }
 
@@ -802,11 +642,13 @@ function ModernEditorialVariantCard({
   dayData,
   theme,
   variant,
+  lineModeOverride,
 }: {
   narrative: ReturnType<typeof useSymbolNarrative>
   dayData: DayCandleData | undefined
   theme: ThemeMode
   variant: EditorialVariant
+  lineModeOverride: boolean
 }) {
   const layout = EDITORIAL_OVERLAY_LAYOUTS[variant.id] ?? EDITORIAL_OVERLAY_LAYOUTS['cover-story']
   const rotatingNotes = variant.notes.slice(0, 2)
@@ -836,27 +678,15 @@ function ModernEditorialVariantCard({
         theme={theme}
         glow={narrative.meta.glow}
         chartAggregation={variant.chartAggregation}
-        chartLineMode={variant.chartLineMode}
+        chartLineMode={lineModeOverride}
         minHeight={variant.minHeight ?? 390}
       >
         <div className={`pointer-events-none absolute z-20 flex flex-wrap gap-x-3 gap-y-1 ${layout.badges}`}>
           <div className={`text-[10px] font-semibold uppercase tracking-[0.28em] ${labelText}`}>
             {variant.chip || narrative.companyName}
           </div>
-          <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${labelText}`}>
-            {variant.heroTag}
-          </div>
-          <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${labelText}`}>
-            Pulse {variant.chartAggregation === '1min' ? '1m' : '5m'} {variant.chartLineMode ? 'Line' : 'Candles'}
-          </div>
         </div>
 
-        <div
-          className={`pointer-events-none absolute font-semibold uppercase leading-none text-black/8 dark:text-white/8 ${layout.ghost}`}
-          style={{ fontFamily: '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif' }}
-        >
-          {variant.word}
-        </div>
 
         {variant.stat && layout.stat && (
           <OverlayTextBlock className={layout.stat}>
@@ -884,9 +714,6 @@ function ModernEditorialVariantCard({
         )}
 
         <OverlayTextBlock className={layout.hero}>
-          <div className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${labelText}`}>
-            {variant.heroTag}
-          </div>
           {!layout.quote && variant.quote && (
             <blockquote
               className={`mt-3 max-w-[420px] text-xl font-medium leading-8 ${headlineText}`}
@@ -896,23 +723,14 @@ function ModernEditorialVariantCard({
             </blockquote>
           )}
           <div
-            className={`mt-3 max-w-[560px] text-[clamp(28px,4vw,54px)] font-semibold leading-[0.98] ${headlineText}`}
+            className={`mt-3 max-w-[560px] text-[clamp(14px,1.8vw,22px)] font-semibold leading-[1.2] ${headlineText}`}
             style={{ fontFamily: '"Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif' }}
           >
             {variant.heroTitle}
           </div>
-          <p
-            className={`mt-3 max-w-[420px] text-sm leading-6 ${supportingText}`}
-            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-          >
-            {variant.heroBody}
-          </p>
         </OverlayTextBlock>
 
         <OverlayTextBlock className={layout.rail}>
-          <div className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${labelText}`}>
-            {variant.railTitle}
-          </div>
           <div className="mt-3 space-y-2">
             {railItems.map((item) => (
               <div key={item.label}>
@@ -925,9 +743,6 @@ function ModernEditorialVariantCard({
 
         {rotatingNotes.length > 0 && (
           <div className={`absolute z-20 ${layout.notes}`}>
-            <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.24em] ${labelText}`}>
-              {variant.rotationLabel}
-            </div>
             <div className="relative h-[64px]">
               {rotatingNotes.map((note, index) => (
                 <div
@@ -955,6 +770,7 @@ export default function PulseTextDashboard() {
   const { theme: rawTheme } = useTheme()
   const theme = (rawTheme === 'dark' ? 'dark' : 'light') as ThemeMode
   const [selectedSymbol, setSelectedSymbol] = useState<SymbolKey>('GOOGL')
+  const [lineMode, setLineMode] = useState(true)
 
   const streams = useMultiStream([...SYMBOLS], '1s')
   const dayMap = useDayCandles(SYMBOLS)
@@ -970,60 +786,36 @@ export default function PulseTextDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[32px] border border-gray-200/80 bg-white/90 shadow-[0_32px_120px_rgba(15,23,42,0.10)] dark:border-white/10 dark:bg-gray-900/85">
-        <div
-          className="relative overflow-hidden px-6 py-6 sm:px-8"
-          style={{ background: narrative.meta.gradient }}
+      <div className="flex flex-wrap items-center gap-2">
+        {SYMBOLS.map((symbol) => {
+          const active = symbol === selectedSymbol
+          return (
+            <button
+              key={symbol}
+              onClick={() => setSelectedSymbol(symbol)}
+              className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+              style={{
+                borderColor: active ? narrative.meta.accent : theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)',
+                background: active ? narrative.meta.soft : theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+                color: active ? narrative.meta.accent : theme === 'dark' ? '#e5e7eb' : '#334155',
+              }}
+            >
+              {symbol}
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setLineMode((v) => !v)}
+          className="ml-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+          style={{
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)',
+            background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
+            color: theme === 'dark' ? '#e5e7eb' : '#334155',
+          }}
         >
-          <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_58%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_58%)]" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex rounded-full border border-white/40 bg-white/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-600 backdrop-blur-md dark:border-white/10 dark:bg-white/8 dark:text-gray-300">
-                Pulse Text on Pulse Charts
-              </div>
-              <h1 className="max-w-2xl text-3xl font-semibold leading-tight text-gray-900 dark:text-white sm:text-4xl">
-                The actual Pulse Today chart, six annotation treatments.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-700 dark:text-gray-300">
-                These versions now use the real Pulse Today canvas. The experiment is how editorial text,
-                transcript copy, news, and metrics behave when they sit directly on top of the current pulse chart.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 rounded-[24px] border border-white/35 bg-white/55 p-4 backdrop-blur-md dark:border-white/10 dark:bg-white/6 sm:grid-cols-4">
-              {[
-                { label: 'Last', value: formatPrice(narrative.lastPrice) },
-                { label: 'Change', value: formatPct(narrative.changePct) },
-                { label: 'Range', value: narrative.rangePct !== null ? `${narrative.rangePct.toFixed(2)}%` : '--' },
-                { label: 'Variants', value: loading ? 'Loading...' : `${editorialVariants.length} layouts` },
-              ].map((item) => (
-                <div key={item.label}>
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400">{item.label}</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{item.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="relative mt-6 flex flex-wrap gap-2">
-            {SYMBOLS.map((symbol) => {
-              const active = symbol === selectedSymbol
-              return (
-                <button
-                  key={symbol}
-                  onClick={() => setSelectedSymbol(symbol)}
-                  className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: active ? narrative.meta.accent : theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)',
-                    background: active ? narrative.meta.soft : theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.58)',
-                    color: active ? narrative.meta.accent : theme === 'dark' ? '#e5e7eb' : '#334155',
-                  }}
-                >
-                  {symbol}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+          {lineMode ? 'Candlestick' : 'Line'}
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {editorialVariants.map((variant) => (
@@ -1033,6 +825,7 @@ export default function PulseTextDashboard() {
             dayData={dayData}
             theme={theme}
             variant={variant}
+            lineModeOverride={lineMode}
           />
         ))}
       </div>
