@@ -20,10 +20,24 @@ function isPrintableSearchKey(event: KeyboardEvent<HTMLInputElement>): boolean {
   return event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey
 }
 
-export default function StockSearch(_props: StockSearchProps) {
+function shouldIgnoreGlobalShortcutTarget(target: EventTarget | null, launcher: HTMLInputElement | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target === launcher) return true
+  if (target.isContentEditable) return true
+
+  const tagName = target.tagName.toLowerCase()
+  if (tagName === 'textarea' || tagName === 'select') return true
+  if (tagName !== 'input') return false
+
+  const type = (target.getAttribute('type') || (target as HTMLInputElement).type || '').toLowerCase()
+  return type !== 'range'
+}
+
+export default function StockSearch({ pathname }: StockSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const isConfigured = Boolean(process.env.NEXT_PUBLIC_CHARTING_URL?.trim())
+  const enableGlobalTypeShortcut = Boolean(pathname?.startsWith('/stock/'))
 
   useEffect(() => {
     const handleSearchState = (event: Event) => {
@@ -40,6 +54,24 @@ export default function StockSearch(_props: StockSearchProps) {
     dispatchNativeTickerSearchOpen(query ? { query: normalizeQuery(query) } : {})
     window.requestAnimationFrame(() => inputRef.current?.blur())
   }
+
+  useEffect(() => {
+    if (!isConfigured || !enableGlobalTypeShortcut) return
+
+    const handleGlobalKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (isSearchOpen) return
+      if (event.defaultPrevented) return
+      if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return
+      if (!/[a-z0-9]/i.test(event.key)) return
+      if (shouldIgnoreGlobalShortcutTarget(event.target, inputRef.current)) return
+
+      event.preventDefault()
+      openNativeSearch(event.key)
+    }
+
+    document.addEventListener('keydown', handleGlobalKeyDown)
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [enableGlobalTypeShortcut, isConfigured, isSearchOpen])
 
   return (
     <div className="relative">

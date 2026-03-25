@@ -270,6 +270,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Change</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">% Change</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">YTD</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-cream-200 dark:divide-gray-800">
@@ -343,6 +344,19 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                             : 'text-red-600 dark:text-red-400'
                         }`}>
                           {quote.changesPercentage >= 0 ? '+' : ''}{quote.changesPercentage.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {quote?.ytd != null ? (
+                        <span className={`text-sm font-medium ${
+                          quote.ytd >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {quote.ytd >= 0 ? '+' : ''}{quote.ytd.toFixed(2)}%
                         </span>
                       ) : (
                         <span className="text-sm text-gray-400 dark:text-gray-500">—</span>

@@ -42,6 +42,39 @@ describe('StockSearch', () => {
     window.removeEventListener(NATIVE_TICKER_SEARCH_OPEN_EVENT, handleOpen as EventListener)
   })
 
+  it('opens the native ticker search from page typing on financials routes', () => {
+    const handleOpen = vi.fn()
+    window.addEventListener(NATIVE_TICKER_SEARCH_OPEN_EVENT, handleOpen as EventListener)
+
+    render(<StockSearch pathname="/stock/aapl" />)
+    fireEvent.keyDown(document, { key: 't' })
+
+    expect(handleOpen).toHaveBeenCalledTimes(1)
+    expect((handleOpen.mock.calls[0][0] as CustomEvent).detail).toEqual({ query: 'T' })
+
+    window.removeEventListener(NATIVE_TICKER_SEARCH_OPEN_EVENT, handleOpen as EventListener)
+  })
+
+  it('does not steal typing from editable fields on financials routes', () => {
+    const handleOpen = vi.fn()
+    window.addEventListener(NATIVE_TICKER_SEARCH_OPEN_EVENT, handleOpen as EventListener)
+
+    render(
+      <>
+        <StockSearch pathname="/stock/aapl" />
+        <input aria-label="Editable field" />
+      </>
+    )
+
+    const editable = screen.getByLabelText('Editable field')
+    editable.focus()
+    fireEvent.keyDown(editable, { key: 't' })
+
+    expect(handleOpen).not.toHaveBeenCalled()
+
+    window.removeEventListener(NATIVE_TICKER_SEARCH_OPEN_EVENT, handleOpen as EventListener)
+  })
+
   it('closes the native ticker search on escape and reflects native open state', () => {
     const handleClose = vi.fn()
     window.addEventListener(NATIVE_TICKER_SEARCH_CLOSE_EVENT, handleClose as EventListener)

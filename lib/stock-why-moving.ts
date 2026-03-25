@@ -1,0 +1,427 @@
+import { createClient } from '@supabase/supabase-js'
+import type { Database, Json } from '@/lib/database.types'
+
+type CacheRow = Database['public']['Tables']['stock_why_moving_cache']['Row']
+type CacheInsert = Database['public']['Tables']['stock_why_moving_cache']['Insert']
+
+export type StockWhyMovingStatus = 'found' | 'not_found' | 'error'
+
+export interface StockWhyMovingResult {
+  symbol: string
+  status: StockWhyMovingStatus
+  displayText: string | null
+  headline: string | null
+  summary: string | null
+  bulletPoints: string[]
+  sentiment: string | null
+  source: string | null
+  sourceTimestamp: string | null
+  isCatalyst: boolean | null
+  sourceUrl: string
+  fetchedAt: string
+  errorMessage: string | null
+}
+
+interface FinvizWhyMovingPayload {
+  id?: number
+  ticker?: string
+  dateTime?: string | null
+  headline?: string | null
+  summary?: string | null
+  source?: string | null
+  sentiment?: string | null
+  catalyst?: boolean | null
+  instrument?: number | null
+  bulletPointsList?: unknown
+}
+
+interface StockWhyMovingRecord extends StockWhyMovingResult {
+  rawPayload: Json | null
+}
+
+const FOUND_TTL_MS = 30 * 60 * 1000
+const NOT_FOUND_TTL_MS = 10 * 60 * 1000
+const ERROR_TTL_MS = 5 * 60 * 1000
+const WHY_MOVING_SCRIPT_RE =
+  /<script id="why-stock-moving-init-data-\d+" type="application\/json">([\s\S]*?)<\/script>/i
+const memoryCache = new Map<string, StockWhyMovingRecord>()
+
+function createSupabaseClient(key?: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url || !key) {
+    return null
+  }
+
+  return createClient<Database>(url, key)
+}
+
+const supabasePublic = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+const supabaseAdmin = createSupabaseClient(process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+function normalizeSymbol(symbol: string): string {
+  return symbol.trim().toUpperCase()
+}
+
+function buildFinvizQuoteUrl(symbol: string): string {
+  return `https://finviz.com/quote.ashx?t=${encodeURIComponent(symbol)}&p=d`
+}
+
+function normalizeText(value: string | null | undefined): string | null {
+  if (!value) return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  return normalized.length > 0 ? normalized : null
+}
+
+function normalizeBulletPoints(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => normalizeText(item))
+    .filter((item): item is string => Boolean(item))
+}
+
+function isLikelyFinvizQuotePage(html: string): boolean {
+  return (
+    html.includes('quote.ashx') &&
+    html.includes('featureFlags') &&
+    html.includes('"stockswhymoving":true')
+  )
+}
+
+function isMissingCacheTableError(error: { message?: string; code?: string } | null | undefined): boolean {
+  const message = error?.message ?? ''
+  const code = error?.code ?? ''
+
+  return (
+    code === 'PGRST205' ||
+    (message.includes('stock_why_moving_cache') && message.includes('schema cache'))
+  )
+}
+
+export function parseFinvizWhyMovingHtml(html: string): FinvizWhyMovingPayload | null {
+  const match = html.match(WHY_MOVING_SCRIPT_RE)
+  if (!match) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as { whyMoving?: FinvizWhyMovingPayload | null }
+    return parsed?.whyMoving ?? null
+  } catch {
+    return null
+  }
+}
+
+export function buildWhyMovingDisplayText(input: {
+  headline?: string | null
+  summary?: string | null
+  bulletPoints?: string[] | null
+}): string | null {
+  const headline = normalizeText(input.headline)
+  if (headline) {
+    return headline
+  }
+
+  const summary = normalizeText(input.summary)
+  if (summary) {
+    return summary
+  }
+
+  const firstBullet = input.bulletPoints?.[0]
+  return normalizeText(firstBullet)
+}
+
+function cacheTtlMs(status: StockWhyMovingStatus): number {
+  switch (status) {
+    case 'found':
+      return FOUND_TTL_MS
+    case 'not_found':
+      return NOT_FOUND_TTL_MS
+    case 'error':
+      return ERROR_TTL_MS
+  }
+}
+
+function mapCacheRow(row: CacheRow): StockWhyMovingRecord {
+  return {
+    symbol: row.symbol,
+    status: (row.status as StockWhyMovingStatus) ?? 'not_found',
+    displayText: row.display_text,
+    headline: row.headline,
+    summary: row.summary,
+    bulletPoints: normalizeBulletPoints(row.bullet_points),
+    sentiment: row.sentiment,
+    source: row.source,
+    sourceTimestamp: row.source_timestamp,
+    isCatalyst: row.is_catalyst,
+    sourceUrl: row.source_url,
+    fetchedAt: row.fetched_at,
+    errorMessage: row.error_message,
+    rawPayload: row.raw_payload,
+  }
+}
+
+function toCacheInsert(record: StockWhyMovingRecord): CacheInsert {
+  return {
+    symbol: record.symbol,
+    status: record.status,
+    display_text: record.displayText,
+    headline: record.headline,
+    summary: record.summary,
+    bullet_points: record.bulletPoints,
+    sentiment: record.sentiment,
+    source: record.source,
+    source_timestamp: record.sourceTimestamp,
+    is_catalyst: record.isCatalyst,
+    raw_payload: record.rawPayload,
+    source_url: record.sourceUrl,
+    error_message: record.errorMessage,
+    fetched_at: record.fetchedAt,
+  }
+}
+
+function stripRawPayload(record: StockWhyMovingRecord): StockWhyMovingResult {
+  const { rawPayload: _rawPayload, ...result } = record
+  return result
+}
+
+function isFreshRecord(record: StockWhyMovingRecord): boolean {
+  const fetchedAtMs = new Date(record.fetchedAt).getTime()
+  if (!Number.isFinite(fetchedAtMs)) {
+    return false
+  }
+  return Date.now() - fetchedAtMs < cacheTtlMs(record.status)
+}
+
+function readInMemoryWhyMoving(symbol: string): StockWhyMovingRecord | null {
+  return memoryCache.get(symbol) ?? null
+}
+
+function writeInMemoryWhyMoving(record: StockWhyMovingRecord): void {
+  memoryCache.set(record.symbol, record)
+
+  if (memoryCache.size <= 256) {
+    return
+  }
+
+  for (const [symbol, cached] of memoryCache) {
+    if (!isFreshRecord(cached)) {
+      memoryCache.delete(symbol)
+    }
+
+    if (memoryCache.size <= 192) {
+      return
+    }
+  }
+
+  const oldestKey = memoryCache.keys().next().value
+  if (oldestKey) {
+    memoryCache.delete(oldestKey)
+  }
+}
+
+async function readCachedWhyMoving(symbol: string): Promise<StockWhyMovingRecord | null> {
+  if (!supabasePublic) {
+    return null
+  }
+
+  try {
+    const { data, error } = await supabasePublic
+      .from('stock_why_moving_cache')
+      .select('*')
+      .eq('symbol', symbol)
+      .maybeSingle()
+
+    if (error || !data) {
+      if (error) {
+        if (isMissingCacheTableError(error)) {
+          return null
+        }
+        console.error('[stock-why-moving] Failed to read cache:', error.message)
+      }
+      return null
+    }
+
+    return mapCacheRow(data)
+  } catch (error) {
+    console.error('[stock-why-moving] Unexpected cache read error:', error)
+    return null
+  }
+}
+
+async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void> {
+  if (!supabaseAdmin) {
+    console.log('[stock-why-moving] Skipping cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
+    return
+  }
+
+  try {
+    const { error } = await supabaseAdmin
+      .from('stock_why_moving_cache')
+      .upsert(toCacheInsert(record), { onConflict: 'symbol' })
+
+    if (error) {
+      if (isMissingCacheTableError(error)) {
+        return
+      }
+      console.error('[stock-why-moving] Failed to write cache:', error.message)
+    }
+  } catch (error) {
+    console.error('[stock-why-moving] Unexpected cache write error:', error)
+  }
+}
+
+async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecord> {
+  const normalized = normalizeSymbol(symbol)
+  const sourceUrl = buildFinvizQuoteUrl(normalized)
+  const fetchedAt = new Date().toISOString()
+
+  try {
+    const response = await fetch(sourceUrl, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(10_000),
+    })
+
+    if (!response.ok) {
+      return {
+        symbol: normalized,
+        status: 'error',
+        displayText: null,
+        headline: null,
+        summary: null,
+        bulletPoints: [],
+        sentiment: null,
+        source: null,
+        sourceTimestamp: null,
+        isCatalyst: null,
+        sourceUrl,
+        fetchedAt,
+        errorMessage: `Finviz returned ${response.status}`,
+        rawPayload: null,
+      }
+    }
+
+    const html = await response.text()
+    const parsed = parseFinvizWhyMovingHtml(html)
+
+    if (!parsed) {
+      if (isLikelyFinvizQuotePage(html)) {
+        return {
+          symbol: normalized,
+          status: 'not_found',
+          displayText: null,
+          headline: null,
+          summary: null,
+          bulletPoints: [],
+          sentiment: null,
+          source: null,
+          sourceTimestamp: null,
+          isCatalyst: null,
+          sourceUrl,
+          fetchedAt,
+          errorMessage: null,
+          rawPayload: null,
+        }
+      }
+
+      return {
+        symbol: normalized,
+        status: 'error',
+        displayText: null,
+        headline: null,
+        summary: null,
+        bulletPoints: [],
+        sentiment: null,
+        source: null,
+        sourceTimestamp: null,
+        isCatalyst: null,
+        sourceUrl,
+        fetchedAt,
+        errorMessage: 'Could not parse Finviz quote page',
+        rawPayload: null,
+      }
+    }
+
+    const bulletPoints = normalizeBulletPoints(parsed.bulletPointsList)
+    const headline = normalizeText(parsed.headline)
+    const summary = normalizeText(parsed.summary)
+
+    return {
+      symbol: normalized,
+      status: 'found',
+      displayText: buildWhyMovingDisplayText({ headline, summary, bulletPoints }),
+      headline,
+      summary,
+      bulletPoints,
+      sentiment: normalizeText(parsed.sentiment),
+      source: normalizeText(parsed.source),
+      sourceTimestamp: normalizeText(parsed.dateTime),
+      isCatalyst: typeof parsed.catalyst === 'boolean' ? parsed.catalyst : null,
+      sourceUrl,
+      fetchedAt,
+      errorMessage: null,
+      rawPayload: parsed as Json,
+    }
+  } catch (error) {
+    return {
+      symbol: normalized,
+      status: 'error',
+      displayText: null,
+      headline: null,
+      summary: null,
+      bulletPoints: [],
+      sentiment: null,
+      source: null,
+      sourceTimestamp: null,
+      isCatalyst: null,
+      sourceUrl,
+      fetchedAt,
+      errorMessage: error instanceof Error ? error.message : 'Unknown fetch error',
+      rawPayload: null,
+    }
+  }
+}
+
+export async function getStockWhyMovingData(
+  symbol: string,
+  options?: { forceRefresh?: boolean }
+): Promise<StockWhyMovingResult> {
+  const normalized = normalizeSymbol(symbol)
+  const inMemoryCached = readInMemoryWhyMoving(normalized)
+
+  if (!options?.forceRefresh && inMemoryCached && isFreshRecord(inMemoryCached)) {
+    return stripRawPayload(inMemoryCached)
+  }
+
+  const cached = await readCachedWhyMoving(normalized)
+
+  if (!options?.forceRefresh && cached && isFreshRecord(cached)) {
+    writeInMemoryWhyMoving(cached)
+    return stripRawPayload(cached)
+  }
+
+  const fallbackCached = cached ?? inMemoryCached
+  const live = await fetchFinvizWhyMoving(normalized)
+
+  if (live.status === 'error') {
+    if (fallbackCached) {
+      return stripRawPayload(fallbackCached)
+    }
+
+    writeInMemoryWhyMoving(live)
+    await writeCachedWhyMoving(live)
+    return stripRawPayload(live)
+  }
+
+  writeInMemoryWhyMoving(live)
+  await writeCachedWhyMoving(live)
+  return stripRawPayload(live)
+}

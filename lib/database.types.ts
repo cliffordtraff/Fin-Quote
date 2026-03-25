@@ -985,6 +985,63 @@ export interface Database {
         }
         Relationships: []
       }
+      stock_why_moving_cache: {
+        Row: {
+          symbol: string
+          status: string
+          display_text: string | null
+          headline: string | null
+          summary: string | null
+          bullet_points: Json
+          sentiment: string | null
+          source: string | null
+          source_timestamp: string | null
+          is_catalyst: boolean | null
+          raw_payload: Json | null
+          source_url: string
+          error_message: string | null
+          fetched_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          symbol: string
+          status?: string
+          display_text?: string | null
+          headline?: string | null
+          summary?: string | null
+          bullet_points?: Json
+          sentiment?: string | null
+          source?: string | null
+          source_timestamp?: string | null
+          is_catalyst?: boolean | null
+          raw_payload?: Json | null
+          source_url: string
+          error_message?: string | null
+          fetched_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          symbol?: string
+          status?: string
+          display_text?: string | null
+          headline?: string | null
+          summary?: string | null
+          bullet_points?: Json
+          sentiment?: string | null
+          source?: string | null
+          source_timestamp?: string | null
+          is_catalyst?: boolean | null
+          raw_payload?: Json | null
+          source_url?: string
+          error_message?: string | null
+          fetched_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metric_resolutions: {
         Row: {
           id: string

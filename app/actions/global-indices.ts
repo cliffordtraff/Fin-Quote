@@ -1,6 +1,5 @@
 'use server'
 
-import { getProvider } from '@/lib/providers'
 import { FMPProvider } from '@/lib/providers/fmp'
 
 export interface GlobalIndexQuote {
@@ -10,6 +9,7 @@ export interface GlobalIndexQuote {
   price: number
   change: number
   changesPercentage: number
+  ytd?: number
 }
 
 // Map market names to their primary index symbols (FMP format)
@@ -38,11 +38,40 @@ export interface FuturesQuote {
   changesPercentage: number
 }
 
+async function fetchYTDChanges(symbols: string[]): Promise<Map<string, number>> {
+  const ytdMap = new Map<string, number>()
+  try {
+    const key = process.env.FMP_API_KEY
+    if (!key) return ytdMap
+    const joined = symbols.map(s => encodeURIComponent(s)).join(',')
+    const res = await fetch(
+      `https://financialmodelingprep.com/api/v3/stock-price-change/${joined}?apikey=${key}`,
+      { next: { revalidate: 300 } }
+    )
+    if (!res.ok) return ytdMap
+    const data: Array<{ symbol: string; ytd: number }> = await res.json()
+    for (const item of data) {
+      if (item.ytd != null) {
+        ytdMap.set(item.symbol, item.ytd)
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching YTD changes:', error)
+  }
+  return ytdMap
+}
+
 export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
   try {
-    const provider = getProvider()
+    // Always use FMP — these are FMP-format international index symbols
+    // that don't have Massive/Polygon equivalents
+    const provider = new FMPProvider()
     const symbols = Object.values(MARKET_INDEX_MAP).map(m => m.symbol)
-    const data = await provider.getQuotes(symbols)
+
+    const [data, ytdMap] = await Promise.all([
+      provider.getQuotes(symbols),
+      fetchYTDChanges(symbols),
+    ])
 
     if (data.length === 0) {
       return []
@@ -61,6 +90,7 @@ export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
           price: quote.price || 0,
           change: quote.change || 0,
           changesPercentage: quote.changesPercentage || 0,
+          ytd: ytdMap.get(indexInfo.symbol),
         })
       }
     }

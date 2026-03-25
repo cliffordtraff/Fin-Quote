@@ -88,6 +88,7 @@ export async function middleware(req: NextRequest) {
     '',
     'dashboard',
     'stock',
+    'stock-v1',
     'company',
     'charts',
     'charts-experiment',

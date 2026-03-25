@@ -8,18 +8,16 @@ import FinancialStatementsTabs from '@/components/FinancialStatementsTabs'
 import NewsFeed from '@/components/NewsFeed'
 import CompanyDescription from '@/components/CompanyDescription'
 import StockInsiderTrades from '@/components/StockInsiderTrades'
-import StockWhyMovingBanner from '@/components/StockWhyMovingBanner'
-// CompanySegmentsCard removed — backup preserved in /stock-v1
+import CompanySegmentsCard from '@/components/CompanySegmentsCard'
 import { getStockOverview } from '@/app/actions/stock-overview'
 import { getStockKeyStats } from '@/app/actions/stock-key-stats'
 import { getAllFinancials } from '@/app/actions/get-all-financials'
 import { getStockNews } from '@/app/actions/get-stock-news'
 import { getCompanyProfile } from '@/app/actions/get-company-profile'
-// getSegmentData removed — backup preserved in /stock-v1
+import { getSegmentData } from '@/app/actions/segment-data'
 import { getInsiderTradesBySymbol } from '@/app/actions/insider-trading'
 import { getDiscoverStocks } from '@/app/actions/discover-stocks'
 import { getFinancialChartData } from '@/app/actions/get-financial-chart-data'
-import { getStockWhyMoving } from '@/app/actions/stock-why-moving'
 import { isValidSymbol } from '@/lib/symbol-resolver'
 import FinancialMetricsCharts from '@/components/FinancialMetricsCharts'
 import DiscoverMoreCarousel from '@/components/DiscoverMoreCarousel'
@@ -98,7 +96,7 @@ export default async function StockPage({ params }: PageProps) {
   }
 
   // Parallel data fetching for all sections
-  const [overview, keyStats, financials, news, profile, insiderResult, discoverResult, chartData, whyMoving] = await Promise.all([
+  const [overview, keyStats, financials, news, profile, insiderResult, discoverResult, chartData, productSegmentsResult, geoSegmentsResult] = await Promise.all([
     getStockOverview(normalizedSymbol).catch(() => null),
     getStockKeyStats(normalizedSymbol).catch(() => null),
     getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
@@ -107,7 +105,8 @@ export default async function StockPage({ params }: PageProps) {
     getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
     getDiscoverStocks(normalizedSymbol, 12).catch(() => ({ stocks: [] })),
     getFinancialChartData(normalizedSymbol).catch(() => ({ data: [] })),
-    getStockWhyMoving(normalizedSymbol).catch(() => null),
+    getSegmentData({ symbol: normalizedSymbol, segmentType: 'product', periodType: 'annual' }).catch(() => ({ data: null, error: 'Failed to fetch', segmentType: 'product' as const, periodType: 'annual' as const })),
+    getSegmentData({ symbol: normalizedSymbol, segmentType: 'geographic', periodType: 'annual' }).catch(() => ({ data: null, error: 'Failed to fetch', segmentType: 'geographic' as const, periodType: 'annual' as const })),
   ])
 
   // Extract insider trades from result
@@ -119,7 +118,7 @@ export default async function StockPage({ params }: PageProps) {
     return (
       <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
         <Navigation />
-        <div className="mx-auto max-w-[1500px] px-4 py-16 text-center">
+        <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
             {normalizedSymbol}
           </h1>
@@ -147,26 +146,28 @@ export default async function StockPage({ params }: PageProps) {
         initialMarketStatus={overview.marketStatus}
       />
 
-      {whyMoving?.status === 'found' && whyMoving.displayText && (
-        <section className="bg-cream-100 dark:bg-gray-900">
-          <div className="mx-auto max-w-[1500px] px-4 pt-2 pb-0 sm:px-6 lg:px-8">
-            <StockWhyMovingBanner whyMoving={whyMoving} />
-          </div>
-        </section>
-      )}
-
       {/* Price Chart Section */}
       <section className="bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 pt-0 pb-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 pt-0 pb-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 overflow-hidden">
             <EmbedChart symbol={normalizedSymbol} />
           </div>
         </div>
       </section>
 
+      {/* Segments (moved from Company tab) */}
+      <section className="bg-cream-100 dark:bg-gray-900">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
+          <CompanySegmentsCard
+            productSegments={productSegmentsResult?.data || null}
+            geographicSegments={geoSegmentsResult?.data || null}
+          />
+        </div>
+      </section>
+
       {/* Quick Stats Grid Section - Finviz Style */}
       <section className="bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-4">
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
               {/* Column 1: Company Info */}
@@ -571,7 +572,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* News Section */}
       <section className="bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             <NewsFeed news={news} />
           </div>
@@ -580,7 +581,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Insider Trading Section */}
       <section className="bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             <StockInsiderTrades symbol={normalizedSymbol} trades={insiderTrades} />
           </div>
@@ -590,7 +591,7 @@ export default async function StockPage({ params }: PageProps) {
       {/* Company Description Section */}
       {profile && (
         <section className="bg-cream-100 dark:bg-gray-900">
-          <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
             <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
               <CompanyDescription
                 description={profile.description}
@@ -606,7 +607,7 @@ export default async function StockPage({ params }: PageProps) {
       {/* Financial Metrics Charts Section */}
       {chartData.data && chartData.data.length > 0 && (
         <section className="bg-cream-100 dark:bg-gray-900">
-          <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
             <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
               <FinancialMetricsCharts data={chartData.data} />
             </div>
@@ -616,7 +617,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Financial Statements Section */}
       <section className="border-b border-cream-300 dark:border-gray-700 bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
             {financials.incomeStatement.length > 0 ||
             financials.balanceSheet.length > 0 ||
@@ -642,7 +643,7 @@ export default async function StockPage({ params }: PageProps) {
 
       {/* Footer */}
       <footer className="bg-cream-100 dark:bg-gray-900 border-t border-cream-300 dark:border-gray-700">
-        <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               &copy; {new Date().getFullYear()} The Intraday. All rights reserved.
