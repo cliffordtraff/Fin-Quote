@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { FMPProvider } from '@/lib/providers/fmp'
 
 export interface GlobalIndexQuote {
   market: string
@@ -73,7 +74,8 @@ export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
 
 export async function getFuturesQuotes(): Promise<FuturesQuote[]> {
   try {
-    const provider = getProvider()
+    // Always use FMP for futures — Massive plan doesn't include futures data
+    const provider = new FMPProvider()
     const symbols = Object.values(FUTURES_MAP).map(f => f.symbol)
     const data = await provider.getQuotes(symbols)
 

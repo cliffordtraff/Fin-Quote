@@ -276,13 +276,15 @@ export function FullDayCanvas({
   const [crosshair, setCrosshair] = useState<CrosshairData | null>(null)
   const rafRef = useRef<number>(0)
 
-  // Filter out candles at or after 4:00 PM (closing auction creates extreme wicks)
+  // Filter to regular market hours only (9:30 AM – 4:00 PM)
+  // Premarket candles get negative slot indices and distort the chart;
+  // closing auction candles create extreme wicks.
   const marketHoursCandles = useMemo(() => {
     return rawCandles.filter((c) => {
       const parts = c.date.split(' ')
       const timeParts = (parts[1] ?? '00:00:00').split(':')
       const totalMins = parseInt(timeParts[0] ?? '0', 10) * 60 + parseInt(timeParts[1] ?? '0', 10)
-      return totalMins < 960 // before 4:00 PM
+      return totalMins >= MARKET_OPEN_MINUTES && totalMins < 960
     })
   }, [rawCandles])
 
@@ -359,12 +361,13 @@ export function FullDayCanvas({
     if (candles.length === 0) return { yMin: 0, yMax: 1 }
     const allPrices: number[] = []
     for (const c of candles) {
-      allPrices.push(c.high, c.low)
+      if (c.high > 0) allPrices.push(c.high)
+      if (c.low > 0) allPrices.push(c.low)
     }
-    if (previousClose !== null) allPrices.push(previousClose)
-    if (lastPrice !== null) allPrices.push(lastPrice)
-    if (dayHigh !== null) allPrices.push(dayHigh)
-    if (dayLow !== null) allPrices.push(dayLow)
+    if (previousClose !== null && previousClose > 0) allPrices.push(previousClose)
+    if (lastPrice !== null && lastPrice > 0) allPrices.push(lastPrice)
+    if (dayHigh !== null && dayHigh > 0) allPrices.push(dayHigh)
+    if (dayLow !== null && dayLow > 0) allPrices.push(dayLow)
     const min = Math.min(...allPrices)
     const max = Math.max(...allPrices)
     const range = max - min || 1
@@ -581,7 +584,7 @@ export function FullDayCanvas({
     }
 
     // --- HOD/LOD dashed lines ---
-    if (dayHigh !== null) {
+    if (dayHigh !== null && dayHigh > 0) {
       const hodY = priceToY(dayHigh)
       if (hodY >= chartTop - 5 && hodY <= chartBottom + 5) {
         ctx.save()
@@ -599,7 +602,7 @@ export function FullDayCanvas({
         ctx.fillText(`HOD $${formatPrice(dayHigh)}`, drawRight - 4, hodY - 4)
       }
     }
-    if (dayLow !== null) {
+    if (dayLow !== null && dayLow > 0) {
       const lodY = priceToY(dayLow)
       if (lodY >= chartTop - 5 && lodY <= chartBottom + 5) {
         // Detect proximity — blink when price is within 0.5% of LOD
@@ -1416,6 +1419,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       {/* Chart area with PIP overlay */}
       <div ref={pipContainerRef} style={{ position: 'relative' }}>
         <FullDayCanvas
+          key={symbol}
           candles={dayData?.candles ?? []}
           previousClose={dayData?.previousClose ?? null}
           lastPrice={stream.lastPrice}

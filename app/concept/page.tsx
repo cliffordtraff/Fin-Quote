@@ -63,6 +63,33 @@ const MARKET_OPEN_MINUTE = 30
 const MARKET_CLOSE_HOUR = 16
 const MARKET_CLOSE_MINUTE = 0
 
+// Determine market session based on Eastern Time
+function getMarketSession(): 'pre-market' | 'open' | 'after-hours' | 'closed' {
+  const now = new Date()
+  const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = eastern.getDay() // 0=Sun, 6=Sat
+  const hours = eastern.getHours()
+  const minutes = eastern.getMinutes()
+  const timeInMinutes = hours * 60 + minutes
+
+  const openMinutes = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE // 9:30 = 570
+  const closeMinutes = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE // 16:00 = 960
+
+  // Weekend
+  if (day === 0 || day === 6) return 'closed'
+
+  // Pre-market: 4:00am - 9:29am ET
+  if (timeInMinutes >= 240 && timeInMinutes < openMinutes) return 'pre-market'
+
+  // Regular hours: 9:30am - 4:00pm ET
+  if (timeInMinutes >= openMinutes && timeInMinutes < closeMinutes) return 'open'
+
+  // After hours: 4:00pm - 8:00pm ET
+  if (timeInMinutes >= closeMinutes && timeInMinutes < 1200) return 'after-hours'
+
+  return 'closed'
+}
+
 // Available timeframes in minutes
 type Timeframe = 2 | 5 | 15
 const TIMEFRAME_OPTIONS: Timeframe[] = [2, 5, 15]
@@ -86,6 +113,29 @@ interface ADCandle {
   unchanged: number
 }
 
+// Get the previous trading day (skip weekends)
+function getPreviousTradingDay(): Date {
+  const now = new Date()
+  const prev = new Date(now)
+  const dayOfWeek = now.getDay()
+
+  if (dayOfWeek === 0) {
+    // Sunday → use Friday
+    prev.setDate(prev.getDate() - 2)
+  } else if (dayOfWeek === 1) {
+    // Monday → use Friday
+    prev.setDate(prev.getDate() - 3)
+  } else if (dayOfWeek === 6) {
+    // Saturday → use Friday
+    prev.setDate(prev.getDate() - 1)
+  } else {
+    // Tue-Fri → use previous day
+    prev.setDate(prev.getDate() - 1)
+  }
+
+  return prev
+}
+
 // Generate fake historical A/D candles from market open to now
 function generateFakeHistoricalADCandles(timeframe: Timeframe = 2): ADCandle[] {
   const now = new Date()
@@ -95,8 +145,21 @@ function generateFakeHistoricalADCandles(timeframe: Timeframe = 2): ADCandle[] {
   const marketClose = new Date(now)
   marketClose.setHours(MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE, 0, 0)
 
-  // If before market open, return empty
-  if (now < marketOpen) return []
+  // If before market open, show previous trading day's full session
+  const isPreMarket = now < marketOpen
+  let startTime: Date
+  let endTime: Date
+
+  if (isPreMarket) {
+    const prevDay = getPreviousTradingDay()
+    startTime = new Date(prevDay)
+    startTime.setHours(MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE, 0, 0)
+    endTime = new Date(prevDay)
+    endTime.setHours(MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE, 0, 0)
+  } else {
+    startTime = new Date(marketOpen)
+    endTime = now < marketClose ? now : marketClose
+  }
 
   const candles: ADCandle[] = []
   const intervalMs = timeframe * 60 * 1000
@@ -104,8 +167,7 @@ function generateFakeHistoricalADCandles(timeframe: Timeframe = 2): ADCandle[] {
   // Start with a slight positive bias
   let currentAD = Math.floor(Math.random() * 100) - 20
 
-  let currentTime = new Date(marketOpen)
-  const endTime = now < marketClose ? now : marketClose
+  let currentTime = new Date(startTime)
 
   // Scale volatility based on timeframe
   const baseVolatility = 30 * Math.sqrt(timeframe / 2)
@@ -173,8 +235,21 @@ function generateFakeHistoricalNYSECandles(timeframe: Timeframe = 2): ADCandle[]
   const marketClose = new Date(now)
   marketClose.setHours(MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE, 0, 0)
 
-  // If before market open, return empty
-  if (now < marketOpen) return []
+  // If before market open, show previous trading day's full session
+  const isPreMarket = now < marketOpen
+  let startTime: Date
+  let endTime: Date
+
+  if (isPreMarket) {
+    const prevDay = getPreviousTradingDay()
+    startTime = new Date(prevDay)
+    startTime.setHours(MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE, 0, 0)
+    endTime = new Date(prevDay)
+    endTime.setHours(MARKET_CLOSE_HOUR, MARKET_CLOSE_MINUTE, 0, 0)
+  } else {
+    startTime = new Date(marketOpen)
+    endTime = now < marketClose ? now : marketClose
+  }
 
   const candles: ADCandle[] = []
   const intervalMs = timeframe * 60 * 1000
@@ -182,8 +257,7 @@ function generateFakeHistoricalNYSECandles(timeframe: Timeframe = 2): ADCandle[]
   // Start with a slight positive bias - NYSE scale is ~6x larger
   let currentAD = Math.floor(Math.random() * 600) - 100
 
-  let currentTime = new Date(marketOpen)
-  const endTime = now < marketClose ? now : marketClose
+  let currentTime = new Date(startTime)
 
   // Scale volatility based on timeframe
   const baseVolatility = 180 * Math.sqrt(timeframe / 2)
@@ -254,6 +328,14 @@ export default function ConceptChartPage() {
   const [distributionData, setDistributionData] = useState<SP500DistributionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [marketSession, setMarketSession] = useState<ReturnType<typeof getMarketSession>>('closed')
+
+  // Update market session on mount and every 30s
+  useEffect(() => {
+    setMarketSession(getMarketSession())
+    const interval = setInterval(() => setMarketSession(getMarketSession()), 30000)
+    return () => clearInterval(interval)
+  }, [])
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const [kdeTooltip, setKdeTooltip] = useState<KDETooltipData | null>(null)
   const [stockTooltip, setStockTooltip] = useState<StockTooltipData | null>(null)
@@ -320,13 +402,29 @@ export default function ConceptChartPage() {
     const result = await getAdvanceDeclineSnapshot()
     if ('data' in result) {
       const snapshot = result.data
+
+      // Don't add pre-market snapshots to the chart - keep showing previous day
+      const [h, m] = snapshot.time.split(':').map(Number)
+      const snapMinutes = h * 60 + m
+      const openMinutes = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE
+      const closeMinutes = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE
+      if (snapMinutes < openMinutes || snapMinutes > closeMinutes) {
+        setAdLoading(false)
+        return
+      }
+
       setAdCandles(prev => {
+        // If existing candles are from a previous day, clear them
+        const today = new Date().toISOString().slice(0, 10)
+        const hasPrevDayData = prev.length > 0 && prev[0].timestamp && !prev[0].timestamp.startsWith(today)
+        const base = hasPrevDayData ? [] : prev
+
         // Check if we already have a candle at this time
-        const existingIndex = prev.findIndex(c => c.time === snapshot.time)
+        const existingIndex = base.findIndex(c => c.time === snapshot.time)
 
         if (existingIndex >= 0) {
           // Update existing candle - adjust high/low/close
-          const existing = prev[existingIndex]
+          const existing = base[existingIndex]
           const updated: ADCandle = {
             ...existing,
             high: Math.max(existing.high, snapshot.advanceDeclineLine),
@@ -336,7 +434,7 @@ export default function ConceptChartPage() {
             declines: snapshot.declines,
             unchanged: snapshot.unchanged,
           }
-          return [...prev.slice(0, existingIndex), updated, ...prev.slice(existingIndex + 1)]
+          return [...base.slice(0, existingIndex), updated, ...base.slice(existingIndex + 1)]
         }
 
         // Create new candle
@@ -351,7 +449,7 @@ export default function ConceptChartPage() {
           declines: snapshot.declines,
           unchanged: snapshot.unchanged,
         }
-        return [...prev, newCandle]
+        return [...base, newCandle]
       })
     }
     setAdLoading(false)
@@ -377,13 +475,29 @@ export default function ConceptChartPage() {
     const result = await getNYSEAdvanceDeclineSnapshot()
     if ('data' in result) {
       const snapshot = result.data
+
+      // Don't add pre-market snapshots to the chart - keep showing previous day
+      const [h, m] = snapshot.time.split(':').map(Number)
+      const snapMinutes = h * 60 + m
+      const openMinutes = MARKET_OPEN_HOUR * 60 + MARKET_OPEN_MINUTE
+      const closeMinutes = MARKET_CLOSE_HOUR * 60 + MARKET_CLOSE_MINUTE
+      if (snapMinutes < openMinutes || snapMinutes > closeMinutes) {
+        setNyseLoading(false)
+        return
+      }
+
       setNyseCandles(prev => {
+        // If existing candles are from a previous day, clear them
+        const today = new Date().toISOString().slice(0, 10)
+        const hasPrevDayData = prev.length > 0 && prev[0].timestamp && !prev[0].timestamp.startsWith(today)
+        const base = hasPrevDayData ? [] : prev
+
         // Check if we already have a candle at this time
-        const existingIndex = prev.findIndex(c => c.time === snapshot.time)
+        const existingIndex = base.findIndex(c => c.time === snapshot.time)
 
         if (existingIndex >= 0) {
           // Update existing candle - adjust high/low/close
-          const existing = prev[existingIndex]
+          const existing = base[existingIndex]
           const updated: ADCandle = {
             ...existing,
             high: Math.max(existing.high, snapshot.advanceDeclineLine),
@@ -393,7 +507,7 @@ export default function ConceptChartPage() {
             declines: snapshot.declines,
             unchanged: snapshot.unchanged,
           }
-          return [...prev.slice(0, existingIndex), updated, ...prev.slice(existingIndex + 1)]
+          return [...base.slice(0, existingIndex), updated, ...base.slice(existingIndex + 1)]
         }
 
         // Create new candle
@@ -408,7 +522,7 @@ export default function ConceptChartPage() {
           declines: snapshot.declines,
           unchanged: snapshot.unchanged,
         }
-        return [...prev, newCandle]
+        return [...base, newCandle]
       })
     }
     setNyseLoading(false)
@@ -676,9 +790,22 @@ export default function ConceptChartPage() {
           <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  S&P 500 Daily Return Distribution
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                    S&P 500 Daily Return Distribution
+                  </h2>
+                  {marketSession !== 'open' && (
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                      marketSession === 'pre-market'
+                        ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                        : marketSession === 'after-hours'
+                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                        : 'bg-gray-500/15 text-gray-400 border border-gray-500/30'
+                    }`}>
+                      {marketSession === 'pre-market' ? 'Pre-Market' : marketSession === 'after-hours' ? 'After Hours' : 'Closed'}
+                    </span>
+                  )}
+                </div>
                 {distributionData && (
                   <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
                     1D% Return Distribution For SPX Individual Constituents
@@ -700,10 +827,6 @@ export default function ConceptChartPage() {
                 {/* Legend */}
                 {distributionData && (
                   <div className="text-xs">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <div className="w-6 h-0.5 bg-yellow-400" />
-                      <span className="text-gray-500 dark:text-gray-400">Weighted Distribution</span>
-                    </div>
                     <div className="flex items-center gap-2 mb-0.5">
                       <div className="w-6 h-0.5 border-t border-dashed border-gray-400" />
                       <span className="text-gray-500 dark:text-gray-400">
@@ -765,7 +888,7 @@ export default function ConceptChartPage() {
                 <path
                   d={outlinePath}
                   fill="none"
-                  stroke="#FFD700"
+                  stroke="rgba(156, 163, 175, 0.8)"
                   strokeWidth="2"
                 />
 
@@ -829,9 +952,9 @@ export default function ConceptChartPage() {
                     y1={MARGIN.top}
                     x2={xScale(tick)}
                     y2={baselineY}
-                    className={tick === 0 ? 'stroke-gray-400 dark:stroke-white/50' : 'stroke-gray-200 dark:stroke-white/15'}
-                    strokeWidth={tick === 0 ? 1.5 : 1}
-                    strokeDasharray={tick === 0 ? '4,4' : '2,4'}
+                    className="stroke-gray-200 dark:stroke-white/15"
+                    strokeWidth={1}
+                    strokeDasharray="2,4"
                   />
                 ))}
 
@@ -898,35 +1021,243 @@ export default function ConceptChartPage() {
                   </text>
                 ))}
 
-                {/* Mag 7 ticker labels */}
-                {mag7Positions.map((stock) => (
-                  <g
-                    key={stock.symbol}
-                    className="cursor-pointer"
-                    onMouseEnter={(e) => handleStockHover(e, stock)}
-                    onMouseLeave={handleStockLeave}
-                  >
-                    {/* Dot */}
-                    <circle
-                      cx={stock.x}
-                      cy={stock.y + 12}
-                      r="4"
-                      fill="cyan"
-                      className="transition-all hover:r-6"
-                    />
-                    {/* Label */}
-                    <text
-                      x={stock.x}
-                      y={stock.y}
-                      textAnchor="middle"
-                      className="fill-gray-900 dark:fill-white"
-                      fontSize="11"
-                      fontWeight="600"
+                {/* Mag 7 logos */}
+                {mag7Positions.map((stock) => {
+                  const logoSize = 28
+                  const logoX = stock.x - logoSize / 2
+                  const logoY = stock.y - logoSize / 2 + 6
+                  return (
+                    <g
+                      key={stock.symbol}
+                      className="cursor-pointer"
+                      onMouseEnter={(e) => handleStockHover(e, stock)}
+                      onMouseLeave={handleStockLeave}
                     >
-                      {stock.symbol}
-                    </text>
-                  </g>
+                      <rect
+                        x={logoX - 1}
+                        y={logoY - 1}
+                        width={logoSize + 2}
+                        height={logoSize + 2}
+                        rx="4"
+                        ry="4"
+                        fill="rgba(255,255,255,0.15)"
+                        stroke="rgba(255,255,255,0.3)"
+                        strokeWidth="1"
+                      />
+                      <clipPath id={`logo-clip-${stock.symbol}`}>
+                        <rect x={logoX} y={logoY} width={logoSize} height={logoSize} rx="3" ry="3" />
+                      </clipPath>
+                      <image
+                        href={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                        x={logoX}
+                        y={logoY}
+                        width={logoSize}
+                        height={logoSize}
+                        clipPath={`url(#logo-clip-${stock.symbol})`}
+                        preserveAspectRatio="xMidYMid slice"
+                      />
+                    </g>
+                  )
+                })}
+              </svg>
+
+              {/* Histogram Chart */}
+              <div className="flex items-start justify-between mt-8 mb-4">
+                <h2 className="text-xl font-bold text-white">
+                  Histogram View (Raw Bins)
+                </h2>
+                {distributionData && (
+                  <div className="flex items-start gap-6">
+                    {/* Summary Stats */}
+                    <div className="text-xs font-medium">
+                      <div className="text-green-600 dark:text-green-400">Stocks Up: {distributionData.stocksUp}</div>
+                      <div className="text-red-600 dark:text-red-400">Stocks Down: {distributionData.stocksDown}</div>
+                      <div className="text-gray-900 dark:text-white">
+                        SPX Daily % Change: {distributionData.spxReturnPct >= 0 ? '+' : ''}
+                        {distributionData.spxReturnPct.toFixed(2)}%
+                      </div>
+                    </div>
+                    {/* Legend */}
+                    <div className="text-xs">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div className="w-6 h-0.5 border-t border-dashed border-gray-400" />
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Avg. Return: {distributionData.avgReturn >= 0 ? '+' : ''}
+                          {distributionData.avgReturn.toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div className="w-6 h-0.5 border-t border-dashed border-green-500" />
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Avg. Gain: +{distributionData.avgGain.toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-0.5 border-t border-dashed border-orange-500" />
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Avg. Decline: {distributionData.avgDecline.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <svg
+                viewBox={`0 0 ${CHART_WIDTH} ${HIST_CHART_HEIGHT}`}
+                className="w-full h-auto"
+                style={{ maxHeight: '350px' }}
+              >
+                {/* Grid lines (vertical, dashed) */}
+                {xTicks.map((tick) => (
+                  <line
+                    key={`hist-grid-${tick}`}
+                    x1={histXScale(tick)}
+                    y1={HIST_MARGIN.top}
+                    x2={histXScale(tick)}
+                    y2={histBaselineY}
+                    stroke={tick === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)'}
+                    strokeWidth={tick === 0 ? 1.5 : 1}
+                    strokeDasharray={tick === 0 ? '4,4' : '2,4'}
+                  />
                 ))}
+
+                {/* Histogram bars */}
+                {histogramBins.map((bin, index) => {
+                  const barHeight = histBaselineY - histYScale(bin.count)
+                  const isNegative = bin.x < 0
+                  return (
+                    <rect
+                      key={`bar-${index}`}
+                      x={histXScale(bin.x) - barWidth / 2}
+                      y={histYScale(bin.count)}
+                      width={barWidth}
+                      height={barHeight}
+                      fill={isNegative ? 'rgba(139, 69, 19, 0.7)' : 'rgba(34, 120, 34, 0.7)'}
+                      stroke={isNegative ? 'rgb(139, 69, 19)' : 'rgb(34, 120, 34)'}
+                      strokeWidth="1"
+                      className="cursor-pointer transition-opacity hover:opacity-80"
+                      onMouseEnter={(e) => handleBarHover(e, bin, index)}
+                      onMouseLeave={handleBarLeave}
+                    />
+                  )
+                })}
+
+                {/* Average return line (dashed gray) */}
+                {distributionData && (
+                  <line
+                    x1={histXScale(distributionData.avgReturn)}
+                    y1={HIST_MARGIN.top}
+                    x2={histXScale(distributionData.avgReturn)}
+                    y2={histBaselineY}
+                    stroke="rgba(156, 163, 175, 0.8)"
+                    strokeWidth="1.5"
+                    strokeDasharray="6,4"
+                  />
+                )}
+
+                {/* Average gain line (dashed green) */}
+                {distributionData && distributionData.avgGain > 0 && (
+                  <line
+                    x1={histXScale(distributionData.avgGain)}
+                    y1={HIST_MARGIN.top}
+                    x2={histXScale(distributionData.avgGain)}
+                    y2={histBaselineY}
+                    stroke="rgba(34, 197, 94, 0.8)"
+                    strokeWidth="1.5"
+                    strokeDasharray="6,4"
+                  />
+                )}
+
+                {/* Average decline line (dashed orange) */}
+                {distributionData && distributionData.avgDecline < 0 && (
+                  <line
+                    x1={histXScale(distributionData.avgDecline)}
+                    y1={HIST_MARGIN.top}
+                    x2={histXScale(distributionData.avgDecline)}
+                    y2={histBaselineY}
+                    stroke="rgba(249, 115, 22, 0.8)"
+                    strokeWidth="1.5"
+                    strokeDasharray="6,4"
+                  />
+                )}
+
+                {/* X-axis baseline */}
+                <line
+                  x1={HIST_MARGIN.left}
+                  y1={histBaselineY}
+                  x2={HIST_MARGIN.left + HIST_INNER_WIDTH}
+                  y2={histBaselineY}
+                  stroke="rgba(255,255,255,0.3)"
+                  strokeWidth="1"
+                />
+
+                {/* X-axis labels */}
+                {xTicks.map((tick) => (
+                  <text
+                    key={`hist-label-${tick}`}
+                    x={histXScale(tick)}
+                    y={histBaselineY + 25}
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.7)"
+                    fontSize="12"
+                  >
+                    {tick}%
+                  </text>
+                ))}
+
+                {/* Y-axis label */}
+                <text
+                  x={HIST_MARGIN.left - 40}
+                  y={HIST_MARGIN.top + HIST_INNER_HEIGHT / 2}
+                  textAnchor="middle"
+                  fill="rgba(255,255,255,0.7)"
+                  fontSize="12"
+                  transform={`rotate(-90, ${HIST_MARGIN.left - 40}, ${HIST_MARGIN.top + HIST_INNER_HEIGHT / 2})`}
+                >
+                  # of Stocks
+                </text>
+
+                {/* Mag 7 ticker labels - positioned to avoid overlaps */}
+                {(() => {
+                  const sorted = [...mag7Data].sort((a, b) => a.changesPercentage - b.changesPercentage)
+                  const yLevels = [
+                    HIST_MARGIN.top + 20,
+                    HIST_MARGIN.top + 50,
+                    HIST_MARGIN.top + 80,
+                    HIST_MARGIN.top + 110,
+                  ]
+
+                  return sorted.map((stock, index) => {
+                    const xPos = histXScale(stock.changesPercentage)
+                    const yPos = yLevels[index % yLevels.length]
+
+                    return (
+                      <g
+                        key={`hist-${stock.symbol}`}
+                        className="cursor-pointer"
+                        onMouseEnter={(e) => handleStockHover(e, stock)}
+                        onMouseLeave={handleStockLeave}
+                      >
+                        <circle
+                          cx={xPos}
+                          cy={yPos + 12}
+                          r="4"
+                          fill="cyan"
+                        />
+                        <text
+                          x={xPos}
+                          y={yPos}
+                          textAnchor="middle"
+                          fill="white"
+                          fontSize="11"
+                          fontWeight="600"
+                        >
+                          {stock.symbol}
+                        </text>
+                      </g>
+                    )
+                  })
+                })()}
               </svg>
 
               </div>

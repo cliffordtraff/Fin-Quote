@@ -44,7 +44,6 @@ export default function Navigation() {
     { href: workspaceHref('/workspace/chart'), label: 'Chart', match: '/workspace/chart' },
     { href: workspaceHref('/workspace/fundamentals'), label: 'Fundamentals', match: '/workspace/fundamentals' },
     { href: workspaceHref('/workspace/overview'), label: 'Overview', match: '/workspace/overview' },
-    { href: '/charts-experiment', label: 'Charting (Old)', match: '/charts-experiment' },
     { href: '/concept', label: 'Market Internals' },
     { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
     { href: '/calendar', label: 'International' },
@@ -73,7 +72,7 @@ export default function Navigation() {
         <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
           <div className="flex items-center gap-6">
             <Logo size="md" />
-            <StockSearch />
+            <StockSearch pathname={pathname} />
           </div>
         </div>
       </div>

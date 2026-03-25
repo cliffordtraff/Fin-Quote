@@ -126,7 +126,7 @@ describe('Number Validator', () => {
   describe('Edge cases', () => {
     it('should skip validation when answer has no numbers', () => {
       const answer = 'No data available'
-      const data = []
+      const data: any[] = []
 
       const result = validateNumbers(answer, data)
 
@@ -162,7 +162,7 @@ describe('Number Validator', () => {
 
     it('should handle empty data array', () => {
       const answer = 'Revenue was $383.3B'
-      const data = []
+      const data: any[] = []
 
       const result = validateNumbers(answer, data)
 

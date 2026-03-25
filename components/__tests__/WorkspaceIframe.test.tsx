@@ -1,14 +1,17 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
+import { NATIVE_TICKER_SEARCH_OPEN_EVENT } from '@/lib/native-ticker-search'
 
 const mockUsePathname = vi.fn()
 const mockUseSearchParams = vi.fn()
 const mockUseTheme = vi.fn()
+const pushMock = vi.fn()
 const postMessage = vi.fn()
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockUsePathname(),
+  useRouter: () => ({ push: pushMock }),
   useSearchParams: () => mockUseSearchParams(),
 }))
 
@@ -22,6 +25,7 @@ describe('WorkspaceIframe', () => {
     mockUseSearchParams.mockReturnValue(new URLSearchParams('symbol=nvda'))
     mockUseTheme.mockReturnValue({ theme: 'dark' })
     process.env.NEXT_PUBLIC_CHARTING_URL = 'https://charts.theintraday.com'
+    pushMock.mockReset()
     postMessage.mockReset()
 
     document.body.innerHTML = '<nav id="app-navigation"></nav>'
@@ -98,6 +102,64 @@ describe('WorkspaceIframe', () => {
             && message?.payload?.mode === 'overview'
         })
       ).toBe(true)
+    })
+  })
+
+  it('opens the native search modal off-workspace and routes selected symbols back through the host app', async () => {
+    mockUsePathname.mockReturnValue('/dashboard')
+    mockUseSearchParams.mockReturnValue(new URLSearchParams())
+
+    render(<WorkspaceIframe />)
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(NATIVE_TICKER_SEARCH_OPEN_EVENT, {
+        detail: { query: 'tsla' },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
+        'src',
+        'https://charts.theintraday.com/tos/AAPL?embed=true&view=price&theme=dark'
+      )
+      expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ display: 'block' })
+      expect(screen.getByTestId('workspace-iframe-search-backdrop')).toBeInTheDocument()
+    })
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: 'https://charts.theintraday.com',
+        data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(
+        postMessage.mock.calls.some(([message, origin]) => {
+          return origin === 'https://charts.theintraday.com'
+            && message?.type === 'SET_EMBED_SURFACE_MODE'
+            && message?.payload?.mode === 'search-only'
+        })
+      ).toBe(true)
+      expect(
+        postMessage.mock.calls.some(([message, origin]) => {
+          return origin === 'https://charts.theintraday.com'
+            && message?.type === 'SET_TICKER_SEARCH_QUERY'
+            && message?.payload?.query === 'TSLA'
+        })
+      ).toBe(true)
+    })
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: 'https://charts.theintraday.com',
+        data: { v: 1, type: 'TICKER_SELECTED', payload: { symbol: 'TSLA' } },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith('/stock/TSLA')
+      expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ display: 'none' })
     })
   })
 })

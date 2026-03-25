@@ -27,7 +27,9 @@ vi.mock('@/components/UserMenu', () => ({
 }))
 
 vi.mock('@/components/StockSearch', () => ({
-  default: () => <div>Search</div>,
+  default: ({ pathname }: { pathname?: string | null }) => (
+    <div data-testid="stock-search" data-pathname={pathname ?? ''}>Search</div>
+  ),
 }))
 
 vi.mock('@/components/TimezoneSelector', () => ({
@@ -41,15 +43,16 @@ describe('Navigation', () => {
     process.env.NEXT_PUBLIC_ENABLE_CHAT = 'false'
   })
 
-  it('renders workspace links and the renamed old charting link', () => {
+  it('renders workspace links and passes the current pathname into stock search', () => {
     render(<Navigation />)
 
     expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Fundamentals' })).toHaveAttribute('href', '/workspace/fundamentals?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/workspace/overview?symbol=MSFT')
-    expect(screen.getByRole('link', { name: 'Charting (Old)' })).toHaveAttribute('href', '/charts-experiment')
+    expect(screen.getByTestId('stock-search')).toHaveAttribute('data-pathname', '/stock/msft')
     expect(screen.queryByRole('link', { name: 'Charting (Beta)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Fundamentals Charting' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Charting (Old)' })).not.toBeInTheDocument()
   })
 
   it('preserves workspace symbols from the query string', async () => {

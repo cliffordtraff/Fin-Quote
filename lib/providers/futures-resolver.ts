@@ -15,6 +15,10 @@ function getApiKey(): string {
   return key
 }
 
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${getApiKey()}` }
+}
+
 // ---------------------------------------------------------------------------
 // Product alias → Massive product code
 // ---------------------------------------------------------------------------
@@ -69,10 +73,9 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
   }
 
   try {
-    const key = getApiKey()
-    const url = `${MASSIVE_BASE}/futures/vX/contracts?product_code=${code}&active=true&sort=last_trade_date.asc&limit=1&apiKey=${key}`
+    const url = `${MASSIVE_BASE}/futures/vX/contracts?product_code=${code}&active=true&sort=last_trade_date.asc&limit=1`
 
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
     if (!res.ok) {
       console.error(`[futures-resolver] Contract lookup failed for ${code}: ${res.status}`)
       return null
@@ -113,10 +116,9 @@ export async function getFuturesSnapshot(contractTicker: string): Promise<{
   low: number
 } | null> {
   try {
-    const key = getApiKey()
-    const url = `${MASSIVE_BASE}/futures/vX/snapshot?ticker=${contractTicker}&apiKey=${key}`
+    const url = `${MASSIVE_BASE}/futures/vX/snapshot?ticker=${contractTicker}`
 
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
     if (!res.ok) return null
 
     const json = await res.json()
@@ -168,11 +170,10 @@ export async function getFuturesCandles(
   timestampMs: number
 }>> {
   try {
-    const key = getApiKey()
-    let url = `${MASSIVE_BASE}/futures/vX/aggs/${contractTicker}?resolution=${resolution}&apiKey=${key}&limit=50000`
+    let url = `${MASSIVE_BASE}/futures/vX/aggs/${contractTicker}?resolution=${resolution}&limit=50000`
     if (from) url += `&window_start=${from}`
 
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
     if (!res.ok) return []
 
     const json = await res.json()
