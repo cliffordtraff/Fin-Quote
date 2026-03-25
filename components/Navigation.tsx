@@ -47,7 +47,7 @@ export default function Navigation() {
     { href: '/charts-experiment', label: 'Charting (Old)', match: '/charts-experiment' },
     { href: '/concept', label: 'Market Internals' },
     { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
-    { href: '/calendar', label: 'Calendar' },
+    { href: '/calendar', label: 'International' },
     { href: '/insiders', label: 'Insiders' },
   ]
 
