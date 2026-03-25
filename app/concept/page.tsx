@@ -614,7 +614,7 @@ export default function ConceptChartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
       {/* Histogram Tooltip */}
       {tooltip && (
         <div
@@ -670,69 +670,78 @@ export default function ConceptChartPage() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-black rounded-xl p-6">
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-white text-center mb-2">
-            S&P 500 Daily Return Distribution
-          </h1>
-          {distributionData && (
-            <p className="text-gray-400 text-center text-sm mb-4">
-              1D% Return Distribution For SPX Individual Constituents
-            </p>
-          )}
-
-          {loading ? (
-            <div className="h-[500px] flex items-center justify-center">
-              <div className="text-gray-400">Loading S&P 500 data...</div>
+        {/* Distribution Card */}
+        <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden mt-4">
+          {/* Card Header */}
+          <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                  S&P 500 Daily Return Distribution
+                </h2>
+                {distributionData && (
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
+                    1D% Return Distribution For SPX Individual Constituents
+                  </p>
+                )}
+              </div>
+              <div className="flex items-start gap-6">
+                {/* Summary Stats */}
+                {distributionData && (
+                  <div className="text-xs font-medium">
+                    <div className="text-green-600 dark:text-green-400">Stocks Up: {distributionData.stocksUp}</div>
+                    <div className="text-red-600 dark:text-red-400">Stocks Down: {distributionData.stocksDown}</div>
+                    <div className="text-gray-900 dark:text-white">
+                      SPX Daily % Change: {distributionData.spxReturnPct >= 0 ? '+' : ''}
+                      {distributionData.spxReturnPct.toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+                {/* Legend */}
+                {distributionData && (
+                  <div className="text-xs">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className="w-6 h-0.5 bg-yellow-400" />
+                      <span className="text-gray-500 dark:text-gray-400">Weighted Distribution</span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className="w-6 h-0.5 border-t border-dashed border-gray-400" />
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Avg. Return: {distributionData.avgReturn >= 0 ? '+' : ''}
+                        {distributionData.avgReturn.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className="w-6 h-0.5 border-t border-dashed border-green-500" />
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Avg. Gain: +{distributionData.avgGain.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-0.5 border-t border-dashed border-orange-500" />
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Avg. Decline: {distributionData.avgDecline.toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : error ? (
-            <div className="h-[500px] flex items-center justify-center">
-              <div className="text-red-500">{error}</div>
-            </div>
-          ) : (
-            <div className="relative">
-              {/* Summary Label - Top Left */}
-              {distributionData && (
-                <div className="absolute top-2 left-12 z-10 text-sm font-medium">
-                  <div className="text-green-400">Stocks Up: {distributionData.stocksUp}</div>
-                  <div className="text-red-400">Stocks Down: {distributionData.stocksDown}</div>
-                  <div className="text-white">
-                    SPX Daily % Change: {distributionData.spxReturnPct >= 0 ? '+' : ''}
-                    {distributionData.spxReturnPct.toFixed(2)}%
-                  </div>
-                </div>
-              )}
+          </div>
 
-              {/* Legend - Top Right */}
-              {distributionData && (
-                <div className="absolute top-2 right-12 z-10 text-xs">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-0.5 bg-yellow-400" />
-                    <span className="text-gray-300">Weighted Distribution</span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-0.5 border-t border-dashed border-gray-400" />
-                    <span className="text-gray-300">
-                      Avg. Daily Return: {distributionData.avgReturn >= 0 ? '+' : ''}
-                      {distributionData.avgReturn.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-0.5 border-t border-dashed border-green-500" />
-                    <span className="text-gray-300">
-                      Avg. Gain: +{distributionData.avgGain.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 border-t border-dashed border-orange-500" />
-                    <span className="text-gray-300">
-                      Avg. Decline: {distributionData.avgDecline.toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* SVG Chart */}
+          {/* Card Body */}
+          <div className="p-4">
+            {loading ? (
+              <div className="h-[500px] flex items-center justify-center">
+                <div className="text-gray-400">Loading S&P 500 data...</div>
+              </div>
+            ) : error ? (
+              <div className="h-[500px] flex items-center justify-center">
+                <div className="text-red-500">{error}</div>
+              </div>
+            ) : (
+              <div className="relative">
+                {/* SVG Chart */}
               <svg
                 viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
                 className="w-full h-auto"
@@ -741,14 +750,14 @@ export default function ConceptChartPage() {
                 {/* Distribution mountain - negative (red/brown) */}
                 <path
                   d={negativePath}
-                  fill="rgba(139, 69, 19, 0.7)"
+                  fill="rgba(139, 69, 19, 0.55)"
                   stroke="none"
                 />
 
                 {/* Distribution mountain - positive (green) */}
                 <path
                   d={positivePath}
-                  fill="rgba(34, 139, 34, 0.7)"
+                  fill="rgba(34, 120, 34, 0.55)"
                   stroke="none"
                 />
 
@@ -820,7 +829,7 @@ export default function ConceptChartPage() {
                     y1={MARGIN.top}
                     x2={xScale(tick)}
                     y2={baselineY}
-                    stroke={tick === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)'}
+                    className={tick === 0 ? 'stroke-gray-400 dark:stroke-white/50' : 'stroke-gray-200 dark:stroke-white/15'}
                     strokeWidth={tick === 0 ? 1.5 : 1}
                     strokeDasharray={tick === 0 ? '4,4' : '2,4'}
                   />
@@ -833,7 +842,7 @@ export default function ConceptChartPage() {
                     y1={MARGIN.top}
                     x2={xScale(distributionData.avgReturn)}
                     y2={baselineY}
-                    stroke="rgba(255,255,255,0.6)"
+                    className="stroke-gray-400 dark:stroke-white/60"
                     strokeWidth="1.5"
                     strokeDasharray="6,4"
                   />
@@ -871,7 +880,7 @@ export default function ConceptChartPage() {
                   y1={baselineY}
                   x2={MARGIN.left + INNER_WIDTH}
                   y2={baselineY}
-                  stroke="rgba(255,255,255,0.3)"
+                  className="stroke-gray-300 dark:stroke-white/30"
                   strokeWidth="1"
                 />
 
@@ -882,7 +891,7 @@ export default function ConceptChartPage() {
                     x={xScale(tick)}
                     y={baselineY + 25}
                     textAnchor="middle"
-                    fill="rgba(255,255,255,0.7)"
+                    className="fill-gray-500 dark:fill-white/70"
                     fontSize="12"
                   >
                     {tick}%
@@ -910,7 +919,7 @@ export default function ConceptChartPage() {
                       x={stock.x}
                       y={stock.y}
                       textAnchor="middle"
-                      fill="white"
+                      className="fill-gray-900 dark:fill-white"
                       fontSize="11"
                       fontWeight="600"
                     >
@@ -920,157 +929,36 @@ export default function ConceptChartPage() {
                 ))}
               </svg>
 
-              {/* Histogram Chart */}
-              <h2 className="text-xl font-bold text-white text-center mt-8 mb-4">
-                Histogram View (Raw Bins)
-              </h2>
-              <svg
-                viewBox={`0 0 ${CHART_WIDTH} ${HIST_CHART_HEIGHT}`}
-                className="w-full h-auto"
-                style={{ maxHeight: '350px' }}
-              >
-                {/* Grid lines (vertical, dashed) */}
-                {xTicks.map((tick) => (
-                  <line
-                    key={`hist-grid-${tick}`}
-                    x1={histXScale(tick)}
-                    y1={HIST_MARGIN.top}
-                    x2={histXScale(tick)}
-                    y2={histBaselineY}
-                    stroke={tick === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)'}
-                    strokeWidth={tick === 0 ? 1.5 : 1}
-                    strokeDasharray={tick === 0 ? '4,4' : '2,4'}
-                  />
-                ))}
-
-                {/* Histogram bars */}
-                {histogramBins.map((bin, index) => {
-                  const barHeight = histBaselineY - histYScale(bin.count)
-                  const isNegative = bin.x < 0
-                  return (
-                    <rect
-                      key={`bar-${index}`}
-                      x={histXScale(bin.x) - barWidth / 2}
-                      y={histYScale(bin.count)}
-                      width={barWidth}
-                      height={barHeight}
-                      fill={isNegative ? 'rgba(185, 28, 28, 0.8)' : 'rgba(34, 197, 94, 0.8)'}
-                      stroke={isNegative ? 'rgb(185, 28, 28)' : 'rgb(34, 197, 94)'}
-                      strokeWidth="1"
-                      className="cursor-pointer transition-opacity hover:opacity-80"
-                      onMouseEnter={(e) => handleBarHover(e, bin, index)}
-                      onMouseLeave={handleBarLeave}
-                    />
-                  )
-                })}
-
-                {/* X-axis baseline */}
-                <line
-                  x1={HIST_MARGIN.left}
-                  y1={histBaselineY}
-                  x2={HIST_MARGIN.left + HIST_INNER_WIDTH}
-                  y2={histBaselineY}
-                  stroke="rgba(255,255,255,0.3)"
-                  strokeWidth="1"
-                />
-
-                {/* X-axis labels */}
-                {xTicks.map((tick) => (
-                  <text
-                    key={`hist-label-${tick}`}
-                    x={histXScale(tick)}
-                    y={histBaselineY + 25}
-                    textAnchor="middle"
-                    fill="rgba(255,255,255,0.7)"
-                    fontSize="12"
-                  >
-                    {tick}%
-                  </text>
-                ))}
-
-                {/* Y-axis label */}
-                <text
-                  x={HIST_MARGIN.left - 40}
-                  y={HIST_MARGIN.top + HIST_INNER_HEIGHT / 2}
-                  textAnchor="middle"
-                  fill="rgba(255,255,255,0.7)"
-                  fontSize="12"
-                  transform={`rotate(-90, ${HIST_MARGIN.left - 40}, ${HIST_MARGIN.top + HIST_INNER_HEIGHT / 2})`}
-                >
-                  # of Stocks
-                </text>
-
-                {/* Mag 7 ticker labels - positioned to avoid overlaps */}
-                {(() => {
-                  // Sort by return percentage to position left-to-right
-                  const sorted = [...mag7Data].sort((a, b) => a.changesPercentage - b.changesPercentage)
-
-                  // Assign alternating y positions to avoid horizontal overlap
-                  const yLevels = [
-                    HIST_MARGIN.top + 20,
-                    HIST_MARGIN.top + 50,
-                    HIST_MARGIN.top + 80,
-                    HIST_MARGIN.top + 110,
-                  ]
-
-                  return sorted.map((stock, index) => {
-                    const xPos = histXScale(stock.changesPercentage)
-                    // Alternate between y levels
-                    const yPos = yLevels[index % yLevels.length]
-
-                    return (
-                      <g
-                        key={`hist-${stock.symbol}`}
-                        className="cursor-pointer"
-                        onMouseEnter={(e) => handleStockHover(e, stock)}
-                        onMouseLeave={handleStockLeave}
-                      >
-                        {/* Dot */}
-                        <circle
-                          cx={xPos}
-                          cy={yPos + 12}
-                          r="4"
-                          fill="cyan"
-                        />
-                        {/* Label */}
-                        <text
-                          x={xPos}
-                          y={yPos}
-                          textAnchor="middle"
-                          fill="white"
-                          fontSize="11"
-                          fontWeight="600"
-                        >
-                          {stock.symbol}
-                        </text>
-                      </g>
-                    )
-                  })
-                })()}
-              </svg>
-
-              {/* Advance-Decline Candlestick Chart */}
-              <div className="flex items-center justify-center gap-4 mt-8 mb-4">
-                <h2 className="text-xl font-bold text-white">
-                  S&P 500 Advance-Decline
-                </h2>
-                <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
-                  {TIMEFRAME_OPTIONS.map((tf) => (
-                    <button
-                      key={`sp-${tf}`}
-                      onClick={() => setSpTimeframe(tf)}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        spTimeframe === tf
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                      }`}
-                    >
-                      {tf}m
-                    </button>
-                  ))}
-                </div>
               </div>
+            )}
+          </div>
+        </div>
 
+        {/* A/D Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          {/* S&P 500 A/D Card */}
+          <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+            <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                S&P 500 Advance-Decline
+              </h2>
+              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                {TIMEFRAME_OPTIONS.map((tf) => (
+                  <button
+                    key={`sp-${tf}`}
+                    onClick={() => setSpTimeframe(tf)}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      spTimeframe === tf
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {tf}m
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-4">
               {adLoading && adCandles.length === 0 ? (
                 <div className="h-[350px] flex items-center justify-center">
                   <div className="text-gray-400">Loading advance-decline data...</div>
@@ -1078,8 +966,7 @@ export default function ConceptChartPage() {
               ) : (
                 <svg
                   viewBox={`0 0 ${AD_CHART_WIDTH} ${AD_CHART_HEIGHT}`}
-                  className="w-full h-auto border border-gray-700 rounded-lg"
-                  style={{ maxWidth: '700px', margin: '0 auto', display: 'block' }}
+                  className="w-full h-auto"
                 >
                   {(() => {
                     // Fixed y-axis range: -500 to +500
@@ -1134,7 +1021,7 @@ export default function ConceptChartPage() {
                             y1={adYScale(tick)}
                             x2={AD_MARGIN.left + AD_INNER_WIDTH}
                             y2={adYScale(tick)}
-                            stroke="rgba(255,255,255,0.1)"
+                            className="stroke-gray-200 dark:stroke-white/10"
                             strokeWidth={1}
                             strokeDasharray="4,4"
                           />
@@ -1146,7 +1033,7 @@ export default function ConceptChartPage() {
                           y1={zeroY}
                           x2={AD_MARGIN.left + AD_INNER_WIDTH}
                           y2={zeroY}
-                          stroke="rgba(255,255,255,0.7)"
+                          className="stroke-gray-400 dark:stroke-white/70"
                           strokeWidth="2"
                         />
 
@@ -1158,7 +1045,7 @@ export default function ConceptChartPage() {
                             y={adYScale(tick)}
                             textAnchor="end"
                             dominantBaseline="middle"
-                            fill="rgba(255,255,255,0.7)"
+                            className="fill-gray-500 dark:fill-white/70"
                             fontSize="11"
                           >
                             {tick > 0 ? '+' : ''}{tick}
@@ -1215,7 +1102,7 @@ export default function ConceptChartPage() {
                               x={adXScale(index)}
                               y={AD_MARGIN.top + AD_INNER_HEIGHT + 20}
                               textAnchor="middle"
-                              fill="rgba(255,255,255,0.7)"
+                              className="fill-gray-500 dark:fill-white/70"
                               fontSize="10"
                             >
                               {label.display}
@@ -1242,7 +1129,7 @@ export default function ConceptChartPage() {
                           x={AD_MARGIN.left - 50}
                           y={AD_MARGIN.top + AD_INNER_HEIGHT / 2}
                           textAnchor="middle"
-                          fill="rgba(255,255,255,0.7)"
+                          className="fill-gray-500 dark:fill-white/70"
                           fontSize="12"
                           transform={`rotate(-90, ${AD_MARGIN.left - 50}, ${AD_MARGIN.top + AD_INNER_HEIGHT / 2})`}
                         >
@@ -1276,28 +1163,32 @@ export default function ConceptChartPage() {
                 </svg>
               )}
 
-              {/* NYSE Advance-Decline Candlestick Chart */}
-              <div className="flex items-center justify-center gap-4 mt-8 mb-4">
-                <h2 className="text-xl font-bold text-white">
-                  NYSE Advance-Decline
-                </h2>
-                <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
-                  {TIMEFRAME_OPTIONS.map((tf) => (
-                    <button
-                      key={`nyse-${tf}`}
-                      onClick={() => setNyseTimeframe(tf)}
-                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                        nyseTimeframe === tf
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                      }`}
-                    >
-                      {tf}m
-                    </button>
-                  ))}
-                </div>
-              </div>
+            </div>
+          </div>
 
+          {/* NYSE A/D Card */}
+          <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+            <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                NYSE Advance-Decline
+              </h2>
+              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                {TIMEFRAME_OPTIONS.map((tf) => (
+                  <button
+                    key={`nyse-${tf}`}
+                    onClick={() => setNyseTimeframe(tf)}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      nyseTimeframe === tf
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {tf}m
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-4">
               {nyseLoading && nyseCandles.length === 0 ? (
                 <div className="h-[350px] flex items-center justify-center">
                   <div className="text-gray-400">Loading NYSE advance-decline data...</div>
@@ -1305,8 +1196,7 @@ export default function ConceptChartPage() {
               ) : (
                 <svg
                   viewBox={`0 0 ${AD_CHART_WIDTH} ${AD_CHART_HEIGHT}`}
-                  className="w-full h-auto border border-gray-700 rounded-lg"
-                  style={{ maxWidth: '700px', margin: '0 auto', display: 'block' }}
+                  className="w-full h-auto"
                 >
                   {(() => {
                     // Fixed y-axis range: -2000 to +2000 (NYSE has ~2,971 stocks)
@@ -1361,7 +1251,7 @@ export default function ConceptChartPage() {
                             y1={nyseYScale(tick)}
                             x2={AD_MARGIN.left + AD_INNER_WIDTH}
                             y2={nyseYScale(tick)}
-                            stroke="rgba(255,255,255,0.1)"
+                            className="stroke-gray-200 dark:stroke-white/10"
                             strokeWidth={1}
                             strokeDasharray="4,4"
                           />
@@ -1373,7 +1263,7 @@ export default function ConceptChartPage() {
                           y1={zeroY}
                           x2={AD_MARGIN.left + AD_INNER_WIDTH}
                           y2={zeroY}
-                          stroke="rgba(255,255,255,0.7)"
+                          className="stroke-gray-400 dark:stroke-white/70"
                           strokeWidth="2"
                         />
 
@@ -1385,7 +1275,7 @@ export default function ConceptChartPage() {
                             y={nyseYScale(tick)}
                             textAnchor="end"
                             dominantBaseline="middle"
-                            fill="rgba(255,255,255,0.7)"
+                            className="fill-gray-500 dark:fill-white/70"
                             fontSize="11"
                           >
                             {tick > 0 ? '+' : ''}{tick}
@@ -1442,7 +1332,7 @@ export default function ConceptChartPage() {
                               x={nyseXScale(index)}
                               y={AD_MARGIN.top + AD_INNER_HEIGHT + 20}
                               textAnchor="middle"
-                              fill="rgba(255,255,255,0.7)"
+                              className="fill-gray-500 dark:fill-white/70"
                               fontSize="10"
                             >
                               {label.display}
@@ -1469,7 +1359,7 @@ export default function ConceptChartPage() {
                           x={AD_MARGIN.left - 50}
                           y={AD_MARGIN.top + AD_INNER_HEIGHT / 2}
                           textAnchor="middle"
-                          fill="rgba(255,255,255,0.7)"
+                          className="fill-gray-500 dark:fill-white/70"
                           fontSize="12"
                           transform={`rotate(-90, ${AD_MARGIN.left - 50}, ${AD_MARGIN.top + AD_INNER_HEIGHT / 2})`}
                         >
@@ -1503,7 +1393,7 @@ export default function ConceptChartPage() {
                 </svg>
               )}
             </div>
-          )}
+          </div>
         </div>
       </main>
     </div>

@@ -18,13 +18,15 @@ export async function getGainersData(): Promise<{ gainers: GainerData[] } | { er
     const provider = getProvider()
     const quotes = await provider.getGainers()
 
-    const gainers: GainerData[] = quotes.map((q) => ({
-      symbol: q.symbol,
-      name: q.name,
-      price: q.price,
-      change: q.change,
-      changesPercentage: q.changesPercentage,
-    }))
+    const gainers: GainerData[] = quotes
+      .filter((q) => q.price >= 0.50)
+      .map((q) => ({
+        symbol: q.symbol,
+        name: q.name,
+        price: q.price,
+        change: q.change,
+        changesPercentage: q.changesPercentage,
+      }))
 
     return { gainers }
   } catch (error) {

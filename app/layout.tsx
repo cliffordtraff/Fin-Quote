@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import WorkspaceIframe from '@/components/WorkspaceIframe'
 import { TimezoneProvider } from '@/lib/timezone-context'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -43,7 +45,12 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-cream-100 dark:bg-gray-900 min-h-full`}>
         <ThemeProvider>
-          <TimezoneProvider>{children}</TimezoneProvider>
+          <TimezoneProvider>
+            {children}
+            <Suspense fallback={null}>
+              <WorkspaceIframe />
+            </Suspense>
+          </TimezoneProvider>
         </ThemeProvider>
       </body>
     </html>

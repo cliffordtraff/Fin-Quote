@@ -247,7 +247,7 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
   })()
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto px-4">
+    <div className="w-full max-w-[1400px] mx-auto px-6">
       {/* Last Updated Note */}
       {lastUpdated && (
         <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">

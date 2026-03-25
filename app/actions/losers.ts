@@ -18,13 +18,15 @@ export async function getLosersData(): Promise<{ losers: LoserData[] } | { error
     const provider = getProvider()
     const quotes = await provider.getLosers()
 
-    const losers: LoserData[] = quotes.map((q) => ({
-      symbol: q.symbol,
-      name: q.name,
-      price: q.price,
-      change: q.change,
-      changesPercentage: q.changesPercentage,
-    }))
+    const losers: LoserData[] = quotes
+      .filter((q) => q.price >= 0.50)
+      .map((q) => ({
+        symbol: q.symbol,
+        name: q.name,
+        price: q.price,
+        change: q.change,
+        changesPercentage: q.changesPercentage,
+      }))
 
     return { losers }
   } catch (error) {

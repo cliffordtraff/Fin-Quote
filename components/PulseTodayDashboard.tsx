@@ -8,6 +8,9 @@ import { useMultiStream } from '@/lib/hooks/use-multi-stream'
 import type { LiveStreamState } from '@/lib/hooks/use-live-stream'
 import { useReplay } from '@/lib/hooks/use-replay'
 import type { ReplayConfig, ReplaySpeed } from '@/lib/hooks/use-replay'
+import MarketMoversTable from '@/components/MarketMoversTable'
+import type { MoverData } from '@/app/actions/market-movers'
+import type { MarketSession } from '@/lib/market-hours'
 
 const SYMBOLS = ['GOOGL'] as const
 
@@ -348,7 +351,7 @@ export function FullDayCanvas({
   const effectiveTotalSlots = isMorphing ? lerp(totalSlots, targetTotalSlots, morphProgress) : totalSlots
 
   // Chart padding
-  const padding = { top: 12, right: 64, bottom: 28, left: 8 }
+  const padding = { top: 12, right: 64, bottom: 28, left: 20 }
 
   // Price range — only expands, never contracts, to keep HOD/LOD lines stable
   const stableRangeRef = useRef<{ yMin: number; yMax: number } | null>(null)
@@ -370,7 +373,10 @@ export function FullDayCanvas({
     const newMax = max + buffer
 
     const prev = stableRangeRef.current
-    if (prev === null || prev.yMin === 0 && prev.yMax === 1) {
+    // Reset when there's no previous range, or when the new data is completely
+    // outside the old range (symbol changed to a different price level)
+    const noOverlap = prev !== null && (newMin > prev.yMax || newMax < prev.yMin)
+    if (prev === null || (prev.yMin === 0 && prev.yMax === 1) || noOverlap) {
       stableRangeRef.current = { yMin: newMin, yMax: newMax }
       return { yMin: newMin, yMax: newMax }
     }
@@ -431,7 +437,7 @@ export function FullDayCanvas({
     const gridColor = isDark ? 'rgba(55,65,81,0.5)' : 'rgba(229,231,235,0.8)'
     const textColor = isDark ? '#9ca3af' : '#6b7280'
 
-    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     ctx.textAlign = 'left'
 
     const firstLabel = Math.ceil(yMin / labelInterval) * labelInterval
@@ -455,7 +461,7 @@ export function FullDayCanvas({
     // --- X-axis time labels ---
     ctx.textAlign = 'center'
     ctx.fillStyle = textColor
-    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
     if (dynamicXAxis && candles.length > 0) {
       // During morph, use 1min-scale for labels since that's the target
@@ -530,6 +536,28 @@ export function FullDayCanvas({
       }
     }
 
+    // --- Axis border lines (solid, subtle) ---
+    const axisBorderColor = isDark ? 'rgba(75,85,99,0.6)' : 'rgba(209,213,219,0.8)'
+    ctx.strokeStyle = axisBorderColor
+    ctx.lineWidth = 1
+    ctx.setLineDash([])
+    // Right Y-axis border
+    ctx.beginPath()
+    ctx.moveTo(drawRight, chartTop)
+    ctx.lineTo(drawRight, chartBottom)
+    ctx.stroke()
+    // Bottom X-axis border
+    ctx.beginPath()
+    ctx.moveTo(drawLeft, chartBottom)
+    ctx.lineTo(drawRight, chartBottom)
+    ctx.stroke()
+
+    // --- Clip to chart area so nothing draws in the left/right margins ---
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(drawLeft, chartTop, drawW, chartAreaH)
+    ctx.clip()
+
     // --- Previous close dashed line ---
     if (previousClose !== null) {
       const prevY = priceToY(previousClose)
@@ -545,7 +573,7 @@ export function FullDayCanvas({
         ctx.restore()
         // Label
         ctx.fillStyle = isDark ? 'rgba(239,68,68,0.7)' : 'rgba(239,68,68,0.6)'
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         ctx.textAlign = 'right'
         ctx.fillText(`Prev $${formatPrice(previousClose)}`, drawRight - 4, prevY - 4)
         ctx.textAlign = 'center'
@@ -566,7 +594,7 @@ export function FullDayCanvas({
         ctx.stroke()
         ctx.restore()
         ctx.fillStyle = isDark ? 'rgba(34,197,94,0.7)' : 'rgba(34,197,94,0.6)'
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         ctx.textAlign = 'right'
         ctx.fillText(`HOD $${formatPrice(dayHigh)}`, drawRight - 4, hodY - 4)
       }
@@ -606,7 +634,7 @@ export function FullDayCanvas({
           ? 0.5 + (Math.sin(Date.now() / 600) * 0.5 + 0.5) * 0.5
           : (isDark ? 0.7 : 0.6)
         ctx.fillStyle = `rgba(239,68,68,${labelAlpha})`
-        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         ctx.textAlign = 'right'
         ctx.fillText(`LOD $${formatPrice(dayLow)}`, drawRight - 4, lodY + 12)
       }
@@ -732,6 +760,9 @@ export function FullDayCanvas({
       }
     }
 
+    // --- Restore from chart-area clip ---
+    ctx.restore()
+
     // --- Live price pill badge at right edge ---
     if (lastPrice !== null && candles.length > 0) {
       const lastSlot = slotMap[candles.length - 1]
@@ -750,7 +781,7 @@ export function FullDayCanvas({
 
       // Pill badge on Y-axis
       const priceText = formatPrice(lastPrice)
-      ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       const tw = ctx.measureText(priceText).width
       const pillPad = 4
       const pillH = 16
@@ -800,7 +831,7 @@ export function FullDayCanvas({
 
       // Price label above cursor
       const priceLabel = `$${formatPrice(crosshair.candle.close)}`
-      ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       const labelW = ctx.measureText(priceLabel).width + 10
       const labelH = 18
       const labelX = crosshair.x - labelW / 2
@@ -1116,6 +1147,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const [pipLineMode, setPipLineMode] = useState(true)
   const [pipZoom, setPipZoom] = useState<number>(2)
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
+  const [gradientMode, setGradientMode] = useState(true)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
   const pipContainerRef = useRef<HTMLDivElement>(null)
 
@@ -1264,27 +1296,54 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       ? 'pulse-today-flash-red'
       : ''
 
+  const isDark = theme === 'dark'
+
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden ${flashClass}`}>
+    <div className={`relative rounded-xl border overflow-hidden ${flashClass} ${
+      gradientMode
+        ? 'border-gray-200/80 bg-white dark:border-gray-700 dark:bg-gray-900'
+        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+    }`}>
+      {/* Gradient mode overlays */}
+      {gradientMode && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-x-6 top-6 z-10 h-24 rounded-full blur-3xl"
+            style={{ background: GOOGL_GRADIENT.glow, opacity: isDark ? 0.5 : 0.24 }}
+          />
+          <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_22%,transparent_72%,rgba(15,23,42,0.12))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_24%,transparent_74%,rgba(2,6,23,0.42))]" />
+        </>
+      )}
+
+      {/* Content */}
+      <div className={gradientMode ? 'relative z-20' : ''}>
       {/* Header */}
       <div className="px-3 pt-3 pb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-sm font-bold ${
+            gradientMode
+              ? 'bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+          }`}>
             {symbol}
           </span>
           {changePct !== null && (
-            <span className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded ${
-              isPositive
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            <span className={`text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded ${
+              gradientMode
+                ? (isPositive
+                    ? 'bg-green-500/20 text-green-800 dark:text-green-300 backdrop-blur-sm'
+                    : 'bg-red-500/20 text-red-800 dark:text-red-300 backdrop-blur-sm')
+                : (isPositive
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400')
             }`}>
               {isPositive ? '+' : ''}{changePct.toFixed(2)}%
             </span>
           )}
-          <span className={`text-[10px] font-semibold tabular-nums ${
-            isPositive
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-red-600 dark:text-red-400'
+          <span className={`text-xs font-semibold tabular-nums ${
+            gradientMode
+              ? (isPositive ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300')
+              : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')
           }`}>
             {isPositive ? '+' : ''}{change.toFixed(2)}
           </span>
@@ -1298,15 +1357,23 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
                 : forceAggregation === '10s' ? '10s' : forceAggregation === '1min' ? '1m' : '5m'}
             </span>
           ) : (
-            <div className="flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <div className={`flex rounded border overflow-hidden ${
+              gradientMode
+                ? 'border-white/20 dark:border-white/10 backdrop-blur-sm'
+                : 'border-gray-300 dark:border-gray-600'
+            }`}>
               {(['1min', '5min'] as const).map((agg) => (
                 <button
                   key={agg}
                   onClick={() => setInternalAgg(agg)}
                   className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
-                    aggregation === agg
-                      ? 'bg-sage-500 text-white dark:bg-sage-600'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    gradientMode
+                      ? (aggregation === agg
+                          ? 'bg-white/30 dark:bg-white/20 text-gray-900 dark:text-white'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-white/10')
+                      : (aggregation === agg
+                          ? 'bg-sage-500 text-white dark:bg-sage-600'
+                          : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700')
                   }`}
                 >
                   {agg === '1min' ? '1m' : '5m'}
@@ -1317,16 +1384,31 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
           {/* Line / Candle toggle */}
           <button
             onClick={() => setLineMode((prev) => !prev)}
-            className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className={`px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+              gradientMode
+                ? 'border-white/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-white/10 backdrop-blur-sm'
+                : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
           >
             {lineMode ? 'Candles' : 'Line'}
+          </button>
+          {/* Gradient toggle */}
+          <button
+            onClick={() => setGradientMode((prev) => !prev)}
+            className={`px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+              gradientMode
+                ? 'bg-white/30 dark:bg-white/20 border-white/20 dark:border-white/10 text-gray-900 dark:text-white backdrop-blur-sm'
+                : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            Gradient
           </button>
         </div>
       </div>
 
       {/* Price */}
       <div className="px-3 pb-2">
-        <span className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
+        <span className="text-xl font-semibold text-gray-900 dark:text-white tabular-nums">
           ${formatPrice(price)}
         </span>
       </div>
@@ -1549,6 +1631,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
           </button>
         )}
       </div>
+      </div>{/* /content wrapper */}
     </div>
   )
 }, (prev, next) => {
@@ -1739,11 +1822,11 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
         {/* Header */}
         <div className="px-3 pt-3 pb-1 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-sm font-bold bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm">
               {symbol}
             </span>
             {changePct !== null && (
-              <span className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded backdrop-blur-sm ${
+              <span className={`text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded backdrop-blur-sm ${
                 isPositive
                   ? 'bg-green-500/20 text-green-800 dark:text-green-300'
                   : 'bg-red-500/20 text-red-800 dark:text-red-300'
@@ -1751,7 +1834,7 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
                 {isPositive ? '+' : ''}{changePct.toFixed(2)}%
               </span>
             )}
-            <span className={`text-[10px] font-semibold tabular-nums ${
+            <span className={`text-xs font-semibold tabular-nums ${
               isPositive
                 ? 'text-green-700 dark:text-green-300'
                 : 'text-red-700 dark:text-red-300'
@@ -1786,7 +1869,7 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
 
         {/* Price */}
         <div className="px-3 pb-2">
-          <span className="text-lg font-semibold text-gray-900 dark:text-white tabular-nums">
+          <span className="text-xl font-semibold text-gray-900 dark:text-white tabular-nums">
             ${formatPrice(price)}
           </span>
         </div>
@@ -2228,9 +2311,25 @@ export function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): 
 
 /* ───────── PulseTodayDashboard ───────── */
 
-export default function PulseTodayDashboard() {
+interface MoversSessionData {
+  premarket: MoverData[]
+  cash: MoverData[]
+  afterhours: MoverData[]
+  currentSession: MarketSession
+}
+
+interface PulseTodayDashboardProps {
+  gainersData?: MoversSessionData
+  losersData?: MoversSessionData
+}
+
+export default function PulseTodayDashboard({ gainersData, losersData }: PulseTodayDashboardProps) {
   const { theme: rawTheme } = useTheme()
   const theme = (rawTheme === 'dark' ? 'dark' : 'light') as ThemeMode
+
+  // Active symbol — updated when user clicks a ticker in the movers tables
+  const [activeSymbol, setActiveSymbol] = useState('GOOGL')
+  const liveSymbols = useMemo(() => [activeSymbol], [activeSymbol])
 
   // Replay state
   const [replayConfig, setReplayConfig] = useState<ReplayConfig | null>(null)
@@ -2267,11 +2366,11 @@ export default function PulseTodayDashboard() {
   }, [adaptiveMode])
 
   // Live streams
-  const streams1s = useMultiStream(SYMBOLS as unknown as string[], '1s')
-  const streams10s = useMultiStream(SYMBOLS as unknown as string[], '10s')
+  const streams1s = useMultiStream(liveSymbols, '1s')
+  const streams10s = useMultiStream(liveSymbols, '10s')
 
   // Day candles
-  const dayCandles = useDayCandles(SYMBOLS)
+  const dayCandles = useDayCandles(liveSymbols)
 
   const startReplay = useCallback(() => {
     setReplayConfig({
@@ -2532,21 +2631,29 @@ export default function PulseTodayDashboard() {
       )}
 
       {!isReplay && (
-        <div className="max-w-3xl mx-auto space-y-4">
-          <PulseTodayCard
-            symbol="GOOGL"
-            dayData={dayCandles['GOOGL']}
-            stream1s={streams1s['GOOGL'] ?? EMPTY_STREAM}
-            stream10s={streams10s['GOOGL'] ?? EMPTY_STREAM}
-            theme={theme}
-          />
-          <GradientPulseTodayCard
-            symbol="GOOGL"
-            dayData={dayCandles['GOOGL']}
-            stream1s={streams1s['GOOGL'] ?? EMPTY_STREAM}
-            stream10s={streams10s['GOOGL'] ?? EMPTY_STREAM}
-            theme={theme}
-          />
+        <div className="flex gap-4">
+          {/* Charts column — fixed width to preserve chart size */}
+          <div className="max-w-3xl w-full space-y-4">
+            <PulseTodayCard
+              symbol={activeSymbol}
+              dayData={dayCandles[activeSymbol]}
+              stream1s={streams1s[activeSymbol] ?? EMPTY_STREAM}
+              stream10s={streams10s[activeSymbol] ?? EMPTY_STREAM}
+              theme={theme}
+            />
+          </div>
+
+          {/* Gainers / Losers sidebar — side by side */}
+          {gainersData && losersData && (
+            <div className="shrink-0 flex gap-3">
+              <div className="w-60">
+                <MarketMoversTable title="Gainers" data={gainersData} maxRows={8} onSymbolClick={setActiveSymbol} />
+              </div>
+              <div className="w-60">
+                <MarketMoversTable title="Losers" data={losersData} maxRows={8} onSymbolClick={setActiveSymbol} />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

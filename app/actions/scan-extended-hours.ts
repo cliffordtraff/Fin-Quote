@@ -28,7 +28,7 @@ let floatCacheTimestamp: number = 0
 const FLOAT_CACHE_TTL = 60 * 60 * 1000 // 1 hour in milliseconds
 
 // Filters to match Finviz-quality results
-const MIN_PRICE = 1.00 // Minimum stock price
+const MIN_PRICE = 0.50 // Minimum stock price
 const MIN_EXTENDED_VOLUME = 10000 // Minimum pre-market/after-hours volume (10K shares)
 
 // Suffixes that indicate non-common stock securities
