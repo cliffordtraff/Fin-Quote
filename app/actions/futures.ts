@@ -1,6 +1,7 @@
 'use server'
 
-import { getProvider } from '@/lib/providers'
+// Always use FMP for futures — Massive plan doesn't include futures data
+import { FMPProvider } from '@/lib/providers/fmp'
 
 interface FutureData {
   symbol: string
@@ -46,7 +47,7 @@ export async function getFuturesData() {
   ]
 
   try {
-    const provider = getProvider()
+    const provider = new FMPProvider()
     const symbols = futuresSymbols.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 
@@ -77,7 +78,7 @@ export async function getFuturesData() {
  */
 export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
   try {
-    const provider = getProvider()
+    const provider = new FMPProvider()
     const symbols = FUTURES_SYMBOLS.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 
@@ -147,7 +148,7 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
   ]
 
   try {
-    const provider = getProvider()
+    const provider = new FMPProvider()
     const symbols = futuresSymbols.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 

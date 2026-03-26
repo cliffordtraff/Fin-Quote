@@ -5,13 +5,11 @@ import FuturesTable from '@/components/FuturesTable'
 import MarketMoversTable from '@/components/MarketMoversTable'
 import StocksTable from '@/components/StocksTable'
 import SectorHeatmap from '@/components/SectorHeatmap'
-import EconomicCalendar from '@/components/EconomicCalendar'
 import MarketHeadlines from '@/components/MarketHeadlines'
 import IndexSparklines from '@/components/IndexSparklines'
 import MarketTrendsCombined from '@/components/MarketTrendsCombined'
 import SP500PerformanceChart from '@/components/SP500PerformanceChart'
 import MarketInsights from '@/components/MarketInsights'
-import EarningsCalendar from '@/components/EarningsCalendar'
 import TopGainerSparklines from '@/components/TopGainerSparklines'
 import ForexBondsTable from '@/components/ForexBondsTable'
 import MarketSessions from '@/components/MarketSessions'
@@ -19,7 +17,7 @@ import TopInsiderTrades from '@/components/TopInsiderTrades'
 import { getMarketSummary } from '@/app/actions/market-summary'
 import { getMarketTrendsResponses, type MarketTrendsBullet } from '@/app/actions/market-trends-responses'
 import { getMarketTrendsAgents } from '@/app/actions/market-trends-agents'
-import { getCalendarSummaries } from '@/app/actions/calendar-summaries'
+
 import type { AllMarketData } from '@/lib/market-types'
 import { useTimezone, getTimezoneAbbr } from '@/lib/timezone-context'
 import { formatTimeInTimezone } from '@/lib/timezone-utils'
@@ -50,9 +48,6 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
   const [responsesGeneratedAt, setResponsesGeneratedAt] = useState<string | undefined>()
   const [agentsGeneratedAt, setAgentsGeneratedAt] = useState<string | undefined>()
 
-  // Calendar summaries state
-  const [economicSummary, setEconomicSummary] = useState<string>('')
-  const [earningsSummary, setEarningsSummary] = useState<string>('')
 
   // Set initial timestamp on client mount to avoid hydration mismatch
   useEffect(() => {
@@ -140,30 +135,6 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     }
   }
 
-  // Function to fetch calendar summaries
-  const fetchCalendarSummaries = async () => {
-    try {
-      const economicEvents = data.economicEvents.map(e => ({
-        date: e.date,
-        event: e.event,
-        impact: e.impact,
-        previous: e.previous,
-        estimate: e.estimate,
-      }))
-      const earningsEvents = data.earnings.map(e => ({
-        symbol: e.symbol,
-        name: e.name,
-        date: e.date,
-        time: e.time,
-      }))
-      const result = await getCalendarSummaries(economicEvents, earningsEvents)
-      if (result.economicSummary) setEconomicSummary(result.economicSummary)
-      if (result.earningsSummary) setEarningsSummary(result.earningsSummary)
-    } catch (error) {
-      console.error('Failed to fetch calendar summaries:', error)
-    }
-  }
-
   // Fetch market summary and bullet points on mount
   useEffect(() => {
     // Only fetch summary if not already loaded from server cache
@@ -175,7 +146,6 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
       fetchResponsesBullets()
     }
     fetchAgentsBullets()
-    fetchCalendarSummaries()
   }, []) // Only run on mount, not on data changes
 
   async function fetchFast() {
@@ -288,32 +258,20 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
         />
       </div>
 
-      {/* Market Insights (Market Trends with bullet points) and Calendars */}
-      <div className="flex gap-4 mb-8">
-        <div className="flex-1">
-          <MarketInsights
-            responsesApiBullets={responsesApiBullets}
-            agentsSdkBullets={agentsSdkBullets}
-            responsesLoading={responsesLoading}
-            agentsLoading={agentsLoading}
-            responsesError={responsesError}
-            agentsError={agentsError}
-            onRefreshResponses={fetchResponsesBullets}
-            onRefreshAgents={fetchAgentsBullets}
-            responsesGeneratedAt={responsesGeneratedAt}
-            agentsGeneratedAt={agentsGeneratedAt}
-          />
-        </div>
-        {economicEvents.length > 0 && (
-          <div className="flex-1">
-            <EconomicCalendar events={economicEvents} summary={economicSummary} />
-          </div>
-        )}
-        {earnings.length > 0 && (
-          <div className="flex-1">
-            <EarningsCalendar earnings={earnings} summary={earningsSummary} totalCount={earningsTotalCount} />
-          </div>
-        )}
+      {/* Market Insights (Market Trends with bullet points) */}
+      <div className="mb-8">
+        <MarketInsights
+          responsesApiBullets={responsesApiBullets}
+          agentsSdkBullets={agentsSdkBullets}
+          responsesLoading={responsesLoading}
+          agentsLoading={agentsLoading}
+          responsesError={responsesError}
+          agentsError={agentsError}
+          onRefreshResponses={fetchResponsesBullets}
+          onRefreshAgents={fetchAgentsBullets}
+          responsesGeneratedAt={responsesGeneratedAt}
+          agentsGeneratedAt={agentsGeneratedAt}
+        />
       </div>
 
       {/* Main Content Grid - Headlines, Stocks, Sectors */}

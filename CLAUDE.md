@@ -2,391 +2,194 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-For every project, write a detailed FORFORD.md file that explains the whole project in plain language. 
-
-Explain the technical architecture, the structure of the codebase and how the various parts are connected, the technologies used, why we made these technical decisions, and lessons I can learn from it (this should include the bugs we ran into and how we fixed them, potential pitfalls and how to avoid them in the future, new technologies used, how good engineers think and work, best practices, etc). 
-
-It should be very engaging to read; don't make it sound like boring technical documentation/textbook. Where appropriate, use analogies and anecdotes to make it more understandable and memorable.
+For every project, write a detailed FORFORD.md file that explains the whole project in plain language. Explain the technical architecture, the structure of the codebase and how the various parts are connected, the technologies used, why we made these technical decisions, and lessons I can learn from it (this should include the bugs we ran into and how we fixed them, potential pitfalls and how to avoid them in the future, new technologies used, how good engineers think and work, best practices, etc). It should be very engaging to read; don't make it sound like boring technical documentation/textbook. Where appropriate, use analogies and anecdotes to make it more understandable and memorable.
 
 ## Project Overview
 
-**The Intraday** (formerly Fin Quote) is a Next.js 15-based financial data platform featuring:
-1. **Landing Page** (`/`) - Marketing/conversion page with hero, features, pricing CTA (components in `components/landing/`)
-2. **Market Dashboard** (`/dashboard`) - Real-time market data with index charts (S&P 500, NASDAQ, DOW, Russell 2000), sector heatmaps, VIX, gainers/losers, futures, and economic calendar
-3. **AI-Powered Chatbot** - Natural language Q&A about Apple (AAPL) stock using a two-step LLM architecture with tool selection, data execution, answer generation, and validation (feature-flagged)
-4. **Multi-Stock Charts** (`/charts`) - Stock-specific pages with price charts and financial metrics
-5. **Insider Trading** (`/insiders`) - SEC Form 4 filings with trade data (in development)
+**The Intraday** (formerly Fin Quote) is a Next.js 15 / React 19 financial data platform.
 
-**Core Design Philosophy:**
-- **Safety First**: LLMs cannot execute arbitrary database queries. Instead, they select from a whitelist of pre-built "tools" (server actions) with validated inputs.
-- **Server-Side Intelligence**: All LLM calls, database queries, and validation logic run server-side. The browser only handles UI.
-- **Grounded Answers**: The LLM must use only fetched data; no external knowledge or hallucinations allowed.
-- **Validation Pipeline**: All answers are validated against source data for number accuracy, year correctness, and citation validity, with auto-regeneration on failures.
+- **Landing Page** (`/`) — Marketing/conversion page (components in `components/landing/`)
+- **Market Dashboard** (`/dashboard`) — Real-time indices, sector heatmaps, VIX, gainers/losers, futures, economic calendar. Also has sub-routes: `/dashboard/pulse`, `/dashboard/pulse-today`, `/dashboard/live`, `/dashboard/review-day`
+- **Stock Pages** (`/stock/[symbol]`) — Individual stock detail with charts, fundamentals, news
+- **Workspace** (`/workspace/*`) — Chart, fundamentals, and overview sub-pages
+- **Concept Page** (`/concept`) — Market-session-aware dashboard variant
+- **Calendar** (`/calendar`) — Economic & earnings calendar with international data
+- **Charts** (`/charts`, `/multi-charts`) — Multi-stock financial charts
+- **Insiders** (`/insiders`) — SEC Form 4 insider trading data
+- **AI Chatbot** (`/chatbot`) — Natural language Q&A about AAPL using two-step LLM architecture (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
+
+**Tech Stack:** Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI · Highcharts · lightweight-charts · Tailwind CSS · TypeScript · Vitest · FMP API · Massive (Polygon.io)
 
 ---
 
 ## Development Commands
 
 ```bash
-# Setup
-npm install                         # Install dependencies
-cp .env.local.example .env.local    # Configure environment variables
-
-# Development
-npm run dev                         # Start dev server (localhost:3000)
+npm install                         # Install dependencies (runs patch-package via postinstall)
+npm run dev                         # Start dev server (localhost:3000, uses ./scripts/dev.sh)
 npm run dev:clean                   # Kill existing, clear .next cache, restart
 npm run build                       # Production build
 npm run lint                        # Run ESLint
 
-# Testing
-npm run test                        # Run Vitest in watch mode
-npm run test:run                    # Run tests once (CI mode)
-npm run test -- lib/__tests__/validators.test.ts  # Run single test file
-npm run test:ui                     # Run Vitest with interactive UI
-npm run test:coverage               # Run tests with coverage report
+# Testing (Vitest, jsdom environment, globals enabled)
+npm run test                        # Watch mode
+npm run test:run                    # Single run (CI)
+npm run test -- lib/__tests__/validators.test.ts  # Single file
+npm run test:ui                     # Interactive UI
+npm run test:coverage               # With coverage
 
-# Chatbot Evaluation
-npx tsx scripts/evaluate.ts         # Run evaluation on golden test set
-npx tsx scripts/evaluate.ts --mode fast    # Routing-only (2-3 min)
-npx tsx scripts/evaluate.ts --limit 10     # First N questions only
+# Chatbot evaluation (golden test set: test-data/golden-test-set.json)
+npx tsx scripts/evaluate.ts                    # Full evaluation
+npx tsx scripts/evaluate.ts --mode fast        # Routing-only (2-3 min)
+npx tsx scripts/evaluate.ts --limit 10         # First N questions
 
-# Data Management
-npx tsx scripts/fetch-aapl-data.ts  # Fetch core financials from FMP API
-npx tsx scripts/ingest-financials.ts # Load into financials_std table
-npm run fetch:metrics && npm run ingest:metrics  # Extended metrics (139 metrics)
-npm run generate:catalog            # Regenerate metrics catalog
-
-# GitHub Actions (runs daily at 2am UTC)
-# Workflow: .github/workflows/daily-data-update.yml
-# - Fetches AAPL financial data from FMP API
-# - Fetches SEC filings
-# - Requires secrets: SUPABASE_URL, SUPABASE_ANON_KEY, FMP_API_KEY
+# Data management
+npx tsx scripts/fetch-aapl-data.ts             # Fetch core financials from FMP
+npx tsx scripts/ingest-financials.ts           # Load into financials_std table
+npm run fetch:metrics && npm run ingest:metrics # Extended metrics (139 metrics)
+npm run generate:catalog                       # Regenerate metrics catalog
+npm run refresh:stocks                         # Refresh US stock registry
 ```
-
----
-
-## Routing & Middleware
-
-### URL Routing (`middleware.ts`)
-
-The middleware handles several routing patterns:
-- **Auth protection**: `/profile` and `/admin/*` require Supabase session; redirects to `/auth` if unauthenticated
-- **Ticker shortcuts**: Single-segment paths that look like tickers redirect to `/stock/TICKER` (e.g., `/AAPL` → `/stock/AAPL`)
-- **Legacy redirects**: `/company/AAPL` → `/stock/AAPL`
-- **Reserved top-level routes**: `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile` (won't be treated as tickers)
-
-### Key Routes
-
-| Route | Nav Component | Rendering | Purpose |
-|-------|---------------|-----------|---------|
-| `/` | LandingNav | Static | Landing/marketing page |
-| `/dashboard` | Navigation | ISR (60s) | Main market dashboard (sage/cream theme) |
-| `/stock/[symbol]` | Navigation | Dynamic | Individual stock pages |
-| `/charts` | Navigation | - | Multi-stock financial charts |
-| `/multi-charts` | Navigation | - | Alternative multi-chart layout |
-| `/calendar` | Navigation | - | Economic & earnings calendar |
-| `/insiders` | Navigation | - | Insider trading data |
-| `/pricing` | LandingNav | Static | Pricing page |
-| `/chatbot` | Sidebar | - | AI chatbot (feature-flagged) |
-| `/auth` | - | - | Login/signup (Google OAuth via Supabase) |
-
-### Navigation Components
-
-- **`Navigation.tsx`** — Used by all app pages (dashboard, stock, charts, calendar, insiders). Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
-- **`LandingNav`** (`components/landing/LandingNav.tsx`) — Marketing page nav with sign-in/sign-up CTAs.
-
-### Theme System
-
-Custom color tokens in `tailwind.config.ts`, dark mode via `class` strategy:
-- **Sage** (`sage-50` through `sage-900`): Primary accent color. `sage-500` (#5a6b4a) is the main accent.
-- **Cream** (`cream-50` through `cream-300`): Page backgrounds and subtle borders. `cream-100` (#f5f5f0) is the main background.
-- **Dark mode**: `bg-gray-900` backgrounds, `bg-gray-800` cards, `border-gray-700` borders.
-- See `APP-THEME-IMPLEMENTATION-PLAN.md` for the full design system with component styling patterns.
-
-### Rendering Strategies
-
-- **ISR (60s)**: `/dashboard` — `export const revalidate = 60` — Server-fetches market data, regenerates every 60s
-- **Dynamic**: Stock pages — `export const dynamic = 'force-dynamic'` — Fresh data on every request
-- **Static**: Landing page, pricing — No data fetching at build time
 
 ---
 
 ## Architecture
 
-### Two-Step LLM Flow
+### Market Data Provider Abstraction (`lib/providers/`)
 
-Every user question follows this pattern (implemented in `app/actions/ask-question.ts`):
+Server actions fetch market data through a provider interface (`MarketDataProvider` in `lib/providers/types.ts`). Two implementations exist:
 
-1. **Tool Selection** → LLM receives question + conversation history + tool menu, returns JSON: `{"tool": "toolName", "args": {...}}`
-2. **Tool Execution** → Server validates tool + args, executes corresponding server action, returns structured data
-3. **Answer Generation** → LLM receives question + fetched facts, generates grounded answer (plain text only, no Markdown)
-4. **Validation & Auto-Correction** → Validates numbers/years/citations; if medium+ severity failure, triggers auto-regeneration
+- **FMPProvider** (`lib/providers/fmp.ts`) — Financial Modeling Prep API (default)
+- **MassiveProvider** (`lib/providers/massive.ts`) — Polygon.io via Massive
 
-### Available Tools
+Set `DATA_PROVIDER=massive` in `.env.local` to switch. Default is `fmp`. The factory (`lib/providers/index.ts`) caches the provider instance. Some server actions (like `futures.ts`) bypass the abstraction and call FMP directly when the other provider doesn't support that data type.
 
-Defined in `lib/tools.ts` (TOOL_MENU):
+### Server Actions Pattern (`app/actions/`)
 
-1. **getAaplFinancialsByMetric** - Core financial metrics from `financials_std` table
-   - Raw metrics: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
-   - Calculated metrics (native support): `gross_margin`, `roe`, `debt_to_equity_ratio`
-   - Returns time-series data with related metrics for ratio calculations
+All data fetching uses Next.js server actions (`'use server'`). ~60+ server actions cover market data, stock fundamentals, insider trading, earnings, news, etc. Most follow this pattern:
+1. Import `getProvider()` from `@/lib/providers` (or call FMP directly)
+2. Fetch and transform data
+3. Return typed response
 
-2. **getFinancialMetric** - Extended metrics from `financial_metrics` table (139 metrics)
-   - Supports flexible aliases: "P/E" → `peRatio`, "return on equity" → `returnOnEquity`
-   - Categories: Valuation, Profitability, Growth, Leverage, Efficiency, Per-Share Metrics
-   - Multi-metric queries: fetch multiple metrics in one call
+Key orchestrator: `lib/fetch-market-data.ts` runs multiple server actions in parallel for the dashboard.
 
-3. **listMetrics** - Browse available metrics catalog
-   - Optional category filter
-   - Returns metric names, descriptions, units, and common aliases
-   - Use when uncertain which metrics are available
+### Two-Step LLM Flow (Chatbot)
 
-4. **getPrices** - Stock price history from FMP API
-   - Custom date ranges: `from` (required), `to` (optional, defaults to today)
-   - Supports multi-year ranges (up to 20 years)
-   - Returns daily OHLCV data
+Implemented in `app/actions/ask-question.ts`:
 
-5. **getRecentFilings** - SEC filing metadata (10-K, 10-Q)
-   - Returns filing type, date, period, fiscal year/quarter, URL
-   - Limit: 1-10 filings
+1. **Tool Selection** — LLM receives question + conversation history + tool menu (`lib/tools.ts`), returns JSON: `{"tool": "toolName", "args": {...}}`
+2. **Tool Execution** — Server validates and executes the selected server action
+3. **Answer Generation** — LLM receives question + fetched data, writes a grounded answer (plain text only, no Markdown)
+4. **Validation** — `lib/validators.ts` checks number accuracy (±2%), year correctness, and filing citations. On medium+ severity failure, `lib/regeneration.ts` auto-regenerates.
 
-6. **searchFilings** - Semantic search over SEC filing content (RAG)
-   - Uses pgvector for embedding-based search
-   - Returns relevant text passages with citations
-   - Query: natural language, Limit: 1-10 passages
+The LLM never touches the database directly. Tool definitions and prompt templates live in `lib/tools.ts` (`TOOL_MENU`, `buildToolSelectionPrompt`, `buildFinalAnswerPrompt`).
 
-### Data Storage (Supabase)
+### Two-Layer Metrics System
 
-**Core Tables:**
-- `company` - Company metadata (symbol, name, sector)
-- `financials_std` - Core financial metrics by year (9 metrics with 20-year history)
-- `financial_metrics` - Extended metrics (139 metrics from FMP, 2006-2025)
-- `filings` - SEC filing metadata with fiscal year/quarter
-- `filing_chunks` - Text chunks with embeddings for semantic search (1536-dim vectors via pgvector)
-- `price_history` - Historical daily stock prices (not currently used; prices fetched from FMP API)
-- `query_logs` - Query logging for accuracy tracking, validation results, and cost analysis
-- `conversations` - User conversation history (with auto-generated titles)
-- `messages` - Individual messages within conversations (with chart configs and follow-up questions)
+**Core metrics** (`financials_std` table, tool: `getAaplFinancialsByMetric`):
+- 9 raw metrics: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
+- 3 calculated: `gross_margin`, `roe`, `debt_to_equity_ratio`
 
-**Storage:**
-- `filings` bucket - Original SEC filing HTML files from EDGAR
+**Extended metrics** (`financial_metrics` table, tool: `getFinancialMetric`):
+- 139 metrics from FMP (2006-2025), organized by category (Valuation, Profitability, Growth, Leverage, Efficiency, Per-Share)
+- Alias resolution in `lib/metric-resolver.ts` ("P/E" → `peRatio`, "profit" → `net_income`)
+- Discovery via `listMetrics` tool; catalog generated by `npm run generate:catalog`
 
-**Key Functions:**
-- `search_filing_chunks()` - PostgreSQL RPC for vector similarity search using pgvector
+### TTM (Trailing Twelve Months) Calculation
+
+`lib/ttm-config.ts` defines calculation type per metric, `lib/ttm-calculator.ts` implements:
+- `sum` — Add last 4 quarters (revenue, net_income)
+- `point_in_time` — Use latest quarter (total_assets, marketCap)
+- `average` — Average of 4 quarters (daysOfInventoryOnHand)
+- `derived` — Recalculate from TTM components (gross_margin = gross_profit TTM / revenue TTM)
+- `not_applicable` — Cannot be TTM'd (growth rates, P/E ratio)
 
 ---
 
-## Key Files
+## Routing & Middleware
 
-### Landing Page & Marketing
-| Path | Purpose |
-|------|---------|
-| `app/page.tsx` | Homepage — renders `LandingPage` component |
-| `components/landing/` | Landing page sections: HeroSection, FeaturesGrid, FAQSection, CTASection, Footer, etc. |
-| `app/pricing/page.tsx` | Pricing page |
+`middleware.ts` handles:
+- **Auth protection**: `/profile` and `/admin/*` require Supabase session; redirects to `/auth`
+- **Ticker shortcuts**: Single-segment paths that look like tickers redirect to `/stock/TICKER` (e.g., `/AAPL` → `/stock/AAPL`)
+- **Legacy redirects**: `/company/AAPL` → `/stock/AAPL`
+- **Reserved top-level routes**: `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile`, `workspace`, `concept` (won't be treated as tickers)
 
-### Market Dashboard
-| Path | Purpose |
-|------|---------|
-| `app/dashboard/page.tsx` | Main dashboard (Navigation + MarketDashboardSunday, ISR 60s) |
-| `components/MarketDashboardSunday.tsx` | Primary dashboard component with all market widgets |
-| `components/SimpleCanvasChart.tsx` | Canvas-based mini charts for index cards |
-| `components/SectorHeatmap.tsx` | Sector performance visualization |
-| `lib/fetch-market-data.ts` | Server-side market data fetching |
+**Rendering strategies:**
+- **ISR (60s)**: `/dashboard` — `export const revalidate = 60`
+- **Dynamic**: `/stock/[symbol]` — `export const dynamic = 'force-dynamic'`
+- **Static**: `/`, `/pricing`
 
-### Chatbot (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
-| Path | Purpose |
-|------|---------|
-| `app/actions/ask-question.ts` | Main Q&A orchestration: tool selection → execution → answer → validation |
-| `lib/tools.ts` | Tool definitions + prompt templates (buildToolSelectionPrompt, buildFinalAnswerPrompt) |
-| `lib/validators.ts` | Answer validation (number accuracy ±2%, year correctness, filing citations) |
-| `lib/regeneration.ts` | Auto-correction on validation failures |
-| `lib/metric-resolver.ts` | Alias resolution ("P/E" → `peRatio`, "profit" → `net_income`) |
-| `lib/chart-helpers.ts` | Chart generation for financial/price data |
-| `components/Sidebar.tsx` | Chatbot UI with conversation history |
+**Navigation components:**
+- `Navigation.tsx` — Used by all app pages. Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
+- `components/landing/LandingNav.tsx` — Marketing page nav with sign-in/sign-up CTAs.
 
-### Stock Pages
-| Path | Purpose |
-|------|---------|
-| `app/stock/aapl/page.tsx` | AAPL stock detail page with price chart and financials |
-| `app/insiders/page.tsx` | Insider trading page (in development) |
-| `components/InsiderTradesTable.tsx` | Insider trades table component |
+---
 
-### TTM Calculations
-| Path | Purpose |
-|------|---------|
-| `lib/ttm-calculator.ts` | TTM value calculation from quarterly data |
-| `lib/ttm-config.ts` | TTM calculation type config per metric |
+## Theme System
+
+Custom color tokens in `tailwind.config.ts`, dark mode via `class` strategy:
+- **Sage** (`sage-50`–`sage-900`): Primary accent. `sage-500` (#5a6b4a) is the main accent, `sage-600` (#4a5a3a) for hover.
+- **Cream** (`cream-50`–`cream-300`): Page backgrounds. `cream-100` (#f5f5f0) is the main background, `cream-300` (#e5e5e0) for borders.
+- **Dark mode**: `bg-gray-900` backgrounds, `bg-gray-800` cards, `border-gray-700` borders.
+- Full design system documented in `docs/APP-THEME-IMPLEMENTATION-PLAN.md`.
+
+---
+
+## Data Storage (Supabase)
+
+**Key tables:**
+- `company` — Company metadata (symbol, name, sector)
+- `financials_std` — Core financial metrics by year (9 metrics, 20-year history)
+- `financial_metrics` — Extended metrics (139 metrics from FMP, 2006-2025)
+- `filings` / `filing_chunks` — SEC filing metadata and text chunks with pgvector embeddings (1536-dim) for semantic search via `search_filing_chunks()` RPC
+- `query_logs` — Query logging with validation results and cost tracking
+- `conversations` / `messages` — User conversation history with chart configs and follow-up questions
+
+**Auth:** Supabase Auth with Google OAuth. Client: `lib/supabase/client.ts` (browser), `lib/supabase/server.ts` (server).
 
 ---
 
 ## Environment Variables
 
-Required in `.env.local`:
-
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-5-nano  # Options: gpt-4o-mini, gpt-5-nano, gpt-5-mini, gpt-4o
+OPENAI_MODEL=gpt-5-nano           # Options: gpt-4o-mini, gpt-5-nano, gpt-5-mini, gpt-4o
 FMP_API_KEY=your-fmp-key
+DATA_PROVIDER=fmp                  # "fmp" (default) or "massive"
+NEXT_PUBLIC_ENABLE_CHAT=false      # Enable AI chatbot feature
 ```
-
----
-
-## Authentication
-
-- **Provider**: Supabase Auth with Google OAuth
-- **Middleware**: `middleware.ts` refreshes sessions on every request and protects `/profile` and `/admin/*`
-- **Client**: `lib/supabase/client.ts` (browser), `lib/supabase/server.ts` (server components/actions)
-- **UI**: `/auth` page for login, `/auth/forgot-password` and `/auth/reset-password` for password recovery
-- **Components**: `UserMenu.tsx` shows auth state in navigation
-
-## Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `NEXT_PUBLIC_ENABLE_CHAT` | `false` | Enables the AI chatbot feature (Chat tab in navigation + `/chatbot` route) |
-
-Feature flags control navigation tab visibility only. Backend code (server actions, tools, database tables) remains in place when disabled. Set to `true` in `.env.local` and restart the dev server.
-
----
-
-## Critical Implementation Details
-
-### Tool Selection Prompt (`lib/tools.ts:buildToolSelectionPrompt`)
-
-- **Metric Mapping**: Maps user terms to exact database metrics ("profit" → `net_income`, "P/E" → use getFinancialMetric)
-- **Limit Rules**: Specific years (limit: 10), year ranges (limit: N), trends (limit: 4)
-- **Date Calculation**: Converts "last 7 years" to specific date ranges (from: YYYY-MM-DD)
-
-### Answer Generation Rules (`lib/tools.ts:buildFinalAnswerPrompt`)
-
-- Use exact values from data; format with B/M suffixes (e.g., "$383.3B")
-- Only mention years/dates present in data
-- Plain text only (no Markdown, bullets, tables)
-- For >4 data points, write at most 2 sentences with summary + trend
-
-### Validation & Auto-Regeneration
-
-Validation (`lib/validators.ts`):
-- Number validation: ±2% tolerance
-- Year validation: all years must exist in source data
-- Filing validation: citation dates must match data
-- Severity levels: none, low, medium, high, critical
-
-Auto-regeneration (`lib/regeneration.ts`):
-- Triggered on medium+ severity failures
-- May refetch data with corrected args (e.g., increase limit if year exists but wasn't fetched)
-- Falls back to original answer if regeneration fails
-
-### Two-Layer Metrics System
-
-**Core metrics** (`financials_std` table, 9 metrics):
-- Raw: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
-- Calculated: `gross_margin`, `roe`, `debt_to_equity_ratio`
-- Tool: `getAaplFinancialsByMetric`
-
-**Extended metrics** (`financial_metrics` table, 139 metrics from FMP):
-- Categories: Valuation, Profitability, Leverage, Efficiency, Growth, Per-Share, Capital Returns
-- Alias support: "P/E" → `peRatio`, "return on equity" → `returnOnEquity`
-- Tool: `getFinancialMetric` (with `listMetrics` for discovery)
-
-### Conversation Context
-
-- Stored in `conversations` and `messages` tables
-- Last 10 messages passed to tool selection, last 4 to answer generation
-- Enables follow-up questions ("What about 2022?" after asking about 2023)
-- Auto-generates titles using LLM after first Q&A pair
-
-### TTM (Trailing Twelve Months) Calculation
-
-For quarterly data, TTM values are calculated differently by metric type (`lib/ttm-config.ts`, `lib/ttm-calculator.ts`):
-
-| Type | Method | Examples |
-|------|--------|----------|
-| `sum` | Add last 4 quarters | revenue, net_income, operating_cash_flow |
-| `point_in_time` | Use latest quarter | total_assets, shareholders_equity, marketCap |
-| `average` | Average of 4 quarters | daysOfInventoryOnHand, cashConversionCycle |
-| `derived` | Recalculate from TTM components | gross_margin (gross_profit TTM / revenue TTM) |
-| `not_applicable` | Cannot be TTM'd | growth rates, P/E ratio, multi-year CAGRs |
-
-### Admin Dashboards
-
-- `/admin/validation` - Answer validation results and failure analysis
-- `/admin/costs` - Token usage and cost tracking
-- `/admin/evaluations` - Prompt evaluation run history
-- `/admin/review` - Manual query review interface
-
----
-
-## Testing
-
-**Unit tests** (in `lib/__tests__/`):
-- `validators.test.ts` - Number/year/filing validation
-- `ttm-calculator.test.ts` - TTM calculation logic
-
-**Golden test set**: `test-data/golden-test-set.json` (100+ questions for prompt evaluation)
-
-**Evaluation**: `npx tsx scripts/evaluate.ts` with options:
-- `--mode fast` - Routing-only evaluation (2-3 min)
-- `--mode full` - End-to-end including answer generation (10+ min)
-- `--llm-judge` - Add GPT-4 answer quality scoring (full mode only)
-- `--limit N` - Limit to first N questions
 
 ---
 
 ## Common Workflows
 
-### Adding a New Tool
-
+### Adding a New Chatbot Tool
 1. Create server action in `app/actions/[tool-name].ts`
 2. Add tool definition to `TOOL_MENU` in `lib/tools.ts`
 3. Update `buildToolSelectionPrompt()` with routing rules
-4. Add tool handler in `ask-question.ts` (search for existing tool handlers)
-5. Update chart helpers if tool returns chart-able data
-6. Add test cases to golden test set
+4. Add tool handler in `ask-question.ts`
+5. Update `lib/chart-helpers.ts` if tool returns chart-able data
+6. Add test cases to `test-data/golden-test-set.json`
 
-### Improving Prompts
+### Adding a New Dashboard Server Action
+1. Create server action in `app/actions/[name].ts` using `getProvider()` or FMP directly
+2. Add to parallel fetch in `lib/fetch-market-data.ts` if needed for dashboard
+3. Create/update the consuming component
 
-1. Update prompt in `lib/tools.ts` (`buildToolSelectionPrompt` or `buildFinalAnswerPrompt`)
+### Improving Chatbot Prompts
+1. Update in `lib/tools.ts` (`buildToolSelectionPrompt` or `buildFinalAnswerPrompt`)
 2. Run evaluation: `npx tsx scripts/evaluate.ts`
-3. Review validation dashboard: `/admin/validation`
-
-### Debugging Answer Quality
-
-1. Check `query_logs` table: `SELECT * FROM query_logs WHERE validation_passed = false ORDER BY created_at DESC LIMIT 20`
-2. Review `/admin/validation` dashboard
-3. Check if regeneration was attempted and succeeded
-4. Update prompt/validator/regeneration logic as needed
+3. Review at `/admin/validation`
 
 ---
 
 ## Important Constraints
 
-- **Chatbot AAPL-only**: Chatbot tools hardcoded to Apple stock for MVP
-- **Read-only**: No write operations; LLM cannot execute arbitrary queries
+- **Chatbot is AAPL-only** for MVP (tools hardcoded to Apple stock)
+- **Read-only LLM**: Cannot execute arbitrary queries; selects from whitelisted tools only
 - **Row limits**: Financials (1-20 years), Filings (1-10), Passages (1-10)
-- **Metric coverage**: Extended metrics available 2006-2025 (FMP API limits)
-
----
-
-## Market Dashboard Server Actions
-
-`lib/fetch-market-data.ts` orchestrates parallel fetching from these server actions in `app/actions/`:
-
-| Action | Purpose |
-|--------|---------|
-| `market-data.ts` | Index data (S&P 500, NASDAQ, DOW, Russell 2000) with price history |
-| `futures.ts` | Futures quotes (ES, NQ, YM, etc.) |
-| `gainers.ts` / `losers.ts` | Top gainers and losers with sparkline data |
-| `sectors.ts` | Sector performance for heatmap |
-| `vix.ts` | VIX volatility index data |
-| `economic-calendar.ts` | Upcoming economic events |
-| `insider-trading.ts` | SEC Form 4 insider trades (FMP API) |
-
----
-
-## Tech Stack
-
-Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI (gpt-5-nano default) · Highcharts · lightweight-charts · Tailwind CSS · TypeScript · Vitest · FMP API
+- **Extended metrics**: Available 2006-2025 (FMP API limits)
+- **Feature flags** control navigation visibility only; backend code remains in place when disabled
+- **Daily data update**: GitHub Actions workflow (`.github/workflows/daily-data-update.yml`) runs at 2am UTC to fetch AAPL financials and SEC filings
