@@ -201,6 +201,16 @@ function formatPercent(pct: number): string {
   return `${sign}${pct.toFixed(2)}%`
 }
 
+function getTimelineBarMinimumWidthPx(marketName: string, performanceText: string): number {
+  const charWidthPx = 7.5
+  const horizontalPaddingPx = 20
+  const gapPx = performanceText ? 12 : 0
+  const nameWidthPx = marketName.length * charWidthPx
+  const performanceWidthPx = performanceText.length * charWidthPx
+
+  return Math.ceil(nameWidthPx + performanceWidthPx + horizontalPaddingPx + gapPx)
+}
+
 function areFuturesOpen(): boolean {
   const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
   const day = etNow.getDay() // 0 = Sunday, 6 = Saturday
@@ -254,7 +264,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
     <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
       {/* Header */}
       <div className="bg-cream-50 dark:bg-gray-800 px-4 py-2 border-b border-cream-300 dark:border-gray-700">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Global Market Hours</h2>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Global Markets</h2>
       </div>
 
       {/* Table View */}
@@ -452,6 +462,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
 
             const performanceText = quote ? formatPercent(quote.changesPercentage) : ''
             const isPositive = quote ? quote.changesPercentage >= 0 : true
+            const minBarWidthPx = getTimelineBarMinimumWidthPx(market.name, performanceText)
 
             // Determine bar styling based on market state - same for all
             const getBarStyle = () => {
@@ -489,21 +500,20 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
 
                 {/* Main market bar */}
                 <div
-                  className={`absolute h-6 flex items-center justify-between px-2 gap-3 whitespace-nowrap overflow-hidden ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
+                  className={`absolute z-10 h-6 flex items-center justify-between gap-2 px-2 ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
                   style={{
                     left: `calc(${left}% + 16px)`,
-                    width: `${width}%`,
+                    width: `max(${width}%, ${minBarWidthPx}px)`,
+                    maxWidth: `calc(100% - ${left}% - 16px)`,
                     top: `${6 + index * 28}px`,
                   }}
                 >
-                  <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                    <span className={`font-semibold text-xs flex-shrink-0 ${getTextStyle()}`}>
-                      {market.name}
-                    </span>
-                  </div>
-                  {/* Performance percentage on the bar - only show when market is open */}
-                  {quote && isOpen && (
-                    <span className={`text-xs font-bold flex-shrink-0 ${
+                  <span className={`flex-shrink-0 whitespace-nowrap font-semibold text-xs ${getTextStyle()}`} title={market.name}>
+                    {market.name}
+                  </span>
+                  {/* Show the latest index move for any market with a quote, even after the session closes. */}
+                  {quote && (
+                    <span className={`flex-shrink-0 whitespace-nowrap text-xs font-bold ${
                       isPositive
                         ? 'text-green-700 dark:text-green-300'
                         : 'text-red-700 dark:text-red-300'
@@ -544,9 +554,6 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
               }`}>
                 {areFuturesOpen() ? 'Open' : 'Closed'}
-              </span>
-              <span className="text-[9px] text-gray-400 dark:text-gray-500">
-                Sun 6pm – Fri 5pm ET
               </span>
             </div>
             <div className="flex gap-2">

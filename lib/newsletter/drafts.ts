@@ -252,6 +252,7 @@ export function normalizeNewsletterDraftDocument(
     ticker,
     format,
     featuredTickers: normalizedFeaturedTickers,
+    generationPrompt: draft.generationPrompt?.trim() || undefined,
     generatedAt,
     subjectLine:
       draft.subjectLine?.trim() ||
@@ -426,6 +427,7 @@ export function buildNewsletterDraftFromResult(
     ticker,
     format: result.format,
     featuredTickers: result.featuredTickers.map((value) => normalizeTicker(value)),
+    generationPrompt: result.generationPrompt?.trim() || undefined,
     generatedAt: result.generatedAt,
     subjectLine: result.subjectLine,
     introText,
@@ -650,6 +652,7 @@ export async function regenerateNewsletterDraft(
     {
       ...options,
       format: existing.draft.format,
+      generationPrompt: options?.generationPrompt ?? existing.draft.generationPrompt,
       featuredTickers: isMarketRoundup
         ? existing.draft.featuredTickers
         : options?.featuredTickers,

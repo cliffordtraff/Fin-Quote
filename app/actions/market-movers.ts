@@ -5,6 +5,7 @@ import { getMarketStatus, getTradingDate, type MarketSession } from '@/lib/marke
 import { deriveGainers, deriveLosers, type ExtendedHoursStock } from '@/app/actions/scan-extended-hours'
 import { getProvider } from '@/lib/providers'
 import type { ProviderQuote } from '@/lib/providers/types'
+import { isPulseTodayChartableCandidate } from '@/lib/pulse-today-utils'
 
 // Types
 export interface MoverData {
@@ -61,6 +62,141 @@ const FMP_ENDPOINTS: Record<SessionType, Record<Direction, string>> = {
 
 // Cache TTL: 60 seconds
 const CACHE_TTL_MS = 60 * 1000
+const MIN_MOVER_PRICE = 0.3
+const PULSE_TODAY_MOVER_LIMIT = 20
+const TOP_MOVER_CANDIDATE_LIMIT = 60
+const CHARTABILITY_CACHE_TTL_MS = 5 * 60 * 1000
+const MIN_PULSE_TODAY_MINUTE_BARS = 5
+const MIN_PULSE_TODAY_STREAM_BARS = 12
+
+type PulseChartabilityCacheEntry = {
+  chartable: boolean
+  checkedAt: number
+}
+
+const pulseChartabilityCache = new Map<string, PulseChartabilityCacheEntry>()
+
+function normalizeMoverCandidates(movers: MoverData[]): MoverData[] {
+  return movers.filter((mover) => {
+    return (
+      Number.isFinite(mover.price) &&
+      mover.price >= MIN_MOVER_PRICE &&
+      Number.isFinite(mover.change) &&
+      Number.isFinite(mover.changesPercentage)
+    )
+  })
+}
+
+function sanitizeMovers(movers: MoverData[]): MoverData[] {
+  return normalizeMoverCandidates(movers).slice(0, PULSE_TODAY_MOVER_LIMIT)
+}
+
+
+async function filterPulseTodayChartableMovers(
+  provider: ReturnType<typeof getProvider>,
+  movers: MoverData[],
+): Promise<MoverData[]> {
+  const candidates = normalizeMoverCandidates(movers)
+  if (candidates.length === 0) return []
+
+  const supportsSecondLevel = (process.env.DATA_PROVIDER ?? 'fmp') === 'massive'
+  const marketDate = getTradingDate()
+  const now = Date.now()
+  const uniqueSymbols = Array.from(new Set(candidates.map((mover) => mover.symbol.toUpperCase())))
+
+  const chartableBySymbol = new Map<string, boolean>()
+  const symbolsNeedingChecks: string[] = []
+
+  for (const symbol of uniqueSymbols) {
+    const cached = pulseChartabilityCache.get(symbol)
+    if (cached && now - cached.checkedAt < CHARTABILITY_CACHE_TTL_MS) {
+      chartableBySymbol.set(symbol, cached.chartable)
+    } else {
+      symbolsNeedingChecks.push(symbol)
+    }
+  }
+
+  if (symbolsNeedingChecks.length > 0) {
+    let quoteSet = new Set<string>()
+    try {
+      const quotes = await provider.getQuotes(symbolsNeedingChecks)
+      quoteSet = new Set(quotes.map((quote) => quote.symbol.toUpperCase()))
+    } catch (err) {
+      console.error('[market-movers] chartability batch quote check failed:', err)
+    }
+
+    const minuteChecks = await Promise.allSettled(
+      symbolsNeedingChecks.map(async (symbol) => ({
+        symbol,
+        minuteBars: (await provider.getIntraday(symbol, 1, 'minute', marketDate, marketDate)).length,
+      })),
+    )
+
+    const streamEligible = new Map<string, number>()
+    for (const result of minuteChecks) {
+      if (result.status !== 'fulfilled') {
+        console.error('[market-movers] minute chartability check failed:', result.reason)
+        continue
+      }
+
+      const { symbol, minuteBars } = result.value
+      if (quoteSet.has(symbol) && minuteBars < MIN_PULSE_TODAY_MINUTE_BARS && supportsSecondLevel) {
+        streamEligible.set(symbol, minuteBars)
+        continue
+      }
+
+      const chartable = isPulseTodayChartableCandidate({
+        quoteExists: quoteSet.has(symbol),
+        minuteBars,
+        streamBars: 0,
+        supportsSecondLevel: false,
+      })
+
+      chartableBySymbol.set(symbol, chartable)
+      pulseChartabilityCache.set(symbol, { chartable, checkedAt: now })
+    }
+
+    if (supportsSecondLevel && streamEligible.size > 0) {
+      const streamChecks = await Promise.allSettled(
+        Array.from(streamEligible.entries()).map(async ([symbol, minuteBars]) => ({
+          symbol,
+          minuteBars,
+          streamBars: (await provider.getIntraday(symbol, 10, 'second', marketDate, marketDate)).length,
+        })),
+      )
+
+      for (const result of streamChecks) {
+        if (result.status !== 'fulfilled') {
+          console.error('[market-movers] stream chartability check failed:', result.reason)
+          continue
+        }
+
+        const { symbol, minuteBars, streamBars } = result.value
+        const chartable = isPulseTodayChartableCandidate({
+          quoteExists: quoteSet.has(symbol),
+          minuteBars,
+          streamBars,
+          supportsSecondLevel,
+        })
+
+        chartableBySymbol.set(symbol, chartable)
+        pulseChartabilityCache.set(symbol, { chartable, checkedAt: now })
+      }
+    }
+
+    for (const symbol of symbolsNeedingChecks) {
+      if (!chartableBySymbol.has(symbol)) {
+        const chartable = false
+        chartableBySymbol.set(symbol, chartable)
+        pulseChartabilityCache.set(symbol, { chartable, checkedAt: now })
+      }
+    }
+  }
+
+  return candidates
+    .filter((mover) => chartableBySymbol.get(mover.symbol.toUpperCase()) !== false)
+    .slice(0, PULSE_TODAY_MOVER_LIMIT)
+}
 
 /**
  * Check if we should fetch LIVE data for this session.
@@ -119,7 +255,7 @@ export async function getMarketMovers(
     // If this is NOT the active session, always use cache (it's the closing snapshot)
     if (!isActiveSession) {
       return {
-        movers: cached.data as MoverData[],
+        movers: sanitizeMovers(cached.data as MoverData[]),
         session,
         cachedAt: cached.fetched_at,
         isLive: false
@@ -129,7 +265,7 @@ export async function getMarketMovers(
     // If active session and cache is fresh, use it
     if (isFresh) {
       return {
-        movers: cached.data as MoverData[],
+        movers: sanitizeMovers(cached.data as MoverData[]),
         session,
         cachedAt: cached.fetched_at,
         isLive: true
@@ -167,7 +303,7 @@ export async function getMarketMovers(
 
   // 4. Fallback: return stale cache or empty
   return {
-    movers: (cached?.data as MoverData[]) || [],
+    movers: sanitizeMovers((cached?.data as MoverData[]) || []),
     session,
     cachedAt: cached?.fetched_at || null,
     isLive: false
@@ -225,7 +361,7 @@ async function updateCache(
           session_type: session,
           direction: direction,
           market_date: marketDate,
-          data: movers,
+          data: sanitizeMovers(movers),
           fetched_at: new Date().toISOString()
         },
         {
@@ -274,14 +410,13 @@ async function fetchFromFMP(
     }
 
     // Filter out bad data and transform
-    return data
+    const movers = data
       .filter((item: Record<string, unknown>) => {
         const pctChange = Math.abs((item.changesPercentage as number) || 0)
         const price = item.price as number
         // Filter unrealistic changes and zero/negative prices
         return pctChange < 1000 && price > 0
       })
-      .slice(0, 20)
       .map((item: Record<string, unknown>) => ({
         symbol: item.symbol as string,
         name: item.name as string,
@@ -289,6 +424,8 @@ async function fetchFromFMP(
         change: item.change as number,
         changesPercentage: item.changesPercentage as number
       }))
+
+    return sanitizeMovers(movers)
   } catch (error) {
     console.error(`FMP fetch error for ${session} ${direction}:`, error)
     return []
@@ -299,13 +436,13 @@ async function fetchFromFMP(
  * Map ExtendedHoursStock[] to MoverData[] (drop extra fields like volume, marketCap)
  */
 function mapToMoverData(stocks: ExtendedHoursStock[]): MoverData[] {
-  return stocks.map(s => ({
+  return sanitizeMovers(stocks.map(s => ({
     symbol: s.symbol,
     name: s.name,
     price: s.price,
     change: s.change,
     changesPercentage: s.changesPercentage,
-  }))
+  })))
 }
 
 /**
@@ -332,12 +469,12 @@ async function getExtendedSessionMovers(
 
     // Session is over — return the persisted snapshot
     if (!isActiveSession) {
-      return cached.data as MoverData[]
+      return sanitizeMovers(cached.data as MoverData[])
     }
 
     // Session is active but cache is fresh enough — skip re-fetching
     if (isFresh) {
-      return cached.data as MoverData[]
+      return sanitizeMovers(cached.data as MoverData[])
     }
   }
 
@@ -354,20 +491,20 @@ async function getExtendedSessionMovers(
   }
 
   // 3. Fallback: stale cache or empty
-  return (cached?.data as MoverData[]) || []
+  return sanitizeMovers((cached?.data as MoverData[]) || [])
 }
 
 /**
  * Convert ProviderQuote[] → MoverData[]
  */
 function quotesToMovers(quotes: ProviderQuote[]): MoverData[] {
-  return quotes.map(q => ({
+  return normalizeMoverCandidates(quotes.map(q => ({
     symbol: q.symbol,
     name: q.name,
     price: q.price,
     change: q.change,
     changesPercentage: q.changesPercentage,
-  }))
+  })))
 }
 
 /**
@@ -391,7 +528,7 @@ export async function getAllSessionMovers(
     const quotes = direction === 'gainers'
       ? await provider.getGainers()
       : await provider.getLosers()
-    movers = quotesToMovers(quotes)
+    movers = await filterPulseTodayChartableMovers(provider, quotesToMovers(quotes))
   } catch (err) {
     console.error(`[market-movers] Massive ${direction} fetch failed:`, err)
   }

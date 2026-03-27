@@ -46,8 +46,21 @@ jobs:
 
       # 6. Ingest insider trades from FMP
       - name: Ingest insider trades
-        run: npx tsx scripts/ingest-fmp-insiders.ts --limit 1000
+        run: npx tsx scripts/ingest-fmp-insiders.ts --limit 3000
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+
+      - name: Enrich recent Form 4 trades from SEC filings
+        run: npx tsx scripts/enrich-sec-form4-trades.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+
+      - name: Ingest SEC Form 144 proposed sales
+        run: npx tsx scripts/ingest-sec-form144.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

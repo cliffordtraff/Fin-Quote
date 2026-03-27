@@ -138,6 +138,8 @@ interface MultiMetricChartProps {
   initialIndexToZero?: boolean
   /** Optional explicit chart height for export/embed surfaces */
   chartHeight?: number
+  /** Export typography preset for embed surfaces */
+  exportTextScale?: 'default' | 'compact'
   /** Callback fired after Highcharts finishes rendering */
   onChartReady?: () => void
   /** Callback to copy a newsletter export URL (shown in export dropdown when provided) */
@@ -157,7 +159,7 @@ interface MultiMetricChartProps {
   }
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, chartHeight, onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, chartHeight, exportTextScale = 'default', onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(initialShowLabels ?? true)
   const [isStacked, setIsStacked] = useState(initialStacked ?? false)
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>(initialChartType ?? 'bar')
@@ -176,6 +178,13 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const METRIC_COLORS = getMetricColors(isDark)
   const FALLBACK_COLORS = getFallbackColors(isDark)
   const resolvedChartHeight = chartHeight ?? (exportMode ? 500 : 650)
+  const isCompactExportText = exportMode && exportTextScale === 'compact'
+  const exportAxisFontSize = isCompactExportText ? '13px' : '22px'
+  const exportDataLabelFontSize = isCompactExportText ? '11px' : '20px'
+  const exportLegendMarkerSizeClass = isCompactExportText ? 'w-2.5 h-2.5' : 'w-5 h-5'
+  const exportLegendTextClass = isCompactExportText ? 'text-[11px] leading-snug' : 'text-xl'
+  const exportTextColor = ht?.textColor ?? '#374151'
+  const exportSurfaceBackground = ht?.backgroundColor ?? '#ffffff'
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Highcharts) {
@@ -232,8 +241,8 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   if (!isMounted) {
     return (
       <div
-        className={`w-full animate-pulse rounded flex items-center justify-center ${exportMode ? 'bg-white' : 'bg-cream-50 dark:bg-gray-800'}`}
-        style={{ height: resolvedChartHeight }}
+        className={`w-full animate-pulse rounded flex items-center justify-center ${exportMode ? '' : 'bg-cream-50 dark:bg-gray-800'}`}
+        style={exportMode ? { height: resolvedChartHeight, backgroundColor: exportSurfaceBackground } : { height: resolvedChartHeight }}
       >
         <p className={exportMode ? 'text-gray-400' : 'text-gray-400 dark:text-gray-500'}>Loading chart...</p>
       </div>
@@ -242,7 +251,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
   if (!data || data.length === 0) {
     return (
-      <div className="w-full flex items-center justify-center" style={{ height: resolvedChartHeight }}>
+      <div
+        className="w-full flex items-center justify-center"
+        style={exportMode ? { height: resolvedChartHeight, backgroundColor: exportSurfaceBackground } : { height: resolvedChartHeight }}
+      >
         <p className="text-gray-600 dark:text-gray-400">No data available</p>
       </div>
     )
@@ -520,7 +532,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       labels: {
         style: {
-          fontSize: exportMode ? '22px' : '12px',
+          fontSize: exportMode ? exportAxisFontSize : '12px',
           color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         formatter: getAxisFormatter(primaryUnit),
@@ -551,7 +563,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       },
       labels: {
         style: {
-          fontSize: exportMode ? '22px' : '12px',
+          fontSize: exportMode ? exportAxisFontSize : '12px',
           color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         formatter: getAxisFormatter(secondaryUnit),
@@ -635,12 +647,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     chart: {
       type: 'column',
       height: resolvedChartHeight,
-      backgroundColor: exportMode ? '#ffffff' : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : (ht?.backgroundColor ?? 'transparent'),
+      backgroundColor: exportMode ? exportSurfaceBackground : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : (ht?.backgroundColor ?? 'transparent'),
       animation: false,
       style: {
         fontFamily: ht?.fontFamily ?? 'inherit',
       },
-      spacingBottom: exportMode ? 8 : 20,
+      spacingBottom: exportMode ? (isCompactExportText ? 2 : 8) : 20,
       zooming: {
         type: 'x',
         mouseWheel: { enabled: true },
@@ -663,7 +675,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       labels: {
         format: isQuarterlyData ? '{value:%Y Q%q}' : '{value:%Y}',
         style: {
-          fontSize: exportMode ? '22px' : (isQuarterlyData ? '10px' : '12px'),
+          fontSize: exportMode ? exportAxisFontSize : (isQuarterlyData ? '10px' : '12px'),
           color: ht?.textColor ?? (isDark ? '#9ca3af' : '#6b7280'),
         },
         rotation: isQuarterlyData && categories.length > 16 ? -45 : 0,
@@ -697,12 +709,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           verticalAlign: isStacked ? 'middle' : 'bottom',
-          y: isStacked ? 0 : (exportMode ? -8 : -5),
+          y: isStacked ? 0 : (exportMode ? (isCompactExportText ? -4 : -8) : -5),
           style: {
-            fontSize: exportMode ? '20px' : '11px',
+            fontSize: exportMode ? exportDataLabelFontSize : '11px',
             fontWeight: exportMode ? '600' : '500',
-            color: isStacked ? '#ffffff' : (isDark ? '#e5e7eb' : '#374151'),
-            textOutline: isStacked ? '1px rgba(0, 0, 0, 0.3)' : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff'),
+            color: isStacked ? '#ffffff' : (exportMode ? exportTextColor : (isDark ? '#e5e7eb' : '#374151')),
+            textOutline: isStacked ? '1px rgba(0, 0, 0, 0.3)' : (exportMode ? `1px ${exportSurfaceBackground}` : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff')),
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           formatter: function (this: any) {
@@ -732,10 +744,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           style: {
-            fontSize: exportMode ? '20px' : '11px',
+            fontSize: exportMode ? exportDataLabelFontSize : '11px',
             fontWeight: exportMode ? '600' : '500',
-            color: isDark ? '#e5e7eb' : '#374151',
-            textOutline: isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff',
+            color: exportMode ? exportTextColor : (isDark ? '#e5e7eb' : '#374151'),
+            textOutline: exportMode ? `1px ${exportSurfaceBackground}` : (isDark ? '1px rgb(45, 45, 45)' : '1px #ffffff'),
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           formatter: function (this: any) {
@@ -765,12 +777,12 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         dataLabels: {
           enabled: showDataLabels && !isDenseChart,
           verticalAlign: exportMode ? 'bottom' : 'middle',
-          y: exportMode ? -12 : 0,
+          y: exportMode ? (isCompactExportText ? -6 : -12) : 0,
           style: {
-            fontSize: exportMode ? '20px' : '11px',
+            fontSize: exportMode ? exportDataLabelFontSize : '11px',
             fontWeight: exportMode ? '600' : '500',
-            color: exportMode ? '#374151' : '#ffffff',
-            textOutline: exportMode ? '2px #ffffff' : '1px rgba(0, 0, 0, 0.3)',
+            color: exportMode ? exportTextColor : '#ffffff',
+            textOutline: exportMode ? `2px ${exportSurfaceBackground}` : '1px rgba(0, 0, 0, 0.3)',
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           formatter: function (this: any) {
@@ -961,6 +973,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
         ? 'fixed inset-0 z-50 bg-white dark:bg-gray-800 p-6 overflow-auto'
         : 'w-full'
       }`}
+      style={exportMode ? { backgroundColor: exportSurfaceBackground } : undefined}
     >
       {/* Fullscreen close button */}
       {isFullscreen && !exportMode && (
@@ -991,16 +1004,19 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       />
 
       {/* Custom Legend + Controls Row */}
-      <div className={`flex items-start ${exportMode ? 'mb-1' : 'justify-between mb-4'} mt-2 gap-4`}>
+      <div className={`flex items-start ${exportMode ? 'mb-0 mt-3 gap-3' : 'justify-between mb-4 mt-2 gap-4'}`}>
         {/* Legend - stacked vertically */}
-        <div className="flex flex-col gap-1">
+        <div className={`flex flex-col ${exportMode ? 'gap-0.5' : 'gap-1'}`}>
           {legendItems.map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={index} className={`flex items-center ${exportMode ? 'gap-1.5' : 'gap-2'}`}>
               <span
-                className={`${exportMode ? 'w-5 h-5' : 'w-3 h-3'} rounded-full flex-shrink-0`}
+                className={`${exportMode ? exportLegendMarkerSizeClass : 'w-3 h-3'} rounded-full flex-shrink-0`}
                 style={{ backgroundColor: item.color }}
               />
-              <span className={`${exportMode ? 'text-xl' : 'text-sm'} ${exportMode ? 'text-gray-700' : 'text-gray-700 dark:text-gray-300'}`}>
+              <span
+                className={`${exportMode ? exportLegendTextClass : 'text-sm'} ${exportMode ? '' : 'text-gray-700 dark:text-gray-300'}`}
+                style={exportMode ? { color: exportTextColor } : undefined}
+              >
                 {item.label} ({years[0]}-{years[years.length - 1]}: {formatPct(item.totalChange)} | CAGR: {formatPct(item.cagr)})
               </span>
             </div>

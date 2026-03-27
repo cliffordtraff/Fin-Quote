@@ -47,6 +47,13 @@ interface StockTooltipData {
   returnPct: number
 }
 
+interface CashDistributionSnapshot {
+  capturedAt: string
+  marketDate: string
+  distribution: SP500DistributionData
+  mag7: Mag7StockReturn[]
+}
+
 const KDE_NUM_SLICES = 40 // Number of interactive slices for KDE chart
 
 // Advance-Decline chart dimensions
@@ -56,6 +63,8 @@ const AD_MARGIN = { top: 40, right: 40, bottom: 60, left: 70 }
 const AD_INNER_WIDTH = AD_CHART_WIDTH - AD_MARGIN.left - AD_MARGIN.right
 const AD_INNER_HEIGHT = AD_CHART_HEIGHT - AD_MARGIN.top - AD_MARGIN.bottom
 const AD_POLL_INTERVAL = 120000 // Poll every 2 minutes
+const DISTRIBUTION_POLL_INTERVAL = 120000 // Poll every 2 minutes during cash session
+const CASH_DISTRIBUTION_SNAPSHOT_STORAGE_KEY = 'concept:sp500-cash-session-snapshot'
 
 // Trading day constants (Eastern Time)
 const MARKET_OPEN_HOUR = 9
@@ -323,16 +332,58 @@ function getCandleIndex(time: string, timeframe: Timeframe): number {
   return Math.floor(minutesSinceOpen / timeframe)
 }
 
+function readStoredCashDistributionSnapshot(): CashDistributionSnapshot | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.localStorage.getItem(CASH_DISTRIBUTION_SNAPSHOT_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as CashDistributionSnapshot
+    if (!parsed?.distribution || !Array.isArray(parsed?.mag7)) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function storeCashDistributionSnapshot(snapshot: CashDistributionSnapshot) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(CASH_DISTRIBUTION_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot))
+  } catch {
+    // Ignore localStorage write failures and keep the in-memory snapshot.
+  }
+}
+
+function formatMarketDateLabel(date: string): string {
+  const parsed = new Date(`${date}T12:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return date
+
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 export default function ConceptChartPage() {
   const [mag7Data, setMag7Data] = useState<Mag7StockReturn[]>([])
   const [distributionData, setDistributionData] = useState<SP500DistributionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [marketSession, setMarketSession] = useState<ReturnType<typeof getMarketSession>>('closed')
+  const [isSessionReady, setIsSessionReady] = useState(false)
+  const [distributionSnapshotSource, setDistributionSnapshotSource] = useState<'live' | 'stored'>('stored')
 
   // Update market session on mount and every 30s
   useEffect(() => {
     setMarketSession(getMarketSession())
+    setIsSessionReady(true)
     const interval = setInterval(() => setMarketSession(getMarketSession()), 30000)
     return () => clearInterval(interval)
   }, [])
@@ -348,6 +399,7 @@ export default function ConceptChartPage() {
   const [adCandles, setAdCandles] = useState<ADCandle[]>(() => generateFakeHistoricalADCandles(2))
   const [adLoading, setAdLoading] = useState(true)
   const adPollingRef = useRef<NodeJS.Timeout | null>(null)
+  const distributionPollingRef = useRef<NodeJS.Timeout | null>(null)
 
   // NYSE Advance-Decline intraday candle data
   const [nyseCandles, setNyseCandles] = useState<ADCandle[]>(() => generateFakeHistoricalNYSECandles(2))
@@ -363,39 +415,99 @@ export default function ConceptChartPage() {
     setNyseCandles(generateFakeHistoricalNYSECandles(nyseTimeframe))
   }, [nyseTimeframe])
 
-  useEffect(() => {
-    async function fetchData() {
+  const applyCashDistributionSnapshot = useCallback((snapshot: CashDistributionSnapshot, source: 'live' | 'stored') => {
+    setMag7Data(snapshot.mag7)
+    setDistributionData(snapshot.distribution)
+    setDistributionSnapshotSource(source)
+    setError(null)
+  }, [])
+
+  const fetchLiveCashDistributionSnapshot = useCallback(async (background = false) => {
+    if (!background) {
       setLoading(true)
-      setError(null)
+    }
 
-      try {
-        // Fetch both Mag 7 and S&P 500 distribution data in parallel
-        const [mag7Result, distResult] = await Promise.all([
-          getMag7Returns(),
-          getSP500Distribution(),
-        ])
+    try {
+      const [mag7Result, distResult] = await Promise.all([
+        getMag7Returns(),
+        getSP500Distribution(),
+      ])
 
-        if ('error' in mag7Result) {
-          setError(mag7Result.error)
-          return
-        }
+      if ('error' in mag7Result) {
+        throw new Error(mag7Result.error)
+      }
 
-        if ('error' in distResult) {
-          setError(distResult.error)
-          return
-        }
+      if ('error' in distResult) {
+        throw new Error(distResult.error)
+      }
 
-        setMag7Data(mag7Result.data)
-        setDistributionData(distResult.data)
-      } catch (e) {
-        setError('Failed to fetch data')
-      } finally {
+      const snapshot: CashDistributionSnapshot = {
+        capturedAt: new Date().toISOString(),
+        marketDate: distResult.data.date,
+        distribution: distResult.data,
+        mag7: mag7Result.data,
+      }
+
+      storeCashDistributionSnapshot(snapshot)
+      applyCashDistributionSnapshot(snapshot, 'live')
+    } catch {
+      const storedSnapshot = readStoredCashDistributionSnapshot()
+      if (storedSnapshot) {
+        applyCashDistributionSnapshot(storedSnapshot, 'stored')
+      } else {
+        setError('Failed to load cash-session distribution data')
+      }
+    } finally {
+      if (!background) {
         setLoading(false)
       }
     }
+  }, [applyCashDistributionSnapshot])
 
-    fetchData()
-  }, [])
+  useEffect(() => {
+    if (!isSessionReady) return
+
+    if (distributionPollingRef.current) {
+      clearInterval(distributionPollingRef.current)
+      distributionPollingRef.current = null
+    }
+
+    if (marketSession === 'open') {
+      void fetchLiveCashDistributionSnapshot()
+      distributionPollingRef.current = setInterval(() => {
+        void fetchLiveCashDistributionSnapshot(true)
+      }, DISTRIBUTION_POLL_INTERVAL)
+
+      return () => {
+        if (distributionPollingRef.current) {
+          clearInterval(distributionPollingRef.current)
+          distributionPollingRef.current = null
+        }
+      }
+    }
+
+    const storedSnapshot = readStoredCashDistributionSnapshot()
+    if (storedSnapshot) {
+      applyCashDistributionSnapshot(storedSnapshot, 'stored')
+      setLoading(false)
+      return
+    }
+
+    if (distributionData && mag7Data.length > 0) {
+      setDistributionSnapshotSource('stored')
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    setLoading(false)
+    setError('No cash-session snapshot is stored yet. This chart updates again when regular trading opens.')
+  }, [
+    applyCashDistributionSnapshot,
+    fetchLiveCashDistributionSnapshot,
+    isSessionReady,
+    marketSession,
+  ])
 
   // Fetch advance-decline snapshot and convert to candle
   const fetchAdSnapshot = useCallback(async () => {
@@ -612,6 +724,14 @@ export default function ConceptChartPage() {
     })
   }, [mag7Data, xScale])
 
+  const distributionSubtitle = useMemo(() => {
+    if (distributionSnapshotSource === 'stored' && distributionData) {
+      return `Showing last cash-session snapshot from ${formatMarketDateLabel(distributionData.date)}`
+    }
+
+    return 'Cash-session return distribution for SPX individual constituents'
+  }, [distributionData, distributionSnapshotSource])
+
   // Compute histogram bins
   const histogramBins = useMemo(() => {
     if (!distributionData) return []
@@ -790,25 +910,12 @@ export default function ConceptChartPage() {
           <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    S&P 500 Daily Return Distribution
-                  </h2>
-                  {marketSession !== 'open' && (
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
-                      marketSession === 'pre-market'
-                        ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
-                        : marketSession === 'after-hours'
-                        ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-                        : 'bg-gray-500/15 text-gray-400 border border-gray-500/30'
-                    }`}>
-                      {marketSession === 'pre-market' ? 'Pre-Market' : marketSession === 'after-hours' ? 'After Hours' : 'Closed'}
-                    </span>
-                  )}
-                </div>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                  S&P 500 Daily Return Distribution
+                </h2>
                 {distributionData && (
                   <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-                    1D% Return Distribution For SPX Individual Constituents
+                    {distributionSubtitle}
                   </p>
                 )}
               </div>

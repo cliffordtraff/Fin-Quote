@@ -18,6 +18,8 @@ import {
 } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterOptions } from '@/lib/newsletter/types'
 
+const MAX_GENERATION_PROMPT_LENGTH = 500
+
 function getRequestBaseUrl(request: NextRequest): string {
   const proto = request.headers.get('x-forwarded-proto') ?? 'http'
   const host = request.headers.get('host') ?? 'localhost:3005'
@@ -52,6 +54,18 @@ function normalizeRoundupSize(value: unknown): number | undefined {
   return Math.max(3, Math.min(5, Math.floor(parsed)))
 }
 
+function normalizeGenerationPrompt(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const prompt = value.trim()
+  if (!prompt) return undefined
+  if (prompt.length > MAX_GENERATION_PROMPT_LENGTH) {
+    throw new Error(
+      `generationPrompt must be ${MAX_GENERATION_PROMPT_LENGTH} characters or fewer`,
+    )
+  }
+  return prompt
+}
+
 function toErrorResponse(error: unknown): NextResponse {
   const message =
     error instanceof Error ? error.message : 'Newsletter draft request failed'
@@ -76,6 +90,7 @@ export async function POST(request: NextRequest) {
     const ticker = normalizeTicker(body?.ticker)
     const format = normalizeFormat(body?.format)
     const roundupSize = normalizeRoundupSize(body?.roundupSize)
+    const generationPrompt = normalizeGenerationPrompt(body?.generationPrompt)
     const host = request.headers.get('host')
 
     if (format === 'market_roundup' && ticker) {
@@ -92,12 +107,17 @@ export async function POST(request: NextRequest) {
       editorMode: true,
       format,
       roundupSize,
+      generationPrompt,
     })
 
     const response = NextResponse.json({ draft }, { status: 201 })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Invalid ticker format')) {
+    if (
+      error instanceof Error &&
+      (error.message.startsWith('Invalid ticker format') ||
+        error.message.startsWith('generationPrompt must be'))
+    ) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
     return toErrorResponse(error)

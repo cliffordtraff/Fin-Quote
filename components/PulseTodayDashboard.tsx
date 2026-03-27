@@ -209,22 +209,233 @@ export function useDayCandles(symbols: readonly string[]): Record<string, DayCan
 /* ───────── Candle time parsing helpers ───────── */
 
 export const MARKET_OPEN_MINUTES = 9 * 60 + 30 // 9:30 AM
+const PREMARKET_START_MINUTES = 4 * 60
+const CASH_END_MINUTES = 16 * 60
+const AFTERHOURS_END_MINUTES = 20 * 60
 
-export function candleMinutesSinceOpen(candle: { date: string }): number {
+type IntradaySession = 'premarket' | 'cash' | 'afterhours'
+
+interface SessionWindow {
+  session: IntradaySession
+  startMinutes: number
+  endMinutes: number
+  hourLabels: Array<{ hour: number; minute?: number; label: string }>
+}
+
+const SESSION_WINDOWS: Record<IntradaySession, SessionWindow> = {
+  premarket: {
+    session: 'premarket',
+    startMinutes: PREMARKET_START_MINUTES,
+    endMinutes: MARKET_OPEN_MINUTES,
+    hourLabels: [
+      { hour: 5, label: '5AM' },
+      { hour: 6, label: '6AM' },
+      { hour: 7, label: '7AM' },
+      { hour: 8, label: '8AM' },
+      { hour: 9, label: '9AM' },
+    ],
+  },
+  cash: {
+    session: 'cash',
+    startMinutes: MARKET_OPEN_MINUTES,
+    endMinutes: CASH_END_MINUTES,
+    hourLabels: [
+      { hour: 10, label: '10AM' },
+      { hour: 11, label: '11AM' },
+      { hour: 12, label: '12PM' },
+      { hour: 13, label: '1PM' },
+      { hour: 14, label: '2PM' },
+      { hour: 15, label: '3PM' },
+    ],
+  },
+  afterhours: {
+    session: 'afterhours',
+    startMinutes: CASH_END_MINUTES,
+    endMinutes: AFTERHOURS_END_MINUTES,
+    hourLabels: [
+      { hour: 17, label: '5PM' },
+      { hour: 18, label: '6PM' },
+      { hour: 19, label: '7PM' },
+    ],
+  },
+}
+
+function getCandleTimeParts(candle: { date: string }) {
   const parts = candle.date.split(' ')
   const timeParts = (parts[1] ?? '00:00:00').split(':')
-  const h = parseInt(timeParts[0] ?? '0', 10)
-  const m = parseInt(timeParts[1] ?? '0', 10)
-  return h * 60 + m - MARKET_OPEN_MINUTES
+
+  return {
+    hour: parseInt(timeParts[0] ?? '0', 10),
+    minute: parseInt(timeParts[1] ?? '0', 10),
+    second: parseInt(timeParts[2] ?? '0', 10),
+  }
+}
+
+function getCandleTotalMinutes(candle: { date: string }): number {
+  const { hour, minute } = getCandleTimeParts(candle)
+  return hour * 60 + minute
+}
+
+export function getSessionWindowForCandles(candles: { date: string }[]): SessionWindow {
+  const latest = candles[candles.length - 1]
+  if (!latest) return SESSION_WINDOWS.cash
+
+  const totalMinutes = getCandleTotalMinutes(latest)
+  if (totalMinutes >= CASH_END_MINUTES) return SESSION_WINDOWS.afterhours
+  if (totalMinutes >= MARKET_OPEN_MINUTES) return SESSION_WINDOWS.cash
+  if (totalMinutes >= PREMARKET_START_MINUTES) return SESSION_WINDOWS.premarket
+  return SESSION_WINDOWS.cash
+}
+
+export function getSessionExtremesForCandles(
+  candles: Array<{ date: string; high: number; low: number }>,
+): { session: IntradaySession; dayHigh: number | null; dayLow: number | null } {
+  const sessionWindow = getSessionWindowForCandles(candles)
+
+  let dayHigh = Number.NEGATIVE_INFINITY
+  let dayLow = Number.POSITIVE_INFINITY
+
+  for (const candle of candles) {
+    const totalMinutes = getCandleTotalMinutes(candle)
+    if (totalMinutes < sessionWindow.startMinutes || totalMinutes >= sessionWindow.endMinutes) {
+      continue
+    }
+
+    if (Number.isFinite(candle.high)) dayHigh = Math.max(dayHigh, candle.high)
+    if (Number.isFinite(candle.low)) dayLow = Math.min(dayLow, candle.low)
+  }
+
+  return {
+    session: sessionWindow.session,
+    dayHigh: Number.isFinite(dayHigh) ? dayHigh : null,
+    dayLow: Number.isFinite(dayLow) ? dayLow : null,
+  }
+}
+
+export interface PulseLevelLine {
+  id: string
+  value: number
+  label: string
+  tone: 'high' | 'low'
+  emphasis: 'primary' | 'secondary'
+}
+
+interface PulseSessionLevels {
+  activeSession: IntradaySession
+  lines: PulseLevelLine[]
+  primaryHigh: PulseLevelLine | null
+  primaryLow: PulseLevelLine | null
+}
+
+function getSessionLabelPrefix(session: IntradaySession): string {
+  if (session === 'premarket') return 'Premarket '
+  if (session === 'afterhours') return 'After Hours '
+  return ''
+}
+
+function getExtremesForSession(
+  candles: Array<{ date: string; high: number; low: number }>,
+  session: IntradaySession,
+): { dayHigh: number | null; dayLow: number | null } {
+  const sessionWindow = SESSION_WINDOWS[session]
+  let dayHigh = Number.NEGATIVE_INFINITY
+  let dayLow = Number.POSITIVE_INFINITY
+
+  for (const candle of candles) {
+    const totalMinutes = getCandleTotalMinutes(candle)
+    if (totalMinutes < sessionWindow.startMinutes || totalMinutes >= sessionWindow.endMinutes) {
+      continue
+    }
+
+    if (Number.isFinite(candle.high)) dayHigh = Math.max(dayHigh, candle.high)
+    if (Number.isFinite(candle.low)) dayLow = Math.min(dayLow, candle.low)
+  }
+
+  return {
+    dayHigh: Number.isFinite(dayHigh) ? dayHigh : null,
+    dayLow: Number.isFinite(dayLow) ? dayLow : null,
+  }
+}
+
+function areLevelsEquivalent(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return false
+  const tolerance = Math.max(0.0001, Math.max(Math.abs(a), Math.abs(b)) * 0.0005)
+  return Math.abs(a - b) <= tolerance
+}
+
+export function buildPulseSessionLevels(
+  candles: Array<{ date: string; high: number; low: number }>,
+): PulseSessionLevels {
+  const activeSession = getSessionWindowForCandles(candles).session
+  const activeExtremes = getExtremesForSession(candles, activeSession)
+  const lines: PulseLevelLine[] = []
+  const activePrefix = getSessionLabelPrefix(activeSession)
+
+  const primaryHigh = activeExtremes.dayHigh !== null
+    ? {
+        id: `${activeSession}-high`,
+        value: activeExtremes.dayHigh,
+        label: `${activePrefix}HOD`,
+        tone: 'high' as const,
+        emphasis: 'primary' as const,
+      }
+    : null
+
+  const primaryLow = activeExtremes.dayLow !== null
+    ? {
+        id: `${activeSession}-low`,
+        value: activeExtremes.dayLow,
+        label: `${activePrefix}LOD`,
+        tone: 'low' as const,
+        emphasis: 'primary' as const,
+      }
+    : null
+
+  if (primaryHigh) lines.push(primaryHigh)
+  if (primaryLow) lines.push(primaryLow)
+
+  if (activeSession !== 'premarket') {
+    const premarketExtremes = getExtremesForSession(candles, 'premarket')
+
+    if (premarketExtremes.dayHigh !== null && !areLevelsEquivalent(premarketExtremes.dayHigh, primaryHigh?.value ?? null)) {
+      lines.push({
+        id: 'premarket-high',
+        value: premarketExtremes.dayHigh,
+        label: 'Premarket HOD',
+        tone: 'high',
+        emphasis: 'secondary',
+      })
+    }
+
+    if (premarketExtremes.dayLow !== null && !areLevelsEquivalent(premarketExtremes.dayLow, primaryLow?.value ?? null)) {
+      lines.push({
+        id: 'premarket-low',
+        value: premarketExtremes.dayLow,
+        label: 'Premarket LOD',
+        tone: 'low',
+        emphasis: 'secondary',
+      })
+    }
+  }
+
+  return { activeSession, lines, primaryHigh, primaryLow }
+}
+
+export function candleMinutesSinceOpen(candle: { date: string }): number {
+  return candleMinutesSinceSessionStart(candle, MARKET_OPEN_MINUTES)
 }
 
 export function candleSecondsSinceOpen(candle: { date: string }): number {
-  const parts = candle.date.split(' ')
-  const tp = (parts[1] ?? '00:00:00').split(':')
-  const h = parseInt(tp[0] ?? '0', 10)
-  const m = parseInt(tp[1] ?? '0', 10)
-  const s = parseInt(tp[2] ?? '0', 10)
-  return (h * 3600 + m * 60 + s) - MARKET_OPEN_MINUTES * 60
+  return candleSecondsSinceSessionStart(candle, MARKET_OPEN_MINUTES)
+}
+
+function candleMinutesSinceSessionStart(candle: { date: string }, sessionStartMinutes: number): number {
+  return getCandleTotalMinutes(candle) - sessionStartMinutes
+}
+
+function candleSecondsSinceSessionStart(candle: { date: string }, sessionStartMinutes: number): number {
+  const { hour, minute, second } = getCandleTimeParts(candle)
+  return (hour * 3600 + minute * 60 + second) - sessionStartMinutes * 60
 }
 
 /* ───────── FullDayCanvas ───────── */
@@ -235,6 +446,7 @@ export interface FullDayCanvasProps {
   lastPrice: number | null
   dayHigh: number | null
   dayLow: number | null
+  levelLines?: PulseLevelLine[]
   lineMode: boolean
   aggregation: '1s' | '10s' | '1min' | '5min'
   theme: ThemeMode
@@ -262,6 +474,7 @@ export function FullDayCanvas({
   lastPrice,
   dayHigh,
   dayLow,
+  levelLines,
   lineMode,
   aggregation,
   theme,
@@ -276,47 +489,66 @@ export function FullDayCanvas({
   const [crosshair, setCrosshair] = useState<CrosshairData | null>(null)
   const rafRef = useRef<number>(0)
 
-  // Filter to regular market hours only (9:30 AM – 4:00 PM)
-  // Premarket candles get negative slot indices and distort the chart;
-  // closing auction candles create extreme wicks.
-  const marketHoursCandles = useMemo(() => {
+  const sessionWindow = useMemo(() => getSessionWindowForCandles(rawCandles), [rawCandles])
+  const resolvedLevelLines = useMemo(() => {
+    const explicitLines = (levelLines ?? []).filter((line) => Number.isFinite(line.value) && line.value > 0)
+    if (explicitLines.length > 0) return explicitLines
+
+    const fallbackLines: PulseLevelLine[] = []
+    if (dayHigh !== null && dayHigh > 0) {
+      fallbackLines.push({ id: 'fallback-high', value: dayHigh, label: 'HOD', tone: 'high', emphasis: 'primary' })
+    }
+    if (dayLow !== null && dayLow > 0) {
+      fallbackLines.push({ id: 'fallback-low', value: dayLow, label: 'LOD', tone: 'low', emphasis: 'primary' })
+    }
+    return fallbackLines
+  }, [levelLines, dayHigh, dayLow])
+
+  // Render the currently active session window so premarket and afterhours
+  // movers still produce a visible main chart.
+  const sessionCandles = useMemo(() => {
     return rawCandles.filter((c) => {
-      const parts = c.date.split(' ')
-      const timeParts = (parts[1] ?? '00:00:00').split(':')
-      const totalMins = parseInt(timeParts[0] ?? '0', 10) * 60 + parseInt(timeParts[1] ?? '0', 10)
-      return totalMins >= MARKET_OPEN_MINUTES && totalMins < 960
+      const totalMins = getCandleTotalMinutes(c)
+      return totalMins >= sessionWindow.startMinutes && totalMins < sessionWindow.endMinutes
     })
-  }, [rawCandles])
+  }, [rawCandles, sessionWindow])
 
   const candles = useMemo(() => {
-    if (aggregation === '5min') return aggregateTo5Min(marketHoursCandles)
+    if (aggregation === '5min') return aggregateTo5Min(sessionCandles)
     // 1s, 10s, and 1min pass through raw candles (second data is pre-bucketed upstream)
-    return marketHoursCandles
-  }, [marketHoursCandles, aggregation])
+    return sessionCandles
+  }, [sessionCandles, aggregation])
 
   const intervalSecs = aggregation === '1s' ? 1 : aggregation === '10s' ? 10 : aggregation === '1min' ? 60 : 300
+  const sessionDurationMinutes = sessionWindow.endMinutes - sessionWindow.startMinutes
 
   // Precompute slot positions for each candle
   const slotMap = useMemo(() => {
     if (aggregation === '1s' || aggregation === '10s') {
       const bucketSize = aggregation === '1s' ? 1 : 10
       return candles.map((c) => {
-        const secs = candleSecondsSinceOpen(c)
+        const secs = candleSecondsSinceSessionStart(c, sessionWindow.startMinutes)
         return Math.floor(secs / bucketSize)
       })
     }
     const intervalMinutes = aggregation === '1min' ? 1 : 5
     return candles.map((c) => {
-      const mins = candleMinutesSinceOpen(c)
+      const mins = candleMinutesSinceSessionStart(c, sessionWindow.startMinutes)
       return Math.floor(mins / intervalMinutes)
     })
-  }, [candles, aggregation])
+  }, [candles, aggregation, sessionWindow.startMinutes])
 
   // Dynamic X-axis: starts at full-day width and never goes below
   // the visible candles × 4, so candles stay compact on the left ~25% at first,
   // then naturally fill more of the chart as the day progresses.
   // 1s: 6.5hrs × 3600 = 23400 slots; 10s: 2340; 1min: 390; 5min: 78
-  const fullDaySlots = aggregation === '1s' ? 23400 : aggregation === '10s' ? 2340 : aggregation === '1min' ? 390 : 78
+  const fullDaySlots = aggregation === '1s'
+    ? sessionDurationMinutes * 60
+    : aggregation === '10s'
+      ? sessionDurationMinutes * 6
+      : aggregation === '1min'
+        ? sessionDurationMinutes
+        : Math.max(1, Math.floor(sessionDurationMinutes / 5))
   const totalSlots = useMemo(() => {
     if (xAxisMaxSlots !== null) {
       return Math.min(Math.max(xAxisMaxSlots, 1), fullDaySlots)
@@ -330,7 +562,7 @@ export function FullDayCanvas({
     const multiplier = aggregation === '1s' ? 1.05 : aggregation === '10s' ? 1.15 : 4
     const minSlots = aggregation === '1s' ? 60 : aggregation === '10s' ? 100 : 40
     return Math.min(Math.max(Math.ceil(maxSlot * multiplier), minSlots), fullDaySlots)
-  }, [dynamicXAxis, slotMap, fullDaySlots, xAxisMaxSlots])
+  }, [dynamicXAxis, slotMap, fullDaySlots, xAxisMaxSlots, aggregation])
 
   // Morph: precompute 1min target slot map and totalSlots
   const isMorphing = morphProgress > 0 && morphProgress < 1 && !!morphTargetCandles && morphTargetCandles.length > 0
@@ -366,8 +598,9 @@ export function FullDayCanvas({
     }
     if (previousClose !== null && previousClose > 0) allPrices.push(previousClose)
     if (lastPrice !== null && lastPrice > 0) allPrices.push(lastPrice)
-    if (dayHigh !== null && dayHigh > 0) allPrices.push(dayHigh)
-    if (dayLow !== null && dayLow > 0) allPrices.push(dayLow)
+    for (const line of resolvedLevelLines) {
+      allPrices.push(line.value)
+    }
     const min = Math.min(...allPrices)
     const max = Math.max(...allPrices)
     const range = max - min || 1
@@ -388,7 +621,7 @@ export function FullDayCanvas({
     const stableMax = Math.max(prev.yMax, newMax)
     stableRangeRef.current = { yMin: stableMin, yMax: stableMax }
     return { yMin: stableMin, yMax: stableMax }
-  }, [candles, previousClose, lastPrice, dayHigh, dayLow])
+  }, [candles, previousClose, lastPrice, resolvedLevelLines])
 
   // Y-axis label interval (adapted from SimpleCanvasChart)
   const labelInterval = useMemo(() => {
@@ -521,17 +754,9 @@ export function FullDayCanvas({
       }
     } else {
       // Fixed: full-day hour labels
-      const xLabels = [
-        { hour: 10, label: '10AM' },
-        { hour: 11, label: '11AM' },
-        { hour: 12, label: '12PM' },
-        { hour: 13, label: '1PM' },
-        { hour: 14, label: '2PM' },
-        { hour: 15, label: '3PM' },
-      ]
-      for (const { hour, label } of xLabels) {
-        const minsFromOpen = hour * 60 - MARKET_OPEN_MINUTES
-        const slot = Math.floor((minsFromOpen * 60) / intervalSecs)
+      for (const { hour, minute = 0, label } of sessionWindow.hourLabels) {
+        const minsFromSessionStart = (hour * 60 + minute) - sessionWindow.startMinutes
+        const slot = Math.floor((minsFromSessionStart * 60) / intervalSecs)
         const x = slotToX(slot)
         if (x >= drawLeft && x <= drawRight) {
           ctx.fillText(label, x, height - 6)
@@ -583,65 +808,72 @@ export function FullDayCanvas({
       }
     }
 
-    // --- HOD/LOD dashed lines ---
-    if (dayHigh !== null && dayHigh > 0) {
-      const hodY = priceToY(dayHigh)
-      if (hodY >= chartTop - 5 && hodY <= chartBottom + 5) {
-        ctx.save()
-        ctx.setLineDash([3, 3])
-        ctx.strokeStyle = isDark ? 'rgba(34,197,94,0.5)' : 'rgba(34,197,94,0.45)'
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.moveTo(drawLeft, hodY)
-        ctx.lineTo(drawRight, hodY)
-        ctx.stroke()
-        ctx.restore()
-        ctx.fillStyle = isDark ? 'rgba(34,197,94,0.7)' : 'rgba(34,197,94,0.6)'
-        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        ctx.textAlign = 'right'
-        ctx.fillText(`HOD $${formatPrice(dayHigh)}`, drawRight - 4, hodY - 4)
+    // --- Session key levels (HOD/LOD + Premarket carryover levels) ---
+    const highLevelLines = resolvedLevelLines
+      .filter((line) => line.tone === 'high')
+      .sort((a, b) => b.value - a.value)
+    const lowLevelLines = resolvedLevelLines
+      .filter((line) => line.tone === 'low')
+      .sort((a, b) => a.value - b.value)
+
+    const drawLevelLine = (line: PulseLevelLine, index: number) => {
+      const y = priceToY(line.value)
+      if (y < chartTop - 5 || y > chartBottom + 5) return
+
+      const isSecondary = line.emphasis === 'secondary'
+      const isLow = line.tone === 'low'
+      const nearLowLevel = isLow && lastPrice !== null && line.value > 0
+        ? Math.abs(lastPrice - line.value) / line.value < 0.005
+        : false
+
+      ctx.save()
+      ctx.setLineDash(isSecondary ? [6, 4] : [3, 3])
+
+      if (nearLowLevel) {
+        const pulse = Math.sin(Date.now() / 600) * 0.5 + 0.5
+        const alpha = 0.35 + pulse * 0.65
+        ctx.strokeStyle = `rgba(239,68,68,${alpha})`
+        ctx.lineWidth = 1 + pulse * 1.5
+        ctx.shadowColor = 'rgba(239,68,68,0.5)'
+        ctx.shadowBlur = pulse * 10
+      } else if (line.tone === 'high') {
+        ctx.strokeStyle = isDark
+          ? `rgba(34,197,94,${isSecondary ? 0.28 : 0.5})`
+          : `rgba(34,197,94,${isSecondary ? 0.22 : 0.45})`
+        ctx.lineWidth = isSecondary ? 0.75 : 1
+      } else {
+        ctx.strokeStyle = isDark
+          ? `rgba(239,68,68,${isSecondary ? 0.28 : 0.5})`
+          : `rgba(239,68,68,${isSecondary ? 0.22 : 0.45})`
+        ctx.lineWidth = isSecondary ? 0.75 : 1
       }
-    }
-    if (dayLow !== null && dayLow > 0) {
-      const lodY = priceToY(dayLow)
-      if (lodY >= chartTop - 5 && lodY <= chartBottom + 5) {
-        // Detect proximity — blink when price is within 0.5% of LOD
-        const lodProximity = lastPrice !== null && dayLow > 0
-          ? Math.abs(lastPrice - dayLow) / dayLow
-          : 1
-        const nearLOD = lodProximity < 0.005
 
-        ctx.save()
-        ctx.setLineDash([3, 3])
+      ctx.beginPath()
+      ctx.moveTo(drawLeft, y)
+      ctx.lineTo(drawRight, y)
+      ctx.stroke()
+      ctx.restore()
 
-        if (nearLOD) {
-          const pulse = Math.sin(Date.now() / 600) * 0.5 + 0.5
-          const alpha = 0.35 + pulse * 0.65
-          ctx.strokeStyle = `rgba(239,68,68,${alpha})`
-          ctx.lineWidth = 1 + pulse * 1.5
-          ctx.shadowColor = 'rgba(239,68,68,0.5)'
-          ctx.shadowBlur = pulse * 10
-        } else {
-          ctx.strokeStyle = isDark ? 'rgba(239,68,68,0.5)' : 'rgba(239,68,68,0.45)'
-          ctx.lineWidth = 1
-        }
-
-        ctx.beginPath()
-        ctx.moveTo(drawLeft, lodY)
-        ctx.lineTo(drawRight, lodY)
-        ctx.stroke()
-        ctx.restore()
-
-        // Label — also pulses when near
-        const labelAlpha = nearLOD
-          ? 0.5 + (Math.sin(Date.now() / 600) * 0.5 + 0.5) * 0.5
+      const baseLabelAlpha = nearLowLevel
+        ? 0.5 + (Math.sin(Date.now() / 600) * 0.5 + 0.5) * 0.5
+        : isSecondary
+          ? (isDark ? 0.52 : 0.44)
           : (isDark ? 0.7 : 0.6)
-        ctx.fillStyle = `rgba(239,68,68,${labelAlpha})`
-        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        ctx.textAlign = 'right'
-        ctx.fillText(`LOD $${formatPrice(dayLow)}`, drawRight - 4, lodY + 12)
-      }
+      const labelColor = line.tone === 'high'
+        ? `rgba(34,197,94,${baseLabelAlpha})`
+        : `rgba(239,68,68,${baseLabelAlpha})`
+
+      ctx.fillStyle = labelColor
+      ctx.font = `${isSecondary ? '11px' : '13px'} -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+      ctx.textAlign = 'right'
+      const labelY = line.tone === 'high'
+        ? y - 4 - index * 12
+        : y + 12 + index * 12
+      ctx.fillText(`${line.label} $${formatPrice(line.value)}`, drawRight - 4, labelY)
     }
+
+    highLevelLines.forEach((line, index) => drawLevelLine(line, index))
+    lowLevelLines.forEach((line, index) => drawLevelLine(line, index))
 
     // --- Draw candles or line ---
     if (lineMode) {
@@ -852,7 +1084,7 @@ export function FullDayCanvas({
       ctx.textAlign = 'center'
       ctx.fillText(priceLabel, crosshair.x, labelY + 13)
     }
-  }, [candles, slotMap, previousClose, lastPrice, dayHigh, dayLow, lineMode, aggregation, theme, chartHeight, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, xAxisMaxSlots, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots])
+  }, [candles, slotMap, previousClose, lastPrice, resolvedLevelLines, lineMode, aggregation, theme, chartHeight, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, xAxisMaxSlots, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots, sessionWindow])
 
   // Mouse handlers
   const handleMouseMove = useCallback(
@@ -1204,47 +1436,112 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const stream = stream1s
   const pipStream = pipTimeframe === '1s' ? stream1s : stream10s
   const chartData = useChartData(pipStream)
-  const degenOpts = useDegenScale(stream.lastPrice, stream.dayHigh, stream.dayLow)
+  const mainChartStream = useMemo(() => {
+    const stream10sCount = stream10s.candles.length + (stream10s.liveCandle ? 1 : 0)
+    if (stream10sCount > 0) return stream10s
 
-  const price = stream.lastPrice ?? (dayData?.candles.length ? dayData.candles[dayData.candles.length - 1].close : 0)
+    const stream1sCount = stream1s.candles.length + (stream1s.liveCandle ? 1 : 0)
+    if (stream1sCount > 0) return stream1s
+
+    return null
+  }, [stream10s, stream1s])
+  const mainDayData = useMemo<DayCandleData | undefined>(() => {
+    const mergedCandles = mergeLatestDayCandlesWithStream(
+      dayData?.candles ?? [],
+      mainChartStream?.candles ?? [],
+      mainChartStream?.liveCandle,
+    )
+
+    if (mergedCandles.length === 0) {
+      return dayData
+    }
+
+    return {
+      candles: mergedCandles,
+      previousClose: mainChartStream?.previousClose ?? dayData?.previousClose ?? null,
+      changePct: mainChartStream?.lastChangePct ?? dayData?.changePct ?? null,
+    }
+  }, [
+    dayData,
+    mainChartStream?.candles,
+    mainChartStream?.liveCandle,
+    mainChartStream?.previousClose,
+    mainChartStream?.lastChangePct,
+  ])
+  const levelModel = useMemo(() => buildPulseSessionLevels(mainDayData?.candles ?? []), [mainDayData?.candles])
+  const chartLevelLines = useMemo(() => {
+    if (levelModel.lines.length > 0) return levelModel.lines
+
+    const fallbackLines: PulseLevelLine[] = []
+    const fallbackPrefix = getSessionLabelPrefix(levelModel.activeSession)
+    if (stream.dayHigh !== null && stream.dayHigh > 0) {
+      fallbackLines.push({
+        id: `${levelModel.activeSession}-fallback-high`,
+        value: stream.dayHigh,
+        label: `${fallbackPrefix}HOD`,
+        tone: 'high',
+        emphasis: 'primary',
+      })
+    }
+    if (stream.dayLow !== null && stream.dayLow > 0) {
+      fallbackLines.push({
+        id: `${levelModel.activeSession}-fallback-low`,
+        value: stream.dayLow,
+        label: `${fallbackPrefix}LOD`,
+        tone: 'low',
+        emphasis: 'primary',
+      })
+    }
+    return fallbackLines
+  }, [levelModel, stream.dayHigh, stream.dayLow])
+  const primaryHighLine = chartLevelLines.find((line) => line.tone === 'high' && line.emphasis === 'primary') ?? null
+  const primaryLowLine = chartLevelLines.find((line) => line.tone === 'low' && line.emphasis === 'primary') ?? null
+  const displayDayHigh = primaryHighLine?.value ?? null
+  const displayDayLow = primaryLowLine?.value ?? null
+  const degenOpts = useDegenScale(stream.lastPrice, displayDayHigh, displayDayLow)
+
+  const price = stream.lastPrice ?? (mainDayData?.candles.length ? mainDayData.candles[mainDayData.candles.length - 1].close : 0)
   const change = stream.lastChange ?? 0
   // Prefer real-time stream changePct so it stays consistent with change
-  const changePct = stream.lastChangePct ?? dayData?.changePct ?? 0
+  const changePct = stream.lastChangePct ?? mainDayData?.changePct ?? 0
   const isPositive = changePct >= 0
 
   const pipBaseWindow = pipTimeframe === '1s' ? 30 : 300
   const pipWindowSecs = pipBaseWindow * pipZoom
 
   // Pass nearest key level as referenceLine so Liveline keeps it in the Y-axis range
-  const pipRefLine = useMemo(() => {
+  const pipReferenceLevel = useMemo(() => {
     const lp = stream.lastPrice
-    const hod = stream.dayHigh
-    const lod = stream.dayLow
-    if (lp === null || (hod === null && lod === null)) return undefined
+    if (lp === null || chartLevelLines.length === 0) return null
 
     const threshold = 0.01 // 1% of price
+    let nearest: PulseLevelLine | null = null
+    let nearestDist = Infinity
 
-    const distToHod = hod !== null ? Math.abs(lp - hod) / lp : Infinity
-    const distToLod = lod !== null ? Math.abs(lp - lod) / lp : Infinity
-
-    // Pick whichever is closer, if within threshold
-    if (distToLod <= distToHod && distToLod <= threshold && lod !== null) {
-      return { value: lod, label: `LOD $${formatPrice(lod)}` }
+    for (const line of chartLevelLines) {
+      const dist = Math.abs(lp - line.value) / lp
+      if (dist <= threshold && dist < nearestDist) {
+        nearest = line
+        nearestDist = dist
+      }
     }
-    if (distToHod < distToLod && distToHod <= threshold && hod !== null) {
-      return { value: hod, label: `HOD $${formatPrice(hod)}` }
-    }
 
-    return undefined
-  }, [stream.lastPrice, stream.dayHigh, stream.dayLow])
+    return nearest
+  }, [stream.lastPrice, chartLevelLines])
+  const pipRefLine = useMemo(() => {
+    if (!pipReferenceLevel) return undefined
+    return {
+      value: pipReferenceLevel.value,
+      label: `${pipReferenceLevel.label} $${formatPrice(pipReferenceLevel.value)}`,
+    }
+  }, [pipReferenceLevel])
 
   // Blink reference line red when near LOD (alternates color, never disappears)
   const isNearLOD = useMemo(() => {
     const lp = stream.lastPrice
-    const lod = stream.dayLow
-    if (lp === null || lod === null || lod === 0) return false
-    return Math.abs(lp - lod) / lod < 0.005
-  }, [stream.lastPrice, stream.dayLow])
+    if (lp === null || !pipReferenceLevel || pipReferenceLevel.tone !== 'low' || pipReferenceLevel.value === 0) return false
+    return Math.abs(lp - pipReferenceLevel.value) / pipReferenceLevel.value < 0.005
+  }, [stream.lastPrice, pipReferenceLevel])
 
   const [lodBlinkRed, setLodBlinkRed] = useState(false)
 
@@ -1257,11 +1554,11 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const coloredRefLine = useMemo(() => {
     if (!pipRefLine) return undefined
     // Only color the LOD line when blinking red
-    if (isNearLOD && pipRefLine.value === stream.dayLow && lodBlinkRed) {
+    if (isNearLOD && pipReferenceLevel?.tone === 'low' && lodBlinkRed) {
       return { ...pipRefLine, color: 'rgba(239, 68, 68, 0.9)' }
     }
     return pipRefLine
-  }, [pipRefLine, isNearLOD, lodBlinkRed, stream.dayLow])
+  }, [pipRefLine, isNearLOD, lodBlinkRed, pipReferenceLevel])
 
   // HOD/LOD break flash detection
   const [flashColor, setFlashColor] = useState<'green' | 'red' | null>(null)
@@ -1420,11 +1717,12 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       <div ref={pipContainerRef} style={{ position: 'relative' }}>
         <FullDayCanvas
           key={symbol}
-          candles={dayData?.candles ?? []}
-          previousClose={dayData?.previousClose ?? null}
+          candles={mainDayData?.candles ?? []}
+          previousClose={mainDayData?.previousClose ?? null}
           lastPrice={stream.lastPrice}
-          dayHigh={stream.dayHigh}
-          dayLow={stream.dayLow}
+          dayHigh={displayDayHigh}
+          dayLow={displayDayLow}
+          levelLines={chartLevelLines}
           lineMode={lineMode}
           aggregation={aggregation}
           theme={theme}
@@ -1757,7 +2055,16 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
   const stream = stream1s
   const pipStream = pipTimeframe === '1s' ? stream1s : stream10s
   const chartData = useChartData(pipStream)
-  const degenOpts = useDegenScale(stream.lastPrice, stream.dayHigh, stream.dayLow)
+  const sessionExtremes = useMemo(() => {
+    const candleExtremes = getSessionExtremesForCandles(dayData?.candles ?? [])
+    return {
+      dayHigh: candleExtremes.dayHigh ?? stream.dayHigh,
+      dayLow: candleExtremes.dayLow ?? stream.dayLow,
+    }
+  }, [dayData?.candles, stream.dayHigh, stream.dayLow])
+  const displayDayHigh = sessionExtremes.dayHigh
+  const displayDayLow = sessionExtremes.dayLow
+  const degenOpts = useDegenScale(stream.lastPrice, displayDayHigh, displayDayLow)
 
   const price = stream.lastPrice ?? (dayData?.candles.length ? dayData.candles[dayData.candles.length - 1].close : 0)
   const change = stream.lastChange ?? 0
@@ -1771,8 +2078,8 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
   // Reference line (HOD/LOD) for PIP
   const pipRefLine = useMemo(() => {
     const lp = stream.lastPrice
-    const hod = stream.dayHigh
-    const lod = stream.dayLow
+    const hod = displayDayHigh
+    const lod = displayDayLow
     if (lp === null || (hod === null && lod === null)) return undefined
     const threshold = 0.01
     const distToHod = hod !== null ? Math.abs(lp - hod) / lp : Infinity
@@ -1784,15 +2091,15 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
       return { value: hod, label: `HOD $${formatPrice(hod)}` }
     }
     return undefined
-  }, [stream.lastPrice, stream.dayHigh, stream.dayLow])
+  }, [stream.lastPrice, displayDayHigh, displayDayLow])
 
   // LOD blink
   const isNearLOD = useMemo(() => {
     const lp = stream.lastPrice
-    const lod = stream.dayLow
+    const lod = displayDayLow
     if (lp === null || lod === null || lod === 0) return false
     return Math.abs(lp - lod) / lod < 0.005
-  }, [stream.lastPrice, stream.dayLow])
+  }, [stream.lastPrice, displayDayLow])
 
   const [lodBlinkRed, setLodBlinkRed] = useState(false)
   useEffect(() => {
@@ -1803,11 +2110,11 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
 
   const coloredRefLine = useMemo(() => {
     if (!pipRefLine) return undefined
-    if (isNearLOD && pipRefLine.value === stream.dayLow && lodBlinkRed) {
+    if (isNearLOD && pipRefLine.value === displayDayLow && lodBlinkRed) {
       return { ...pipRefLine, color: 'rgba(239, 68, 68, 0.9)' }
     }
     return pipRefLine
-  }, [pipRefLine, isNearLOD, lodBlinkRed, stream.dayLow])
+  }, [pipRefLine, isNearLOD, lodBlinkRed, displayDayLow])
 
   const pipColor = isPositive ? '#22c55e' : '#ef4444'
 
@@ -1884,8 +2191,8 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
             candles={dayData?.candles ?? []}
             previousClose={dayData?.previousClose ?? null}
             lastPrice={stream.lastPrice}
-            dayHigh={stream.dayHigh}
-            dayLow={stream.dayLow}
+            dayHigh={displayDayHigh}
+            dayLow={displayDayLow}
             lineMode={lineMode}
             aggregation={aggregation}
             theme={theme}
@@ -2265,6 +2572,48 @@ export function bucketCandles(
       ...ohlc,
     }
   })
+}
+
+export function mergeLatestDayCandlesWithStream(
+  baseCandles: DayCandle[],
+  streamCandles: { time: number; open: number; high: number; low: number; close: number }[],
+  liveCandle?: { time: number; open: number; high: number; low: number; close: number },
+): DayCandle[] {
+  const revealed = [...streamCandles]
+  if (liveCandle) revealed.push(liveCandle)
+
+  const etFmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const streamedBuckets = bucketCandles(revealed, 60, etFmt)
+  const allDates = [...baseCandles, ...streamedBuckets].map((c) => c.date.split(' ')[0]).filter(Boolean)
+  const latestDate = allDates.sort().at(-1)
+
+  if (!latestDate) return []
+
+  const merged = new Map<string, DayCandle>()
+
+  for (const candle of sortCandles(baseCandles)) {
+    if (candle.date.startsWith(latestDate)) {
+      merged.set(candle.date, candle)
+    }
+  }
+
+  for (const candle of sortCandles(streamedBuckets)) {
+    if (candle.date.startsWith(latestDate)) {
+      merged.set(candle.date, candle)
+    }
+  }
+
+  return sortCandles(Array.from(merged.values()))
 }
 
 export function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): {

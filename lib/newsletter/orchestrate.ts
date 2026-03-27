@@ -31,11 +31,13 @@ import {
   buildCopyGenerationMessages,
   buildEditorialHookMessages,
   buildMarketRoundupMessages,
+  buildMarketRoundupStockSelectionMessages,
   buildStockPickerMessages,
   buildTemplateSelectionMessages,
   parseCopyGeneration,
   parseEditorialHook,
   parseMarketRoundupIntro,
+  parseMarketRoundupStockSelections,
   parseStockPickerResult,
   parseTemplateSelections,
 } from './prompts'
@@ -222,9 +224,13 @@ function scoreRoundupCandidate(
 }
 
 async function selectMarketRoundupStocks(
+  openai: OpenAI,
+  model: string,
+  isGpt5: boolean,
   market: Awaited<ReturnType<typeof fetchMarketContext>>,
   roundupSize: number,
   explicitTickers: string[],
+  generationPrompt?: string,
 ): Promise<FeaturedStock[]> {
   if (explicitTickers.length > 0) {
     return Promise.all(explicitTickers.slice(0, roundupSize).map((ticker) => buildFeaturedStock(ticker, market)))
@@ -234,7 +240,31 @@ async function selectMarketRoundupStocks(
     .sort((a, b) => scoreRoundupCandidate(b, market) - scoreRoundupCandidate(a, market))
     .map((candidate) => candidate.symbol)
 
-  const selectedSymbols = Array.from(new Set(sortedSymbols)).slice(0, roundupSize)
+  const fallbackSymbols = Array.from(new Set(sortedSymbols)).slice(0, roundupSize)
+  let selectedSymbols = fallbackSymbols
+
+  if (generationPrompt?.trim()) {
+    const selectionText = await runJsonPrompt(
+      openai,
+      model,
+      isGpt5,
+      'msg_roundup_pick',
+      buildMarketRoundupStockSelectionMessages(market, roundupSize, generationPrompt),
+      { temperature: 0, maxOutputTokens: 700 },
+    )
+    const promptSymbols = parseMarketRoundupStockSelections(
+      selectionText,
+      market,
+      roundupSize,
+    )
+    if (promptSymbols.length > 0) {
+      selectedSymbols = [
+        ...promptSymbols,
+        ...fallbackSymbols.filter((symbol) => !promptSymbols.includes(symbol)),
+      ].slice(0, roundupSize)
+    }
+  }
+
   return Promise.all(selectedSymbols.map((ticker) => buildFeaturedStock(ticker, market)))
 }
 
@@ -251,6 +281,7 @@ async function generateSingleStockNewsletter(params: {
   chartRenderWidth: number
   chartRenderHeight: number
   timings: Record<string, number>
+  generationPrompt?: string
 }): Promise<{
   ticker: string
   featuredTickers: string[]
@@ -263,6 +294,7 @@ async function generateSingleStockNewsletter(params: {
   chartPaths: string[]
   autoPickedStock: boolean
   stockPickerResult?: StockPickerResult
+  generationPrompt?: string
 }> {
   const {
     openai,
@@ -277,6 +309,7 @@ async function generateSingleStockNewsletter(params: {
     chartRenderWidth,
     chartRenderHeight,
     timings,
+    generationPrompt,
   } = params
 
   let tickerUpper: string
@@ -300,7 +333,7 @@ async function generateSingleStockNewsletter(params: {
       model,
       isGpt5,
       'msg_pick',
-      buildStockPickerMessages(market),
+      buildStockPickerMessages(market, generationPrompt),
       { temperature: 0, maxOutputTokens: 500 },
     )
 
@@ -334,7 +367,7 @@ async function generateSingleStockNewsletter(params: {
       model,
       isGpt5,
       'msg_hook',
-      buildEditorialHookMessages(todayQuote, topHeadlines),
+      buildEditorialHookMessages(todayQuote, topHeadlines, generationPrompt),
       { temperature: 0.3, maxOutputTokens: 300 },
     )
 
@@ -364,6 +397,7 @@ async function generateSingleStockNewsletter(params: {
     buildTemplateSelectionMessages(context, maxCharts, {
       mode: 'single_stock',
       editorialContext,
+      generationPrompt,
     }),
     { temperature: 0, maxOutputTokens: 700 },
   )
@@ -419,6 +453,7 @@ async function generateSingleStockNewsletter(params: {
           selection.reason,
           resolvedCharts[index].spec,
           editorialContext,
+          generationPrompt,
         ),
         { temperature: 0.3, maxOutputTokens: 500 },
       )
@@ -460,6 +495,7 @@ async function generateSingleStockNewsletter(params: {
     chartPaths,
     autoPickedStock,
     stockPickerResult,
+    generationPrompt,
   }
 }
 
@@ -476,6 +512,7 @@ async function generateMarketRoundupNewsletter(params: {
   chartRenderWidth: number
   chartRenderHeight: number
   timings: Record<string, number>
+  generationPrompt?: string
 }): Promise<{
   ticker: string
   subjectLine: string
@@ -488,6 +525,7 @@ async function generateMarketRoundupNewsletter(params: {
   autoPickedStock: boolean
   stockPickerResult?: StockPickerResult
   featuredTickers: string[]
+  generationPrompt?: string
 }> {
   const {
     openai,
@@ -502,6 +540,7 @@ async function generateMarketRoundupNewsletter(params: {
     chartRenderWidth,
     chartRenderHeight,
     timings,
+    generationPrompt,
   } = params
 
   const tMarket = Date.now()
@@ -513,9 +552,13 @@ async function generateMarketRoundupNewsletter(params: {
   timings.fetchMarketContext = Date.now() - tMarket
 
   const selectedStocks = await selectMarketRoundupStocks(
+    openai,
+    model,
+    isGpt5,
     market,
     roundupSize,
     featuredTickers,
+    generationPrompt,
   )
   if (selectedStocks.length < 3) {
     throw new Error('Market roundup requires at least 3 featured stocks')
@@ -542,7 +585,7 @@ async function generateMarketRoundupNewsletter(params: {
     model,
     isGpt5,
     'msg_roundup',
-    buildMarketRoundupMessages(selectedStocks),
+    buildMarketRoundupMessages(selectedStocks, generationPrompt),
     { temperature: 0.3, maxOutputTokens: 300 },
   )
   const roundupIntro = parseMarketRoundupIntro(roundupIntroText, selectedStocks)
@@ -575,6 +618,7 @@ async function generateMarketRoundupNewsletter(params: {
         buildTemplateSelectionMessages(context, 1, {
           mode: 'market_roundup',
           editorialContext: stock,
+          generationPrompt,
         }),
         { temperature: 0, maxOutputTokens: 500 },
       )
@@ -636,6 +680,7 @@ async function generateMarketRoundupNewsletter(params: {
           plan.selection.reason,
           plan.resolved.spec,
           plan.stock,
+          generationPrompt,
         ),
         { temperature: 0.3, maxOutputTokens: 500 },
       )
@@ -675,6 +720,7 @@ async function generateMarketRoundupNewsletter(params: {
     chartPaths,
     autoPickedStock,
     featuredTickers: selectedStocks.map((stock) => stock.ticker),
+    generationPrompt,
   }
 }
 
@@ -704,6 +750,7 @@ export async function generateNewsletter(
     normalizedFeaturedTickers,
   )
   const roundupSize = normalizeRoundupSize(options?.roundupSize)
+  const generationPrompt = options?.generationPrompt?.trim() || undefined
 
   if (ticker && format === 'market_roundup') {
     throw new Error('ticker cannot be combined with market_roundup mode')
@@ -736,6 +783,7 @@ export async function generateNewsletter(
           chartRenderWidth,
           chartRenderHeight,
           timings,
+          generationPrompt,
         })
       : await generateSingleStockNewsletter({
           openai,
@@ -750,6 +798,7 @@ export async function generateNewsletter(
           chartRenderWidth,
           chartRenderHeight,
           timings,
+          generationPrompt,
         })
 
   const headerOverride =
@@ -824,6 +873,7 @@ export async function generateNewsletter(
         : [generationResult.ticker],
     generatedAt: now.toISOString(),
     subjectLine: generationResult.subjectLine,
+    generationPrompt,
     selections: generationResult.selections,
     blocks: generationResult.blocks,
     chartSpecs: generationResult.chartSpecs,

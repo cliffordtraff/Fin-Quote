@@ -27,6 +27,7 @@ export async function getLosersData(): Promise<{ losers: LoserData[] } | { error
         change: q.change,
         changesPercentage: q.changesPercentage,
       }))
+      .slice(0, 20)
 
     return { losers }
   } catch (error) {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildMarketRoundupMessages,
+  buildMarketRoundupStockSelectionMessages,
+  buildStockPickerMessages,
   buildCopyGenerationMessages,
+  buildTemplateSelectionMessages,
+  parseMarketRoundupStockSelections,
   parseTemplateSelections,
 } from '@/lib/newsletter/prompts'
 
@@ -135,5 +140,127 @@ describe('buildCopyGenerationMessages', () => {
       'If a value is null or missing, treat it as unavailable. Never rewrite null as 0, $0, or 0%.',
     )
     expect(messages[1]?.content).toContain('"freeCashFlow": null')
+  })
+})
+
+describe('prompt steering', () => {
+  it('includes a user brief in the stock picker prompt when provided', () => {
+    const messages = buildStockPickerMessages(
+      {
+        candidates: [
+          {
+            symbol: 'NVDA',
+            name: 'NVIDIA Corporation',
+            price: 900,
+            change: 30,
+            changesPercentage: 3.45,
+          },
+        ],
+        newsBySymbol: {
+          NVDA: [
+            {
+              title: 'NVIDIA extends AI server leadership',
+              text: '',
+              url: 'https://example.com',
+              publishedDate: '2026-03-27',
+              site: 'Example',
+            },
+          ],
+        },
+      },
+      'Focus on AI infrastructure winners.',
+    )
+
+    expect(messages[0]?.content).toContain('If a user brief is provided, prioritize candidates that clearly match it')
+    expect(messages[1]?.content).toContain('=== USER BRIEF ===')
+    expect(messages[1]?.content).toContain('Focus on AI infrastructure winners.')
+  })
+
+  it('includes a user brief in template selection and roundup intro prompts', () => {
+    const selectionMessages = buildTemplateSelectionMessages(
+      {
+        ticker: 'AMD',
+        financials: [],
+        quarterlyFinancials: [],
+        highlights: {
+          revenueGrowthYoY: null,
+          netIncomeGrowthYoY: null,
+          grossMarginLatest: null,
+          operatingMarginLatest: null,
+          fcfLatest: null,
+        },
+        quarterlyHighlights: {
+          revenueGrowthYoY: null,
+          netIncomeGrowthYoY: null,
+          grossMarginLatest: null,
+          operatingMarginLatest: null,
+          fcfLatest: null,
+          latestPeriodLabel: null,
+        },
+      },
+      1,
+      {
+        mode: 'market_roundup',
+        generationPrompt: 'Focus on semiconductor weakness after earnings.',
+      },
+    )
+
+    const roundupMessages = buildMarketRoundupMessages(
+      [
+        {
+          ticker: 'AMD',
+          name: 'Advanced Micro Devices',
+          changesPercentage: -7.5,
+          editorialHook: 'AMD fell after a guidance reset.',
+          topHeadlines: [],
+        },
+      ],
+      'Focus on semiconductor weakness after earnings.',
+    )
+
+    expect(selectionMessages[1]?.content).toContain('=== User Brief ===')
+    expect(selectionMessages[1]?.content).toContain('Focus on semiconductor weakness after earnings.')
+    expect(roundupMessages[1]?.content).toContain('=== USER BRIEF ===')
+    expect(roundupMessages[1]?.content).toContain('Focus on semiconductor weakness after earnings.')
+  })
+
+  it('parses roundup stock selections and filters invalid symbols', () => {
+    const selections = parseMarketRoundupStockSelections(
+      JSON.stringify({
+        selections: [
+          { symbol: 'AMD', reason: 'Fits the semiconductor theme.' },
+          { symbol: 'MU', reason: 'Also fits the semiconductor theme.' },
+          { symbol: 'INVALID', reason: 'Should be ignored.' },
+        ],
+      }),
+      {
+        candidates: [
+          { symbol: 'AMD', name: 'AMD', price: 100, change: -5, changesPercentage: -4.7 },
+          { symbol: 'MU', name: 'Micron', price: 90, change: -4, changesPercentage: -4.1 },
+        ],
+        newsBySymbol: {},
+      },
+      4,
+    )
+
+    expect(selections).toEqual(['AMD', 'MU'])
+  })
+
+  it('builds an AI roundup stock-selection prompt from the user brief', () => {
+    const messages = buildMarketRoundupStockSelectionMessages(
+      {
+        candidates: [
+          { symbol: 'AMD', name: 'AMD', price: 100, change: -5, changesPercentage: -4.7 },
+          { symbol: 'MU', name: 'Micron', price: 90, change: -4, changesPercentage: -4.1 },
+        ],
+        newsBySymbol: {},
+      },
+      3,
+      'Focus on semiconductors.',
+    )
+
+    expect(messages[0]?.content).toContain('Pick 3 stocks for a market roundup newsletter.')
+    expect(messages[1]?.content).toContain('=== USER BRIEF ===')
+    expect(messages[1]?.content).toContain('Focus on semiconductors.')
   })
 })

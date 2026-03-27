@@ -1,23 +1,67 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { resolveDashboardChartOfTheDay } from '@/lib/dashboard/chart-of-the-day'
+import { NextRequest } from 'next/server'
+import {
+  findDashboardChartOfTheDayFallbackImage,
+  resolveDashboardChartOfTheDay,
+} from '@/lib/dashboard/chart-of-the-day'
+import { NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
-    const format = request.nextUrl.searchParams.get('format')
+    const theme = request.nextUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light'
     const resolvedChart = resolveDashboardChartOfTheDay({
-      baseUrl: request.nextUrl.origin,
+      hostHeader: request.headers.get('host'),
+      theme,
     })
-    const exportUrl = new URL(resolvedChart.exportUrl)
+    const response = await fetch(resolvedChart.renderUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'image/png',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        spec: resolvedChart.captureSpec,
+        timeoutMs: 30000,
+      }),
+      cache: 'no-store',
+    })
 
-    if (format === 'embed') {
-      exportUrl.searchParams.set('embed', 'true')
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`.trim()
+      try {
+        const contentType = response.headers.get('content-type') || ''
+        if (contentType.includes('application/json')) {
+          const payload = await response.json() as { error?: string }
+          if (payload?.error?.trim()) {
+            detail = payload.error.trim()
+          }
+        } else {
+          const text = (await response.text()).trim()
+          if (text) detail = text
+        }
+      } catch {}
+
+      throw new Error(`Chart render failed: ${detail}`)
     }
 
-    return NextResponse.redirect(exportUrl, { status: 307 })
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': response.headers.get('content-type') || 'image/png',
+      },
+    })
   } catch (error) {
+    const fallbackImage = findDashboardChartOfTheDayFallbackImage()
+    if (fallbackImage) {
+      return NextResponse.redirect(
+        new URL(fallbackImage.publicUrl, request.nextUrl.origin),
+        { status: 307 },
+      )
+    }
+
     const message =
       error instanceof Error ? error.message : 'Chart render failed'
 

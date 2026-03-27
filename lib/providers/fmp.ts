@@ -191,7 +191,7 @@ export class FMPProvider implements MarketDataProvider {
 
     return data
       .filter((item: any) => Math.abs(item.changesPercentage ?? 0) < 1000 && (item.price ?? 0) > 0)
-      .slice(0, 20)
+      .slice(0, 60)
       .map(d => mapQuote(d as Record<string, unknown>))
   }
 
@@ -207,7 +207,7 @@ export class FMPProvider implements MarketDataProvider {
 
     return data
       .filter((item: any) => Math.abs(item.changesPercentage ?? 0) < 100 && (item.price ?? 0) > 0)
-      .slice(0, 20)
+      .slice(0, 60)
       .map(d => mapQuote(d as Record<string, unknown>))
   }
 

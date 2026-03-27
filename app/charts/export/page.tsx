@@ -46,6 +46,11 @@ function ChartExportContent() {
   const [ready, setReady] = useState(false)
   const [embedViewportHeight, setEmbedViewportHeight] = useState(520)
   const isEmbedded = searchParams.get('embed') === 'true'
+  const hideBranding = searchParams.get('hideBranding') === 'true'
+  const autoSize = searchParams.get('autosize') === 'true'
+  const isAutoSizedEmbed = isEmbedded && autoSize
+  const requestedTheme = searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+  const isDarkTheme = requestedTheme === 'dark'
 
   // Parse spec from URL (stable across renders since URL doesn't change)
   const spec = useMemo(
@@ -61,16 +66,56 @@ function ChartExportContent() {
 
   // Stable key for the effect dependency
   const specKey = useMemo(() => JSON.stringify(spec), [spec])
-  const shellClassName = isEmbedded
-    ? 'flex h-screen w-full flex-col overflow-hidden bg-white'
-    : 'flex w-[1200px] flex-col bg-white'
-  const loadingShellClassName = isEmbedded
-    ? 'h-screen w-full flex items-center justify-center bg-white'
-    : 'w-[1200px] h-[700px] flex items-center justify-center bg-white'
-  const titleClassName = isEmbedded ? 'px-4 pt-4 pb-1' : 'px-8 pt-6 pb-1'
-  const chartWrapClassName = isEmbedded ? 'flex-1 min-h-0 px-4 pt-2' : 'px-6 pt-2'
+  const surfaceBackgroundClass = isDarkTheme ? 'bg-slate-800' : 'bg-white'
+  const surfaceBackgroundColor = isDarkTheme ? '#1e293b' : '#ffffff'
+  const titleTextClass = isDarkTheme ? 'text-slate-100' : 'text-gray-900'
+  const subtitleTextClass = isDarkTheme ? 'text-slate-400' : 'text-gray-500'
+  const loadingTextClass = isDarkTheme ? 'text-slate-400' : 'text-gray-400'
+  const shellClassName = isAutoSizedEmbed
+    ? `h-full min-h-full w-full overflow-hidden ${surfaceBackgroundClass}`
+    : isEmbedded
+    ? `flex h-screen w-full flex-col overflow-hidden ${surfaceBackgroundClass}`
+    : `flex w-[1200px] flex-col ${surfaceBackgroundClass}`
+  const loadingShellClassName = isAutoSizedEmbed
+    ? `h-full min-h-[520px] w-full flex items-center justify-center ${surfaceBackgroundClass}`
+    : isEmbedded
+    ? `h-screen w-full flex items-center justify-center ${surfaceBackgroundClass}`
+    : `w-[1200px] h-[700px] flex items-center justify-center ${surfaceBackgroundClass}`
+  const titleClassName = isEmbedded ? 'px-4 pt-3 pb-0' : 'px-8 pt-6 pb-1'
+  const chartWrapClassName = isAutoSizedEmbed
+    ? 'px-4 pt-1 pb-1'
+    : isEmbedded
+    ? 'flex-1 min-h-0 px-4 pt-1 pb-1'
+    : 'px-6 pt-2 pb-1'
   const footerClassName = isEmbedded ? 'px-4 pb-3 pt-1 flex justify-end' : 'px-8 pb-2 flex justify-end'
-  const chartHeight = isEmbedded ? Math.max(280, embedViewportHeight - 190) : 500
+  const chartHeight = isAutoSizedEmbed
+    ? Math.max(460, embedViewportHeight - 88)
+    : isEmbedded
+    ? Math.max(300, embedViewportHeight - (hideBranding ? 124 : 156))
+    : 500
+  const embedChartTheme = useMemo(() => {
+    if (!isDarkTheme) {
+      return {
+        backgroundColor: '#ffffff',
+        textColor: '#6b7280',
+        gridLineColor: '#d1d5db',
+        lineColor: '#374151',
+        tooltipBg: '#ffffff',
+        tooltipBorder: '#e5e7eb',
+        tooltipText: '#1f2937',
+      }
+    }
+
+    return {
+      backgroundColor: '#1e293b',
+      textColor: '#cbd5e1',
+      gridLineColor: 'rgba(148, 163, 184, 0.28)',
+      lineColor: '#94a3b8',
+      tooltipBg: '#0f172a',
+      tooltipBorder: '#334155',
+      tooltipText: '#f8fafc',
+    }
+  }, [isDarkTheme])
 
   useEffect(() => {
     if (!isEmbedded) return
@@ -83,6 +128,35 @@ function ChartExportContent() {
     window.addEventListener('resize', syncViewportHeight)
     return () => window.removeEventListener('resize', syncViewportHeight)
   }, [isEmbedded])
+
+  useEffect(() => {
+    if (!isAutoSizedEmbed || !ready || typeof window === 'undefined') return
+
+    const postHeight = () => {
+      window.parent.postMessage(
+        {
+          type: 'dashboard-chart-of-the-day-height',
+          height: document.documentElement.scrollHeight,
+        },
+        window.location.origin,
+      )
+    }
+
+    postHeight()
+
+    const observer = new ResizeObserver(() => {
+      window.requestAnimationFrame(postHeight)
+    })
+
+    observer.observe(document.documentElement)
+    observer.observe(document.body)
+    window.addEventListener('resize', postHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', postHeight)
+    }
+  }, [isAutoSizedEmbed, ready, metricsData.length])
 
   // Fetch data based on the spec
   useEffect(() => {
@@ -198,7 +272,7 @@ function ChartExportContent() {
   const chartColors = useMemo(() => {
     if (metricsData.length === 0) return {}
     const specColors = config?.colors ?? {}
-    const defaultColors = getMetricColors(false) // light mode
+    const defaultColors = getMetricColors(isDarkTheme)
     const isMultiStock = (config?.stocks.length ?? 0) > 1
     const result: Record<string, string> = {}
 
@@ -212,11 +286,11 @@ function ChartExportContent() {
       }
     })
     return result
-  }, [metricsData, config?.colors, config?.stocks.length])
+  }, [metricsData, config?.colors, config?.stocks.length, isDarkTheme])
 
   if (error) {
     return (
-      <div className={loadingShellClassName}>
+      <div className={loadingShellClassName} style={{ backgroundColor: surfaceBackgroundColor }}>
         <p className="text-red-600 text-sm">{error}</p>
       </div>
     )
@@ -224,8 +298,8 @@ function ChartExportContent() {
 
   if (loading) {
     return (
-      <div className={loadingShellClassName}>
-        <p className="text-gray-400">Loading chart data...</p>
+      <div className={loadingShellClassName} style={{ backgroundColor: surfaceBackgroundColor }}>
+        <p className={`${loadingTextClass}`}>Loading chart data...</p>
       </div>
     )
   }
@@ -233,18 +307,19 @@ function ChartExportContent() {
   return (
     <div
       className={shellClassName}
+      style={{ backgroundColor: surfaceBackgroundColor }}
       data-export-ready={ready ? 'true' : 'false'}
     >
       {/* Title area */}
       {(config?.title || config?.subtitle) && (
         <div className={titleClassName}>
           {config?.title && (
-            <h1 className={`${isEmbedded ? 'text-2xl' : 'text-3xl'} font-bold text-gray-900 leading-tight`}>
+            <h1 className={`${isEmbedded ? 'text-base' : 'text-3xl'} font-bold leading-tight ${titleTextClass}`}>
               {config.title}
             </h1>
           )}
           {!isEmbedded && config?.subtitle && (
-            <p className="text-lg text-gray-500 mt-1">{config.subtitle}</p>
+            <p className={`text-lg mt-1 ${subtitleTextClass}`}>{config.subtitle}</p>
           )}
         </div>
       )}
@@ -258,25 +333,28 @@ function ChartExportContent() {
             customColors={chartColors}
             exportMode
             chartHeight={chartHeight}
+            exportTextScale={isEmbedded ? 'compact' : 'default'}
             initialChartType={config?.chartType}
             initialShowLabels={config?.showLabels}
             initialStacked={config?.stacked}
             initialIndexToZero={config?.indexToZero}
             onChartReady={handleChartReady}
+            highchartsTheme={embedChartTheme}
           />
         ) : (
           <div className="flex items-center justify-center" style={{ height: chartHeight }}>
-            <p className="text-gray-400">No data to display</p>
+            <p className={loadingTextClass}>No data to display</p>
           </div>
         )}
       </div>
 
-      {/* Branding footer */}
-      <div className={footerClassName}>
-        <span className={`${isEmbedded ? 'text-sm' : 'text-base'} text-gray-400`}>
-          The Intraday &middot; theintraday.com
-        </span>
-      </div>
+      {!hideBranding && (
+        <div className={footerClassName}>
+          <span className={`${isEmbedded ? 'text-[10px]' : 'text-base'} ${subtitleTextClass}`}>
+            The Intraday &middot; theintraday.com
+          </span>
+        </div>
+      )}
     </div>
   )
 }

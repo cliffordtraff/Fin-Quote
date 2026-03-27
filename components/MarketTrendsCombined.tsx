@@ -59,7 +59,7 @@ function SessionToggle({
             onClick={() => onChange(session.id)}
             title={`${session.fullName}: ${timeRange}`}
             className={`
-              relative px-2 py-0.5 text-[9px] font-medium rounded transition-colors
+              relative px-2.5 py-1 text-[11px] font-medium rounded transition-colors
               ${isActive
                 ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
@@ -314,7 +314,7 @@ function LoadingSteps({ loading }: { loading: boolean }) {
 function ChartOfTheDay() {
   const { theme } = useTheme()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const iframeSrc = '/api/dashboard/chart-of-the-day?format=embed'
+  const imageSrc = `/api/dashboard/chart-of-the-day?theme=${theme === 'dark' ? 'dark' : 'light'}`
   const outerCardClasses =
     theme === 'dark'
       ? 'border-slate-700 bg-slate-800'
@@ -323,28 +323,30 @@ function ChartOfTheDay() {
     theme === 'dark'
       ? 'border-slate-700 bg-slate-800'
       : 'border-cream-300 bg-cream-50'
-  const frameClasses = 'border-cream-200 bg-white'
+  const frameClasses =
+    theme === 'dark'
+      ? 'border-slate-700 bg-slate-800'
+      : 'border-cream-200 bg-white'
 
   useEffect(() => {
     setStatus('loading')
-  }, [iframeSrc])
+  }, [imageSrc])
 
   return (
     <div className={`flex-[2] rounded-lg border overflow-hidden flex flex-col ${outerCardClasses}`}>
       <div className={`px-2 py-1.5 border-b ${headerClasses}`}>
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Chart of the Day</h2>
       </div>
-      <div className="flex-1 min-h-[440px] p-1">
-        <div className={`relative h-full overflow-hidden rounded-md border ${frameClasses}`}>
-          <iframe
-            key={iframeSrc}
-            src={iframeSrc}
-            title="Chart of the day"
-            className={`absolute inset-0 h-full w-full border-0 transition-opacity duration-150 ${
+      <div className="flex-1 p-1" style={{ minHeight: 580 }}>
+        <div className={`relative flex h-full min-h-[560px] items-center justify-center overflow-hidden rounded-md border ${frameClasses}`}>
+          <img
+            key={imageSrc}
+            src={imageSrc}
+            alt="Chart of the day"
+            className={`h-full w-full object-contain transition-opacity duration-150 ${
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             }`}
-            style={{ background: '#ffffff' }}
-            allow="fullscreen"
+            style={{ background: theme === 'dark' ? '#1e293b' : '#ffffff' }}
             loading="eager"
             onLoad={() => setStatus('ready')}
             onError={() => setStatus('error')}
@@ -389,7 +391,7 @@ function MarketSummaryCard({ summary, loading, onRefresh, lastUpdated }: { summa
           )}
         </div>
       </div>
-      <div className="p-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed overflow-y-auto" style={{ maxHeight: '400px' }}>
+      <div className="p-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed overflow-y-auto" style={{ maxHeight: '340px' }}>
         {loading ? (
           <LoadingSteps loading={loading} />
         ) : summary ? (
@@ -411,7 +413,7 @@ export default function MarketTrendsCombined({
   onRefreshSummary,
   summaryLastUpdated,
 }: MarketTrendsCombinedProps) {
-  const maxRows = 17
+  const maxRows = 12
   const { timezone } = useTimezone()
 
   // Default to current session, fallback to 'cash' if market closed
@@ -431,9 +433,9 @@ export default function MarketTrendsCombined({
   return (
     <div className="flex gap-4 w-full">
       <ChartOfTheDay />
-      <div className="w-[200px] shrink-0 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      <div className="w-[220px] shrink-0 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
-          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Gainers</h2>
+          <h2 className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Gainers</h2>
           <SessionToggle
             selected={selectedSession}
             onChange={setSelectedSession}
@@ -441,18 +443,18 @@ export default function MarketTrendsCombined({
             timezone={timezone}
           />
         </div>
-        <table className="w-full text-[10px]">
+        <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-cream-300 dark:border-gray-700">
-              <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
-              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
-              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
+              <th className="text-left py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
+              <th className="text-right py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
+              <th className="text-right py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
             </tr>
           </thead>
           <tbody>
             {gainersData.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-4 px-2 text-center text-gray-400 dark:text-gray-500">
+                <td colSpan={3} className="py-4 px-2 text-center text-[13px] text-gray-400 dark:text-gray-500">
                   No data for {selectedSession === 'premarket' ? 'pre-market' : selectedSession === 'afterhours' ? 'after-hours' : 'regular'} session
                 </td>
               </tr>
@@ -462,13 +464,13 @@ export default function MarketTrendsCombined({
                   key={stock.symbol}
                   className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
                 >
-                  <td className="py-1 px-2">
+                  <td className="py-1.5 px-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
                   </td>
-                  <td className="py-1 px-2 text-right text-gray-900 dark:text-gray-100">
+                  <td className="py-1.5 px-2 text-right text-gray-900 dark:text-gray-100">
                     ${stock.price.toFixed(2)}
                   </td>
-                  <td className="py-1 px-2 text-right font-medium text-green-600 dark:text-green-400">
+                  <td className="py-1.5 px-2 text-right font-medium text-green-600 dark:text-green-400">
                     +{stock.changesPercentage.toFixed(2)}%
                   </td>
                 </tr>
@@ -478,9 +480,9 @@ export default function MarketTrendsCombined({
         </table>
       </div>
 
-      <div className="w-[200px] shrink-0 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      <div className="w-[220px] shrink-0 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
-          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Losers</h2>
+          <h2 className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Losers</h2>
           <SessionToggle
             selected={selectedSession}
             onChange={setSelectedSession}
@@ -488,18 +490,18 @@ export default function MarketTrendsCombined({
             timezone={timezone}
           />
         </div>
-        <table className="w-full text-[10px]">
+        <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-cream-300 dark:border-gray-700">
-              <th className="text-left py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
-              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
-              <th className="text-right py-1 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
+              <th className="text-left py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Ticker</th>
+              <th className="text-right py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Price</th>
+              <th className="text-right py-1.5 px-2 font-medium text-gray-500 dark:text-gray-400">Chg%</th>
             </tr>
           </thead>
           <tbody>
             {losersData.length === 0 ? (
               <tr>
-                <td colSpan={3} className="py-4 px-2 text-center text-gray-400 dark:text-gray-500">
+                <td colSpan={3} className="py-4 px-2 text-center text-[13px] text-gray-400 dark:text-gray-500">
                   No data for {selectedSession === 'premarket' ? 'pre-market' : selectedSession === 'afterhours' ? 'after-hours' : 'regular'} session
                 </td>
               </tr>
@@ -509,13 +511,13 @@ export default function MarketTrendsCombined({
                   key={stock.symbol}
                   className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-cream-50 dark:hover:bg-gray-800/50"
                 >
-                  <td className="py-1 px-2">
+                  <td className="py-1.5 px-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{stock.symbol}</span>
                   </td>
-                  <td className="py-1 px-2 text-right text-gray-900 dark:text-gray-100">
+                  <td className="py-1.5 px-2 text-right text-gray-900 dark:text-gray-100">
                     ${stock.price.toFixed(2)}
                   </td>
-                  <td className="py-1 px-2 text-right font-medium text-red-600 dark:text-red-400">
+                  <td className="py-1.5 px-2 text-right font-medium text-red-600 dark:text-red-400">
                     {stock.changesPercentage.toFixed(2)}%
                   </td>
                 </tr>

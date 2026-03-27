@@ -122,6 +122,12 @@ function getTickerLogoUrl(ticker: string): string {
   return `https://financialmodelingprep.com/image-stock/${sym}.png`
 }
 
+function shouldRenderNewsletterHeaderLogo(header: NewsletterDraftHeader): boolean {
+  const logoUrl = typeof header.logoUrl === 'string' ? header.logoUrl.trim() : ''
+  if (!logoUrl) return false
+  return !/\/MARKET\.png(?:[?#].*)?$/i.test(logoUrl)
+}
+
 export function buildNewsletterHeader(
   ticker: string,
   date: Date,
@@ -136,6 +142,7 @@ export function buildNewsletterHeader(
     options.format === 'market_roundup'
       ? `Market Roundup${featuredCount > 0 ? ` — ${featuredCount} Stocks` : ''}`
       : `${ticker.toUpperCase()} Snapshot`
+  const logoUrl = options.format === 'market_roundup' ? '' : getTickerLogoUrl(ticker)
   return {
     title: options.subjectLine?.trim() || defaultSubject,
     dateText: formatDate(date),
@@ -143,7 +150,7 @@ export function buildNewsletterHeader(
       options.format === 'market_roundup'
         ? `Market Roundup${featuredCount > 0 ? ` • ${featuredCount} Stocks` : ''}`
         : `${ticker.toUpperCase()} Snapshot`,
-    logoUrl: getTickerLogoUrl(ticker),
+    ...(logoUrl ? { logoUrl } : {}),
   }
 }
 
@@ -245,6 +252,7 @@ export function assembleNewsletterHtml(
     : statsInnerHtml && !introInnerHtml
       ? `<tr><td colspan="2" style="padding:0;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
       : ''
+  const showHeaderLogo = shouldRenderNewsletterHeaderLogo(header)
 
   const blockHtml = blocks
     .map(
@@ -301,7 +309,7 @@ export function assembleNewsletterHtml(
                     </p>
                   </td>
                   <td align="right" valign="middle" style="width:60px;padding:24px 32px 24px 0;">
-                    ${header.logoUrl ? `<img src="${escapeHtml(header.logoUrl)}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
+                    ${showHeaderLogo ? `<img src="${escapeHtml(header.logoUrl || '')}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
                   </td>
                 </tr>
 ${introInnerHtml}

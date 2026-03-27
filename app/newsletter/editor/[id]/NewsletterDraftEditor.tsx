@@ -728,6 +728,26 @@ export default function NewsletterDraftEditor({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-5 py-3.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
         <div>
+          <Link
+            href="/newsletter/editor"
+            className="mb-2 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-cream-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-700 transition hover:border-sage-300 hover:bg-sage-50 hover:text-sage-800"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              className="h-3.5 w-3.5"
+            >
+              <path
+                d="M9.5 3.5L5 8L9.5 12.5"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back
+          </Link>
           <h1 className="text-lg font-semibold tracking-tight text-gray-900">
             {draft.subjectLine}
           </h1>

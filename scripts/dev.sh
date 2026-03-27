@@ -11,4 +11,4 @@ fi
 # Check data freshness (non-blocking)
 node scripts/check-data-freshness.js 2>/dev/null || true
 
-exec npm run dev:next
+exec npm run dev:next -- --hostname localhost

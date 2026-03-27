@@ -6,6 +6,8 @@ import {
 } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterOptions } from '@/lib/newsletter/types'
 
+const MAX_GENERATION_PROMPT_LENGTH = 500
+
 function normalizeFormat(value: unknown): NewsletterOptions['format'] {
   if (value === 'market_roundup' || value === 'single_stock' || value === 'auto') {
     return value
@@ -24,12 +26,25 @@ function normalizeRoundupSize(value: unknown): number | undefined {
   return Math.max(3, Math.min(5, Math.floor(parsed)))
 }
 
+function normalizeGenerationPrompt(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const prompt = value.trim()
+  if (!prompt) return undefined
+  if (prompt.length > MAX_GENERATION_PROMPT_LENGTH) {
+    throw new Error(
+      `generationPrompt must be ${MAX_GENERATION_PROMPT_LENGTH} characters or fewer`,
+    )
+  }
+  return prompt
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
     const ticker = body?.ticker
     const format = normalizeFormat(body?.format)
     const roundupSize = normalizeRoundupSize(body?.roundupSize)
+    const generationPrompt = normalizeGenerationPrompt(body?.generationPrompt)
 
     // Validate ticker format if provided (empty/missing triggers AI stock picker)
     if (ticker != null && typeof ticker === 'string' && ticker.trim() !== '') {
@@ -67,6 +82,7 @@ export async function POST(request: NextRequest) {
       publicChartBaseUrl,
       format,
       roundupSize,
+      generationPrompt,
     })
 
     return NextResponse.json({
@@ -84,6 +100,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error('Newsletter generation failed:', err)
+    if (
+      err instanceof Error &&
+      err.message.startsWith('generationPrompt must be')
+    ) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
     return NextResponse.json(
       {
         error:

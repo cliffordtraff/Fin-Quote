@@ -148,9 +148,10 @@ describe('assembleNewsletterHtml', () => {
 
   it('builds a reusable newsletter header for draft seeding', () => {
     expect(buildNewsletterHeader('TSLA', new Date('2026-03-26T12:00:00.000Z'))).toEqual({
-      title: 'The Intraday',
+      title: 'TSLA Snapshot',
       dateText: 'March 26, 2026',
       badgeText: 'TSLA Snapshot',
+      logoUrl: 'https://financialmodelingprep.com/image-stock/TSLA.png',
     })
   })
 
@@ -161,7 +162,7 @@ describe('assembleNewsletterHtml', () => {
         featuredTickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA'],
       }),
     ).toEqual({
-      title: 'The Intraday',
+      title: 'Market Roundup — 4 Stocks',
       dateText: 'March 26, 2026',
       badgeText: 'Market Roundup • 4 Stocks',
     })

@@ -11,6 +11,7 @@ const sampleResult: NewsletterResult = {
   ticker: 'AAPL',
   format: 'single_stock',
   featuredTickers: ['AAPL'],
+  generationPrompt: 'Focus on Apple services growth and margin durability.',
   generatedAt: '2026-03-26T12:00:00.000Z',
   subjectLine: 'Apple snapshot',
   selections: [
@@ -68,11 +69,13 @@ describe('newsletter drafts', () => {
     )
 
     expect(draft.ticker).toBe('AAPL')
+    expect(draft.generationPrompt).toBe('Focus on Apple services growth and margin durability.')
     expect(draft.introText).toContain('Apple Inc. (AAPL) is +0.75% (+$1.50) today.')
     expect(draft.header).toEqual({
-      title: 'The Intraday',
+      title: 'Apple snapshot',
       dateText: 'March 26, 2026',
       badgeText: 'AAPL Snapshot',
+      logoUrl: 'https://financialmodelingprep.com/image-stock/AAPL.png',
     })
     expect(draft.blocks).toHaveLength(1)
     expect(draft.statsCard?.items).toEqual([

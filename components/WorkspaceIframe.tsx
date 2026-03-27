@@ -19,10 +19,26 @@ type WorkspaceLoadError = {
   title: string
   detail: string
 }
+type SyncedWorkspaceState = {
+  mode: WorkspaceMode | null
+  symbol: string | null
+  theme: ThemeMode | null
+}
+type WorkspaceSyncTarget = {
+  mode: WorkspaceMode
+  symbol: string
+  theme: ThemeMode
+}
+type WorkspaceSyncOptions = {
+  forceMode?: boolean
+  forceSymbol?: boolean
+  forceTheme?: boolean
+}
 
 const DEFAULT_SYMBOL = 'AAPL'
 const PM_VERSION = 1
 const READY_TIMEOUT_MS = 12000
+const WORKSPACE_SYNC_RETRY_DELAYS_MS = [120, 360] as const
 
 function getWorkspaceMode(pathname: string | null): WorkspaceMode | null {
   if (!pathname) return null
@@ -107,17 +123,56 @@ function buildSymbolDestination(
   return `/stock/${encodeURIComponent(normalizedSymbol)}`
 }
 
+function createUnsyncedWorkspaceState(): SyncedWorkspaceState {
+  return {
+    mode: null,
+    symbol: null,
+    theme: null,
+  }
+}
+
+function syncWorkspaceState(
+  iframeWindow: WindowProxy,
+  chartingOrigin: string,
+  target: WorkspaceSyncTarget,
+  lastSynced: SyncedWorkspaceState,
+  options: WorkspaceSyncOptions = {}
+) {
+  if (options.forceMode || lastSynced.mode !== target.mode) {
+    iframeWindow.postMessage({
+      v: PM_VERSION,
+      type: 'SET_WORKSPACE_MODE',
+      payload: { mode: target.mode },
+    }, chartingOrigin)
+    lastSynced.mode = target.mode
+  }
+
+  if (options.forceSymbol || lastSynced.symbol !== target.symbol) {
+    iframeWindow.postMessage({
+      v: PM_VERSION,
+      type: 'SET_SYMBOL',
+      payload: { symbolId: target.symbol },
+    }, chartingOrigin)
+    lastSynced.symbol = target.symbol
+  }
+
+  if (options.forceTheme || lastSynced.theme !== target.theme) {
+    iframeWindow.postMessage({
+      v: PM_VERSION,
+      type: 'SET_THEME',
+      payload: { theme: target.theme },
+    }, chartingOrigin)
+    lastSynced.theme = target.theme
+  }
+}
+
 export default function WorkspaceIframe() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { theme } = useTheme()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const lastSyncedRef = useRef<{ mode: WorkspaceMode | null; symbol: string | null; theme: ThemeMode | null }>({
-    mode: null,
-    symbol: null,
-    theme: null,
-  })
+  const lastSyncedRef = useRef<SyncedWorkspaceState>(createUnsyncedWorkspaceState())
   const lastSurfaceModeRef = useRef<EmbedSurfaceMode | null>(null)
   const pendingSearchMessageRef = useRef<{
     type: NativeSearchMessageType
@@ -215,7 +270,6 @@ export default function WorkspaceIframe() {
     const handleOpenSearch = (event: Event) => {
       const detail = (event as CustomEvent<NativeTickerSearchOpenDetail>).detail
       const query = normalizeSearchQuery(detail?.query)
-      const nextMode = workspaceMode ?? 'price'
       const nextSrc = desiredSrc ?? launcherSrc
 
       pendingSearchMessageRef.current = query
@@ -226,11 +280,7 @@ export default function WorkspaceIframe() {
 
       if (!iframeSrc && nextSrc) {
         hasMountedFrameRef.current = true
-        lastSyncedRef.current = {
-          mode: nextMode,
-          symbol: routeSymbol,
-          theme: requestedTheme,
-        }
+        lastSyncedRef.current = createUnsyncedWorkspaceState()
         setIsReady(false)
         setLoadError(null)
         setIframeSrc(nextSrc)
@@ -302,11 +352,7 @@ export default function WorkspaceIframe() {
 
     if (!iframeSrc) {
       hasMountedFrameRef.current = true
-      lastSyncedRef.current = {
-        mode: workspaceMode,
-        symbol: routeSymbol,
-        theme: requestedTheme,
-      }
+      lastSyncedRef.current = createUnsyncedWorkspaceState()
       setIsReady(false)
       setLoadError(null)
       setIframeSrc(desiredSrc)
@@ -314,11 +360,7 @@ export default function WorkspaceIframe() {
     }
 
     if (!isReady && iframeSrc !== desiredSrc) {
-      lastSyncedRef.current = {
-        mode: workspaceMode,
-        symbol: routeSymbol,
-        theme: requestedTheme,
-      }
+      lastSyncedRef.current = createUnsyncedWorkspaceState()
       setIsReady(false)
       setLoadError(null)
       setIframeSrc(desiredSrc)
@@ -337,40 +379,38 @@ export default function WorkspaceIframe() {
   useEffect(() => {
     if (!iframeVisible || !activeMode || !isReady || !chartingOrigin) return
 
-    const iframeWindow = iframeRef.current?.contentWindow
-    if (!iframeWindow) return
-
-    const lastSynced = lastSyncedRef.current
+    const target: WorkspaceSyncTarget = {
+      mode: activeMode,
+      symbol: routeSymbol,
+      theme: requestedTheme,
+    }
     const forceResync = forceResyncRef.current
-
-    if (forceResync || lastSynced.mode !== activeMode) {
-      iframeWindow.postMessage({
-        v: PM_VERSION,
-        type: 'SET_WORKSPACE_MODE',
-        payload: { mode: activeMode },
-      }, chartingOrigin)
-      lastSynced.mode = activeMode
+    const syncCurrentState = (options: WorkspaceSyncOptions = {}) => {
+      const iframeWindow = iframeRef.current?.contentWindow
+      if (!iframeWindow) return
+      syncWorkspaceState(iframeWindow, chartingOrigin, target, lastSyncedRef.current, options)
     }
 
-    if (lastSynced.symbol !== routeSymbol) {
-      iframeWindow.postMessage({
-        v: PM_VERSION,
-        type: 'SET_SYMBOL',
-        payload: { symbolId: routeSymbol },
-      }, chartingOrigin)
-      lastSynced.symbol = routeSymbol
-    }
-
-    if (forceResync || lastSynced.theme !== requestedTheme) {
-      iframeWindow.postMessage({
-        v: PM_VERSION,
-        type: 'SET_THEME',
-        payload: { theme: requestedTheme },
-      }, chartingOrigin)
-      lastSynced.theme = requestedTheme
-    }
-
+    syncCurrentState({
+      forceMode: forceResync,
+      forceSymbol: forceResync,
+      forceTheme: forceResync,
+    })
     forceResyncRef.current = false
+
+    const retryTimeoutIds = WORKSPACE_SYNC_RETRY_DELAYS_MS.map((delay) => {
+      return window.setTimeout(() => {
+        syncCurrentState({
+          forceMode: true,
+          forceSymbol: true,
+          forceTheme: true,
+        })
+      }, delay)
+    })
+
+    return () => {
+      retryTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    }
   }, [activeMode, chartingOrigin, iframeVisible, isReady, requestedTheme, routeSymbol])
 
   useEffect(() => {

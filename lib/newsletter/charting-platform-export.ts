@@ -6,7 +6,7 @@ import type {
 import { isPriceNewsletterChartSpec } from './chart-spec'
 
 export const DEFAULT_CHARTING_BASE_URL = 'https://charts.theintraday.com'
-export const DEFAULT_LOCAL_CHARTING_BASE_URL = 'http://localhost:3000'
+export const DEFAULT_LOCAL_CHARTING_BASE_URL = 'http://localhost:3001'
 const DEFAULT_NEWSLETTER_CHART_THEME = 'light'
 
 const LEGACY_TO_CHARTING_METRIC_MAP = {
@@ -173,13 +173,13 @@ export function getDefaultChartingBaseUrl(): string {
 export function getDefaultChartingBaseUrlForHost(
   hostHeader: string | null | undefined,
 ): string {
-  if (isLocalChartingHost(hostHeader)) {
-    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
-  }
-
   const configured = process.env.NEXT_PUBLIC_CHARTING_URL?.trim()
   if (configured) {
     return normalizeBaseUrl(configured)
+  }
+
+  if (isLocalChartingHost(hostHeader)) {
+    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
   }
 
   return getDefaultChartingBaseUrl()
@@ -203,13 +203,13 @@ export function getDefaultPublicChartingBaseUrl(): string {
 export function getDefaultPublicChartingBaseUrlForHost(
   hostHeader: string | null | undefined,
 ): string {
-  if (isLocalChartingHost(hostHeader)) {
-    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
-  }
-
   const configured = process.env.NEWSLETTER_PUBLIC_CHARTING_URL?.trim()
   if (configured) {
     return normalizeBaseUrl(configured)
+  }
+
+  if (isLocalChartingHost(hostHeader)) {
+    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
   }
 
   return getDefaultPublicChartingBaseUrl()

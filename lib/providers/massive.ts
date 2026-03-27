@@ -22,6 +22,7 @@ import {
 import { resolveFrontMonth, getFuturesSnapshot } from './futures-resolver'
 
 const MASSIVE_BASE = 'https://api.massive.com'
+const TOP_MOVER_CANDIDATE_LIMIT = 60
 
 function getApiKey(): string {
   const key = process.env.MASSIVE_API_KEY
@@ -260,7 +261,7 @@ export class MassiveProvider implements MarketDataProvider {
       return tickers
         .map(t => mapStockSnapshot(t))
         .filter(q => q.price >= 0.10)
-        .slice(0, 20)
+        .slice(0, TOP_MOVER_CANDIDATE_LIMIT)
     } catch (err) {
       console.error('[massive] getGainers error:', err)
       return []
@@ -281,7 +282,7 @@ export class MassiveProvider implements MarketDataProvider {
       return tickers
         .map(t => mapStockSnapshot(t))
         .filter(q => q.price >= 0.10)
-        .slice(0, 20)
+        .slice(0, TOP_MOVER_CANDIDATE_LIMIT)
     } catch (err) {
       console.error('[massive] getLosers error:', err)
       return []

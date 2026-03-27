@@ -26,25 +26,28 @@ export interface FutureMarketData {
   priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }>
 }
 
-// Futures symbols with their display names
+// FMP returns futures with 'USD' suffix (e.g. CLUSD) instead of '=F' suffix
+// FUTURES_SYMBOLS: commodity subset used for history charts
 const FUTURES_SYMBOLS = [
-  { symbol: 'CL=F', name: 'Crude Oil' },
-  { symbol: 'NG=F', name: 'Natural Gas' },
-  { symbol: 'GC=F', name: 'Gold' },
-  { symbol: 'SI=F', name: 'Silver' },
+  { symbol: 'CL=F', fmpSymbol: 'CLUSD', name: 'Crude Oil' },
+  { symbol: 'NG=F', fmpSymbol: 'NGUSD', name: 'Natural Gas' },
+  { symbol: 'GC=F', fmpSymbol: 'GCUSD', name: 'Gold' },
+  { symbol: 'SI=F', fmpSymbol: 'SIUSD', name: 'Silver' },
+]
+
+// ALL_FUTURES_SYMBOLS: full set including index futures
+const ALL_FUTURES_SYMBOLS = [
+  { symbol: 'CL=F', fmpSymbol: 'CLUSD', name: 'Crude Oil' },
+  { symbol: 'NG=F', fmpSymbol: 'NGUSD', name: 'Natural Gas' },
+  { symbol: 'GC=F', fmpSymbol: 'GCUSD', name: 'Gold' },
+  { symbol: 'YM=F', fmpSymbol: 'YMUSD', name: 'Dow' },
+  { symbol: 'ES=F', fmpSymbol: 'ESUSD', name: 'S&P 500' },
+  { symbol: 'NQ=F', fmpSymbol: 'NQUSD', name: 'Nasdaq 100' },
+  { symbol: 'RTY=F', fmpSymbol: 'RTYUSD', name: 'Russell 2000' },
 ]
 
 export async function getFuturesData() {
-  // Futures symbols with their display names
-  const futuresSymbols = [
-    { symbol: 'CL=F', name: 'Crude Oil' },
-    { symbol: 'NG=F', name: 'Natural Gas' },
-    { symbol: 'GC=F', name: 'Gold' },
-    { symbol: 'YM=F', name: 'Dow' },
-    { symbol: 'ES=F', name: 'S&P 500' },
-    { symbol: 'NQ=F', name: 'Nasdaq 100' },
-    { symbol: 'RTY=F', name: 'Russell 2000' }
-  ]
+  const futuresSymbols = ALL_FUTURES_SYMBOLS
 
   try {
     const provider = new FMPProvider()
@@ -52,9 +55,10 @@ export async function getFuturesData() {
     const quotes = await provider.getQuotes(symbols)
 
     // Map quotes back to our format with display names
+    // FMP returns symbols like CLUSD instead of CL=F, so match on fmpSymbol
     const futuresData: FutureData[] = futuresSymbols
-      .map(({ symbol, name }) => {
-        const quote = quotes.find(q => q.symbol === symbol)
+      .map(({ symbol, fmpSymbol, name }) => {
+        const quote = quotes.find(q => q.symbol === fmpSymbol || q.symbol === symbol)
         if (!quote) return null
         return {
           symbol,
@@ -88,8 +92,8 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
     const fromDate = sixtyDaysAgo.toISOString().split('T')[0]
 
     const futuresData = await Promise.all(
-      FUTURES_SYMBOLS.map(async ({ symbol, name }) => {
-        const quote = quotes.find(q => q.symbol === symbol)
+      FUTURES_SYMBOLS.map(async ({ symbol, fmpSymbol, name }) => {
+        const quote = quotes.find(q => q.symbol === fmpSymbol || q.symbol === symbol)
         if (!quote) return null
 
         // Fetch daily historical data via provider
@@ -137,15 +141,7 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
   const currentYear = new Date().getFullYear()
   const yearStart = `${currentYear}-01-01`
 
-  const futuresSymbols = [
-    { symbol: 'CL=F', name: 'Crude Oil' },
-    { symbol: 'NG=F', name: 'Natural Gas' },
-    { symbol: 'GC=F', name: 'Gold' },
-    { symbol: 'YM=F', name: 'Dow' },
-    { symbol: 'ES=F', name: 'S&P 500' },
-    { symbol: 'NQ=F', name: 'Nasdaq 100' },
-    { symbol: 'RTY=F', name: 'Russell 2000' }
-  ]
+  const futuresSymbols = ALL_FUTURES_SYMBOLS
 
   try {
     const provider = new FMPProvider()
@@ -153,8 +149,8 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
     const quotes = await provider.getQuotes(symbols)
 
     const futuresData = await Promise.all(
-      futuresSymbols.map(async ({ symbol, name }) => {
-        const quote = quotes.find(q => q.symbol === symbol)
+      futuresSymbols.map(async ({ symbol, fmpSymbol, name }) => {
+        const quote = quotes.find(q => q.symbol === fmpSymbol || q.symbol === symbol)
         if (!quote) return null
 
         // Fetch YTD historical data via provider

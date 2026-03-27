@@ -35,6 +35,7 @@ type SelectionEditorialContext = Pick<
  */
 export function buildStockPickerMessages(
   market: MarketContext,
+  generationPrompt?: string,
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const systemParts = [
     'You are the editor of The Intraday, a financial newsletter.',
@@ -50,6 +51,7 @@ export function buildStockPickerMessages(
     '- Pick a company most readers would recognize',
     '- Financial charts (revenue, margins, cash flow) should add context to the story',
     '- Avoid: random volume spikes with no news, obscure names, trivial <2% moves on no news',
+    '- If a user brief is provided, prioritize candidates that clearly match it, but do not force a bad fit.',
     '',
   ]
 
@@ -100,6 +102,12 @@ export function buildStockPickerMessages(
   }
 
   // Candidates section
+  if (generationPrompt?.trim()) {
+    userParts.push('=== USER BRIEF ===')
+    userParts.push(generationPrompt.trim())
+    userParts.push('')
+  }
+
   userParts.push(`=== TODAY'S CANDIDATES (${new Date().toISOString().slice(0, 10)}) ===`)
   userParts.push('')
 
@@ -122,6 +130,107 @@ export function buildStockPickerMessages(
     { role: 'system' as const, content: systemParts.join('\n') },
     { role: 'user' as const, content: userParts.join('\n\n') },
   ]
+}
+
+export function buildMarketRoundupStockSelectionMessages(
+  market: MarketContext,
+  roundupSize: number,
+  generationPrompt: string,
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const systemParts = [
+    'You are the editor of The Intraday, a financial newsletter.',
+    `Pick ${roundupSize} stocks for a market roundup newsletter.`,
+    'Follow the user brief when it is clearly supported by the candidate list and headlines.',
+    'Only choose symbols from the provided candidates.',
+    'Prefer recognizable names with a coherent shared theme, catalyst, or market angle.',
+    'If the brief is too narrow, unsupported, or incomplete, choose the closest strong matches and then fill the roundup with the strongest remaining editorial names.',
+    'Avoid repeating recently featured stocks unless fresh earnings, a major move, or clear new headlines justify it.',
+    '',
+    'Output JSON only:',
+    '{ "selections": [{ "symbol": "...", "reason": "1 sentence" }] }',
+  ]
+
+  if (market.recentPicks && market.recentPicks.length > 0) {
+    systemParts.push(
+      '',
+      'Recent picks to avoid when possible:',
+      ...market.recentPicks.map((pick) => `- ${pick.ticker} (${pick.name})`),
+    )
+  }
+
+  const userParts: string[] = [
+    '=== USER BRIEF ===',
+    generationPrompt.trim(),
+    '',
+  ]
+
+  if (market.earningsReports && market.earningsReports.length > 0) {
+    userParts.push(
+      '=== RECENT EARNINGS REPORTS ===',
+      ...market.earningsReports.map((entry) => {
+        const timing = entry.hoursAgo > 0
+          ? `reported ~${entry.hoursAgo}h ago`
+          : `reports in ~${Math.abs(entry.hoursAgo)}h`
+        return `${entry.symbol} — ${timing}`
+      }),
+      '',
+    )
+  }
+
+  userParts.push(`=== TODAY'S CANDIDATES (${new Date().toISOString().slice(0, 10)}) ===`)
+  userParts.push('')
+
+  const candidateBlocks = market.candidates.map((candidate) => {
+    const headlines = (market.newsBySymbol[candidate.symbol] || [])
+      .slice(0, 4)
+      .map((headline, index) => `    ${index + 1}. "${headline.title}" — ${headline.site}, ${headline.publishedDate}`)
+      .join('\n')
+
+    return [
+      `${candidate.symbol} — ${candidate.name}`,
+      `  Price: $${candidate.price.toFixed(2)}, Change: ${candidate.changesPercentage >= 0 ? '+' : ''}${candidate.changesPercentage.toFixed(2)}%`,
+      headlines ? `  Headlines:\n${headlines}` : '  Headlines: (none)',
+    ].join('\n')
+  })
+
+  userParts.push(...candidateBlocks)
+
+  return [
+    { role: 'system' as const, content: systemParts.join('\n') },
+    { role: 'user' as const, content: userParts.join('\n\n') },
+  ]
+}
+
+export function parseMarketRoundupStockSelections(
+  responseText: string,
+  market: MarketContext,
+  roundupSize: number,
+): string[] {
+  const candidateSymbols = new Set(market.candidates.map((candidate) => candidate.symbol))
+
+  try {
+    const parsed = JSON.parse(responseText)
+    const rawSelections = Array.isArray(parsed.selections)
+      ? parsed.selections
+      : Array.isArray(parsed.symbols)
+        ? parsed.symbols.map((symbol: string) => ({ symbol }))
+        : []
+
+    const deduped = new Set<string>()
+    for (const selection of rawSelections) {
+      const symbol =
+        typeof selection?.symbol === 'string'
+          ? selection.symbol.trim().toUpperCase()
+          : ''
+      if (!symbol || !candidateSymbols.has(symbol) || deduped.has(symbol)) continue
+      deduped.add(symbol)
+      if (deduped.size >= roundupSize) break
+    }
+
+    return Array.from(deduped)
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -187,18 +296,30 @@ export function parseStockPickerResult(
 
 export function buildMarketRoundupMessages(
   featuredStocks: FeaturedStock[],
+  generationPrompt?: string,
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const system = [
     'You are the editor of The Intraday, a financial newsletter.',
     'Write the subject line and intro for a multi-stock market roundup newsletter.',
     'The intro should be 1-2 sentences, mention at least 2 featured stocks, and frame why these names matter today.',
     'If there is a shared theme, mention it. If there is not, present the roundup as a broad market snapshot.',
+    'If a user brief is provided, use it to shape the framing as long as it fits the featured stocks.',
     '',
     'Output JSON only:',
     '{ "subjectLine": "short punchy email subject < 70 chars", "introText": "1-2 sentences" }',
   ].join('\n')
 
-  const user = [
+  const userSections = []
+
+  if (generationPrompt?.trim()) {
+    userSections.push(
+      '=== USER BRIEF ===',
+      generationPrompt.trim(),
+      '',
+    )
+  }
+
+  userSections.push(
     `Featured stocks (${featuredStocks.length}):`,
     ...featuredStocks.map((stock) => {
       const sign = stock.changesPercentage >= 0 ? '+' : ''
@@ -213,7 +334,8 @@ export function buildMarketRoundupMessages(
         `Top headline: ${headlineText}`,
       ].join('\n')
     }),
-  ].join('\n\n')
+  )
+  const user = userSections.join('\n\n')
 
   return [
     { role: 'system' as const, content: system },
@@ -260,11 +382,13 @@ export function parseMarketRoundupIntro(
 export function buildEditorialHookMessages(
   quote: TodayQuote,
   headlines: StockNewsItem[],
+  generationPrompt?: string,
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const system = [
     'You are the editor of The Intraday, a financial newsletter.',
     'Write a 1-2 sentence editorial hook explaining why this stock is worth reading about today.',
     'Connect the price move to any available news. If no news explains it, note the move and set up the financial deep-dive.',
+    'If a user brief is provided, use it to guide the framing when the available quote and headlines support it.',
     '',
     'Output JSON only:',
     '{ "editorialHook": "1-2 sentences", "subjectLine": "short punchy email subject < 60 chars" }',
@@ -277,11 +401,17 @@ export function buildEditorialHookMessages(
     ? ['', 'Recent headlines:', ...headlines.map((h) => `- "${h.title}" — ${h.site}, ${h.publishedDate}`)].join('\n')
     : '\nNo recent headlines available.'
 
-  const user = [
+  const userParts = [
     `${quote.ticker} — ${quote.name}`,
     `Price: $${quote.price.toFixed(2)}, Change: ${dollarSign}$${Math.abs(quote.change).toFixed(2)} (${sign}${quote.changesPercentage.toFixed(2)}%)`,
     headlineBlock,
-  ].join('\n')
+  ]
+
+  if (generationPrompt?.trim()) {
+    userParts.push('', 'User brief:', generationPrompt.trim())
+  }
+
+  const user = userParts.join('\n')
 
   return [
     { role: 'system' as const, content: system },
@@ -321,6 +451,7 @@ export function buildTemplateSelectionMessages(
   options: {
     mode?: 'single_stock' | 'market_roundup'
     editorialContext?: SelectionEditorialContext
+    generationPrompt?: string
   } = {},
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const templateDescriptions = EDITORIAL_TEMPLATES.map(
@@ -341,6 +472,7 @@ export function buildTemplateSelectionMessages(
     'Prefer quarterly when the story is tied to recent earnings, a fresh inflection, or a catalyst happening right now.',
     'Prefer annual when the chart is about a long-duration moat, decade-long compounding, or capital allocation over time.',
     'If a metric value is null, treat it as unavailable data, not as zero.',
+    'If a user brief is provided, prefer templates that best match it without inventing a story the data does not support.',
     ...(isRoundup
       ? ['This is one slot inside a broader market roundup, so favor one clean, recent angle over a sprawling deep dive.']
       : []),
@@ -364,6 +496,14 @@ export function buildTemplateSelectionMessages(
     '=== Quarterly Highlights ===',
     JSON.stringify(context.quarterlyHighlights, null, 2),
   ]
+
+  if (options.generationPrompt?.trim()) {
+    userParts.push(
+      '',
+      '=== User Brief ===',
+      options.generationPrompt.trim(),
+    )
+  }
 
   if (context.priceContext) {
     userParts.push(
@@ -476,6 +616,7 @@ export function buildCopyGenerationMessages(
   editorialAngle: string,
   chartSpec: NewsletterChartSpec,
   stockPickerResult?: SelectionEditorialContext,
+  generationPrompt?: string,
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const isPriceChart = isPriceNewsletterChartSpec(chartSpec)
   const fundamentalsPeriod =
@@ -531,6 +672,12 @@ export function buildCopyGenerationMessages(
     )
   }
 
+  if (generationPrompt?.trim()) {
+    systemParts.push(
+      '- If a user brief is provided, align the framing to it without inventing unsupported claims.',
+    )
+  }
+
   systemParts.push(
     '',
     'Respond with JSON only:',
@@ -560,6 +707,14 @@ export function buildCopyGenerationMessages(
       '',
       `=== ${fundamentalsPeriod === 'quarterly' ? 'Quarterly' : 'Annual'} Highlights ===`,
       JSON.stringify(highlightDataset, null, 2),
+    )
+  }
+
+  if (generationPrompt?.trim()) {
+    userParts.push(
+      '',
+      '=== User Brief ===',
+      generationPrompt.trim(),
     )
   }
 

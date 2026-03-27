@@ -397,6 +397,8 @@ export interface NewsletterOptions {
   roundupSize?: number
   /** Explicit featured tickers for market roundup regeneration/overrides. */
   featuredTickers?: string[]
+  /** Optional user brief to steer stock selection, chart choice, and copy. */
+  generationPrompt?: string
   /** Upload chart PNGs to Supabase Storage and rewrite image URLs to public URLs */
   publish?: boolean
   /** Editor-specific fast path: smaller chart captures and no preview screenshot unless overridden */
@@ -414,6 +416,7 @@ export interface NewsletterResult {
   ticker: string
   format: NewsletterFormat
   featuredTickers: string[]
+  generationPrompt?: string
   generatedAt: string
   subjectLine: string
   selections: Array<{
@@ -499,6 +502,7 @@ export interface NewsletterDraftDocument {
   ticker: string
   format: NewsletterFormat
   featuredTickers: string[]
+  generationPrompt?: string
   generatedAt: string
   subjectLine: string
   introText: string

@@ -80,6 +80,37 @@ describe('WorkspaceIframe', () => {
     expect(screen.getByTitle('Workspace charting')).toBeInTheDocument()
   })
 
+  it('sends the initial workspace mode after the iframe reports ready on first load', async () => {
+    mockUsePathname.mockReturnValue('/workspace/chart')
+    mockUseSearchParams.mockReturnValue(new URLSearchParams('symbol=tsla'))
+
+    render(<WorkspaceIframe />)
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
+        'src',
+        'https://charts.theintraday.com/tos/TSLA?embed=true&view=price&theme=dark'
+      )
+    })
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: 'https://charts.theintraday.com',
+        data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(
+        postMessage.mock.calls.some(([message, origin]) => {
+          return origin === 'https://charts.theintraday.com'
+            && message?.type === 'SET_WORKSPACE_MODE'
+            && message?.payload?.mode === 'price'
+        })
+      ).toBe(true)
+    })
+  })
+
   it('sends workspace mode messages after the iframe reports ready', async () => {
     const { rerender } = render(<WorkspaceIframe />)
 
@@ -107,6 +138,58 @@ describe('WorkspaceIframe', () => {
         })
       ).toBe(true)
     })
+  })
+
+  it('retries workspace mode sync after a route change so the first post-refresh switch is not lost', async () => {
+    mockUsePathname.mockReturnValue('/workspace/overview')
+    mockUseSearchParams.mockReturnValue(new URLSearchParams('symbol=nvda'))
+
+    const { rerender } = render(<WorkspaceIframe />)
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
+        'src',
+        'https://charts.theintraday.com/tos/NVDA?embed=true&view=overview&theme=dark'
+      )
+    })
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: 'https://charts.theintraday.com',
+        data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
+      }))
+    })
+
+    vi.useFakeTimers()
+    postMessage.mockClear()
+    mockUsePathname.mockReturnValue('/workspace/chart')
+    rerender(<WorkspaceIframe />)
+
+    expect(
+      postMessage.mock.calls.some(([message, origin]) => {
+        return origin === 'https://charts.theintraday.com'
+          && message?.type === 'SET_WORKSPACE_MODE'
+          && message?.payload?.mode === 'price'
+      })
+    ).toBe(true)
+
+    const priceModeMessagesBeforeRetry = postMessage.mock.calls.filter(([message, origin]) => {
+      return origin === 'https://charts.theintraday.com'
+        && message?.type === 'SET_WORKSPACE_MODE'
+        && message?.payload?.mode === 'price'
+    }).length
+
+    act(() => {
+      vi.advanceTimersByTime(400)
+    })
+
+    const priceModeMessagesAfterRetry = postMessage.mock.calls.filter(([message, origin]) => {
+      return origin === 'https://charts.theintraday.com'
+        && message?.type === 'SET_WORKSPACE_MODE'
+        && message?.payload?.mode === 'price'
+    }).length
+
+    expect(priceModeMessagesAfterRetry).toBeGreaterThan(priceModeMessagesBeforeRetry)
   })
 
   it('opens the native search modal off-workspace and routes selected symbols back through the host app', async () => {

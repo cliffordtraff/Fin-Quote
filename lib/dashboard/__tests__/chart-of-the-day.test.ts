@@ -7,13 +7,13 @@ import {
   DASHBOARD_CHART_OF_THE_DAY_TEMPLATE_ID,
   resolveDashboardChartOfTheDay,
 } from '@/lib/dashboard/chart-of-the-day'
-import { decodeChartSpec } from '@/lib/chart-export'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 
 describe('resolveDashboardChartOfTheDay', () => {
-  it('uses the newsletter editorial template and local export pipeline', () => {
+  it('uses the newsletter editorial template and charting platform render pipeline', () => {
     const result = resolveDashboardChartOfTheDay({
-      baseUrl: 'https://theintraday.com',
+      hostHeader: 'localhost:3000',
+      theme: 'dark',
     })
 
     expect(result.label).toBe('Chart of the Day')
@@ -33,14 +33,24 @@ describe('resolveDashboardChartOfTheDay', () => {
     expect(DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH).toBe(1200)
     expect(DASHBOARD_CHART_OF_THE_DAY_RENDER_HEIGHT).toBe(760)
 
-    const exportUrl = new URL(result.exportUrl)
-    expect(exportUrl.pathname).toBe('/charts/export')
+    expect(result.chartBaseUrl).toBe('http://localhost:3001')
+    expect(result.renderUrl).toBe('http://localhost:3001/tos/api/newsletter/render')
 
-    const decodedSpec = decodeChartSpec(exportUrl.searchParams.get('spec') || '')
-    expect(decodedSpec).toMatchObject({
-      stocks: [DASHBOARD_CHART_OF_THE_DAY_SYMBOL],
-      metrics: ['revenue', 'net_income'],
-      title: 'AAPL Revenue vs Net Income',
+    const captureUrl = new URL(result.captureUrl)
+    expect(captureUrl.pathname).toBe('/tos/export/newsletter')
+
+    expect(result.captureSpec).toMatchObject({
+      mode: 'fundamentals',
+      ticker: DASHBOARD_CHART_OF_THE_DAY_SYMBOL,
+      symbol: DASHBOARD_CHART_OF_THE_DAY_SYMBOL,
+      theme: 'dark',
+      width: DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH,
+      height: DASHBOARD_CHART_OF_THE_DAY_RENDER_HEIGHT,
+      fundSymbol: DASHBOARD_CHART_OF_THE_DAY_SYMBOL,
     })
+
+    const fundState = (result.captureSpec.fundState ?? {}) as Record<string, unknown>
+    expect(fundState.visibleMetrics).toEqual(['revenue', 'netIncome'])
+    expect(fundState.chartTitleText).toBe('AAPL Revenue vs Net Income')
   })
 })

@@ -29,6 +29,7 @@ export default function NewsletterDraftsHome() {
   const router = useRouter()
   const [drafts, setDrafts] = useState<NewsletterDraftSummary[]>([])
   const [ticker, setTicker] = useState('')
+  const [generationPrompt, setGenerationPrompt] = useState('')
   const [format, setFormat] = useState<'single_stock' | 'market_roundup'>('single_stock')
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -75,6 +76,13 @@ export default function NewsletterDraftsHome() {
   }, [])
 
   const normalizedTicker = useMemo(() => ticker.trim().toUpperCase(), [ticker])
+  const promptPlaceholder = useMemo(
+    () =>
+      format === 'market_roundup'
+        ? 'Optional: describe the theme, sector, catalyst, or type of roundup you want. Example: Generate a newsletter based on chip stocks reacting to earnings.'
+        : 'Optional: describe the angle you want. Example: Focus on margin pressure after earnings and whether the recent selloff looks overdone.',
+    [format],
+  )
 
   async function createDraft() {
     try {
@@ -90,6 +98,7 @@ export default function NewsletterDraftsHome() {
         body: JSON.stringify({
           ticker: format === 'single_stock' ? normalizedTicker || undefined : undefined,
           format,
+          generationPrompt: generationPrompt.trim() || undefined,
         }),
       })
 
@@ -112,20 +121,7 @@ export default function NewsletterDraftsHome() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-gray-300 bg-white p-8 shadow-sm">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sage-700">
-              Newsletter Studio
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900">
-              Create and edit browser-based newsletter drafts
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              Generate a draft from the existing AI workflow, edit the intro and chart
-              sections in the browser, and regenerate only the charts that changed.
-            </p>
-          </div>
-
+        <div className="flex justify-end">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-cream-100 p-4">
             <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-gray-600">
               Start A Draft
@@ -166,11 +162,26 @@ export default function NewsletterDraftsHome() {
                   placeholder="AAPL"
                   className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium uppercase tracking-[0.16em] text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
                 />
-              ) : (
-                <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                  The generator will auto-pick 3-5 of today&apos;s most interesting names and create one chart section per stock.
-                </div>
-              )}
+              ) : null}
+
+              <div className="rounded-xl border border-gray-200 bg-white p-4">
+                <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-600">
+                  What should this newsletter focus on?
+                </label>
+                <p className="mt-2 text-sm text-gray-500">
+                  {format === 'market_roundup'
+                    ? 'Leave this blank to auto-pick 3-5 of today’s most interesting names, or describe the theme you want.'
+                    : 'Leave this blank for the default deep dive, or describe the angle you want the generator to emphasize.'}
+                </p>
+                <textarea
+                  value={generationPrompt}
+                  onChange={(event) => setGenerationPrompt(event.target.value)}
+                  placeholder={promptPlaceholder}
+                  rows={4}
+                  maxLength={500}
+                  className="mt-3 w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                />
+              </div>
 
               <button
                 type="button"
