@@ -1,5 +1,8 @@
 import type { ChartExportSpec } from '@/types/chart-export'
 
+export type NewsletterPeriodType = 'annual' | 'quarterly'
+export type NewsletterFormat = 'single_stock' | 'market_roundup'
+
 // ---------------------------------------------------------------------------
 // Year-range strategies — keep templates evergreen
 // ---------------------------------------------------------------------------
@@ -18,10 +21,63 @@ export interface AllAvailableStrategy {
 export type YearRangeStrategy = LastNYearsStrategy | AllAvailableStrategy
 
 // ---------------------------------------------------------------------------
+// Newsletter chart modes
+// ---------------------------------------------------------------------------
+
+export type NewsletterPriceRange =
+  | '1d'
+  | '5d'
+  | '1m'
+  | '3m'
+  | '6m'
+  | '1y'
+  | '2y'
+  | '5y'
+
+export type NewsletterPriceInterval =
+  | '1sec'
+  | '10sec'
+  | '1min'
+  | '2min'
+  | '5min'
+  | '15min'
+  | '30min'
+  | '1hour'
+  | '4hour'
+  | 'D'
+  | 'W'
+  | 'M'
+
+export type NewsletterPriceChartType =
+  | 'candles'
+  | 'hollow-candles'
+  | 'ohlc-bars'
+  | 'line'
+  | 'heikin-ashi'
+
+export interface FundamentalsNewsletterChartSpec extends ChartExportSpec {
+  mode?: 'fundamentals'
+}
+
+export interface PriceNewsletterChartSpec {
+  mode: 'price'
+  symbol: string
+  range: NewsletterPriceRange
+  interval: NewsletterPriceInterval
+  chartType: NewsletterPriceChartType
+  title?: string
+  subtitle?: string
+}
+
+export type NewsletterChartSpec =
+  | FundamentalsNewsletterChartSpec
+  | PriceNewsletterChartSpec
+
+// ---------------------------------------------------------------------------
 // Editorial chart templates
 // ---------------------------------------------------------------------------
 
-export interface EditorialChartTemplate {
+interface EditorialChartTemplateBase {
   /** Unique template identifier (e.g. 'revenue_vs_net_income') */
   id: string
 
@@ -33,6 +89,21 @@ export interface EditorialChartTemplate {
 
   /** Guidance for an AI on when to pick this template */
   whenToUse: string
+
+  /**
+   * Title pattern with placeholders:
+   *   fundamentals: {ticker}, {minYear}, {maxYear}
+   *   price: {ticker}
+   */
+  titlePattern: string
+
+  /** Subtitle pattern with the same placeholders */
+  subtitlePattern: string
+}
+
+export interface FundamentalsEditorialChartTemplate
+  extends EditorialChartTemplateBase {
+  mode?: 'fundamentals'
 
   /** Metric IDs to plot */
   metrics: string[]
@@ -46,8 +117,14 @@ export interface EditorialChartTemplate {
   /** Year range strategy */
   yearRange: YearRangeStrategy
 
+  /** Optional alternate range strategy when the chart is rendered quarterly */
+  quarterlyYearRange?: YearRangeStrategy
+
+  /** Allowed periods for this template */
+  supportedPeriods: NewsletterPeriodType[]
+
   /** Default period */
-  periodType: 'annual' | 'quarterly'
+  defaultPeriodType: NewsletterPeriodType
 
   /** Whether price overlay is allowed */
   priceOverlayAllowed: boolean
@@ -55,29 +132,37 @@ export interface EditorialChartTemplate {
   /** Whether price overlay is on by default */
   priceOverlayDefault: boolean
 
-  /**
-   * Title pattern with placeholders: {ticker}, {minYear}, {maxYear}
-   * Example: '{ticker} Revenue vs Net Income ({minYear}–{maxYear})'
-   */
-  titlePattern: string
-
-  /** Subtitle pattern with the same placeholders */
-  subtitlePattern: string
-
   /** Default colors keyed by metric ID */
   defaultColors: Record<string, string>
 }
+
+export interface PriceEditorialChartTemplate extends EditorialChartTemplateBase {
+  mode: 'price'
+  range: NewsletterPriceRange
+  interval: NewsletterPriceInterval
+  chartType: NewsletterPriceChartType
+}
+
+export type EditorialChartTemplate =
+  | FundamentalsEditorialChartTemplate
+  | PriceEditorialChartTemplate
 
 // ---------------------------------------------------------------------------
 // Resolver inputs / outputs
 // ---------------------------------------------------------------------------
 
 export interface ResolveChartOptions {
-  /** Stock ticker (required) */
-  ticker: string
+  /** Stock ticker (primary ticker when `stocks` is omitted) */
+  ticker?: string
+
+  /** Stock ticker symbols (primary first) */
+  stocks?: string[]
 
   /** Override the year range */
   yearOverride?: { minYear: number; maxYear: number }
+
+  /** Override the default period */
+  periodType?: NewsletterPeriodType
 
   /** Override the chart title */
   titleOverride?: string
@@ -96,11 +181,8 @@ export interface ResolvedChart {
   /** The template that was used */
   templateId: string
 
-  /** A fully-formed ChartExportSpec ready for buildExportUrl() */
-  spec: ChartExportSpec
-
-  /** Pre-built export URL (relative) */
-  exportUrl: string
+  /** A fully-formed newsletter chart spec ready for capture/rendering */
+  spec: NewsletterChartSpec
 }
 
 // ---------------------------------------------------------------------------
@@ -210,15 +292,18 @@ export interface MarketContext {
   gainersLosers?: StockCandidate[]
 }
 
-/** Result of the AI stock picker step */
-export interface StockPickerResult {
+export interface FeaturedStock {
   ticker: string
   name: string
   changesPercentage: number
   editorialHook: string
-  subjectLine: string
   topHeadlines: StockNewsItem[]
   pickSource?: 'earnings' | 'big_mover' | 'news_catalyst' | 'fallback'
+}
+
+/** Result of the AI stock picker step */
+export interface StockPickerResult extends FeaturedStock {
+  subjectLine: string
 }
 
 // ---------------------------------------------------------------------------
@@ -243,25 +328,52 @@ export interface TodayQuote {
 // AI orchestration types
 // ---------------------------------------------------------------------------
 
+export interface NewsletterFinancialPoint {
+  year: number
+  periodLabel: string
+  revenue: number
+  netIncome: number
+  grossMargin: number
+  operatingMargin: number
+  freeCashFlow: number | null
+  eps: number
+  fiscalQuarter?: number | null
+  fiscalLabel?: string | null
+}
+
+export interface NewsletterHighlights {
+  revenueGrowthYoY: number | null
+  netIncomeGrowthYoY: number | null
+  grossMarginLatest: number | null
+  operatingMarginLatest: number | null
+  fcfLatest: number | null
+}
+
 /** Financial data gathered for the LLM to reason about */
 export interface NewsletterContext {
   ticker: string
-  financials: Array<{
-    year: number
-    revenue: number
-    netIncome: number
-    grossMargin: number
-    operatingMargin: number
-    freeCashFlow: number
-    eps: number
-  }>
+  financials: NewsletterFinancialPoint[]
+  quarterlyFinancials: NewsletterFinancialPoint[]
   /** Pre-computed highlights so the LLM doesn't have to do math */
-  highlights: {
-    revenueGrowthYoY: number | null
-    netIncomeGrowthYoY: number | null
-    grossMarginLatest: number | null
-    operatingMarginLatest: number | null
-    fcfLatest: number | null
+  highlights: NewsletterHighlights
+  quarterlyHighlights: NewsletterHighlights & {
+    latestPeriodLabel: string | null
+  }
+  priceContext?: {
+    latestClose: number | null
+    latestDate: string | null
+    return1m: number | null
+    return3m: number | null
+    return6m: number | null
+    return1y: number | null
+    high52Week: number | null
+    low52Week: number | null
+    distanceTo52WeekHigh: number | null
+    distanceTo52WeekLow: number | null
+    sma50: number | null
+    sma200: number | null
+    above50DaySma: boolean | null
+    above200DaySma: boolean | null
   }
   /** Present when the stock was auto-picked (no --ticker override) */
   stockPickerResult?: StockPickerResult
@@ -271,27 +383,55 @@ export interface NewsletterContext {
 export interface NewsletterOptions {
   /** Base URL of the running app (default: 'http://localhost:3000') */
   baseUrl?: string
+  /** Base URL of the Charting Platform app used for chart capture and links */
+  chartBaseUrl?: string
+  /** Public Charting Platform URL used in final newsletter click-through links */
+  publicChartBaseUrl?: string
   /** Directory for saved chart PNGs (default: './public/newsletter-charts') */
   outputDir?: string
   /** Maximum number of chart sections (default: 3) */
   maxCharts?: number
+  /** Newsletter generation format. */
+  format?: NewsletterFormat | 'auto'
+  /** Number of featured stocks in market roundup mode. */
+  roundupSize?: number
+  /** Explicit featured tickers for market roundup regeneration/overrides. */
+  featuredTickers?: string[]
   /** Upload chart PNGs to Supabase Storage and rewrite image URLs to public URLs */
   publish?: boolean
+  /** Editor-specific fast path: smaller chart captures and no preview screenshot unless overridden */
+  editorMode?: boolean
+  /** Skip the assembled newsletter preview PNG capture */
+  skipPreviewCapture?: boolean
+  /** Override chart capture width */
+  chartRenderWidth?: number
+  /** Override chart capture height */
+  chartRenderHeight?: number
 }
 
 /** Result returned by generateNewsletter() */
 export interface NewsletterResult {
   ticker: string
+  format: NewsletterFormat
+  featuredTickers: string[]
   generatedAt: string
   subjectLine: string
-  selections: Array<{ templateId: string; reason: string }>
+  selections: Array<{
+    templateId: string
+    reason: string
+    periodType?: NewsletterPeriodType
+    ticker?: string
+  }>
   blocks: NewsletterBlock[]
+  chartSpecs: NewsletterChartSpec[]
   fullHtml: string
   chartPaths: string[]
   htmlPath: string
   /** Full-page preview screenshot of the assembled newsletter */
-  previewPath: string
+  previewPath: string | null
   timings: Record<string, number>
+  todayQuote?: TodayQuote
+  editorialHook?: string
   /** True when the stock was auto-picked by AI (no --ticker override) */
   autoPickedStock: boolean
   /** Details of the AI stock pick (only present when autoPickedStock is true) */
@@ -304,6 +444,8 @@ export interface NewsletterResult {
 export interface TemplateSelection {
   templateId: string
   reason: string
+  periodType?: NewsletterPeriodType
+  ticker?: string
 }
 
 /** AI copy generation output */
@@ -311,4 +453,85 @@ export interface GeneratedCopy {
   headline: string
   body: string
   caption: string
+}
+
+// ---------------------------------------------------------------------------
+// Newsletter draft editor types
+// ---------------------------------------------------------------------------
+
+export type NewsletterDraftStatus = 'draft' | 'published'
+
+export interface NewsletterDraftBlock {
+  id: string
+  layoutId: string
+  templateId: string
+  selectionReason: string
+  heading: string
+  body: string
+  chartImageUrl: string
+  chartAlt: string
+  chartExportUrl: string
+  chartSpec: NewsletterChartSpec
+  chartNeedsRegeneration: boolean
+  caption?: string
+  ctaText?: string
+  ctaUrl?: string
+  footer?: string
+}
+
+export interface NewsletterDraftStatsItem {
+  label: string
+  value: string
+}
+
+export interface NewsletterDraftStatsCard {
+  items: NewsletterDraftStatsItem[]
+}
+
+export interface NewsletterDraftHeader {
+  title: string
+  dateText: string
+  badgeText: string
+  logoUrl?: string
+}
+
+export interface NewsletterDraftDocument {
+  ticker: string
+  format: NewsletterFormat
+  featuredTickers: string[]
+  generatedAt: string
+  subjectLine: string
+  introText: string
+  editorialHook?: string
+  todayQuote?: TodayQuote
+  header?: NewsletterDraftHeader
+  statsCard?: NewsletterDraftStatsCard
+  autoPickedStock: boolean
+  stockPickerResult?: StockPickerResult
+  blocks: NewsletterDraftBlock[]
+}
+
+export interface NewsletterDraftRecord {
+  id: string
+  ownerId: string | null
+  ticker: string
+  status: NewsletterDraftStatus
+  subjectLine: string
+  previewHtml: string
+  draft: NewsletterDraftDocument
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NewsletterDraftSummary {
+  id: string
+  ticker: string
+  format: NewsletterFormat
+  featuredTickers: string[]
+  status: NewsletterDraftStatus
+  subjectLine: string
+  generatedAt: string
+  blockCount: number
+  createdAt: string
+  updatedAt: string
 }

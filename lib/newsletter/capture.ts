@@ -1,98 +1,97 @@
-import type { ChartExportSpec } from '@/types/chart-export'
-import { encodeChartSpec } from '@/lib/chart-export'
+import { writeFileSync } from 'fs'
+import type { NewsletterChartSpec } from './types'
+import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
 
 type Browser = import('puppeteer').Browser
+const DEFAULT_RENDER_ROUTE_PATH = '/tos/api/newsletter/render'
+export const DEFAULT_CHART_RENDER_WIDTH = 1400
+export const DEFAULT_CHART_RENDER_HEIGHT = 960
+export const DEFAULT_EDITOR_CHART_RENDER_WIDTH = 1280
+export const DEFAULT_EDITOR_CHART_RENDER_HEIGHT = 900
 
 export interface CaptureChartOptions {
   /** File path to save the PNG screenshot */
   outputPath: string
-  /** Base URL of the running app (e.g. 'http://localhost:3000') */
-  baseUrl: string
-  /** Viewport width (default: 1200) */
+  /** Base URL of the Charting Platform app (e.g. 'http://localhost:3001') */
+  chartBaseUrl: string
+  /** Viewport width (default: 1400) */
   width?: number
-  /** Viewport height (default: 700) */
+  /** Viewport height (default: 960) */
   height?: number
   /** Max wait time in ms (default: 30000) */
   timeout?: number
 }
 
 /**
- * Capture a chart as a PNG screenshot using an existing Puppeteer browser instance.
- *
- * The orchestrator creates one browser and reuses it across all charts,
- * saving ~2-3s per chart on browser launch overhead.
+ * Resolve the charting service API endpoint used for newsletter PNG rendering.
+ */
+export function getChartingPlatformRenderUrl(chartBaseUrl: string): string {
+  const trimmed = chartBaseUrl.trim().replace(/\/+$/, '')
+  if (!trimmed) {
+    throw new Error('chartBaseUrl is required')
+  }
+  return `${trimmed}${DEFAULT_RENDER_ROUTE_PATH}`
+}
+
+/**
+ * Capture a chart as a PNG by calling the Charting Platform render API.
  *
  * Returns the saved file path.
  */
 export async function captureChart(
-  browser: Browser,
-  spec: ChartExportSpec,
+  spec: NewsletterChartSpec,
   options: CaptureChartOptions,
 ): Promise<string> {
   const {
     outputPath,
-    baseUrl,
-    width = 1200,
-    height = 700,
+    chartBaseUrl,
+    width = DEFAULT_CHART_RENDER_WIDTH,
+    height = DEFAULT_CHART_RENDER_HEIGHT,
     timeout = 30000,
   } = options
 
-  const specBase64 = encodeChartSpec(spec)
-  const exportUrl = `${baseUrl}/charts/export?spec=${specBase64}`
+  const { captureSpec } = resolveChartingPlatformNewsletterChart(spec, {
+    chartBaseUrl,
+    width,
+    height,
+  })
+  const renderUrl = getChartingPlatformRenderUrl(chartBaseUrl)
 
-  const page = await browser.newPage()
+  const response = await fetch(renderUrl, {
+    method: 'POST',
+    headers: {
+      Accept: 'image/png',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      spec: captureSpec,
+      timeoutMs: timeout,
+    }),
+  })
 
-  try {
-    // Log browser console messages for debugging
-    page.on('console', (msg) => {
-      const type = msg.type()
-      if (type === 'error' || type === 'warn') {
-        console.error(`  [browser ${type}] ${msg.text()}`)
-      }
-    })
-    page.on('pageerror', (err: unknown) => {
-      console.error(`  [browser error] ${err instanceof Error ? err.message : String(err)}`)
-    })
-    page.on('requestfailed', (req) => {
-      console.error(`  [404] ${req.url().slice(0, 120)}`)
-    })
-
-    await page.setViewport({ width, height })
-    await page.goto(exportUrl, { waitUntil: 'networkidle0', timeout })
-
-    // Wait for the chart to signal it's ready
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`.trim()
     try {
-      await page.waitForFunction(
-        () => (window as any).__CHART_EXPORT_READY__ === true,
-        { timeout },
-      )
-    } catch {
-      // Check what state the page is in
-      const pageState = await page.evaluate(() => {
-        const el = document.querySelector('[data-export-ready]')
-        const bodyText = document.body?.innerText?.slice(0, 500) ?? ''
-        return { readyAttr: el?.getAttribute('data-export-ready'), bodyText }
-      })
-      throw new Error(
-        `Chart not ready after ${timeout}ms. Page state: ${JSON.stringify(pageState)}`,
-      )
-    }
-
-    // Small extra delay for any final CSS settling
-    await new Promise((r) => setTimeout(r, 200))
-
-    // Find the export container and screenshot just that element
-    const container = await page.$('[data-export-ready="true"]')
-    if (container) {
-      await container.screenshot({ path: outputPath, type: 'png' })
-    } else {
-      // Fallback to full page screenshot
-      await page.screenshot({ path: outputPath, type: 'png' })
-    }
-  } finally {
-    await page.close()
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const payload = await response.json() as { error?: string }
+        if (payload && typeof payload.error === 'string' && payload.error.trim()) {
+          detail = payload.error.trim()
+        }
+      } else {
+        const text = (await response.text()).trim()
+        if (text) detail = text
+      }
+    } catch (_err) {}
+    throw new Error(`Chart render failed: ${detail}`)
   }
 
+  const pngBytes = Buffer.from(await response.arrayBuffer())
+  if (pngBytes.length === 0) {
+    throw new Error('Chart render returned an empty PNG response')
+  }
+
+  writeFileSync(outputPath, pngBytes)
   return outputPath
 }
 
@@ -121,19 +120,11 @@ export async function captureFullPage(
 }
 
 /**
- * Convenience wrapper: launches its own browser, captures one chart, closes.
- * Use `captureChart()` with a shared browser when capturing multiple charts.
+ * Convenience wrapper retained for callers that want a single capture helper.
  */
 export async function captureChartStandalone(
-  spec: ChartExportSpec,
+  spec: NewsletterChartSpec,
   options: CaptureChartOptions,
 ): Promise<string> {
-  const puppeteer = await import('puppeteer')
-  const browser = await puppeteer.launch({ headless: true })
-
-  try {
-    return await captureChart(browser, spec, options)
-  } finally {
-    await browser.close()
-  }
+  return captureChart(spec, options)
 }

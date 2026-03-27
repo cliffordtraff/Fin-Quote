@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
+import { getProvider } from '@/lib/providers'
 import type {
   NewsletterContext,
+  NewsletterFinancialPoint,
+  NewsletterHighlights,
   MarketContext,
   StockCandidate,
   StockNewsItem,
@@ -25,6 +28,174 @@ function createDirectClient() {
   return createClient(url, key)
 }
 
+async function fetchNewsletterPriceContext(
+  symbol: string,
+): Promise<NewsletterContext['priceContext'] | undefined> {
+  const provider = getProvider()
+  const from = new Date()
+  from.setFullYear(from.getFullYear() - 2)
+
+  try {
+    const candles = await provider.getHistoricalDaily(
+      symbol,
+      from.toISOString().slice(0, 10),
+    )
+    const sorted = [...candles]
+      .filter((candle) => Number.isFinite(candle.timestampMs) && Number.isFinite(candle.close))
+      .sort((a, b) => a.timestampMs - b.timestampMs)
+
+    if (sorted.length === 0) return undefined
+
+    const latest = sorted[sorted.length - 1]
+    const last252 = sorted.slice(-252)
+    const latestClose = latest?.close ?? null
+    const high52Week =
+      last252.length > 0 ? Math.max(...last252.map((candle) => candle.high)) : null
+    const low52Week =
+      last252.length > 0 ? Math.min(...last252.map((candle) => candle.low)) : null
+    const sma50 = averageClose(sorted.slice(-50))
+    const sma200 = averageClose(sorted.slice(-200))
+
+    return {
+      latestClose: latestClose == null ? null : round2(latestClose),
+      latestDate: latest?.date?.slice(0, 10) ?? null,
+      return1m: computeTrailingReturn(sorted, 21),
+      return3m: computeTrailingReturn(sorted, 63),
+      return6m: computeTrailingReturn(sorted, 126),
+      return1y: computeTrailingReturn(sorted, 252),
+      high52Week: high52Week == null ? null : round2(high52Week),
+      low52Week: low52Week == null ? null : round2(low52Week),
+      distanceTo52WeekHigh:
+        latestClose == null || high52Week == null
+          ? null
+          : round2(((latestClose - high52Week) / high52Week) * 100),
+      distanceTo52WeekLow:
+        latestClose == null || low52Week == null
+          ? null
+          : round2(((latestClose - low52Week) / low52Week) * 100),
+      sma50,
+      sma200,
+      above50DaySma:
+        latestClose == null || sma50 == null ? null : latestClose >= sma50,
+      above200DaySma:
+        latestClose == null || sma200 == null ? null : latestClose >= sma200,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+interface FinancialStatementRow {
+  year: number
+  revenue: number | null
+  gross_profit: number | null
+  net_income: number | null
+  operating_income: number | null
+  eps: number | null
+  fiscal_quarter?: number | null
+  fiscal_label?: string | null
+}
+
+interface FinancialMetricRow {
+  year: number
+  period: string
+  metric_value: number | null
+}
+
+function sortFinancialRows(
+  a: Pick<FinancialStatementRow, 'year' | 'fiscal_quarter'>,
+  b: Pick<FinancialStatementRow, 'year' | 'fiscal_quarter'>,
+): number {
+  if (a.year !== b.year) return a.year - b.year
+  return (a.fiscal_quarter ?? 0) - (b.fiscal_quarter ?? 0)
+}
+
+function buildPeriodLabel(
+  row: Pick<FinancialStatementRow, 'year' | 'fiscal_quarter' | 'fiscal_label'>,
+  periodType: 'annual' | 'quarterly',
+): string {
+  if (periodType === 'quarterly') {
+    if (row.fiscal_label && row.fiscal_label.trim()) return row.fiscal_label.trim()
+    if (row.fiscal_quarter) return `FY${row.year} Q${row.fiscal_quarter}`
+  }
+  return `FY${row.year}`
+}
+
+export function buildFinancialPoints(
+  rows: FinancialStatementRow[],
+  freeCashFlowLookup: Map<string, number>,
+  periodType: 'annual' | 'quarterly',
+): NewsletterFinancialPoint[] {
+  return rows.map((row) => {
+    const revenue = row.revenue ?? 0
+    const grossProfit = row.gross_profit ?? 0
+    const operatingIncome = row.operating_income ?? 0
+    const periodKey =
+      periodType === 'quarterly'
+        ? `${row.year}-Q${row.fiscal_quarter ?? 0}`
+        : `${row.year}-FY`
+
+    return {
+      year: row.year,
+      periodLabel: buildPeriodLabel(row, periodType),
+      revenue,
+      netIncome: row.net_income ?? 0,
+      grossMargin: revenue ? round2((grossProfit / revenue) * 100) : 0,
+      operatingMargin: revenue
+        ? round2((operatingIncome / revenue) * 100)
+        : 0,
+      freeCashFlow: freeCashFlowLookup.has(periodKey)
+        ? (freeCashFlowLookup.get(periodKey) ?? null)
+        : null,
+      eps: round2(row.eps ?? 0),
+      fiscalQuarter: row.fiscal_quarter ?? null,
+      fiscalLabel: row.fiscal_label ?? null,
+    }
+  })
+}
+
+function buildAnnualHighlights(
+  points: NewsletterFinancialPoint[],
+): NewsletterHighlights {
+  const latest = points[points.length - 1]
+  const prior = points.length >= 2 ? points[points.length - 2] : null
+
+  return {
+    revenueGrowthYoY: computeGrowth(latest?.revenue, prior?.revenue),
+    netIncomeGrowthYoY: computeGrowth(latest?.netIncome, prior?.netIncome),
+    grossMarginLatest: latest?.grossMargin ?? null,
+    operatingMarginLatest: latest?.operatingMargin ?? null,
+    fcfLatest: latest?.freeCashFlow ?? null,
+  }
+}
+
+function buildQuarterlyHighlights(
+  points: NewsletterFinancialPoint[],
+): NewsletterContext['quarterlyHighlights'] {
+  const latest = points[points.length - 1]
+  const priorYearMatch = latest
+    ? [...points]
+        .reverse()
+        .find((point) =>
+          point !== latest &&
+          point.fiscalQuarter != null &&
+          point.fiscalQuarter === latest.fiscalQuarter &&
+          point.year < latest.year,
+        ) ?? null
+    : null
+  const fallbackPrior = points.length >= 2 ? points[points.length - 2] : null
+  const comparison = priorYearMatch ?? fallbackPrior
+
+  return {
+    revenueGrowthYoY: computeGrowth(latest?.revenue, comparison?.revenue),
+    netIncomeGrowthYoY: computeGrowth(latest?.netIncome, comparison?.netIncome),
+    grossMarginLatest: latest?.grossMargin ?? null,
+    operatingMarginLatest: latest?.operatingMargin ?? null,
+    fcfLatest: latest?.freeCashFlow ?? null,
+    latestPeriodLabel: latest?.periodLabel ?? null,
+  }
+}
+
 /**
  * Fetch financial data for the LLM to reason about when selecting
  * newsletter templates and generating copy.
@@ -40,81 +211,107 @@ export async function fetchNewsletterContext(
 ): Promise<NewsletterContext> {
   const symbol = ticker.toUpperCase()
   const supabase = createDirectClient()
+  const priceContextPromise = fetchNewsletterPriceContext(symbol)
 
-  // Fetch core metrics from financials_std (7 most recent annual rows)
-  const { data: stdRows, error: stdError } = await supabase
-    .from('financials_std')
-    .select(
-      'year, revenue, gross_profit, net_income, operating_income, operating_cash_flow, eps',
-    )
-    .eq('symbol', symbol)
-    .eq('period_type', 'annual')
-    .order('year', { ascending: false })
-    .limit(7)
+  const [
+    annualStdResult,
+    quarterlyStdResult,
+    annualFcfResult,
+    quarterlyFcfResult,
+  ] = await Promise.all([
+    supabase
+      .from('financials_std')
+      .select(
+        'year, revenue, gross_profit, net_income, operating_income, eps, fiscal_quarter, fiscal_label',
+      )
+      .eq('symbol', symbol)
+      .eq('period_type', 'annual')
+      .order('year', { ascending: false })
+      .limit(7),
+    supabase
+      .from('financials_std')
+      .select(
+        'year, revenue, gross_profit, net_income, operating_income, eps, fiscal_quarter, fiscal_label',
+      )
+      .eq('symbol', symbol)
+      .eq('period_type', 'quarterly')
+      .order('year', { ascending: false })
+      .order('fiscal_quarter', { ascending: false, nullsFirst: false })
+      .limit(12),
+    supabase
+      .from('financial_metrics')
+      .select('year, period, metric_value')
+      .eq('symbol', symbol)
+      .eq('metric_name', 'freeCashFlow')
+      .eq('period', 'FY')
+      .order('year', { ascending: false })
+      .limit(7),
+    supabase
+      .from('financial_metrics')
+      .select('year, period, metric_value')
+      .eq('symbol', symbol)
+      .eq('metric_name', 'freeCashFlow')
+      .in('period', ['Q1', 'Q2', 'Q3', 'Q4'])
+      .order('year', { ascending: false })
+      .limit(12),
+  ])
 
-  if (stdError) {
+  if (annualStdResult.error) {
     throw new Error(
-      `Failed to fetch financials for ${symbol}: ${stdError.message}`,
+      `Failed to fetch annual financials for ${symbol}: ${annualStdResult.error.message}`,
     )
   }
-  if (!stdRows || stdRows.length === 0) {
+  if (quarterlyStdResult.error) {
+    throw new Error(
+      `Failed to fetch quarterly financials for ${symbol}: ${quarterlyStdResult.error.message}`,
+    )
+  }
+
+  const annualRows = [...((annualStdResult.data ?? []) as FinancialStatementRow[])]
+    .sort(sortFinancialRows)
+  const quarterlyRows = [...((quarterlyStdResult.data ?? []) as FinancialStatementRow[])]
+    .sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year
+      return (b.fiscal_quarter ?? 0) - (a.fiscal_quarter ?? 0)
+    })
+    .slice(0, 8)
+    .sort(sortFinancialRows)
+
+  if (annualRows.length === 0 && quarterlyRows.length === 0) {
     throw new Error(`No financial data found for ${symbol}`)
   }
 
-  // Sort ascending by year
-  const sorted = [...stdRows].sort((a, b) => a.year - b.year)
-  const years = sorted.map((r) => r.year)
+  const annualFcfLookup = new Map<string, number>()
+  for (const row of (annualFcfResult.data ?? []) as FinancialMetricRow[]) {
+    annualFcfLookup.set(`${row.year}-FY`, row.metric_value ?? 0)
+  }
 
-  // Fetch free cash flow from financial_metrics table
-  const { data: fcfRows } = await supabase
-    .from('financial_metrics')
-    .select('year, metric_value')
-    .eq('symbol', symbol)
-    .eq('metric_name', 'freeCashFlow')
-    .eq('period', 'FY')
-    .in('year', years)
-    .order('year', { ascending: true })
-
-  const fcfByYear = new Map<number, number>()
-  if (fcfRows) {
-    for (const row of fcfRows) {
-      fcfByYear.set(row.year, row.metric_value ?? 0)
+  const quarterlyFcfLookup = new Map<string, number>()
+  for (const row of (quarterlyFcfResult.data ?? []) as FinancialMetricRow[]) {
+    if (/^Q[1-4]$/.test(row.period)) {
+      quarterlyFcfLookup.set(`${row.year}-${row.period}`, row.metric_value ?? 0)
     }
   }
 
-  // Build per-year financial rows
-  const financials = sorted.map((row) => {
-    const revenue = row.revenue ?? 0
-    const grossProfit = row.gross_profit ?? 0
-    const operatingIncome = row.operating_income ?? 0
+  const financials = buildFinancialPoints(annualRows, annualFcfLookup, 'annual')
+  const quarterlyFinancials = buildFinancialPoints(
+    quarterlyRows,
+    quarterlyFcfLookup,
+    'quarterly',
+  )
+  const highlights = buildAnnualHighlights(financials)
+  const quarterlyHighlights = buildQuarterlyHighlights(quarterlyFinancials)
 
-    return {
-      year: row.year,
-      revenue,
-      netIncome: row.net_income ?? 0,
-      grossMargin: revenue ? round2((grossProfit / revenue) * 100) : 0,
-      operatingMargin: revenue
-        ? round2((operatingIncome / revenue) * 100)
-        : 0,
-      freeCashFlow: fcfByYear.get(row.year) ?? 0,
-      eps: round2(row.eps ?? 0),
-    }
-  })
+  const priceContext = await priceContextPromise
 
-  // Compute highlights from the most recent two years
-  const latest = financials[financials.length - 1]
-  const prior =
-    financials.length >= 2 ? financials[financials.length - 2] : null
-
-  const highlights = {
-    revenueGrowthYoY: computeGrowth(latest?.revenue, prior?.revenue),
-    netIncomeGrowthYoY: computeGrowth(latest?.netIncome, prior?.netIncome),
-    grossMarginLatest: latest?.grossMargin ?? null,
-    operatingMarginLatest: latest?.operatingMargin ?? null,
-    fcfLatest: latest?.freeCashFlow ?? null,
+  return {
+    ticker: symbol,
+    financials,
+    quarterlyFinancials,
+    highlights,
+    quarterlyHighlights,
+    priceContext,
   }
-
-  return { ticker: symbol, financials, highlights }
 }
 
 // ---------------------------------------------------------------------------
@@ -535,6 +732,25 @@ export async function fetchTickerNews(
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+function averageClose(
+  candles: Array<{ close: number }>,
+): number | null {
+  if (candles.length === 0) return null
+  const total = candles.reduce((sum, candle) => sum + candle.close, 0)
+  return round2(total / candles.length)
+}
+
+function computeTrailingReturn(
+  candles: Array<{ close: number }>,
+  lookbackBars: number,
+): number | null {
+  if (candles.length <= lookbackBars) return null
+  const latest = candles[candles.length - 1]?.close
+  const prior = candles[candles.length - 1 - lookbackBars]?.close
+  if (!Number.isFinite(latest) || !Number.isFinite(prior) || !prior) return null
+  return round2(((latest - prior) / prior) * 100)
 }
 
 function computeGrowth(

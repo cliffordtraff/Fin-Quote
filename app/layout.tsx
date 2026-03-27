@@ -9,8 +9,28 @@ import { TimezoneProvider } from '@/lib/timezone-context'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Fin Quote - Financial Data',
-  description: 'View company financial data',
+  title: 'The Intraday | Market Dashboard, Stock Analysis, and Charting Workspace',
+  description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
+  applicationName: 'The Intraday',
+  keywords: [
+    'stocks',
+    'market dashboard',
+    'stock analysis',
+    'financial metrics',
+    'charting workspace',
+    'insider trading',
+  ],
+  openGraph: {
+    title: 'The Intraday',
+    description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
+    siteName: 'The Intraday',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'The Intraday',
+    description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
+  },
 }
 
 export default function RootLayout({

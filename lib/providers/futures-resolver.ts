@@ -77,7 +77,11 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
 
     const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
     if (!res.ok) {
-      console.error(`[futures-resolver] Contract lookup failed for ${code}: ${res.status}`)
+      if (res.status === 401 || res.status === 403) {
+        console.warn(`[futures-resolver] Contract lookup unavailable for ${code}: ${res.status}`)
+      } else {
+        console.error(`[futures-resolver] Contract lookup failed for ${code}: ${res.status}`)
+      }
       return null
     }
 

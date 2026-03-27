@@ -1,4 +1,10 @@
-import type { NewsletterBlock, StockNewsItem, TodayQuote } from './types'
+import type {
+  NewsletterFormat,
+  NewsletterBlock,
+  NewsletterDraftHeader,
+  NewsletterDraftStatsCard,
+  TodayQuote,
+} from './types'
 
 // Brand colors (matching build-block.ts)
 const BRAND = {
@@ -10,6 +16,8 @@ const BRAND = {
   textMuted: '#6b7280',
   white: '#ffffff',
 } as const
+
+const NEWSLETTER_CARD_MAX_WIDTH = 720
 
 function escapeHtml(str: string): string {
   return str
@@ -37,7 +45,7 @@ function formatDate(date: Date): string {
  * email client compatibility (including Outlook).
  *
  * Structure:
- *   - Header: "The Intraday" branding + date + ticker badge
+ *   - Header: Subject line + date + company logo
  *   - Blocks: each separated by 24px spacers
  *   - Footer: data source disclaimer + link
  */
@@ -51,75 +59,135 @@ function formatMarketCap(value: number): string {
   return `$${value.toLocaleString()}`
 }
 
-/**
- * Render a compact 3-column stats card (market cap, P/E, 52-week range).
- */
-function renderStatsCard(quote: TodayQuote): string {
+export interface AssembleNewsletterOptions {
+  headerOverride?: NewsletterDraftHeader
+  introTextOverride?: string
+  statsCardOverride?: NewsletterDraftStatsCard
+}
+
+export function buildNewsletterIntroText(
+  quote?: TodayQuote,
+  editorialHook?: string,
+): string {
+  if (!quote) {
+    return editorialHook?.trim() ?? ''
+  }
+
+  const pctSign = quote.changesPercentage >= 0 ? '+' : ''
+  const dollarChange = Math.abs(quote.change)
+  const dollarSign = quote.change >= 0 ? '+' : '-'
+  const tickerUpper = quote.ticker.toUpperCase()
+  const base = `${quote.name} (${tickerUpper}) is ${pctSign}${quote.changesPercentage.toFixed(2)}% (${dollarSign}$${dollarChange.toFixed(2)}) today.`
+  const hook = editorialHook?.trim()
+  return hook ? `${base} ${hook}` : base
+}
+
+function formatStatValueColor(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('+')) return '#16a34a'
+  if (trimmed.startsWith('-')) return '#dc2626'
+  return BRAND.textDark
+}
+
+export function buildNewsletterStatsCard(
+  quote?: TodayQuote,
+): NewsletterDraftStatsCard | undefined {
+  if (!quote) return undefined
+
   const hasStats = quote.marketCap != null || quote.pe != null || quote.ytdReturn != null
-  if (!hasStats) return ''
+  if (!hasStats) return undefined
 
   const marketCapStr = quote.marketCap != null ? formatMarketCap(quote.marketCap) : '—'
   const peStr = quote.pe != null ? `${quote.pe.toFixed(1)}x` : '—'
   const ytdVal = quote.ytdReturn != null ? quote.ytdReturn : null
   const ytdSign = ytdVal != null && ytdVal >= 0 ? '+' : ''
   const ytdStr = ytdVal != null ? `${ytdSign}${ytdVal.toFixed(1)}%` : '—'
-  const ytdColor = ytdVal != null ? (ytdVal >= 0 ? '#16a34a' : '#dc2626') : BRAND.textDark
 
-  return `
-    <!-- Stats Card -->
-    <tr><td style="padding:0 0 24px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
-        <tr>
-          <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
-            <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">Market Cap</p>
-            <p style="margin:0;font-size:18px;font-weight:700;color:${BRAND.textDark};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${marketCapStr}</p>
-          </td>
-          <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
-            <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">P/E Ratio</p>
-            <p style="margin:0;font-size:18px;font-weight:700;color:${BRAND.textDark};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${peStr}</p>
-          </td>
-          <td style="padding:16px 32px;width:34%;text-align:center;">
-            <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">YTD Performance</p>
-            <p style="margin:0;font-size:18px;font-weight:700;color:${ytdColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${ytdStr}</p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>`
+  return {
+    items: [
+      { label: 'Market Cap', value: marketCapStr },
+      { label: 'P/E Ratio', value: peStr },
+      { label: 'YTD Performance', value: ytdStr },
+    ],
+  }
 }
 
 /**
- * Render a compact "In the News" block with 2-3 linked headlines.
+ * Build a ticker logo URL using FMP's public image CDN.
+ * Works for any ticker — no API key required.
  */
-function renderHeadlinesBlock(headlines: StockNewsItem[]): string {
-  const items = headlines.slice(0, 3)
-  if (items.length === 0) return ''
+function getTickerLogoUrl(ticker: string): string {
+  const sym = ticker.trim().toUpperCase()
+  if (!sym) return ''
+  return `https://financialmodelingprep.com/image-stock/${sym}.png`
+}
 
-  const rows = items
-    .map((h) => {
-      const title = escapeHtml(h.title)
-      const site = escapeHtml(h.site)
-      const url = escapeHtml(h.url)
-      return `<tr><td style="padding:4px 0;">
-        <a href="${url}" target="_blank" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:${BRAND.sage700};text-decoration:none;line-height:1.4;">${title}</a>
-        <span style="font-size:12px;color:${BRAND.textMuted};"> — ${site}</span>
-      </td></tr>`
-    })
-    .join('\n')
+export function buildNewsletterHeader(
+  ticker: string,
+  date: Date,
+  options: {
+    format?: NewsletterFormat
+    featuredTickers?: string[]
+    subjectLine?: string
+  } = {},
+): NewsletterDraftHeader {
+  const featuredCount = options.featuredTickers?.length ?? 0
+  const defaultSubject =
+    options.format === 'market_roundup'
+      ? `Market Roundup${featuredCount > 0 ? ` — ${featuredCount} Stocks` : ''}`
+      : `${ticker.toUpperCase()} Snapshot`
+  return {
+    title: options.subjectLine?.trim() || defaultSubject,
+    dateText: formatDate(date),
+    badgeText:
+      options.format === 'market_roundup'
+        ? `Market Roundup${featuredCount > 0 ? ` • ${featuredCount} Stocks` : ''}`
+        : `${ticker.toUpperCase()} Snapshot`,
+    logoUrl: getTickerLogoUrl(ticker),
+  }
+}
+
+/**
+ * Render the inner stats row (no card wrapper — used inside the combined header card).
+ */
+function renderStatsCardInner(statsCard: NewsletterDraftStatsCard): string {
+  const items = statsCard.items
+    .slice(0, 3)
+    .map((item) => ({
+      label: item.label.trim(),
+      value: item.value.trim(),
+    }))
+
+  if (!items.length || items.every((item) => !item.label && !item.value)) return ''
+
+  const normalizedItems = [0, 1, 2].map((index) => {
+    const item = items[index] ?? { label: '', value: '' }
+    return {
+      label: item.label || '—',
+      value: item.value || '—',
+      valueColor: formatStatValueColor(item.value || '—'),
+    }
+  })
 
   return `
-    <!-- In the News -->
-    <tr><td style="padding:0 0 24px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
-        <tr><td style="padding:20px 32px 8px 32px;">
-          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:${BRAND.textMuted};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">In the News</p>
-        </td></tr>
-        <tr><td style="padding:4px 32px 20px 32px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            ${rows}
-          </table>
-        </td></tr>
-      </table>
-    </td></tr>`
+                <tr id="newsletter-preview-stats"><td colspan="2" style="padding:0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
+                        <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[0].label)}</p>
+                        <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[0].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[0].value)}</p>
+                      </td>
+                      <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
+                        <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[1].label)}</p>
+                        <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[1].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[1].value)}</p>
+                      </td>
+                      <td style="padding:16px 32px;width:34%;text-align:center;">
+                        <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[2].label)}</p>
+                        <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[2].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[2].value)}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>`
 }
 
 export function assembleNewsletterHtml(
@@ -129,19 +197,29 @@ export function assembleNewsletterHtml(
   quote?: TodayQuote,
   editorialHook?: string,
   subjectLine?: string,
-  headlines?: StockNewsItem[],
+  options?: AssembleNewsletterOptions,
 ): string {
   const formattedDate = formatDate(date)
   const tickerUpper = escapeHtml(ticker.toUpperCase())
+  const header = options?.headerOverride ?? buildNewsletterHeader(ticker, date)
+  const introText = options?.introTextOverride ?? buildNewsletterIntroText(quote, editorialHook)
+  const statsCard = options?.statsCardOverride ?? buildNewsletterStatsCard(quote)
 
   // Preheader: editorial hook truncated to ~90 chars for inbox preview
-  const preheaderText = editorialHook
-    ? editorialHook.slice(0, 90)
+  const preheaderText = introText
+    ? introText.slice(0, 90)
     : `${ticker.toUpperCase()} financial snapshot for ${formattedDate}`
 
-  // Build intro block with today's trading data + editorial hook
-  let introHtml = ''
-  if (quote) {
+  // Build intro inner HTML (no card wrapper — merged into header card)
+  let introInnerHtml = ''
+  if (options?.introTextOverride) {
+    introInnerHtml = `
+                <tr id="newsletter-preview-intro"><td colspan="2" style="padding:0 32px 24px 32px;border-top:1px solid ${BRAND.cream300};">
+                  <p style="margin:0;padding-top:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
+                    ${escapeHtml(options.introTextOverride)}
+                  </p>
+                </td></tr>`
+  } else if (quote && introText) {
     const pct = quote.changesPercentage
     const pctSign = pct >= 0 ? '+' : ''
     const dollarChange = Math.abs(quote.change)
@@ -150,19 +228,23 @@ export function assembleNewsletterHtml(
     const name = escapeHtml(quote.name)
     const moveColor = pct >= 0 ? '#16a34a' : '#dc2626'
 
-    introHtml = `
-    <!-- Intro -->
-    <tr><td style="padding:0 0 24px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
-        <tr><td style="padding:24px 32px;">
-          <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
-            <strong>${name}</strong> (<span style="font-weight:600;">${tickerUpper}</span>) is
-            <span style="color:${moveColor};font-weight:600;">${pctSign}${pct.toFixed(2)}% (${dollarSign}$${dollarChange.toFixed(2)})</span> today.${hook}
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>`
+    introInnerHtml = `
+                <tr id="newsletter-preview-intro"><td colspan="2" style="padding:0 32px 24px 32px;border-top:1px solid ${BRAND.cream300};">
+                  <p style="margin:0;padding-top:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
+                    <strong>${name}</strong> (<span style="font-weight:600;">${tickerUpper}</span>) is
+                    <span style="color:${moveColor};font-weight:600;">${pctSign}${pct.toFixed(2)}% (${dollarSign}$${dollarChange.toFixed(2)})</span> today.${hook}
+                  </p>
+                </td></tr>`
   }
+
+  // Build stats inner HTML (no card wrapper — merged into header card)
+  const statsInnerHtml = statsCard ? renderStatsCardInner(statsCard) : ''
+  // Add divider before stats if both intro and stats are present
+  const statsDivider = introInnerHtml && statsInnerHtml
+    ? `<tr><td colspan="2" style="padding:0 32px;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
+    : statsInnerHtml && !introInnerHtml
+      ? `<tr><td colspan="2" style="padding:0;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
+      : ''
 
   const blockHtml = blocks
     .map(
@@ -180,7 +262,7 @@ export function assembleNewsletterHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>${subjectLine ? escapeHtml(subjectLine) : `The Intraday — ${tickerUpper} Snapshot`}</title>
+  <title>${subjectLine ? escapeHtml(subjectLine) : escapeHtml(header.title)}</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -204,41 +286,34 @@ export function assembleNewsletterHtml(
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${BRAND.cream100};">
     <tr>
       <td align="center" style="padding:32px 16px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="664" style="max-width:664px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${NEWSLETTER_CARD_MAX_WIDTH}" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;">
 
-          <!-- Header -->
-          <tr><td style="padding:0 0 32px 0;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
-              <tr><td style="padding:24px 32px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                  <tr>
-                    <td>
-                      <h1 style="margin:0 0 4px 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:${BRAND.sage700};">
-                        The Intraday
-                      </h1>
-                      <p style="margin:0;font-size:13px;color:${BRAND.textMuted};">
-                        ${escapeHtml(formattedDate)}
-                      </p>
-                    </td>
-                    <td align="right" valign="middle">
-                      <span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">
-                        ${tickerUpper} Snapshot
-                      </span>
-                    </td>
-                  </tr>
-                </table>
-              </td></tr>
+          <!-- Header + Intro + Stats (unified card) -->
+          <tr id="newsletter-preview-header"><td style="padding:0 0 32px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+                <tr>
+                  <td style="padding:24px 32px${introInnerHtml || statsInnerHtml ? '' : ''};">
+                    <h1 style="margin:0 0 4px 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${BRAND.sage700};line-height:1.3;">
+                      ${escapeHtml(header.title)}
+                    </h1>
+                    <p style="margin:0;font-size:13px;color:${BRAND.textMuted};">
+                      ${escapeHtml(header.dateText)}
+                    </p>
+                  </td>
+                  <td align="right" valign="middle" style="width:60px;padding:24px 32px 24px 0;">
+                    ${header.logoUrl ? `<img src="${escapeHtml(header.logoUrl)}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
+                  </td>
+                </tr>
+${introInnerHtml}
+${statsDivider}${statsInnerHtml}
             </table>
           </td></tr>
 
-${introHtml}
-${headlines && headlines.length > 0 ? renderHeadlinesBlock(headlines) : ''}
-${quote ? renderStatsCard(quote) : ''}
 ${blockHtml}
 
           <!-- Footer -->
           <tr><td style="padding:8px 0 0 0;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;">
               <tr><td style="padding:16px 32px;text-align:center;">
                 <p style="margin:0 0 8px 0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;">
                   Data sourced from SEC filings and Financial Modeling Prep. Charts generated by The Intraday.

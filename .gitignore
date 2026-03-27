@@ -44,4 +44,8 @@ Watchlist/
 # Dexter agent (cloned repo)
 /dexter
 
+# Generated newsletter outputs
+public/newsletter-charts/
+.newsletter-drafts/
+
 # Trigger rebuild

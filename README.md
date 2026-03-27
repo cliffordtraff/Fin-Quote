@@ -1,215 +1,304 @@
-# Fin Quote - Company Financial Data Platform
+# Fin Quote
 
-A Next.js application that displays company financial data from Supabase.
+Fin Quote is the main The Intraday web app. It is a Next.js 15 application that combines:
 
-## Tech Stack
+- Market dashboards
+- Stock detail pages
+- Financial statement and metric visualizations
+- An embedded charting workspace
+- AI-assisted market and financial analysis
+- Admin tooling for evaluation, review, and cost tracking
 
-- **Framework**: Next.js 14 (App Router)
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Firebase Auth (separate)
-- **Styling**: Tailwind CSS
-- **Language**: TypeScript
+The repository also includes a separate `dexter/` package used for deeper financial-research agent workflows.
 
-## Database Schema
+## What This Repo Contains
 
-### Tables
+The current app is much broader than a basic “company financial data viewer”.
 
-1. **company**
-   - `id` (uuid, primary key)
-   - `created_at` (timestamptz)
-   - `symbol` (text, unique)
-   - `name` (text)
-   - `sector` (text)
-   - RLS Policy: Public read access
+Main product areas:
 
-2. **financials_std**
-   - `id` (uuid, primary key)
-   - `created_at` (timestamptz)
-   - `symbol` (text, foreign key → company.symbol)
-   - `year` (int4)
-   - `revenue` (int8)
-   - `gross_profit` (int8)
-   - RLS Policy: Public read access
+- `Dashboard` and pulse pages for broad market monitoring
+- `Stock` pages for company-specific price, financial, news, and insider data
+- `Workspace` routes that embed the separate charting platform inside a persistent iframe
+- `Chatbot` and AI endpoints for financial Q&A, summaries, and experimentation
+- `Newsletter` generation tooling that produces chart images and HTML output
+- `Admin` pages for reviewing model output, evaluations, and API cost usage
 
-## Setup Instructions
+## Stack
 
-### 1. Install Dependencies
+- Next.js 15 App Router
+- React 19 RC
+- TypeScript
+- Tailwind CSS
+- Supabase for database, auth, and storage-backed workflows
+- OpenAI APIs for chat, summaries, evaluations, and newsletter generation
+- FMP and Massive/Polygon-style providers for market data
+- Puppeteer for chart/newsletter capture
+- Vitest for unit and component tests
+
+## Architecture Overview
+
+### App shell
+
+The root layout mounts the normal page content and a persistent workspace iframe shell. That lets the external charting app remain alive across route changes instead of being recreated on every navigation.
+
+Relevant files:
+
+- `app/layout.tsx`
+- `components/Navigation.tsx`
+- `components/WorkspaceIframe.tsx`
+
+### Data layer
+
+There are two main data paths:
+
+1. Market data providers for quotes, candles, movers, news, and streaming.
+2. Supabase-backed financial and product data for financial statements, metrics, filings, conversations, caches, and admin workflows.
+
+The provider factory lives in `lib/providers/` and switches by `DATA_PROVIDER`:
+
+- `fmp` for Financial Modeling Prep
+- `massive` for Massive/Polygon-style REST and websocket data
+
+### AI layer
+
+The repo contains multiple AI surfaces:
+
+- Streamed Q&A pipeline in `app/api/ask/route.ts`
+- Market summaries and trend bullets
+- Evaluation and review tooling
+- Newsletter generation pipeline in `lib/newsletter/`
+- Dexter sidecar agent exposed via `app/api/dexter-query/route.ts`
+
+Some of the older chat/evaluation flows are still AAPL-centric. The rest of the product is broader.
+
+### Real-time layer
+
+Live streaming uses SSE endpoints on top of a singleton websocket broker for Massive data. The broker multiplexes subscriptions and aggregates 1-second data into higher-level candles.
+
+Relevant files:
+
+- `app/api/stream/multi/route.ts`
+- `app/api/stream/[symbol]/route.ts`
+- `lib/ws/massive-broker.ts`
+
+## Key Routes
+
+User-facing routes:
+
+- `/dashboard`
+- `/dashboard/pulse`
+- `/dashboard/pulse-today`
+- `/dashboard/live`
+- `/stock/[symbol]`
+- `/workspace/chart`
+- `/workspace/fundamentals`
+- `/workspace/overview`
+- `/calendar`
+- `/insiders`
+- `/chatbot` when enabled
+
+Admin routes:
+
+- `/admin/review`
+- `/admin/validation`
+- `/admin/evaluations`
+- `/admin/costs`
+
+Auth routes:
+
+- `/auth`
+- `/auth/forgot-password`
+- `/auth/reset-password`
+
+## Project Structure
+
+```text
+app/
+  actions/        Server actions for market data, financials, chat, review flows
+  api/            Route handlers for streaming, chat, newsletters, search, quotes
+  dashboard/      Dashboard and pulse pages
+  stock/          Stock detail pages
+  workspace/      Embedded charting workspace shell routes
+
+components/       UI building blocks and dashboard modules
+lib/              Providers, Supabase helpers, AI helpers, streaming, metrics logic
+scripts/          Ingestion, migration, evaluation, and debugging scripts
+supabase/         SQL migrations and local config
+data/             SQL helpers, seed-like data, exports, backups, raw inputs
+docs/             Architecture notes, plans, and implementation docs
+dexter/           Separate Bun-based research agent package
+```
+
+## Getting Started
+
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Configure Environment Variables
-
-Copy the example environment file:
+### 2. Create local env file
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Then edit `.env.local` with your Supabase credentials:
+### 3. Set the required environment variables
+
+Minimum setup for basic app usage:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+FMP_API_KEY=...
 ```
 
-You can find these values in your Supabase project:
-1. Go to [Supabase Dashboard](https://app.supabase.com)
-2. Select your project
-3. Navigate to Settings → API
-4. Copy the "Project URL" and "anon/public" key
+Required for AI features:
 
-### 3. Run the Development Server
+```env
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5-nano
+```
+
+Recommended for server-side ingestion, caches, and admin workflows:
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Optional but commonly needed:
+
+```env
+DATA_PROVIDER=fmp
+MASSIVE_API_KEY=...
+NEXT_PUBLIC_CHARTING_URL=http://localhost:3001
+NEXT_PUBLIC_COOKIE_DOMAIN=.theintraday.com
+NEXT_PUBLIC_ENABLE_CHAT=false
+NEXT_PUBLIC_ENABLE_LANDING=false
+NEXT_PUBLIC_SHOW_STOCK_V1=false
+NEXT_PUBLIC_ENABLE_MOVERS=true
+```
+
+Notes:
+
+- `NEXT_PUBLIC_CHARTING_URL` is required for the embedded workspace experience.
+- `MASSIVE_API_KEY` is required for real-time streaming and for `DATA_PROVIDER=massive`.
+- `NEXT_PUBLIC_COOKIE_DOMAIN` is used for shared-auth cookie behavior across subdomains.
+- `.env.local.example` is intentionally small and not exhaustive.
+
+### 4. Run the app
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the application.
+This uses `scripts/dev.sh`, which checks that port `3000` is free and runs the Next dev server.
 
-## Project Structure
+Open `http://localhost:3000`.
 
-```
-├── app/
-│   ├── actions/
-│   │   └── financials.ts       # Server action to fetch data
-│   ├── financials/
-│   │   └── page.tsx            # Financials display page
-│   ├── layout.tsx              # Root layout
-│   ├── page.tsx                # Home page
-│   └── globals.css             # Global styles
-├── lib/
-│   ├── database.types.ts       # TypeScript types for Supabase
-│   └── supabase/
-│       ├── client.ts           # Client-side Supabase client
-│       └── server.ts           # Server-side Supabase client
-├── .env.local.example          # Example environment variables
-└── package.json
-```
+## Authentication
 
-## Features
+The app uses Supabase Auth, not Firebase. Client auth is wired through `@supabase/ssr`, and middleware refreshes session state and protects routes like `/profile` and `/admin`.
 
-### Server Actions
+Relevant files:
 
-The app uses Next.js Server Actions for data fetching, located in `app/actions/financials.ts`:
+- `lib/supabase/client.ts`
+- `lib/supabase/server.ts`
+- `middleware.ts`
+- `app/auth/`
 
-```typescript
-import { getCompaniesWithFinancials } from '@/app/actions/financials'
+## Database and Migrations
 
-const { data, error } = await getCompaniesWithFinancials()
-```
+Supabase migrations live in `supabase/migrations/`. The schema has grown beyond the original `company` and `financials_std` tables and now includes:
 
-This server action:
-- Fetches all companies with their related financial data
-- Uses Supabase's nested `.select()` syntax to join tables
-- Returns fully typed data using TypeScript
-- Handles errors gracefully
-- Orders companies by name and financials by year (descending)
+- Financial metrics
+- SEC filings and filing chunks
+- Query logs and prompt versions
+- Conversations and messages
+- Company metrics and segment data
+- Insider trading tables
+- Several cache tables for AI and market workflows
 
-### Type Safety
+Start here:
 
-All database types are defined in `lib/database.types.ts`, providing:
-- Full TypeScript autocomplete for database queries
-- Type-safe data access throughout the application
-- Helper types like `CompanyWithFinancials` for joined data
-
-### Supabase Client
-
-Two client configurations are available:
-
-1. **Server Client** (`lib/supabase/server.ts`)
-   - Used in Server Components and Server Actions
-   - Runs on the server only
-   - Safe for sensitive operations
-
-2. **Browser Client** (`lib/supabase/client.ts`)
-   - Used in Client Components
-   - Runs in the browser
-   - Uses the public anon key (safe to expose)
-
-## Usage Example
-
-### Fetching Data in a Server Component
-
-```typescript
-// app/financials/page.tsx
-import { getCompaniesWithFinancials } from '@/app/actions/financials'
-
-export default async function FinancialsPage() {
-  const { data: companies, error } = await getCompaniesWithFinancials()
-
-  // Render companies and their financials
-  return (
-    <div>
-      {companies?.map(company => (
-        <div key={company.id}>
-          <h2>{company.name} ({company.symbol})</h2>
-          {company.financials_std.map(financial => (
-            <div key={financial.id}>
-              <p>Year: {financial.year}</p>
-              <p>Revenue: ${financial.revenue.toLocaleString()}</p>
-              <p>Gross Profit: ${financial.gross_profit.toLocaleString()}</p>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-```
-
-### Nested Supabase Query
-
-The server action uses Supabase's nested select syntax to fetch related data in a single query:
-
-```typescript
-const { data, error } = await supabase
-  .from('company')
-  .select(`
-    id,
-    created_at,
-    symbol,
-    name,
-    sector,
-    financials_std (
-      id,
-      created_at,
-      symbol,
-      year,
-      revenue,
-      gross_profit
-    )
-  `)
-  .order('name', { ascending: true })
-  .order('year', { foreignTable: 'financials_std', ascending: false })
-```
-
-This approach:
-- Avoids N+1 query problems
-- Returns properly typed nested data
-- Maintains referential integrity
-- Reduces network overhead
-
-## Security
-
-- RLS (Row Level Security) policies are enabled on both tables with public read access
-- The anon key is safe to expose in the browser (it's prefixed with `NEXT_PUBLIC_`)
-- Authentication is handled separately via Firebase Auth
-- Environment variables are properly configured and ignored by git
+- `supabase/migrations/README.md`
+- `data/MIGRATIONS.md`
 
 ## Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint
+Common scripts:
 
-## Next Steps
+- `npm run dev` start the app locally
+- `npm run build` production build
+- `npm run test:run` run Vitest once
+- `npm run export` export to Excel
+- `npm run export:catalog` export metric catalog
+- `npm run setup:metrics` set up financial metrics tables/workflow
+- `npm run fetch:metrics` fetch FMP metrics
+- `npm run ingest:metrics` ingest fetched metrics
+- `npm run generate:catalog` regenerate metric catalog
+- `npm run refresh:stocks` refresh stock registry
+- `npm run stocks:status` inspect stock-registry ingestion status
+- `npm run ingest:segments` ingest segment data
 
-- Add pagination for large datasets
-- Implement filtering and search
-- Add data visualization (charts/graphs)
-- Set up Firebase Auth integration
-- Add data export functionality
-- Create admin panel for data management
+There are many additional operational scripts under `scripts/` for:
+
+- data ingestion
+- filings download and chunking
+- evaluation runs
+- migration helpers
+- newsletter generation
+- debugging and verification
+
+## Testing
+
+Tests run with Vitest and JSDOM.
+
+Current automated coverage is focused on a few high-value modules such as:
+
+- workspace iframe behavior
+- navigation and stock search
+- validators
+- TTM calculation
+- stock “why moving” parsing
+
+Run:
+
+```bash
+npm run test:run
+```
+
+## Dexter Package
+
+The `dexter/` directory is a separate Bun-based project for autonomous financial research. The main app can call it through `/api/dexter-query`, but it has its own dependencies, runtime, and README.
+
+See:
+
+- `dexter/README.md`
+- `app/api/dexter-query/route.ts`
+
+## Docs
+
+The `docs/` directory contains implementation plans, architecture notes, migration plans, and feature writeups. It is the best place to go deeper on a specific subsystem.
+
+Especially relevant:
+
+- workspace iframe integration
+- charting platform integration
+- market-data provider migration
+- evaluation system
+- Supabase migrations
+
+## Current State
+
+This README is intentionally high-level. The repo is active and contains both production paths and experimental surfaces. When in doubt, treat these files as the main entry points:
+
+- `app/layout.tsx`
+- `components/Navigation.tsx`
+- `components/WorkspaceIframe.tsx`
+- `lib/fetch-market-data.ts`
+- `app/stock/[symbol]/page.tsx`
+- `app/api/ask/route.ts`
+- `app/actions/chart-metrics.ts`
+

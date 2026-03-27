@@ -1,5 +1,7 @@
 import { EDITORIAL_TEMPLATES } from './editorial-templates'
 import type {
+  FeaturedStock,
+  NewsletterChartSpec,
   NewsletterContext,
   TemplateSelection,
   GeneratedCopy,
@@ -8,6 +10,12 @@ import type {
   TodayQuote,
   StockNewsItem,
 } from './types'
+import { isPriceNewsletterChartSpec } from './chart-spec'
+
+type SelectionEditorialContext = Pick<
+  FeaturedStock,
+  'changesPercentage' | 'editorialHook' | 'topHeadlines'
+>
 
 // ---------------------------------------------------------------------------
 // Stock picker prompt (Step 0)
@@ -174,6 +182,74 @@ export function parseStockPickerResult(
 }
 
 // ---------------------------------------------------------------------------
+// Market roundup intro prompt
+// ---------------------------------------------------------------------------
+
+export function buildMarketRoundupMessages(
+  featuredStocks: FeaturedStock[],
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const system = [
+    'You are the editor of The Intraday, a financial newsletter.',
+    'Write the subject line and intro for a multi-stock market roundup newsletter.',
+    'The intro should be 1-2 sentences, mention at least 2 featured stocks, and frame why these names matter today.',
+    'If there is a shared theme, mention it. If there is not, present the roundup as a broad market snapshot.',
+    '',
+    'Output JSON only:',
+    '{ "subjectLine": "short punchy email subject < 70 chars", "introText": "1-2 sentences" }',
+  ].join('\n')
+
+  const user = [
+    `Featured stocks (${featuredStocks.length}):`,
+    ...featuredStocks.map((stock) => {
+      const sign = stock.changesPercentage >= 0 ? '+' : ''
+      const firstHeadline = stock.topHeadlines[0]
+      const headlineText = firstHeadline
+        ? `"${firstHeadline.title}" — ${firstHeadline.site}`
+        : 'No fresh headline available'
+      return [
+        `${stock.ticker} — ${stock.name}`,
+        `Move: ${sign}${stock.changesPercentage.toFixed(2)}%`,
+        `Angle: ${stock.editorialHook}`,
+        `Top headline: ${headlineText}`,
+      ].join('\n')
+    }),
+  ].join('\n\n')
+
+  return [
+    { role: 'system' as const, content: system },
+    { role: 'user' as const, content: user },
+  ]
+}
+
+export function parseMarketRoundupIntro(
+  responseText: string,
+  featuredStocks: FeaturedStock[],
+): { subjectLine: string; introText: string } {
+  const fallbackSubject = `Market Roundup: ${featuredStocks
+    .slice(0, 3)
+    .map((stock) => stock.ticker)
+    .join(', ')}`
+  const fallbackIntro = `Today's market roundup covers ${featuredStocks
+    .map((stock) => `${stock.name} (${stock.ticker})`)
+    .join(', ')} after headline-driven moves across the tape.`
+
+  try {
+    const parsed = JSON.parse(responseText)
+    const subjectLine =
+      typeof parsed.subjectLine === 'string' && parsed.subjectLine.trim()
+        ? parsed.subjectLine.trim()
+        : fallbackSubject
+    const introText =
+      typeof parsed.introText === 'string' && parsed.introText.trim()
+        ? parsed.introText.trim()
+        : fallbackIntro
+    return { subjectLine, introText }
+  } catch {
+    return { subjectLine: fallbackSubject, introText: fallbackIntro }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Editorial hook prompt (for manual tickers without a stock picker result)
 // ---------------------------------------------------------------------------
 
@@ -242,34 +318,88 @@ export function parseEditorialHook(
 export function buildTemplateSelectionMessages(
   context: NewsletterContext,
   maxSelections: number,
+  options: {
+    mode?: 'single_stock' | 'market_roundup'
+    editorialContext?: SelectionEditorialContext
+  } = {},
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const templateDescriptions = EDITORIAL_TEMPLATES.map(
     (t) =>
-      `- id: "${t.id}"\n  label: ${t.label}\n  description: ${t.description}\n  whenToUse: ${t.whenToUse}`,
+      t.mode === 'price'
+        ? `- id: "${t.id}"\n  mode: price\n  label: ${t.label}\n  chartSetup: ${t.chartType}, ${t.interval}, ${t.range}\n  description: ${t.description}\n  whenToUse: ${t.whenToUse}`
+        : `- id: "${t.id}"\n  mode: fundamentals\n  label: ${t.label}\n  metrics: ${t.metrics.join(', ')}\n  supportedPeriods: ${t.supportedPeriods.join(', ')}\n  defaultPeriod: ${t.defaultPeriodType}\n  description: ${t.description}\n  whenToUse: ${t.whenToUse}`,
   ).join('\n\n')
+  const isRoundup = options.mode === 'market_roundup'
 
   const system = [
     'You are a financial newsletter editor for The Intraday.',
     `Select ${maxSelections} chart templates that tell the most compelling visual story for this company.`,
     'Pick templates that highlight the most interesting or noteworthy trends in the data.',
     'Do NOT pick templates whose underlying data is flat or uninteresting.',
+    'Use price templates when recent market action is the clearest story, and fundamentals templates when the financial trend is stronger.',
+    'For fundamentals templates, also choose the best periodType: annual or quarterly.',
+    'Prefer quarterly when the story is tied to recent earnings, a fresh inflection, or a catalyst happening right now.',
+    'Prefer annual when the chart is about a long-duration moat, decade-long compounding, or capital allocation over time.',
+    'If a metric value is null, treat it as unavailable data, not as zero.',
+    ...(isRoundup
+      ? ['This is one slot inside a broader market roundup, so favor one clean, recent angle over a sprawling deep dive.']
+      : []),
     '',
     'Respond with JSON only:',
-    '{ "selections": [{ "templateId": "<id>", "reason": "<1 sentence editorial angle>" }] }',
+    '{ "selections": [{ "templateId": "<id>", "periodType": "annual|quarterly (fundamentals only)", "reason": "<1 sentence editorial angle>" }] }',
   ].join('\n')
 
-  const user = [
+  const userParts = [
     `Company: ${context.ticker}`,
     '',
-    '=== Financial Data (last 7 years) ===',
+    '=== Annual Financial Data ===',
     JSON.stringify(context.financials, null, 2),
     '',
-    '=== Highlights ===',
+    '=== Annual Highlights ===',
     JSON.stringify(context.highlights, null, 2),
+    '',
+    '=== Quarterly Financial Data ===',
+    JSON.stringify(context.quarterlyFinancials, null, 2),
+    '',
+    '=== Quarterly Highlights ===',
+    JSON.stringify(context.quarterlyHighlights, null, 2),
+  ]
+
+  if (context.priceContext) {
+    userParts.push(
+      '',
+      '=== Price Context ===',
+      JSON.stringify(context.priceContext, null, 2),
+    )
+  }
+
+  if (options.editorialContext) {
+    const sign = options.editorialContext.changesPercentage >= 0 ? '+' : ''
+    userParts.push(
+      '',
+      '=== Current Market Context ===',
+      `Today's move: ${sign}${options.editorialContext.changesPercentage.toFixed(2)}%`,
+      `Editorial hook: ${options.editorialContext.editorialHook}`,
+    )
+
+    if (options.editorialContext.topHeadlines.length > 0) {
+      userParts.push(
+        '',
+        '=== Recent Headlines ===',
+        ...options.editorialContext.topHeadlines.map(
+          (headline) => `- "${headline.title}" — ${headline.site}, ${headline.publishedDate}`,
+        ),
+      )
+    }
+  }
+
+  userParts.push(
     '',
     '=== Available Templates ===',
     templateDescriptions,
-  ].join('\n')
+  )
+
+  const user = userParts.join('\n')
 
   return [
     { role: 'system' as const, content: system },
@@ -285,11 +415,48 @@ export function parseTemplateSelections(
   responseText: string,
   maxSelections: number,
 ): TemplateSelection[] {
-  const parsed = JSON.parse(responseText)
-  const selections: TemplateSelection[] = parsed.selections ?? []
+  let parsed: { selections?: Array<Record<string, unknown>> } = {}
+  try {
+    parsed = JSON.parse(responseText)
+  } catch {
+    parsed = {}
+  }
 
-  const validIds = new Set(EDITORIAL_TEMPLATES.map((t) => t.id))
-  const validated = selections.filter((s) => validIds.has(s.templateId))
+  const selections = Array.isArray(parsed.selections) ? parsed.selections : []
+  const templatesById = new Map(
+    EDITORIAL_TEMPLATES.map((template) => [template.id, template] as const),
+  )
+
+  const validated = selections.flatMap((selection) => {
+    const templateId =
+      typeof selection.templateId === 'string' ? selection.templateId : ''
+    const template = templatesById.get(templateId)
+    if (!template) return []
+
+    const reason =
+      typeof selection.reason === 'string' && selection.reason.trim()
+        ? selection.reason.trim()
+        : ''
+    const ticker =
+      typeof selection.ticker === 'string' && selection.ticker.trim()
+        ? selection.ticker.trim().toUpperCase()
+        : undefined
+
+    if (template.mode === 'price') {
+      return [{ templateId, reason, ticker }]
+    }
+
+    const rawPeriod =
+      selection.periodType === 'quarterly' || selection.periodType === 'annual'
+        ? selection.periodType
+        : undefined
+    const periodType =
+      rawPeriod && template.supportedPeriods.includes(rawPeriod)
+        ? rawPeriod
+        : template.defaultPeriodType
+
+    return [{ templateId, reason, periodType, ticker }]
+  })
 
   return validated.slice(0, maxSelections)
 }
@@ -307,8 +474,22 @@ export function buildCopyGenerationMessages(
   templateId: string,
   templateLabel: string,
   editorialAngle: string,
-  stockPickerResult?: StockPickerResult,
+  chartSpec: NewsletterChartSpec,
+  stockPickerResult?: SelectionEditorialContext,
 ): Array<{ role: 'system' | 'user'; content: string }> {
+  const isPriceChart = isPriceNewsletterChartSpec(chartSpec)
+  const fundamentalsPeriod =
+    !isPriceChart && chartSpec.periodType === 'quarterly'
+      ? 'quarterly'
+      : 'annual'
+  const financialDataset =
+    fundamentalsPeriod === 'quarterly'
+      ? context.quarterlyFinancials
+      : context.financials
+  const highlightDataset =
+    fundamentalsPeriod === 'quarterly'
+      ? context.quarterlyHighlights
+      : context.highlights
   const systemParts = [
     'You are a financial newsletter copywriter for The Intraday.',
     'Write concise, data-grounded copy for one chart section of a newsletter.',
@@ -320,16 +501,29 @@ export function buildCopyGenerationMessages(
     '- Every sentence must contain at least one specific number from the data',
     '- caption: 1 sentence describing what the chart shows',
     '- All numbers MUST come from the provided data — never invent figures',
+    '- If a value is null or missing, treat it as unavailable. Never rewrite null as 0, $0, or 0%.',
     '- Write in present tense for current state, past tense for trends',
     '- Do not use markdown formatting except for **bold** on key numbers',
     '',
-    'Number formatting (CRITICAL):',
-    '- Dollar values in the data are in MILLIONS. You MUST convert to human-readable format.',
-    '- Values >= 1,000 → show as billions: 416161 → "$416.2B", 79024 → "$79.0B"',
-    '- Values < 1,000 but >= 1 → show as millions: 823 → "$823M", 56.7 → "$56.7M"',
-    '- Percentages: round to 2 decimal places, e.g. 46.91%',
-    '- NEVER output raw numbers like "$416,161.0M" — always convert to $B first if >= 1,000',
   ]
+
+  if (isPriceChart) {
+    systemParts.push(
+      'Number formatting (CRITICAL):',
+      '- Price values are in USD per share, not millions. Show as "$214.53".',
+      '- Returns and distances should be formatted as percentages with 2 decimal places.',
+      '- Prefer using the provided range return, latest close, 52-week high/low, and moving-average context.',
+    )
+  } else {
+    systemParts.push(
+      'Number formatting (CRITICAL):',
+      '- Dollar values in the data are in MILLIONS. You MUST convert to human-readable format.',
+      '- Values >= 1,000 → show as billions: 416161 → "$416.2B", 79024 → "$79.0B"',
+      '- Values < 1,000 but >= 1 → show as millions: 823 → "$823M", 56.7 → "$56.7M"',
+      '- Percentages: round to 2 decimal places, e.g. 46.91%',
+      '- NEVER output raw numbers like "$416,161.0M" — always convert to $B first if >= 1,000',
+    )
+  }
 
   if (stockPickerResult) {
     systemParts.push(
@@ -345,15 +539,37 @@ export function buildCopyGenerationMessages(
 
   const userParts = [
     `Company: ${context.ticker}`,
-    `Chart template: ${templateLabel}`,
+    `Chart template: ${templateLabel} (${templateId})`,
     `Editorial angle: ${editorialAngle}`,
     '',
-    '=== Financial Data ===',
-    JSON.stringify(context.financials, null, 2),
-    '',
-    '=== Highlights ===',
-    JSON.stringify(context.highlights, null, 2),
+    '=== Chart Spec ===',
+    JSON.stringify(chartSpec, null, 2),
   ]
+
+  if (isPriceChart) {
+    userParts.push(
+      '',
+      '=== Price Context ===',
+      JSON.stringify(context.priceContext ?? {}, null, 2),
+    )
+  } else {
+    userParts.push(
+      '',
+      `=== ${fundamentalsPeriod === 'quarterly' ? 'Quarterly' : 'Annual'} Financial Data ===`,
+      JSON.stringify(financialDataset, null, 2),
+      '',
+      `=== ${fundamentalsPeriod === 'quarterly' ? 'Quarterly' : 'Annual'} Highlights ===`,
+      JSON.stringify(highlightDataset, null, 2),
+    )
+  }
+
+  if (!isPriceChart && context.priceContext) {
+    userParts.push(
+      '',
+      '=== Current Price Context ===',
+      JSON.stringify(context.priceContext, null, 2),
+    )
+  }
 
   if (stockPickerResult) {
     const sign = stockPickerResult.changesPercentage >= 0 ? '+' : ''

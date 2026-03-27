@@ -13,12 +13,11 @@ import type {
   ProviderNews,
   CandleTimespan,
 } from './types'
+import { FMPProvider } from './fmp'
 import {
   formatMarketTimestamp,
-  isMassiveIndexSymbol,
   resolveSymbol,
   MASSIVE_TO_FMP_SYMBOLS,
-  FMP_FUTURES_TO_PRODUCT,
 } from './utils'
 import { resolveFrontMonth, getFuturesSnapshot } from './futures-resolver'
 
@@ -102,6 +101,8 @@ function mapAggCandle(bar: any): ProviderCandle {
 // ---------------------------------------------------------------------------
 
 export class MassiveProvider implements MarketDataProvider {
+  private futuresFallbackProvider: FMPProvider | null = null
+
   // ---- Quotes ----
 
   async getQuote(symbol: string): Promise<ProviderQuote | null> {
@@ -358,7 +359,7 @@ export class MassiveProvider implements MarketDataProvider {
 
     // Futures need front-month resolution + dedicated aggs endpoint
     if (isFutures(symbol)) {
-      return this.fetchFuturesAggs(massiveSymbol, multiplier, timespan, from)
+      return this.fetchFuturesAggs(symbol, massiveSymbol, multiplier, timespan, from, to)
     }
 
     // Stocks and indices use the same /v2/aggs endpoint
@@ -381,13 +382,17 @@ export class MassiveProvider implements MarketDataProvider {
   }
 
   private async fetchFuturesAggs(
+    originalSymbol: string,
     productCode: string,
     multiplier: number,
     timespan: CandleTimespan,
     from?: string,
+    to?: string,
   ): Promise<ProviderCandle[]> {
     const contractTicker = await resolveFrontMonth(productCode)
-    if (!contractTicker) return []
+    if (!contractTicker) {
+      return this.getFuturesFallbackCandles(originalSymbol, multiplier, timespan, from, to)
+    }
 
     // Map our CandleTimespan to Massive futures resolution format
     const resolutionMap: Record<CandleTimespan, string> = {
@@ -403,6 +408,10 @@ export class MassiveProvider implements MarketDataProvider {
     // Import inline to avoid circular dependency
     const { getFuturesCandles } = await import('./futures-resolver')
     const candles = await getFuturesCandles(contractTicker, resolution, from)
+
+    if (candles.length === 0) {
+      return this.getFuturesFallbackCandles(originalSymbol, multiplier, timespan, from, to)
+    }
 
     return candles.map(c => ({
       date: formatMarketTimestamp(c.timestampMs),
@@ -442,10 +451,14 @@ export class MassiveProvider implements MarketDataProvider {
     productCode: string,
   ): Promise<ProviderQuote | null> {
     const contractTicker = await resolveFrontMonth(productCode)
-    if (!contractTicker) return null
+    if (!contractTicker) {
+      return this.getFuturesFallbackQuote(originalSymbol)
+    }
 
     const snap = await getFuturesSnapshot(contractTicker)
-    if (!snap) return null
+    if (!snap) {
+      return this.getFuturesFallbackQuote(originalSymbol)
+    }
 
     // Derive the display name from the FMP futures table
     const nameMap: Record<string, string> = {
@@ -468,6 +481,48 @@ export class MassiveProvider implements MarketDataProvider {
       volume: snap.volume,
       dayHigh: snap.high,
       dayLow: snap.low,
+    }
+  }
+
+  private getFuturesFallbackProvider(): FMPProvider {
+    if (!this.futuresFallbackProvider) {
+      this.futuresFallbackProvider = new FMPProvider()
+    }
+    return this.futuresFallbackProvider
+  }
+
+  private async getFuturesFallbackQuote(symbol: string): Promise<ProviderQuote | null> {
+    try {
+      return await this.getFuturesFallbackProvider().getQuote(symbol)
+    } catch (err) {
+      console.error(`[massive] futures quote fallback failed for ${symbol}:`, err)
+      return null
+    }
+  }
+
+  private async getFuturesFallbackCandles(
+    symbol: string,
+    multiplier: number,
+    timespan: CandleTimespan,
+    from?: string,
+    to?: string,
+  ): Promise<ProviderCandle[]> {
+    const provider = this.getFuturesFallbackProvider()
+
+    try {
+      if (timespan === 'minute' || timespan === 'hour') {
+        return await provider.getIntraday(symbol, multiplier, timespan, from, to)
+      }
+
+      if (timespan === 'day' || timespan === 'week' || timespan === 'month') {
+        const fromParam = from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        return await provider.getHistoricalDaily(symbol, fromParam, to)
+      }
+
+      return []
+    } catch (err) {
+      console.error(`[massive] futures candle fallback failed for ${symbol}:`, err)
+      return []
     }
   }
 }

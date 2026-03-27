@@ -8,17 +8,19 @@ For every project, write a detailed FORFORD.md file that explains the whole proj
 
 **The Intraday** (formerly Fin Quote) is a Next.js 15 / React 19 financial data platform.
 
-- **Landing Page** (`/`) — Marketing/conversion page (components in `components/landing/`)
-- **Market Dashboard** (`/dashboard`) — Real-time indices, sector heatmaps, VIX, gainers/losers, futures, economic calendar. Also has sub-routes: `/dashboard/pulse`, `/dashboard/pulse-today`, `/dashboard/live`, `/dashboard/review-day`
-- **Stock Pages** (`/stock/[symbol]`) — Individual stock detail with charts, fundamentals, news
-- **Workspace** (`/workspace/*`) — Chart, fundamentals, and overview sub-pages
-- **Concept Page** (`/concept`) — Market-session-aware dashboard variant
-- **Calendar** (`/calendar`) — Economic & earnings calendar with international data
-- **Charts** (`/charts`, `/multi-charts`) — Multi-stock financial charts
-- **Insiders** (`/insiders`) — SEC Form 4 insider trading data
-- **AI Chatbot** (`/chatbot`) — Natural language Q&A about AAPL using two-step LLM architecture (feature-flagged via `NEXT_PUBLIC_ENABLE_CHAT`)
+Primary surfaces:
 
-**Tech Stack:** Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI · Highcharts · lightweight-charts · Tailwind CSS · TypeScript · Vitest · FMP API · Massive (Polygon.io)
+- **Home / Landing** (`/`) — Either the marketing site or the main market dashboard depending on `NEXT_PUBLIC_ENABLE_LANDING`
+- **Market Dashboard** (`/dashboard`) — Market overview with indices, movers, sector heatmaps, futures, news, insider activity, and AI summaries
+- **Pulse Pages** (`/dashboard/pulse*`, `/dashboard/live`, `/dashboard/review-day`) — Variant market-monitoring views
+- **Stock Pages** (`/stock/[symbol]`) — Price header, chart embed, key stats, financial statements, metrics charts, news, insider trades, and "why moving" context
+- **Workspace** (`/workspace/chart`, `/workspace/fundamentals`, `/workspace/overview`) — Persistent iframe shell around the separate charting platform
+- **Concept / Charts** (`/concept`, `/charts`, `/multi-charts`, `/charts/export`) — Specialized market and charting experiments
+- **Calendar / Insiders** (`/calendar`, `/insiders`) — International calendar and insider-trading data
+- **Chatbot** (`/chatbot`) — Feature-flagged AI Q&A with conversation history, evaluations, and admin review flows
+- **Admin** (`/admin/*`) — Validation, evaluation, review, and cost dashboards
+
+**Tech Stack:** Next.js 15 (App Router) · React 19 · Supabase (PostgreSQL + pgvector) · Supabase Auth (Google OAuth) · OpenAI · Highcharts · lightweight-charts · Tailwind CSS · TypeScript · Vitest · FMP API · Massive (Polygon.io) · Puppeteer
 
 ---
 
@@ -26,170 +28,248 @@ For every project, write a detailed FORFORD.md file that explains the whole proj
 
 ```bash
 npm install                         # Install dependencies (runs patch-package via postinstall)
-npm run dev                         # Start dev server (localhost:3000, uses ./scripts/dev.sh)
-npm run dev:clean                   # Kill existing, clear .next cache, restart
+npm run dev                         # Start dev server on localhost:3000 via ./scripts/dev.sh
+npm run dev:clean                   # Kill existing dev server, clear .next, restart
 npm run build                       # Production build
 npm run lint                        # Run ESLint
 
-# Testing (Vitest, jsdom environment, globals enabled)
+# Testing (Vitest, jsdom)
 npm run test                        # Watch mode
-npm run test:run                    # Single run (CI)
-npm run test -- lib/__tests__/validators.test.ts  # Single file
+npm run test:run                    # Single run
 npm run test:ui                     # Interactive UI
-npm run test:coverage               # With coverage
+npm run test:coverage               # Coverage report
 
-# Chatbot evaluation (golden test set: test-data/golden-test-set.json)
-npx tsx scripts/evaluate.ts                    # Full evaluation
-npx tsx scripts/evaluate.ts --mode fast        # Routing-only (2-3 min)
-npx tsx scripts/evaluate.ts --limit 10         # First N questions
+# Metrics / financial data workflows
+npm run setup:metrics               # Set up metrics tables/workflow
+npm run fetch:metrics               # Fetch FMP metrics
+npm run ingest:metrics              # Ingest fetched metrics
+npm run generate:catalog            # Regenerate metrics catalog
+npm run refresh:stocks              # Refresh US stock registry
+npm run stocks:status               # Check registry ingestion status
+npm run ingest:segments             # Ingest segment data
 
-# Data management
-npx tsx scripts/fetch-aapl-data.ts             # Fetch core financials from FMP
-npx tsx scripts/ingest-financials.ts           # Load into financials_std table
-npm run fetch:metrics && npm run ingest:metrics # Extended metrics (139 metrics)
-npm run generate:catalog                       # Regenerate metrics catalog
-npm run refresh:stocks                         # Refresh US stock registry
+# Evaluation / newsletter workflows
+npx tsx scripts/evaluate.ts
+npx tsx scripts/evaluate.ts --mode fast
+npx tsx scripts/generate-newsletter.ts --ticker AAPL
 ```
 
 ---
 
 ## Architecture
 
+### App Shell and Persistent Workspace
+
+The root layout renders the page plus a persistent workspace iframe shell:
+
+- `app/layout.tsx`
+- `components/Navigation.tsx`
+- `components/WorkspaceIframe.tsx`
+
+The iframe is mounted once and hidden/shown across route changes so chart state survives navigation. The `/workspace/*` routes are minimal shells; the real content lives in the embedded charting app controlled by `postMessage`.
+
 ### Market Data Provider Abstraction (`lib/providers/`)
 
-Server actions fetch market data through a provider interface (`MarketDataProvider` in `lib/providers/types.ts`). Two implementations exist:
+Server-side market-data actions fetch through a provider interface in `lib/providers/types.ts`.
 
-- **FMPProvider** (`lib/providers/fmp.ts`) — Financial Modeling Prep API (default)
-- **MassiveProvider** (`lib/providers/massive.ts`) — Polygon.io via Massive
+Implementations:
 
-Set `DATA_PROVIDER=massive` in `.env.local` to switch. Default is `fmp`. The factory (`lib/providers/index.ts`) caches the provider instance. Some server actions (like `futures.ts`) bypass the abstraction and call FMP directly when the other provider doesn't support that data type.
+- **FMPProvider** (`lib/providers/fmp.ts`) — Financial Modeling Prep REST data
+- **MassiveProvider** (`lib/providers/massive.ts`) — Massive/Polygon-style REST data
 
-### Server Actions Pattern (`app/actions/`)
+Select via `DATA_PROVIDER`:
 
-All data fetching uses Next.js server actions (`'use server'`). ~60+ server actions cover market data, stock fundamentals, insider trading, earnings, news, etc. Most follow this pattern:
-1. Import `getProvider()` from `@/lib/providers` (or call FMP directly)
-2. Fetch and transform data
-3. Return typed response
+- `fmp` (default)
+- `massive`
 
-Key orchestrator: `lib/fetch-market-data.ts` runs multiple server actions in parallel for the dashboard.
+The provider factory in `lib/providers/index.ts` caches the active provider instance.
 
-### Two-Step LLM Flow (Chatbot)
+### Server Actions and Route Handlers
 
-Implemented in `app/actions/ask-question.ts`:
+The app uses a mix of:
 
-1. **Tool Selection** — LLM receives question + conversation history + tool menu (`lib/tools.ts`), returns JSON: `{"tool": "toolName", "args": {...}}`
-2. **Tool Execution** — Server validates and executes the selected server action
-3. **Answer Generation** — LLM receives question + fetched data, writes a grounded answer (plain text only, no Markdown)
-4. **Validation** — `lib/validators.ts` checks number accuracy (±2%), year correctness, and filing citations. On medium+ severity failure, `lib/regeneration.ts` auto-regenerates.
+- **Server actions** in `app/actions/` for market data, stock data, financials, review flows, and caches
+- **Route handlers** in `app/api/` for streaming, AI endpoints, newsletters, quote/search APIs, and integrations
 
-The LLM never touches the database directly. Tool definitions and prompt templates live in `lib/tools.ts` (`TOOL_MENU`, `buildToolSelectionPrompt`, `buildFinalAnswerPrompt`).
+Key orchestrators:
 
-### Two-Layer Metrics System
+- `lib/fetch-market-data.ts` — Dashboard market-data fanout
+- `app/actions/chart-metrics.ts` — Metric registry, data loading, and chart-metric assembly
+- `app/stock/[symbol]/page.tsx` — Main stock-page composition
 
-**Core metrics** (`financials_std` table, tool: `getAaplFinancialsByMetric`):
-- 9 raw metrics: `revenue`, `gross_profit`, `net_income`, `operating_income`, `total_assets`, `total_liabilities`, `shareholders_equity`, `operating_cash_flow`, `eps`
-- 3 calculated: `gross_margin`, `roe`, `debt_to_equity_ratio`
+### AI Surfaces
 
-**Extended metrics** (`financial_metrics` table, tool: `getFinancialMetric`):
-- 139 metrics from FMP (2006-2025), organized by category (Valuation, Profitability, Growth, Leverage, Efficiency, Per-Share)
-- Alias resolution in `lib/metric-resolver.ts` ("P/E" → `peRatio`, "profit" → `net_income`)
-- Discovery via `listMetrics` tool; catalog generated by `npm run generate:catalog`
+There are multiple AI surfaces in this repo:
 
-### TTM (Trailing Twelve Months) Calculation
+- **Streaming Q&A** in `app/api/ask/route.ts`
+- **Conversation persistence** in `app/actions/conversations.ts`
+- **Market summaries and trend bullets**
+- **Evaluation and review tooling** in `/admin/*`
+- **Newsletter generation** in `lib/newsletter/`
+- **Dexter sidecar integration** via `app/api/dexter-query/route.ts`
 
-`lib/ttm-config.ts` defines calculation type per metric, `lib/ttm-calculator.ts` implements:
-- `sum` — Add last 4 quarters (revenue, net_income)
-- `point_in_time` — Use latest quarter (total_assets, marketCap)
-- `average` — Average of 4 quarters (daysOfInventoryOnHand)
-- `derived` — Recalculate from TTM components (gross_margin = gross_profit TTM / revenue TTM)
-- `not_applicable` — Cannot be TTM'd (growth rates, P/E ratio)
+Important nuance: some older chat and evaluation flows still have AAPL-specific assumptions even though the broader product is now multi-symbol.
+
+### Metrics System
+
+Financial charting and analysis pull from multiple layers:
+
+- `financials_std` for standardized core statement data
+- `financial_metrics` for broader derived and provider-sourced metrics
+- `company_metrics` for segment and company-specific dimensional data
+- provider-backed price data for aligned market series
+
+The main metric router/config lives in `app/actions/chart-metrics.ts`.
+
+### Real-Time Streaming
+
+Live streaming is built on:
+
+- SSE route handlers in `app/api/stream/`
+- a singleton websocket broker in `lib/ws/massive-broker.ts`
+
+The broker multiplexes subscriptions and aggregates 1-second market data into larger candles for clients.
 
 ---
 
-## Routing & Middleware
+## Routing and Middleware
 
 `middleware.ts` handles:
-- **Auth protection**: `/profile` and `/admin/*` require Supabase session; redirects to `/auth`
-- **Ticker shortcuts**: Single-segment paths that look like tickers redirect to `/stock/TICKER` (e.g., `/AAPL` → `/stock/AAPL`)
-- **Legacy redirects**: `/company/AAPL` → `/stock/AAPL`
-- **Reserved top-level routes**: `dashboard`, `stock`, `charts`, `calendar`, `insiders`, `chatbot`, `pricing`, `auth`, `admin`, `profile`, `workspace`, `concept` (won't be treated as tickers)
 
-**Rendering strategies:**
-- **ISR (60s)**: `/dashboard` — `export const revalidate = 60`
-- **Dynamic**: `/stock/[symbol]` — `export const dynamic = 'force-dynamic'`
-- **Static**: `/`, `/pricing`
+- **Auth protection** for `/profile` and `/admin/*`
+- **Ticker shortcuts** such as `/AAPL` → `/stock/AAPL`
+- **Legacy redirect** from `/company/:symbol` → `/stock/:symbol`
+- **Session refresh** via Supabase SSR auth helpers
 
-**Navigation components:**
-- `Navigation.tsx` — Used by all app pages. Has stock search bar, feature-flagged tabs, theme toggle, user menu. Top border: `border-b-2 border-sage-500`.
-- `components/landing/LandingNav.tsx` — Marketing page nav with sign-in/sign-up CTAs.
+Rendering notes:
+
+- `/dashboard` uses ISR with `revalidate = 60`
+- `/stock/[symbol]` also uses `revalidate = 60`
+- `/` is `force-dynamic`
+- `/workspace/*` pages are layout shells for the persistent iframe flow
 
 ---
 
-## Theme System
+## Theme and UI
 
-Custom color tokens in `tailwind.config.ts`, dark mode via `class` strategy:
-- **Sage** (`sage-50`–`sage-900`): Primary accent. `sage-500` (#5a6b4a) is the main accent, `sage-600` (#4a5a3a) for hover.
-- **Cream** (`cream-50`–`cream-300`): Page backgrounds. `cream-100` (#f5f5f0) is the main background, `cream-300` (#e5e5e0) for borders.
-- **Dark mode**: `bg-gray-900` backgrounds, `bg-gray-800` cards, `border-gray-700` borders.
-- Full design system documented in `docs/APP-THEME-IMPLEMENTATION-PLAN.md`.
+The app uses Tailwind with a custom theme centered around sage and cream tokens:
+
+- **Sage** for accents, active states, and action colors
+- **Cream** for light-mode backgrounds and borders
+- **Gray 800/900** for dark mode
+
+Useful files:
+
+- `tailwind.config.ts`
+- `app/globals.css`
+- `components/ThemeProvider.tsx`
+- `components/ThemeToggle.tsx`
 
 ---
 
 ## Data Storage (Supabase)
 
-**Key tables:**
-- `company` — Company metadata (symbol, name, sector)
-- `financials_std` — Core financial metrics by year (9 metrics, 20-year history)
-- `financial_metrics` — Extended metrics (139 metrics from FMP, 2006-2025)
-- `filings` / `filing_chunks` — SEC filing metadata and text chunks with pgvector embeddings (1536-dim) for semantic search via `search_filing_chunks()` RPC
-- `query_logs` — Query logging with validation results and cost tracking
-- `conversations` / `messages` — User conversation history with chart configs and follow-up questions
+Important table groups include:
 
-**Auth:** Supabase Auth with Google OAuth. Client: `lib/supabase/client.ts` (browser), `lib/supabase/server.ts` (server).
+- company and security metadata
+- `financials_std`
+- `financial_metrics`
+- `company_metrics`
+- filings and filing chunks
+- conversations and messages
+- query logs, prompt versions, validation/review metadata
+- insider-trading tables
+- cache tables for market summaries, market movers, LLM outputs, and stock "why moving" data
+
+Core references:
+
+- `lib/database.types.ts`
+- `supabase/migrations/`
+- `data/MIGRATIONS.md`
+
+Auth uses Supabase Auth through `@supabase/ssr`:
+
+- `lib/supabase/client.ts`
+- `lib/supabase/server.ts`
+- `app/auth/`
+- `app/auth/callback/route.ts`
 
 ---
 
 ## Environment Variables
 
+Common variables used by the app:
+
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-5-nano           # Options: gpt-4o-mini, gpt-5-nano, gpt-5-mini, gpt-4o
+OPENAI_MODEL=gpt-5-nano
+
 FMP_API_KEY=your-fmp-key
-DATA_PROVIDER=fmp                  # "fmp" (default) or "massive"
-NEXT_PUBLIC_ENABLE_CHAT=false      # Enable AI chatbot feature
+MASSIVE_API_KEY=your-massive-key
+DATA_PROVIDER=fmp                  # "fmp" or "massive"
+
+NEXT_PUBLIC_CHARTING_URL=http://localhost:3001
+NEXT_PUBLIC_COOKIE_DOMAIN=.theintraday.com
+
+NEXT_PUBLIC_ENABLE_CHAT=false
+NEXT_PUBLIC_ENABLE_LANDING=false
+NEXT_PUBLIC_SHOW_STOCK_V1=false
+NEXT_PUBLIC_ENABLE_MOVERS=true
+
+NEWSLETTER_PUBLIC_CHARTING_URL=https://charts.theintraday.com
+```
+
+Dexter-related optional variables:
+
+```bash
+EXA_API_KEY=...
+TAVILY_API_KEY=...
+FINANCIAL_DATASETS_API_KEY=...
+DEXTER_MODEL=gpt-4o
+DEXTER_MODEL_PROVIDER=openai
 ```
 
 ---
 
 ## Common Workflows
 
-### Adding a New Chatbot Tool
-1. Create server action in `app/actions/[tool-name].ts`
-2. Add tool definition to `TOOL_MENU` in `lib/tools.ts`
-3. Update `buildToolSelectionPrompt()` with routing rules
-4. Add tool handler in `ask-question.ts`
-5. Update `lib/chart-helpers.ts` if tool returns chart-able data
-6. Add test cases to `test-data/golden-test-set.json`
+### Adding or Updating Dashboard Data
 
-### Adding a New Dashboard Server Action
-1. Create server action in `app/actions/[name].ts` using `getProvider()` or FMP directly
-2. Add to parallel fetch in `lib/fetch-market-data.ts` if needed for dashboard
-3. Create/update the consuming component
+1. Add or update a server action in `app/actions/`
+2. Wire it into `lib/fetch-market-data.ts` if it belongs on the dashboard
+3. Update the consuming component in `components/`
+4. If needed, add fast/slow snapshot coverage in `app/api/market-snapshot/*`
 
-### Improving Chatbot Prompts
-1. Update in `lib/tools.ts` (`buildToolSelectionPrompt` or `buildFinalAnswerPrompt`)
-2. Run evaluation: `npx tsx scripts/evaluate.ts`
-3. Review at `/admin/validation`
+### Adding or Updating a Financial Metric
+
+1. Update metric config or loaders in `app/actions/chart-metrics.ts`
+2. Ensure the underlying source exists in `financials_std`, `financial_metrics`, or `company_metrics`
+3. Update metric catalog generation if needed
+4. Verify the consuming chart or stock page handles the new shape
+
+### Updating Chat / AI Prompting
+
+1. Update prompt builders and tool definitions in `lib/tools.ts`, `lib/regeneration.ts`, or related action files
+2. Run evaluation with `scripts/evaluate.ts`
+3. Review failures in `/admin/evaluations` and `/admin/review`
+
+### Updating Workspace Integration
+
+1. Update host-side navigation and iframe behavior in `components/Navigation.tsx` and `components/WorkspaceIframe.tsx`
+2. Keep the embedded charting URL and theme/symbol sync behavior aligned with the external charting app
+3. Verify `/workspace/chart`, `/workspace/fundamentals`, and `/workspace/overview`
 
 ---
 
 ## Important Constraints
 
-- **Chatbot is AAPL-only** for MVP (tools hardcoded to Apple stock)
-- **Read-only LLM**: Cannot execute arbitrary queries; selects from whitelisted tools only
-- **Row limits**: Financials (1-20 years), Filings (1-10), Passages (1-10)
-- **Extended metrics**: Available 2006-2025 (FMP API limits)
-- **Feature flags** control navigation visibility only; backend code remains in place when disabled
-- **Daily data update**: GitHub Actions workflow (`.github/workflows/daily-data-update.yml`) runs at 2am UTC to fetch AAPL financials and SEC filings
+- The workspace experience depends on an external charting platform being available at `NEXT_PUBLIC_CHARTING_URL`
+- Many ingestion, cache, and admin workflows require `SUPABASE_SERVICE_ROLE_KEY`
+- `DATA_PROVIDER=massive` requires `MASSIVE_API_KEY`
+- Some older AI and evaluation paths still assume AAPL-oriented tooling
+- Feature flags mainly control visibility and entry points, not complete code removal
+- The repository contains both production paths and experimental surfaces; check active usage before deleting old modules

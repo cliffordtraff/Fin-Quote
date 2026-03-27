@@ -10,10 +10,14 @@ const BRAND = {
   sage700: '#3d4a30',
   cream100: '#f5f5f0',
   cream300: '#e5e5e0',
+  gray300: '#d1d5db',
   textDark: '#1a1a1a',
   textMuted: '#6b7280',
   white: '#ffffff',
 } as const
+
+const NEWSLETTER_CARD_MAX_WIDTH = 720
+const NEWSLETTER_CHART_WIDTH = 704
 
 // ---------------------------------------------------------------------------
 // Content → slot mapping
@@ -64,18 +68,18 @@ function renderBody(text: string): string {
   const escaped = escapeHtml(text)
   const withBold = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   return `<tr><td style="padding:8px 32px 16px 32px;">
-  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;color:${BRAND.textDark};line-height:1.6;">
+  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;color:${BRAND.textDark};line-height:1.65;">
     ${withBold}
   </p>
 </td></tr>`
 }
 
 function renderChart(imageUrl: string, alt: string, chartUrl?: string): string {
-  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="600" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.cream300};" />`
+  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="${NEWSLETTER_CHART_WIDTH}" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.gray300};" />`
   const content = chartUrl
     ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:block;text-decoration:none;">${img}</a>`
     : img
-  return `<tr><td style="padding:8px 32px;">
+  return `<tr><td style="padding:8px 8px;">
   ${content}
 </td></tr>`
 }
@@ -179,7 +183,7 @@ export function buildNewsletterBlock(
     .filter(Boolean)
     .join('\n')
 
-  const html = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:664px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+  const html = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.gray300};">
 ${rows}
 </table>`
 

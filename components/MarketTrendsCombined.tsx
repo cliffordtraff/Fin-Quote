@@ -2,13 +2,12 @@
 
 import { type ReactNode, useState, useEffect } from 'react'
 import type { LoserData } from '@/app/actions/losers'
-import type { AllSessionMoversResult, MoverData } from '@/app/actions/market-movers'
+import type { AllSessionMoversResult } from '@/app/actions/market-movers'
 import type { MarketSession } from '@/lib/market-hours'
-import { LOADING_STEPS, LOADING_MESSAGES, type LoadingStep } from '@/lib/loading-steps'
+import { LOADING_STEPS, LOADING_MESSAGES } from '@/lib/loading-steps'
+import { useTheme } from '@/components/ThemeProvider'
 import { useTimezone } from '@/lib/timezone-context'
 import { getSessionTimeRange } from '@/lib/timezone-utils'
-import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
-import { getMultipleMetrics, type MetricData, type MetricId } from '@/app/actions/chart-metrics'
 
 type SessionType = 'premarket' | 'cash' | 'afterhours'
 
@@ -313,51 +312,53 @@ function LoadingSteps({ loading }: { loading: boolean }) {
 }
 
 function ChartOfTheDay() {
-  const [metricsData, setMetricsData] = useState<MetricData[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const symbol = 'AAPL'
-  const metrics: MetricId[] = ['revenue', 'net_income']
+  const { theme } = useTheme()
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const chartTheme = theme === 'dark' ? 'dark' : 'light'
+  const chartSrc = `/api/dashboard/chart-of-the-day?theme=${chartTheme}`
+  const isReady = loadedSrc === chartSrc && failedSrc !== chartSrc
+  const hasError = failedSrc === chartSrc
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const result = await getMultipleMetrics({
-          symbol,
-          metrics,
-          period: 'annual',
-        })
-        if (result.data) {
-          setMetricsData(result.data)
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [])
+    setFailedSrc(null)
+  }, [chartSrc])
 
   return (
     <div className="flex-[2] rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
       <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
-        <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Chart of the Day &mdash; {symbol}</h2>
+        <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Chart of the Day</h2>
       </div>
       <div className="p-2" style={{ height: 380 }}>
-        {loading ? (
-          <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading chart...</div>
-        ) : metricsData.length > 0 ? (
-          <MultiMetricChart
-            data={metricsData}
-            metrics={metrics}
-            initialChartType="bar"
-            initialShowLabels={false}
-            initialStacked={false}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full text-xs text-gray-400">Chart unavailable</div>
-        )}
+        <div className="relative h-full overflow-hidden rounded-md border border-cream-200 dark:border-gray-700 bg-cream-50 dark:bg-gray-900/60">
+          {!hasError && (
+            <img
+              key={chartSrc}
+              src={chartSrc}
+              alt="Chart of the day"
+              className={`h-full w-full object-contain transition-opacity duration-150 ${
+                isReady ? 'opacity-100' : 'opacity-0'
+              }`}
+              onLoad={() => {
+                setLoadedSrc(chartSrc)
+                setFailedSrc(null)
+              }}
+              onError={() => setFailedSrc(chartSrc)}
+            />
+          )}
+
+          {!isReady && !hasError && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
+              Loading chart...
+            </div>
+          )}
+
+          {hasError && (
+            <div className="flex h-full items-center justify-center text-xs text-gray-400">
+              Chart unavailable
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
