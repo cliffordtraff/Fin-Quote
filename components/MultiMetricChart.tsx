@@ -136,6 +136,8 @@ interface MultiMetricChartProps {
   initialStacked?: boolean
   /** Initial index-to-zero state */
   initialIndexToZero?: boolean
+  /** Optional explicit chart height for export/embed surfaces */
+  chartHeight?: number
   /** Callback fired after Highcharts finishes rendering */
   onChartReady?: () => void
   /** Callback to copy a newsletter export URL (shown in export dropdown when provided) */
@@ -155,7 +157,7 @@ interface MultiMetricChartProps {
   }
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, chartHeight, onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(initialShowLabels ?? true)
   const [isStacked, setIsStacked] = useState(initialStacked ?? false)
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>(initialChartType ?? 'bar')
@@ -173,6 +175,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   // Get theme-aware colors
   const METRIC_COLORS = getMetricColors(isDark)
   const FALLBACK_COLORS = getFallbackColors(isDark)
+  const resolvedChartHeight = chartHeight ?? (exportMode ? 500 : 650)
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Highcharts) {
@@ -228,7 +231,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
   if (!isMounted) {
     return (
-      <div className={`w-full ${exportMode ? 'h-[500px] bg-white' : 'h-[650px] bg-cream-50 dark:bg-gray-800'} animate-pulse rounded flex items-center justify-center`}>
+      <div
+        className={`w-full animate-pulse rounded flex items-center justify-center ${exportMode ? 'bg-white' : 'bg-cream-50 dark:bg-gray-800'}`}
+        style={{ height: resolvedChartHeight }}
+      >
         <p className={exportMode ? 'text-gray-400' : 'text-gray-400 dark:text-gray-500'}>Loading chart...</p>
       </div>
     )
@@ -236,7 +242,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
 
   if (!data || data.length === 0) {
     return (
-      <div className="w-full h-[650px] flex items-center justify-center">
+      <div className="w-full flex items-center justify-center" style={{ height: resolvedChartHeight }}>
         <p className="text-gray-600 dark:text-gray-400">No data available</p>
       </div>
     )
@@ -260,6 +266,10 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
     seenMetrics.add(d.metric)
     return true
   })
+  const showDataTableSection =
+    !isFullscreen &&
+    !exportMode &&
+    !filteredData.every(d => isPriceMetric(d.metric))
 
   // Define sort order for chart bars (smaller metrics on left, larger on right)
   // Revenue should always be on the right (highest number = rightmost bar)
@@ -624,7 +634,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
   const options: Highcharts.Options = {
     chart: {
       type: 'column',
-      height: exportMode ? 500 : 650,
+      height: resolvedChartHeight,
       backgroundColor: exportMode ? '#ffffff' : exportColors ? (isDark ? 'rgb(45, 45, 45)' : '#ffffff') : (ht?.backgroundColor ?? 'transparent'),
       animation: false,
       style: {
@@ -971,7 +981,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
           ...options,
           chart: {
             ...options.chart,
-            height: exportMode ? 500 : (isFullscreen ? window.innerHeight - 100 : 650),
+            height: exportMode ? resolvedChartHeight : (isFullscreen ? window.innerHeight - 100 : resolvedChartHeight),
           },
         }}
         callback={(chart: Highcharts.Chart) => {
@@ -1157,7 +1167,7 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       </div>
 
       {/* Data Table - hidden in fullscreen, export mode, and when only stock price is shown */}
-      {!isFullscreen && !exportMode && !filteredData.every(d => isPriceMetric(d.metric)) && (
+      {showDataTableSection && (
       <div className="bg-cream-50 dark:bg-gray-800 border border-cream-300 dark:border-gray-700 rounded-lg overflow-hidden">
         <table className="w-full table-fixed divide-y divide-cream-200 dark:divide-gray-700">
           <thead className="bg-cream-50 dark:bg-gray-900">

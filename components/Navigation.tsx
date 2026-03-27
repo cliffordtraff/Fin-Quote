@@ -72,7 +72,7 @@ export default function Navigation() {
   return (
     <nav id="app-navigation" className="bg-white dark:bg-gray-900 border-b-2 border-sage-500">
       <div className="w-full border-b border-gray-100 dark:border-gray-800">
-        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
+        <div className="mx-auto max-w-[1600px] px-6 sm:px-12 lg:px-20 flex justify-between items-center h-14">
           <div className="flex items-center gap-6">
             <Logo size="md" />
             <StockSearch pathname={pathname} />
@@ -81,7 +81,7 @@ export default function Navigation() {
       </div>
 
       <div className="w-full bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 flex justify-between items-center h-10">
+        <div className="mx-auto max-w-[1600px] px-6 sm:px-12 lg:px-20 flex justify-between items-center h-10">
           <div className="flex items-center">
             <div className="flex items-center space-x-1">
               {navLinks.map((link) => (

@@ -44,6 +44,8 @@ function ChartExportContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  const [embedViewportHeight, setEmbedViewportHeight] = useState(520)
+  const isEmbedded = searchParams.get('embed') === 'true'
 
   // Parse spec from URL (stable across renders since URL doesn't change)
   const spec = useMemo(
@@ -59,6 +61,28 @@ function ChartExportContent() {
 
   // Stable key for the effect dependency
   const specKey = useMemo(() => JSON.stringify(spec), [spec])
+  const shellClassName = isEmbedded
+    ? 'flex h-screen w-full flex-col overflow-hidden bg-white'
+    : 'flex w-[1200px] flex-col bg-white'
+  const loadingShellClassName = isEmbedded
+    ? 'h-screen w-full flex items-center justify-center bg-white'
+    : 'w-[1200px] h-[700px] flex items-center justify-center bg-white'
+  const titleClassName = isEmbedded ? 'px-4 pt-4 pb-1' : 'px-8 pt-6 pb-1'
+  const chartWrapClassName = isEmbedded ? 'flex-1 min-h-0 px-4 pt-2' : 'px-6 pt-2'
+  const footerClassName = isEmbedded ? 'px-4 pb-3 pt-1 flex justify-end' : 'px-8 pb-2 flex justify-end'
+  const chartHeight = isEmbedded ? Math.max(280, embedViewportHeight - 190) : 500
+
+  useEffect(() => {
+    if (!isEmbedded) return
+
+    const syncViewportHeight = () => {
+      setEmbedViewportHeight(window.innerHeight)
+    }
+
+    syncViewportHeight()
+    window.addEventListener('resize', syncViewportHeight)
+    return () => window.removeEventListener('resize', syncViewportHeight)
+  }, [isEmbedded])
 
   // Fetch data based on the spec
   useEffect(() => {
@@ -192,7 +216,7 @@ function ChartExportContent() {
 
   if (error) {
     return (
-      <div className="w-[1200px] h-[700px] flex items-center justify-center bg-white">
+      <div className={loadingShellClassName}>
         <p className="text-red-600 text-sm">{error}</p>
       </div>
     )
@@ -200,7 +224,7 @@ function ChartExportContent() {
 
   if (loading) {
     return (
-      <div className="w-[1200px] h-[700px] flex items-center justify-center bg-white">
+      <div className={loadingShellClassName}>
         <p className="text-gray-400">Loading chart data...</p>
       </div>
     )
@@ -208,29 +232,32 @@ function ChartExportContent() {
 
   return (
     <div
-      className="w-[1200px] bg-white"
+      className={shellClassName}
       data-export-ready={ready ? 'true' : 'false'}
     >
       {/* Title area */}
       {(config?.title || config?.subtitle) && (
-        <div className="px-8 pt-6 pb-1">
+        <div className={titleClassName}>
           {config?.title && (
-            <h1 className="text-3xl font-bold text-gray-900 leading-tight">{config.title}</h1>
+            <h1 className={`${isEmbedded ? 'text-2xl' : 'text-3xl'} font-bold text-gray-900 leading-tight`}>
+              {config.title}
+            </h1>
           )}
-          {config?.subtitle && (
+          {!isEmbedded && config?.subtitle && (
             <p className="text-lg text-gray-500 mt-1">{config.subtitle}</p>
           )}
         </div>
       )}
 
       {/* Chart */}
-      <div className="px-6 pt-2">
+      <div className={chartWrapClassName}>
         {metricsData.length > 0 ? (
           <MultiMetricChart
             data={metricsData}
             metrics={metricsData.map(d => d.metric)}
             customColors={chartColors}
             exportMode
+            chartHeight={chartHeight}
             initialChartType={config?.chartType}
             initialShowLabels={config?.showLabels}
             initialStacked={config?.stacked}
@@ -238,15 +265,17 @@ function ChartExportContent() {
             onChartReady={handleChartReady}
           />
         ) : (
-          <div className="h-[500px] flex items-center justify-center">
+          <div className="flex items-center justify-center" style={{ height: chartHeight }}>
             <p className="text-gray-400">No data to display</p>
           </div>
         )}
       </div>
 
       {/* Branding footer */}
-      <div className="px-8 pb-2 flex justify-end">
-        <span className="text-base text-gray-400">The Intraday &middot; theintraday.com</span>
+      <div className={footerClassName}>
+        <span className={`${isEmbedded ? 'text-sm' : 'text-base'} text-gray-400`}>
+          The Intraday &middot; theintraday.com
+        </span>
       </div>
     </div>
   )
@@ -256,7 +285,7 @@ export default function ChartExportPage() {
   return (
     <Suspense
       fallback={
-        <div className="w-[1200px] h-[700px] flex items-center justify-center bg-white">
+        <div className="h-screen w-full flex items-center justify-center bg-white">
           <p className="text-gray-400">Loading...</p>
         </div>
       }

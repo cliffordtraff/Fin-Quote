@@ -313,48 +313,51 @@ function LoadingSteps({ loading }: { loading: boolean }) {
 
 function ChartOfTheDay() {
   const { theme } = useTheme()
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
-  const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const chartTheme = theme === 'dark' ? 'dark' : 'light'
-  const chartSrc = `/api/dashboard/chart-of-the-day?theme=${chartTheme}`
-  const isReady = loadedSrc === chartSrc && failedSrc !== chartSrc
-  const hasError = failedSrc === chartSrc
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const iframeSrc = '/api/dashboard/chart-of-the-day?format=embed'
+  const outerCardClasses =
+    theme === 'dark'
+      ? 'border-slate-700 bg-slate-800'
+      : 'border-cream-300 bg-white'
+  const headerClasses =
+    theme === 'dark'
+      ? 'border-slate-700 bg-slate-800'
+      : 'border-cream-300 bg-cream-50'
+  const frameClasses = 'border-cream-200 bg-white'
 
   useEffect(() => {
-    setFailedSrc(null)
-  }, [chartSrc])
+    setStatus('loading')
+  }, [iframeSrc])
 
   return (
-    <div className="flex-[2] rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
-      <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
+    <div className={`flex-[2] rounded-lg border overflow-hidden flex flex-col ${outerCardClasses}`}>
+      <div className={`px-2 py-1.5 border-b ${headerClasses}`}>
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Chart of the Day</h2>
       </div>
-      <div className="p-2" style={{ height: 380 }}>
-        <div className="relative h-full overflow-hidden rounded-md border border-cream-200 dark:border-gray-700 bg-cream-50 dark:bg-gray-900/60">
-          {!hasError && (
-            <img
-              key={chartSrc}
-              src={chartSrc}
-              alt="Chart of the day"
-              className={`h-full w-full object-contain transition-opacity duration-150 ${
-                isReady ? 'opacity-100' : 'opacity-0'
-              }`}
-              onLoad={() => {
-                setLoadedSrc(chartSrc)
-                setFailedSrc(null)
-              }}
-              onError={() => setFailedSrc(chartSrc)}
-            />
-          )}
+      <div className="flex-1 min-h-[440px] p-1">
+        <div className={`relative h-full overflow-hidden rounded-md border ${frameClasses}`}>
+          <iframe
+            key={iframeSrc}
+            src={iframeSrc}
+            title="Chart of the day"
+            className={`absolute inset-0 h-full w-full border-0 transition-opacity duration-150 ${
+              status === 'ready' ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ background: '#ffffff' }}
+            allow="fullscreen"
+            loading="eager"
+            onLoad={() => setStatus('ready')}
+            onError={() => setStatus('error')}
+          />
 
-          {!isReady && !hasError && (
+          {status === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
               Loading chart...
             </div>
           )}
 
-          {hasError && (
-            <div className="flex h-full items-center justify-center text-xs text-gray-400">
+          {status === 'error' && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
               Chart unavailable
             </div>
           )}

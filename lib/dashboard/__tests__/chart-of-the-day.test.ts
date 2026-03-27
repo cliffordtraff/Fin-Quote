@@ -7,13 +7,13 @@ import {
   DASHBOARD_CHART_OF_THE_DAY_TEMPLATE_ID,
   resolveDashboardChartOfTheDay,
 } from '@/lib/dashboard/chart-of-the-day'
+import { decodeChartSpec } from '@/lib/chart-export'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 
 describe('resolveDashboardChartOfTheDay', () => {
-  it('uses the newsletter editorial template and charting export pipeline', () => {
+  it('uses the newsletter editorial template and local export pipeline', () => {
     const result = resolveDashboardChartOfTheDay({
-      chartBaseUrl: 'https://charts.theintraday.com',
-      theme: 'dark',
+      baseUrl: 'https://theintraday.com',
     })
 
     expect(result.label).toBe('Chart of the Day')
@@ -30,21 +30,17 @@ describe('resolveDashboardChartOfTheDay', () => {
     expect(result.spec.title).toBe('AAPL Revenue vs Net Income')
     expect(result.spec.title).not.toMatch(/\(\s*(?:19|20)\d{2}\s*[–-]\s*(?:19|20)\d{2}\s*\)$/u)
 
-    expect(result.captureSpec).toMatchObject({
-      theme: 'dark',
-      width: DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH,
-      height: DASHBOARD_CHART_OF_THE_DAY_RENDER_HEIGHT,
-    })
+    expect(DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH).toBe(1200)
+    expect(DASHBOARD_CHART_OF_THE_DAY_RENDER_HEIGHT).toBe(760)
 
-    expect(result.fundState).toMatchObject({
-      visibleMetrics: ['revenue', 'netIncome'],
-      chartTitleCustomized: true,
-      chartTitleText: 'AAPL Revenue vs Net Income',
-    })
+    const exportUrl = new URL(result.exportUrl)
+    expect(exportUrl.pathname).toBe('/charts/export')
 
-    const interactiveUrl = new URL(result.interactiveUrl)
-    expect(interactiveUrl.pathname).toBe('/tos/AAPL')
-    expect(interactiveUrl.searchParams.get('view')).toBe('fundamentals')
-    expect(interactiveUrl.searchParams.get('theme')).toBe('dark')
+    const decodedSpec = decodeChartSpec(exportUrl.searchParams.get('spec') || '')
+    expect(decodedSpec).toMatchObject({
+      stocks: [DASHBOARD_CHART_OF_THE_DAY_SYMBOL],
+      metrics: ['revenue', 'net_income'],
+      title: 'AAPL Revenue vs Net Income',
+    })
   })
 })

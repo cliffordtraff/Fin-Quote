@@ -15,9 +15,14 @@ type WorkspaceMode = 'price' | 'fundamentals' | 'overview'
 type ThemeMode = 'light' | 'dark'
 type NativeSearchMessageType = 'OPEN_TICKER_SEARCH' | 'SET_TICKER_SEARCH_QUERY'
 type EmbedSurfaceMode = 'default' | 'search-only'
+type WorkspaceLoadError = {
+  title: string
+  detail: string
+}
 
 const DEFAULT_SYMBOL = 'AAPL'
 const PM_VERSION = 1
+const READY_TIMEOUT_MS = 12000
 
 function getWorkspaceMode(pathname: string | null): WorkspaceMode | null {
   if (!pathname) return null
@@ -48,6 +53,36 @@ function getOrigin(url: string): string | null {
     return new URL(url).origin
   } catch {
     return null
+  }
+}
+
+function isLocalDevChartingUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url)
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0'
+  } catch {
+    return false
+  }
+}
+
+function buildWorkspaceLoadError(chartingUrl: string, reason: 'timeout' | 'load'): WorkspaceLoadError {
+  if (reason === 'load') {
+    return {
+      title: 'Workspace failed to load.',
+      detail: `The browser could not load the charting app at ${chartingUrl}.`,
+    }
+  }
+
+  if (isLocalDevChartingUrl(chartingUrl)) {
+    return {
+      title: 'Workspace app is unavailable.',
+      detail: `Nothing responded at ${chartingUrl}. Start the charting app there or change NEXT_PUBLIC_CHARTING_URL to a running deployment.`,
+    }
+  }
+
+  return {
+    title: 'Workspace failed to initialize.',
+    detail: `The embedded charting app at ${chartingUrl} never sent the READY handshake. Verify embed mode and the postMessage integration on the charting app side.`,
   }
 }
 
@@ -93,6 +128,7 @@ export default function WorkspaceIframe() {
   const forceResyncRef = useRef(false)
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [loadError, setLoadError] = useState<WorkspaceLoadError | null>(null)
   const [navOffset, setNavOffset] = useState(0)
   const [searchOverlayActive, setSearchOverlayActive] = useState(false)
 
@@ -157,6 +193,23 @@ export default function WorkspaceIframe() {
   }, [iframeSrc])
 
   useEffect(() => {
+    if (isReady) {
+      setLoadError(null)
+      return
+    }
+
+    if (!iframeSrc || !chartingUrl) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLoadError(buildWorkspaceLoadError(chartingUrl, 'timeout'))
+    }, READY_TIMEOUT_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [chartingUrl, iframeSrc, isReady])
+
+  useEffect(() => {
     if (!chartingUrl) return
 
     const handleOpenSearch = (event: Event) => {
@@ -179,6 +232,7 @@ export default function WorkspaceIframe() {
           theme: requestedTheme,
         }
         setIsReady(false)
+        setLoadError(null)
         setIframeSrc(nextSrc)
       }
     }
@@ -219,6 +273,7 @@ export default function WorkspaceIframe() {
 
       if (message.type === 'READY') {
         setIsReady(true)
+        setLoadError(null)
         return
       }
 
@@ -253,6 +308,7 @@ export default function WorkspaceIframe() {
         theme: requestedTheme,
       }
       setIsReady(false)
+      setLoadError(null)
       setIframeSrc(desiredSrc)
       return
     }
@@ -264,6 +320,7 @@ export default function WorkspaceIframe() {
         theme: requestedTheme,
       }
       setIsReady(false)
+      setLoadError(null)
       setIframeSrc(desiredSrc)
     }
   }, [desiredSrc, iframeSrc, isReady, isWorkspaceRoute, requestedTheme, routeSymbol, workspaceMode])
@@ -353,6 +410,32 @@ export default function WorkspaceIframe() {
     return null
   }
 
+  const loadingOverlay = !isReady && !loadError ? (
+    <div
+      data-testid="workspace-iframe-loading"
+      className="absolute inset-0 flex items-center justify-center bg-cream-100 dark:bg-gray-900"
+    >
+      <div className="flex items-center gap-3 rounded-xl border border-sage-500/20 bg-white/80 px-4 py-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-200">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-sage-500 border-t-transparent" />
+        Loading workspace...
+      </div>
+    </div>
+  ) : null
+
+  const errorOverlay = loadError ? (
+    <div
+      data-testid="workspace-iframe-load-error"
+      className="absolute inset-0 flex items-center justify-center bg-cream-100 px-6 dark:bg-gray-900"
+    >
+      <div className="max-w-lg rounded-2xl border border-red-200 bg-white/95 p-5 text-sm shadow-lg dark:border-red-900/50 dark:bg-gray-800/95">
+        <p className="font-semibold text-gray-900 dark:text-gray-100">{loadError.title}</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-300">{loadError.detail}</p>
+      </div>
+    </div>
+  ) : null
+
+  const iframeOpacity = isReady ? 1 : 0
+
   return (
     <div
       data-testid="workspace-iframe-shell"
@@ -408,24 +491,20 @@ export default function WorkspaceIframe() {
                     src={iframeSrc}
                     className="h-full w-full border-0 bg-transparent"
                     allow="clipboard-write"
-                    style={{ opacity: isReady ? 1 : 0, transition: 'opacity 150ms ease' }}
+                    onError={() => {
+                      setLoadError(buildWorkspaceLoadError(chartingUrl, 'load'))
+                    }}
+                    style={{ opacity: iframeOpacity, transition: 'opacity 150ms ease' }}
                   />
                 </div>
               ) : null}
+              {loadingOverlay}
+              {errorOverlay}
             </>
           ) : (
             <>
-              {!isReady && (
-                <div
-                  data-testid="workspace-iframe-loading"
-                  className="absolute inset-0 flex items-center justify-center bg-cream-100 dark:bg-gray-900"
-                >
-                  <div className="flex items-center gap-3 rounded-xl border border-sage-500/20 bg-white/80 px-4 py-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-200">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-sage-500 border-t-transparent" />
-                    Loading workspace...
-                  </div>
-                </div>
-              )}
+              {loadingOverlay}
+              {errorOverlay}
               {iframeSrc ? (
                 <iframe
                   ref={iframeRef}
@@ -433,7 +512,10 @@ export default function WorkspaceIframe() {
                   src={iframeSrc}
                   className="h-full w-full border-0 bg-cream-100 dark:bg-gray-900"
                   allow="clipboard-write"
-                  style={{ opacity: isReady ? 1 : 0, transition: 'opacity 150ms ease' }}
+                  onError={() => {
+                    setLoadError(buildWorkspaceLoadError(chartingUrl, 'load'))
+                  }}
+                  style={{ opacity: iframeOpacity, transition: 'opacity 150ms ease' }}
                 />
               ) : null}
             </>

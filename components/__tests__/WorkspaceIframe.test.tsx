@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
 import { NATIVE_TICKER_SEARCH_OPEN_EVENT } from '@/lib/native-ticker-search'
 
@@ -20,6 +20,10 @@ vi.mock('@/components/ThemeProvider', () => ({
 }))
 
 describe('WorkspaceIframe', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     mockUsePathname.mockReturnValue('/workspace/fundamentals')
     mockUseSearchParams.mockReturnValue(new URLSearchParams('symbol=nvda'))
@@ -161,5 +165,24 @@ describe('WorkspaceIframe', () => {
       expect(pushMock).toHaveBeenCalledWith('/stock/TSLA')
       expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ display: 'none' })
     })
+  })
+
+  it('shows an actionable error when the local charting app never becomes ready', () => {
+    vi.useFakeTimers()
+    process.env.NEXT_PUBLIC_CHARTING_URL = 'http://localhost:3001'
+
+    render(<WorkspaceIframe />)
+
+    expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
+      'src',
+      'http://localhost:3001/tos/NVDA?embed=true&view=fundamentals&theme=dark'
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(12000)
+    })
+
+    expect(screen.getByTestId('workspace-iframe-load-error')).toHaveTextContent('Workspace app is unavailable.')
+    expect(screen.getByTestId('workspace-iframe-load-error')).toHaveTextContent('Nothing responded at http://localhost:3001.')
   })
 })
