@@ -136,7 +136,7 @@ function buildAutoChartTitle(data: MetricData[]): string | undefined {
     : `Financial Metrics${yearRange}`
 }
 
-export function ChartsPageContent({
+function ChartsPageContent({
   chartOfDayEditor = false,
   initialSpec = null,
 }: ChartsPageContentProps) {

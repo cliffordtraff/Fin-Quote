@@ -1,4 +1,4 @@
-import { ChartsPageContent } from '@/app/charts/page'
+import AdminChartOfTheDayEditor from '@/components/AdminChartOfTheDayEditor'
 import { getDashboardChartOfTheDaySetting } from '@/lib/dashboard/chart-of-the-day-settings'
 
 export const dynamic = 'force-dynamic'
@@ -6,10 +6,5 @@ export const dynamic = 'force-dynamic'
 export default async function AdminChartOfTheDayPage() {
   const setting = await getDashboardChartOfTheDaySetting()
 
-  return (
-    <ChartsPageContent
-      chartOfDayEditor
-      initialSpec={setting.chartSpec}
-    />
-  )
+  return <AdminChartOfTheDayEditor initialSpec={setting.chartSpec} />
 }

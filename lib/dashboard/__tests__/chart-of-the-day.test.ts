@@ -8,11 +8,14 @@ import {
   DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH,
   DASHBOARD_CHART_OF_THE_DAY_SYMBOL,
   DASHBOARD_CHART_OF_THE_DAY_TEMPLATE_ID,
+  parseDashboardChartOfTheDayEditorSpecFromUrl,
+  resolveDashboardChartOfTheDayEditorPath,
   resolveDashboardChartOfTheDay,
   resolveDashboardChartOfTheDayEmbedSpec,
   resolveDashboardChartOfTheDayIframeUrls,
 } from '@/lib/dashboard/chart-of-the-day'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
+import type { ChartExportSpec } from '@/types/chart-export'
 
 function decodeBase64UrlJson<T>(value: string): T {
   const padded = value.replace(/-/g, '+').replace(/_/g, '/')
@@ -100,6 +103,54 @@ describe('resolveDashboardChartOfTheDay', () => {
     expect(darkFundState.sliderOnlyMode).toBe(true)
     expect(darkFundState.showTooltip).toBe(false)
     expect(darkFundState.hoverFocusEnabled).toBe(false)
+  })
+
+  it('builds a fundamentals editor path with interactive editing enabled', () => {
+    const spec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: ['revenue', 'net_income'],
+      periodType: 'annual',
+      chartType: 'bar',
+    }
+
+    const result = resolveDashboardChartOfTheDayEditorPath(spec, 'dark')
+    const editorUrl = new URL(result, 'https://app.theintraday.com')
+    const editorFundState = decodeBase64UrlJson<Record<string, unknown>>(
+      editorUrl.searchParams.get('fundState') || '',
+    )
+
+    expect(editorUrl.pathname).toBe('/tos/AAPL')
+    expect(editorUrl.searchParams.get('view')).toBe('fundamentals')
+    expect(editorUrl.searchParams.get('theme')).toBe('dark')
+    expect(editorFundState.sliderOnlyMode).toBe(false)
+    expect(editorFundState.showTooltip).toBe(true)
+    expect(editorFundState.hoverFocusEnabled).toBe(true)
+  })
+
+  it('can recover a dashboard chart spec from the fundamentals editor url', () => {
+    const spec: ChartExportSpec = {
+      stocks: ['NVDA', 'AMD', 'QCOM'],
+      metrics: ['debt_to_equity_ratio', 'rd_pct_revenue'],
+      periodType: 'quarterly',
+      minYear: 2018,
+      maxYear: 2024,
+      showStockPrice: true,
+      chartType: 'line',
+      showLabels: false,
+      stacked: false,
+      indexToZero: true,
+      title: 'NVDA Capital Discipline vs R&D Mix',
+      subtitle: 'Quarterly comparison',
+      colors: {
+        debt_to_equity_ratio: '#223344',
+        rd_pct_revenue: '#556677',
+      },
+    }
+
+    const editorPath = resolveDashboardChartOfTheDayEditorPath(spec, 'light')
+    const parsedSpec = parseDashboardChartOfTheDayEditorSpecFromUrl(editorPath, spec)
+
+    expect(parsedSpec).toEqual(spec)
   })
 
   it('exposes a serializable fundamentals spec for client-sized embeds', () => {

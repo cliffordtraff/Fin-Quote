@@ -1,4 +1,5 @@
 import Navigation from '@/components/Navigation'
+import DashboardFooter from '@/components/DashboardFooter'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
@@ -14,12 +15,13 @@ export default async function Dashboard() {
   return (
     <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
       <Navigation />
-      <main className="py-4">
+      <main className="flex-1 py-4">
         <MarketDashboardSunday
           initialData={initialData}
           chartOfDaySpec={chartOfDaySpec}
         />
       </main>
+      <DashboardFooter />
     </div>
   )
 }
