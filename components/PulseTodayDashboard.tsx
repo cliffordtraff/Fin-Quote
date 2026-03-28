@@ -329,7 +329,6 @@ interface PulseSessionLevels {
 
 function getSessionLabelPrefix(session: IntradaySession): string {
   if (session === 'premarket') return 'Premarket '
-  if (session === 'afterhours') return 'After Hours '
   return ''
 }
 
@@ -357,23 +356,18 @@ function getExtremesForSession(
   }
 }
 
-function areLevelsEquivalent(a: number | null, b: number | null): boolean {
-  if (a === null || b === null) return false
-  const tolerance = Math.max(0.0001, Math.max(Math.abs(a), Math.abs(b)) * 0.0005)
-  return Math.abs(a - b) <= tolerance
-}
-
 export function buildPulseSessionLevels(
   candles: Array<{ date: string; high: number; low: number }>,
 ): PulseSessionLevels {
   const activeSession = getSessionWindowForCandles(candles).session
-  const activeExtremes = getExtremesForSession(candles, activeSession)
+  const primarySession = activeSession === 'afterhours' ? 'cash' : activeSession
+  const activeExtremes = getExtremesForSession(candles, primarySession)
   const lines: PulseLevelLine[] = []
-  const activePrefix = getSessionLabelPrefix(activeSession)
+  const activePrefix = getSessionLabelPrefix(primarySession)
 
   const primaryHigh = activeExtremes.dayHigh !== null
     ? {
-        id: `${activeSession}-high`,
+        id: `${primarySession}-high`,
         value: activeExtremes.dayHigh,
         label: `${activePrefix}HOD`,
         tone: 'high' as const,
@@ -383,7 +377,7 @@ export function buildPulseSessionLevels(
 
   const primaryLow = activeExtremes.dayLow !== null
     ? {
-        id: `${activeSession}-low`,
+        id: `${primarySession}-low`,
         value: activeExtremes.dayLow,
         label: `${activePrefix}LOD`,
         tone: 'low' as const,
@@ -393,30 +387,6 @@ export function buildPulseSessionLevels(
 
   if (primaryHigh) lines.push(primaryHigh)
   if (primaryLow) lines.push(primaryLow)
-
-  if (activeSession !== 'premarket') {
-    const premarketExtremes = getExtremesForSession(candles, 'premarket')
-
-    if (premarketExtremes.dayHigh !== null && !areLevelsEquivalent(premarketExtremes.dayHigh, primaryHigh?.value ?? null)) {
-      lines.push({
-        id: 'premarket-high',
-        value: premarketExtremes.dayHigh,
-        label: 'Premarket HOD',
-        tone: 'high',
-        emphasis: 'secondary',
-      })
-    }
-
-    if (premarketExtremes.dayLow !== null && !areLevelsEquivalent(premarketExtremes.dayLow, primaryLow?.value ?? null)) {
-      lines.push({
-        id: 'premarket-low',
-        value: premarketExtremes.dayLow,
-        label: 'Premarket LOD',
-        tone: 'low',
-        emphasis: 'secondary',
-      })
-    }
-  }
 
   return { activeSession, lines, primaryHigh, primaryLow }
 }
@@ -808,7 +778,7 @@ export function FullDayCanvas({
       }
     }
 
-    // --- Session key levels (HOD/LOD + Premarket carryover levels) ---
+    // --- Session key levels (HOD/LOD + optional after-hours premarket carryover levels) ---
     const highLevelLines = resolvedLevelLines
       .filter((line) => line.tone === 'high')
       .sort((a, b) => b.value - a.value)

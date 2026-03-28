@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
+import WorkspaceFooter from '@/components/WorkspaceFooter'
 import { TimezoneProvider } from '@/lib/timezone-context'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -69,6 +70,9 @@ export default function RootLayout({
             {children}
             <Suspense fallback={null}>
               <WorkspaceIframe />
+            </Suspense>
+            <Suspense fallback={null}>
+              <WorkspaceFooter />
             </Suspense>
           </TimezoneProvider>
         </ThemeProvider>

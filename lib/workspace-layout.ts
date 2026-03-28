@@ -1,0 +1,1 @@
+export const WORKSPACE_FOOTER_HEIGHT_PX = 64

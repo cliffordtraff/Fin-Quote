@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
+import { WORKSPACE_FOOTER_HEIGHT_PX } from '@/lib/workspace-layout'
 import { NATIVE_TICKER_SEARCH_OPEN_EVENT } from '@/lib/native-ticker-search'
 
 const mockUsePathname = vi.fn()
@@ -71,6 +72,7 @@ describe('WorkspaceIframe', () => {
         'https://charts.theintraday.com/tos/NVDA?embed=true&view=fundamentals&theme=dark'
       )
     })
+    expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ bottom: `${WORKSPACE_FOOTER_HEIGHT_PX}px` })
 
     mockUsePathname.mockReturnValue('/dashboard')
     mockUseSearchParams.mockReturnValue(new URLSearchParams())
@@ -92,6 +94,7 @@ describe('WorkspaceIframe', () => {
         'https://charts.theintraday.com/tos/TSLA?embed=true&view=price&theme=dark'
       )
     })
+    expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ bottom: '0px' })
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {

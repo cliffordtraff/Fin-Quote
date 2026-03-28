@@ -47,18 +47,30 @@ export default function StockPriceHeader({
     return () => clearInterval(interval)
   }, [symbol])
 
+  const normalizedCompanyName = companyName.trim()
+  const normalizedSector = sector.trim()
+  const title = normalizedCompanyName && normalizedCompanyName.toUpperCase() !== symbol
+    ? normalizedCompanyName
+    : symbol
+  const subtitleParts = [
+    title === symbol ? null : symbol,
+    normalizedSector && normalizedSector.toUpperCase() !== 'N/A' ? normalizedSector : null,
+  ].filter(Boolean) as string[]
+
   return (
     <section className="sticky top-0 z-30 h-16 bg-cream-100/90 dark:bg-gray-900/90 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl h-full px-4 sm:px-6 lg:px-8 flex items-center">
+      <div className="mx-auto max-w-[1600px] h-full px-6 sm:px-12 lg:px-20 flex items-center">
         <div className="flex items-center justify-between w-full">
           {/* Company Info */}
           <div className="flex items-end gap-3">
             <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-none">
-              {companyName}
+              {title}
             </h1>
-            <span className="text-sm text-gray-500 dark:text-gray-400 leading-none">
-              {symbol} · {sector}
-            </span>
+            {subtitleParts.length > 0 && (
+              <span className="text-sm text-gray-500 dark:text-gray-400 leading-none">
+                {subtitleParts.join(' · ')}
+              </span>
+            )}
           </div>
 
           {/* Price Display */}

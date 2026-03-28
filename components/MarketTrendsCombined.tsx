@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useState, useEffect } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import type { LoserData } from '@/app/actions/losers'
 import type { AllSessionMoversResult } from '@/app/actions/market-movers'
 import type { MarketSession } from '@/lib/market-hours'
@@ -8,6 +8,12 @@ import { LOADING_STEPS, LOADING_MESSAGES } from '@/lib/loading-steps'
 import { useTheme } from '@/components/ThemeProvider'
 import { useTimezone } from '@/lib/timezone-context'
 import { getSessionTimeRange } from '@/lib/timezone-utils'
+import {
+  DASHBOARD_CHART_OF_THE_DAY_IFRAME_HEIGHT,
+  DASHBOARD_CHART_OF_THE_DAY_IFRAME_WIDTH,
+} from '@/lib/dashboard/chart-of-the-day-spec'
+import type { NewsletterChartSpec } from '@/lib/newsletter/types'
+import { resolveChartingPlatformDashboardFundamentalsSurfacePath } from '@/lib/newsletter/charting-platform-export'
 
 type SessionType = 'premarket' | 'cash' | 'afterhours'
 
@@ -15,12 +21,8 @@ interface MarketTrendsCombinedProps {
   gainers: AllSessionMoversResult
   losers: AllSessionMoversResult
   sp500Losers?: LoserData[]
-  marketSummary?: string
-  marketSummaryLoading?: boolean
-  onRefreshSummary?: () => void
-  summaryLastUpdated?: Date | null
+  chartOfDaySpec: NewsletterChartSpec
 }
-
 
 interface StockData {
   symbol: string
@@ -311,56 +313,92 @@ function LoadingSteps({ loading }: { loading: boolean }) {
   )
 }
 
-function ChartOfTheDay() {
+function ChartOfTheDay({
+  chartOfDaySpec,
+}: {
+  chartOfDaySpec: NewsletterChartSpec
+}) {
   const { theme } = useTheme()
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const imageSrc = `/api/dashboard/chart-of-the-day?theme=${theme === 'dark' ? 'dark' : 'light'}`
-  const outerCardClasses =
+  const [status, setStatus] = useState<'loading' | 'ready'>('loading')
+  const [frameNode, setFrameNode] = useState<HTMLDivElement | null>(null)
+  const [frameSize, setFrameSize] = useState({
+    width: DASHBOARD_CHART_OF_THE_DAY_IFRAME_WIDTH,
+    height: DASHBOARD_CHART_OF_THE_DAY_IFRAME_HEIGHT,
+  })
+  const panelClasses =
     theme === 'dark'
-      ? 'border-slate-700 bg-slate-800'
+      ? 'border-[#334155] bg-[#1f2937]'
       : 'border-cream-300 bg-white'
   const headerClasses =
     theme === 'dark'
-      ? 'border-slate-700 bg-slate-800'
+      ? 'border-[#334155] bg-[#1f2937]'
       : 'border-cream-300 bg-cream-50'
   const frameClasses =
     theme === 'dark'
-      ? 'border-slate-700 bg-slate-800'
+      ? 'border-0 bg-[#1f2937]'
       : 'border-cream-200 bg-white'
+  const iframeSrc = useMemo(
+    () =>
+      resolveChartingPlatformDashboardFundamentalsSurfacePath(chartOfDaySpec, {
+        width: Math.max(320, Math.round(frameSize.width)),
+        height: Math.max(280, Math.round(frameSize.height)),
+        theme: theme === 'dark' ? 'dark' : 'light',
+      }),
+    [chartOfDaySpec, frameSize.height, frameSize.width, theme],
+  )
 
   useEffect(() => {
     setStatus('loading')
-  }, [imageSrc])
+  }, [iframeSrc])
+
+  useEffect(() => {
+    if (!frameNode || typeof ResizeObserver === 'undefined') return
+
+    const updateFrameSize = () => {
+      const nextWidth = Math.max(320, frameNode.clientWidth)
+      const nextHeight = Math.max(280, frameNode.clientHeight)
+      setFrameSize((current) =>
+        current.width === nextWidth && current.height === nextHeight
+          ? current
+          : { width: nextWidth, height: nextHeight },
+      )
+    }
+
+    updateFrameSize()
+
+    const observer = new ResizeObserver(() => {
+      updateFrameSize()
+    })
+
+    observer.observe(frameNode)
+    return () => observer.disconnect()
+  }, [frameNode])
 
   return (
-    <div className={`flex-[2] rounded-lg border overflow-hidden flex flex-col ${outerCardClasses}`}>
+    <div className={`flex-[2] min-h-[620px] rounded-lg border overflow-hidden flex flex-col ${panelClasses}`}>
       <div className={`px-2 py-1.5 border-b ${headerClasses}`}>
         <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Chart of the Day</h2>
       </div>
-      <div className="flex-1 p-1" style={{ minHeight: 580 }}>
-        <div className={`relative flex h-full min-h-[560px] items-center justify-center overflow-hidden rounded-md border ${frameClasses}`}>
-          <img
-            key={imageSrc}
-            src={imageSrc}
-            alt="Chart of the day"
-            className={`h-full w-full object-contain transition-opacity duration-150 ${
+      <div className="flex-1 min-h-0">
+        <div
+          ref={setFrameNode}
+          className={`relative h-full min-h-[580px] overflow-hidden ${frameClasses}`}
+        >
+          <iframe
+            key={iframeSrc}
+            src={iframeSrc}
+            title="Chart of the day"
+            className={`absolute inset-0 h-full w-full border-0 transition-opacity duration-150 ${
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             }`}
-            style={{ background: theme === 'dark' ? '#1e293b' : '#ffffff' }}
             loading="eager"
             onLoad={() => setStatus('ready')}
-            onError={() => setStatus('error')}
+            style={{ pointerEvents: 'none' }}
           />
 
           {status === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
               Loading chart...
-            </div>
-          )}
-
-          {status === 'error' && (
-            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
-              Chart unavailable
             </div>
           )}
         </div>
@@ -408,10 +446,7 @@ export default function MarketTrendsCombined({
   gainers,
   losers,
   sp500Losers,
-  marketSummary,
-  marketSummaryLoading,
-  onRefreshSummary,
-  summaryLastUpdated,
+  chartOfDaySpec,
 }: MarketTrendsCombinedProps) {
   const maxRows = 12
   const { timezone } = useTimezone()
@@ -432,7 +467,7 @@ export default function MarketTrendsCombined({
 
   return (
     <div className="flex gap-4 w-full">
-      <ChartOfTheDay />
+      <ChartOfTheDay chartOfDaySpec={chartOfDaySpec} />
       <div className="w-[220px] shrink-0 rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="px-2 py-1.5 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800 flex justify-between items-center">
           <h2 className="text-[13px] font-semibold text-gray-700 dark:text-gray-300">Gainers</h2>
@@ -527,12 +562,6 @@ export default function MarketTrendsCombined({
         </table>
       </div>
 
-      <MarketSummaryCard
-        summary={marketSummary}
-        loading={marketSummaryLoading}
-        onRefresh={onRefreshSummary}
-        lastUpdated={summaryLastUpdated}
-      />
     </div>
   )
 }

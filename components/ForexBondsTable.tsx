@@ -1,9 +1,14 @@
 'use client'
 
-import type { ForexBondDataWithYTD } from '@/app/actions/forex-bonds'
+import type { CSSProperties } from 'react'
+import type { ForexBondData } from '@/app/actions/forex-bonds'
 
 interface ForexBondsTableProps {
-  data: ForexBondDataWithYTD[]
+  data: ForexBondData[]
+}
+
+const tableGridStyle: CSSProperties = {
+  gridTemplateColumns: 'minmax(0, 1.5fr) minmax(72px, 0.9fr) minmax(72px, 0.9fr) minmax(82px, 0.95fr)',
 }
 
 export default function ForexBondsTable({ data }: ForexBondsTableProps) {
@@ -11,18 +16,13 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
     return null
   }
 
-  const hasYTDData = data.some(item => item.ytdChangePercent !== undefined)
-
   const formatPrice = (price: number, symbol: string) => {
-    // Treasury yields are already in percentage form
     if (symbol.startsWith('^')) {
-      return price.toFixed(3)
+      return price.toFixed(3).replace(/\.?0+$/, '')
     }
-    // BTC needs more decimal places shown differently
-    if (symbol === 'BTCUSD') {
+    if (symbol === 'USDJPY') {
       return price.toFixed(2)
     }
-    // Forex pairs typically show 4 decimal places
     return price.toFixed(4)
   }
 
@@ -34,9 +34,9 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
   const formatChange = (change: number, symbol: string) => {
     const sign = change >= 0 ? '+' : ''
     if (symbol.startsWith('^')) {
-      return `${sign}${change.toFixed(3)}`
+      return `${sign}${change.toFixed(3).replace(/\.?0+$/, '')}`
     }
-    if (symbol === 'BTCUSD') {
+    if (symbol === 'USDJPY') {
       return `${sign}${change.toFixed(2)}`
     }
     return `${sign}${change.toFixed(4)}`
@@ -44,50 +44,41 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
 
   return (
     <div className="w-full">
-      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
-        {/* Header */}
-        <div className={`grid ${hasYTDData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-1 bg-cream-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 text-xs font-semibold whitespace-nowrap`}>
+      <div className="overflow-hidden rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div
+          className="grid gap-3 px-4 py-1.5 bg-cream-50 dark:bg-gray-800/50 text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap"
+          style={tableGridStyle}
+        >
           <div>Forex & Bonds</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
           <div className="text-right">Change %</div>
-          {hasYTDData && <div className="text-right">YTD</div>}
         </div>
 
-        {/* Rows */}
         <div className="divide-y divide-cream-200 dark:divide-gray-700">
           {data.map((item) => {
-            const isPositive = item.changesPercentage >= 0
-            const colorClass = isPositive
-              ? 'text-green-500'
-              : 'text-red-500'
-
-            const ytdIsPositive = (item.ytdChangePercent ?? 0) >= 0
+            const colorClass = item.change >= 0
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
 
             return (
               <div
                 key={item.symbol}
-                className={`grid ${hasYTDData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-1 hover:bg-gray-750 transition-colors whitespace-nowrap`}
+                className="grid gap-3 items-center px-4 py-2 hover:bg-cream-50 dark:hover:bg-gray-800/50 transition-colors whitespace-nowrap"
+                style={tableGridStyle}
               >
-                <div className="text-sage-600 dark:text-sage-400 font-medium text-xs">{item.name}</div>
-                <div className={`text-right ${colorClass} text-xs`}>
+                <div className="min-w-0 truncate text-xs font-medium text-sage-600 dark:text-sage-400">
+                  {item.name}
+                </div>
+                <div className={`text-right text-xs tabular-nums ${colorClass}`}>
                   {formatPrice(item.price, item.symbol)}
                 </div>
-                <div className={`text-right ${colorClass} text-xs`}>
+                <div className={`text-right text-xs tabular-nums ${colorClass}`}>
                   {formatChange(item.change, item.symbol)}
                 </div>
-                <div className={`text-right ${colorClass} text-xs`}>
+                <div className={`text-right text-xs tabular-nums ${colorClass}`}>
                   {formatPercentage(item.changesPercentage)}
                 </div>
-                {hasYTDData && (
-                  <div className={`text-right text-xs ${ytdIsPositive ? 'text-green-500' : 'text-red-500'}`}>
-                    {item.ytdChangePercent !== undefined ? (
-                      formatPercentage(item.ytdChangePercent)
-                    ) : (
-                      <span className="text-gray-500">—</span>
-                    )}
-                  </div>
-                )}
               </div>
             )
           })}

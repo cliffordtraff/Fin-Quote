@@ -266,16 +266,6 @@ export default function FinancialsModal({ isOpen, onClose }: FinancialsModalProp
                     formatFn={formatPercent}
                   />
                   <CalculatedRow
-                    label="ROE (%)"
-                    calculator={(year) => calculateMargin(getValue(year, 'net_income'), getValue(year, 'shareholders_equity'))}
-                    formatFn={formatPercent}
-                  />
-                  <CalculatedRow
-                    label="ROA (%)"
-                    calculator={(year) => calculateMargin(getValue(year, 'net_income'), getValue(year, 'total_assets'))}
-                    formatFn={formatPercent}
-                  />
-                  <CalculatedRow
                     label="Debt to Equity"
                     calculator={(year) => {
                       const liabilities = getValue(year, 'total_liabilities')

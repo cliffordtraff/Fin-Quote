@@ -11,24 +11,9 @@ import { computeKDE, splitDistributionPath, getAxisRange } from '@/lib/distribut
 // Chart dimensions
 const CHART_WIDTH = 1000
 const CHART_HEIGHT = 500
-const MARGIN = { top: 60, right: 40, bottom: 60, left: 40 }
+const MARGIN = { top: 36, right: 40, bottom: 60, left: 40 }
 const INNER_WIDTH = CHART_WIDTH - MARGIN.left - MARGIN.right
 const INNER_HEIGHT = CHART_HEIGHT - MARGIN.top - MARGIN.bottom
-
-// Histogram chart dimensions
-const HIST_CHART_HEIGHT = 300
-const HIST_MARGIN = { top: 40, right: 40, bottom: 60, left: 60 }
-const HIST_INNER_WIDTH = CHART_WIDTH - HIST_MARGIN.left - HIST_MARGIN.right
-const HIST_INNER_HEIGHT = HIST_CHART_HEIGHT - HIST_MARGIN.top - HIST_MARGIN.bottom
-const NUM_BINS = 40 // Number of histogram bins
-
-interface TooltipData {
-  x: number
-  y: number
-  count: number
-  rangeStart: number
-  rangeEnd: number
-}
 
 interface KDETooltipData {
   x: number
@@ -387,7 +372,6 @@ export default function ConceptChartPage() {
     const interval = setInterval(() => setMarketSession(getMarketSession()), 30000)
     return () => clearInterval(interval)
   }, [])
-  const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const [kdeTooltip, setKdeTooltip] = useState<KDETooltipData | null>(null)
   const [stockTooltip, setStockTooltip] = useState<StockTooltipData | null>(null)
 
@@ -732,66 +716,6 @@ export default function ConceptChartPage() {
     return 'Cash-session return distribution for SPX individual constituents'
   }, [distributionData, distributionSnapshotSource])
 
-  // Compute histogram bins
-  const histogramBins = useMemo(() => {
-    if (!distributionData) return []
-
-    const returns = distributionData.returns.map(r => r.returnPct)
-    const binWidth = (axisRange.max - axisRange.min) / NUM_BINS
-    const bins: { x: number; count: number }[] = []
-
-    // Initialize bins
-    for (let i = 0; i < NUM_BINS; i++) {
-      const binStart = axisRange.min + i * binWidth
-      bins.push({ x: binStart + binWidth / 2, count: 0 })
-    }
-
-    // Count returns in each bin
-    for (const ret of returns) {
-      const binIndex = Math.floor((ret - axisRange.min) / binWidth)
-      // Clamp to valid bin range
-      const clampedIndex = Math.max(0, Math.min(NUM_BINS - 1, binIndex))
-      bins[clampedIndex].count++
-    }
-
-    return bins
-  }, [distributionData, axisRange])
-
-  // Histogram scale functions
-  const histXScale = (x: number) => {
-    return HIST_MARGIN.left + ((x - axisRange.min) / (axisRange.max - axisRange.min)) * HIST_INNER_WIDTH
-  }
-
-  const histYScale = useMemo(() => {
-    if (histogramBins.length === 0) return () => HIST_MARGIN.top + HIST_INNER_HEIGHT
-    const maxCount = Math.max(...histogramBins.map(b => b.count))
-    return (count: number) => {
-      return HIST_MARGIN.top + HIST_INNER_HEIGHT - (count / maxCount) * HIST_INNER_HEIGHT * 0.9
-    }
-  }, [histogramBins])
-
-  const histBaselineY = HIST_MARGIN.top + HIST_INNER_HEIGHT
-  const binWidthPct = (axisRange.max - axisRange.min) / NUM_BINS
-  const barWidth = (HIST_INNER_WIDTH / NUM_BINS) - 2 // 2px gap between bars
-
-  // Handle bar hover
-  const handleBarHover = (event: React.MouseEvent<SVGRectElement>, bin: { x: number; count: number }, index: number) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const rangeStart = axisRange.min + index * binWidthPct
-    const rangeEnd = rangeStart + binWidthPct
-    setTooltip({
-      x: rect.left + rect.width / 2,
-      y: rect.top,
-      count: bin.count,
-      rangeStart,
-      rangeEnd,
-    })
-  }
-
-  const handleBarLeave = () => {
-    setTooltip(null)
-  }
-
   // Compute KDE slice bins (for hover interaction)
   const kdeSliceBins = useMemo(() => {
     if (!distributionData) return []
@@ -849,23 +773,6 @@ export default function ConceptChartPage() {
 
   return (
     <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
-      {/* Histogram Tooltip */}
-      {tooltip && (
-        <div
-          className="fixed z-50 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg shadow-lg text-sm pointer-events-none"
-          style={{
-            left: tooltip.x,
-            top: tooltip.y - 10,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <div className="text-white font-medium">{tooltip.count} stocks</div>
-          <div className="text-gray-400 text-xs">
-            {tooltip.rangeStart.toFixed(2)}% to {tooltip.rangeEnd.toFixed(2)}%
-          </div>
-        </div>
-      )}
-
       {/* KDE Tooltip */}
       {kdeTooltip && (
         <div
@@ -960,7 +867,7 @@ export default function ConceptChartPage() {
           </div>
 
           {/* Card Body */}
-          <div className="p-4">
+          <div className="px-4 pb-4 pt-2">
             {loading ? (
               <div className="h-[500px] flex items-center justify-center">
                 <div className="text-gray-400">Loading S&P 500 data...</div>
@@ -1166,205 +1073,6 @@ export default function ConceptChartPage() {
                     </g>
                   )
                 })}
-              </svg>
-
-              {/* Histogram Chart */}
-              <div className="flex items-start justify-between mt-8 mb-4">
-                <h2 className="text-xl font-bold text-white">
-                  Histogram View (Raw Bins)
-                </h2>
-                {distributionData && (
-                  <div className="flex items-start gap-6">
-                    {/* Summary Stats */}
-                    <div className="text-xs font-medium">
-                      <div className="text-green-600 dark:text-green-400">Stocks Up: {distributionData.stocksUp}</div>
-                      <div className="text-red-600 dark:text-red-400">Stocks Down: {distributionData.stocksDown}</div>
-                      <div className="text-gray-900 dark:text-white">
-                        SPX Daily % Change: {distributionData.spxReturnPct >= 0 ? '+' : ''}
-                        {distributionData.spxReturnPct.toFixed(2)}%
-                      </div>
-                    </div>
-                    {/* Legend */}
-                    <div className="text-xs">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div className="w-6 h-0.5 border-t border-dashed border-gray-400" />
-                        <span className="text-gray-500 dark:text-gray-400">
-                          Avg. Return: {distributionData.avgReturn >= 0 ? '+' : ''}
-                          {distributionData.avgReturn.toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div className="w-6 h-0.5 border-t border-dashed border-green-500" />
-                        <span className="text-gray-500 dark:text-gray-400">
-                          Avg. Gain: +{distributionData.avgGain.toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-0.5 border-t border-dashed border-orange-500" />
-                        <span className="text-gray-500 dark:text-gray-400">
-                          Avg. Decline: {distributionData.avgDecline.toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <svg
-                viewBox={`0 0 ${CHART_WIDTH} ${HIST_CHART_HEIGHT}`}
-                className="w-full h-auto"
-                style={{ maxHeight: '350px' }}
-              >
-                {/* Grid lines (vertical, dashed) */}
-                {xTicks.map((tick) => (
-                  <line
-                    key={`hist-grid-${tick}`}
-                    x1={histXScale(tick)}
-                    y1={HIST_MARGIN.top}
-                    x2={histXScale(tick)}
-                    y2={histBaselineY}
-                    stroke={tick === 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)'}
-                    strokeWidth={tick === 0 ? 1.5 : 1}
-                    strokeDasharray={tick === 0 ? '4,4' : '2,4'}
-                  />
-                ))}
-
-                {/* Histogram bars */}
-                {histogramBins.map((bin, index) => {
-                  const barHeight = histBaselineY - histYScale(bin.count)
-                  const isNegative = bin.x < 0
-                  return (
-                    <rect
-                      key={`bar-${index}`}
-                      x={histXScale(bin.x) - barWidth / 2}
-                      y={histYScale(bin.count)}
-                      width={barWidth}
-                      height={barHeight}
-                      fill={isNegative ? 'rgba(139, 69, 19, 0.7)' : 'rgba(34, 120, 34, 0.7)'}
-                      stroke={isNegative ? 'rgb(139, 69, 19)' : 'rgb(34, 120, 34)'}
-                      strokeWidth="1"
-                      className="cursor-pointer transition-opacity hover:opacity-80"
-                      onMouseEnter={(e) => handleBarHover(e, bin, index)}
-                      onMouseLeave={handleBarLeave}
-                    />
-                  )
-                })}
-
-                {/* Average return line (dashed gray) */}
-                {distributionData && (
-                  <line
-                    x1={histXScale(distributionData.avgReturn)}
-                    y1={HIST_MARGIN.top}
-                    x2={histXScale(distributionData.avgReturn)}
-                    y2={histBaselineY}
-                    stroke="rgba(156, 163, 175, 0.8)"
-                    strokeWidth="1.5"
-                    strokeDasharray="6,4"
-                  />
-                )}
-
-                {/* Average gain line (dashed green) */}
-                {distributionData && distributionData.avgGain > 0 && (
-                  <line
-                    x1={histXScale(distributionData.avgGain)}
-                    y1={HIST_MARGIN.top}
-                    x2={histXScale(distributionData.avgGain)}
-                    y2={histBaselineY}
-                    stroke="rgba(34, 197, 94, 0.8)"
-                    strokeWidth="1.5"
-                    strokeDasharray="6,4"
-                  />
-                )}
-
-                {/* Average decline line (dashed orange) */}
-                {distributionData && distributionData.avgDecline < 0 && (
-                  <line
-                    x1={histXScale(distributionData.avgDecline)}
-                    y1={HIST_MARGIN.top}
-                    x2={histXScale(distributionData.avgDecline)}
-                    y2={histBaselineY}
-                    stroke="rgba(249, 115, 22, 0.8)"
-                    strokeWidth="1.5"
-                    strokeDasharray="6,4"
-                  />
-                )}
-
-                {/* X-axis baseline */}
-                <line
-                  x1={HIST_MARGIN.left}
-                  y1={histBaselineY}
-                  x2={HIST_MARGIN.left + HIST_INNER_WIDTH}
-                  y2={histBaselineY}
-                  stroke="rgba(255,255,255,0.3)"
-                  strokeWidth="1"
-                />
-
-                {/* X-axis labels */}
-                {xTicks.map((tick) => (
-                  <text
-                    key={`hist-label-${tick}`}
-                    x={histXScale(tick)}
-                    y={histBaselineY + 25}
-                    textAnchor="middle"
-                    fill="rgba(255,255,255,0.7)"
-                    fontSize="12"
-                  >
-                    {tick}%
-                  </text>
-                ))}
-
-                {/* Y-axis label */}
-                <text
-                  x={HIST_MARGIN.left - 40}
-                  y={HIST_MARGIN.top + HIST_INNER_HEIGHT / 2}
-                  textAnchor="middle"
-                  fill="rgba(255,255,255,0.7)"
-                  fontSize="12"
-                  transform={`rotate(-90, ${HIST_MARGIN.left - 40}, ${HIST_MARGIN.top + HIST_INNER_HEIGHT / 2})`}
-                >
-                  # of Stocks
-                </text>
-
-                {/* Mag 7 ticker labels - positioned to avoid overlaps */}
-                {(() => {
-                  const sorted = [...mag7Data].sort((a, b) => a.changesPercentage - b.changesPercentage)
-                  const yLevels = [
-                    HIST_MARGIN.top + 20,
-                    HIST_MARGIN.top + 50,
-                    HIST_MARGIN.top + 80,
-                    HIST_MARGIN.top + 110,
-                  ]
-
-                  return sorted.map((stock, index) => {
-                    const xPos = histXScale(stock.changesPercentage)
-                    const yPos = yLevels[index % yLevels.length]
-
-                    return (
-                      <g
-                        key={`hist-${stock.symbol}`}
-                        className="cursor-pointer"
-                        onMouseEnter={(e) => handleStockHover(e, stock)}
-                        onMouseLeave={handleStockLeave}
-                      >
-                        <circle
-                          cx={xPos}
-                          cy={yPos + 12}
-                          r="4"
-                          fill="cyan"
-                        />
-                        <text
-                          x={xPos}
-                          y={yPos}
-                          textAnchor="middle"
-                          fill="white"
-                          fontSize="11"
-                          fontWeight="600"
-                        >
-                          {stock.symbol}
-                        </text>
-                      </g>
-                    )
-                  })
-                })()}
               </svg>
 
               </div>

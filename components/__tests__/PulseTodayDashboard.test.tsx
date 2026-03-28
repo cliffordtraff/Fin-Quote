@@ -78,7 +78,7 @@ describe('buildPulseSessionLevels', () => {
     ])
   })
 
-  it('keeps regular-session HOD/LOD while also surfacing premarket carryover levels', () => {
+  it('drops premarket carryover levels once the cash session starts', () => {
     const levels = buildPulseSessionLevels([
       { date: '2026-03-27 04:25:00', high: 282.4, low: 277.6 },
       { date: '2026-03-27 09:35:00', high: 281.8, low: 280.2 },
@@ -89,8 +89,22 @@ describe('buildPulseSessionLevels', () => {
     expect(levels.lines).toEqual([
       expect.objectContaining({ label: 'HOD', value: 283.1, tone: 'high', emphasis: 'primary' }),
       expect.objectContaining({ label: 'LOD', value: 279.9, tone: 'low', emphasis: 'primary' }),
-      expect.objectContaining({ label: 'Premarket HOD', value: 282.4, tone: 'high', emphasis: 'secondary' }),
-      expect.objectContaining({ label: 'Premarket LOD', value: 277.6, tone: 'low', emphasis: 'secondary' }),
+    ])
+  })
+
+  it('reuses cash-session HOD and LOD during after-hours without creating after-hours or premarket labels', () => {
+    const levels = buildPulseSessionLevels([
+      { date: '2026-03-27 04:25:00', high: 282.4, low: 277.6 },
+      { date: '2026-03-27 09:35:00', high: 281.8, low: 280.2 },
+      { date: '2026-03-27 10:10:00', high: 283.1, low: 279.9 },
+      { date: '2026-03-27 16:15:00', high: 282.2, low: 281.4 },
+      { date: '2026-03-27 17:05:00', high: 282.6, low: 281.1 },
+    ])
+
+    expect(levels.activeSession).toBe('afterhours')
+    expect(levels.lines).toEqual([
+      expect.objectContaining({ label: 'HOD', value: 283.1, tone: 'high', emphasis: 'primary' }),
+      expect.objectContaining({ label: 'LOD', value: 279.9, tone: 'low', emphasis: 'primary' }),
     ])
   })
 })

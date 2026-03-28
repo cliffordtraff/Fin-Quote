@@ -3,15 +3,18 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest } from 'next/server'
 import {
-  findDashboardChartOfTheDayFallbackImage,
-  resolveDashboardChartOfTheDay,
+  loadDashboardChartOfTheDayFallbackImage,
+  resolveCurrentDashboardChartOfTheDay,
+  transformDashboardChartImageForDarkTheme,
 } from '@/lib/dashboard/chart-of-the-day'
-import { NextResponse } from 'next/server'
+import { getDashboardChartOfTheDaySetting } from '@/lib/dashboard/chart-of-the-day-settings'
 
 export async function GET(request: NextRequest) {
+  const theme = request.nextUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+  const setting = await getDashboardChartOfTheDaySetting()
+
   try {
-    const theme = request.nextUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light'
-    const resolvedChart = resolveDashboardChartOfTheDay({
+    const resolvedChart = await resolveCurrentDashboardChartOfTheDay({
       hostHeader: request.headers.get('host'),
       theme,
     })
@@ -46,6 +49,22 @@ export async function GET(request: NextRequest) {
       throw new Error(`Chart render failed: ${detail}`)
     }
 
+    if (theme === 'dark' && (response.headers.get('content-type') || '').includes('image/png')) {
+      const rawBuffer = Buffer.from(await response.arrayBuffer())
+      const themedBuffer = await transformDashboardChartImageForDarkTheme(rawBuffer)
+      const body = new Blob([Uint8Array.from(themedBuffer)], {
+        type: 'image/png',
+      })
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Type': 'image/png',
+        },
+      })
+    }
+
     return new Response(response.body, {
       status: 200,
       headers: {
@@ -54,12 +73,22 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    const fallbackImage = findDashboardChartOfTheDayFallbackImage()
+    const fallbackImage =
+      setting.source === 'template' && setting.selection
+        ? await loadDashboardChartOfTheDayFallbackImage(theme, setting.selection)
+        : null
     if (fallbackImage) {
-      return NextResponse.redirect(
-        new URL(fallbackImage.publicUrl, request.nextUrl.origin),
-        { status: 307 },
-      )
+      const body = new Blob([Uint8Array.from(fallbackImage.buffer)], {
+        type: fallbackImage.contentType,
+      })
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Type': fallbackImage.contentType,
+        },
+      })
     }
 
     const message =

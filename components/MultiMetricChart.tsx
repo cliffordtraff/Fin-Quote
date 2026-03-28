@@ -126,6 +126,11 @@ interface MultiMetricChartProps {
   metrics: string[]
   customColors?: Record<string, string>
   onReset?: () => void
+  toolbarAction?: {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+  }
   /** Render in clean export mode: hides controls, forces light theme, signals readiness */
   exportMode?: boolean
   /** Initial chart type (used by export mode to set without UI interaction) */
@@ -144,6 +149,13 @@ interface MultiMetricChartProps {
   onChartReady?: () => void
   /** Callback to copy a newsletter export URL (shown in export dropdown when provided) */
   onCopyExportUrl?: () => void
+  /** Callback fired when chart display controls change */
+  onViewStateChange?: (state: {
+    chartType: 'bar' | 'line' | 'area'
+    showLabels: boolean
+    stacked: boolean
+    indexToZero: boolean
+  }) => void
   /** Optional Highcharts theme overrides (backward-compatible — callers without this prop are unaffected) */
   highchartsTheme?: {
     backgroundColor?: string
@@ -159,7 +171,7 @@ interface MultiMetricChartProps {
   }
 }
 
-export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, chartHeight, exportTextScale = 'default', onChartReady, onCopyExportUrl, highchartsTheme: ht }: MultiMetricChartProps) {
+export default function MultiMetricChart({ data, metrics, customColors = {}, onReset, toolbarAction, exportMode, initialChartType, initialShowLabels, initialStacked, initialIndexToZero, chartHeight, exportTextScale = 'default', onChartReady, onCopyExportUrl, onViewStateChange, highchartsTheme: ht }: MultiMetricChartProps) {
   const [showDataLabels, setShowDataLabels] = useState(initialShowLabels ?? true)
   const [isStacked, setIsStacked] = useState(initialStacked ?? false)
   const [chartType, setChartType] = useState<'bar' | 'line' | 'area'>(initialChartType ?? 'bar')
@@ -237,6 +249,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
       document.body.style.overflow = ''
     }
   }, [isFullscreen])
+
+  useEffect(() => {
+    onViewStateChange?.({
+      chartType,
+      showLabels: showDataLabels,
+      stacked: isStacked,
+      indexToZero,
+    })
+  }, [chartType, indexToZero, isStacked, onViewStateChange, showDataLabels])
 
   if (!isMounted) {
     return (
@@ -1115,6 +1136,15 @@ export default function MultiMetricChart({ data, metrics, customColors = {}, onR
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Reset Chart
+            </button>
+          )}
+          {toolbarAction && (
+            <button
+              onClick={toolbarAction.onClick}
+              disabled={toolbarAction.disabled}
+              className="rounded-md bg-sage-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-sage-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-400"
+            >
+              {toolbarAction.label}
             </button>
           )}
           <div ref={exportMenuRef} className="relative">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import FuturesTable from '@/components/FuturesTable'
 import MarketMoversTable from '@/components/MarketMoversTable'
 import StocksTable from '@/components/StocksTable'
@@ -16,19 +16,26 @@ import MarketSessions from '@/components/MarketSessions'
 import TopInsiderTrades from '@/components/TopInsiderTrades'
 import { getMarketSummary } from '@/app/actions/market-summary'
 import { getMarketTrendsResponses, type MarketTrendsBullet } from '@/app/actions/market-trends-responses'
-import { getMarketTrendsAgents } from '@/app/actions/market-trends-agents'
 
 import type { AllMarketData } from '@/lib/market-types'
+import type { NewsletterChartSpec } from '@/lib/newsletter/types'
 import { useTimezone, getTimezoneAbbr } from '@/lib/timezone-context'
 import { formatTimeInTimezone } from '@/lib/timezone-utils'
 
 interface MarketDashboardSundayProps {
   initialData: AllMarketData
+  chartOfDaySpec: NewsletterChartSpec
 }
 
 const ENABLE_MOVERS = process.env.NEXT_PUBLIC_ENABLE_MOVERS === 'true'
+const tertiaryCardWidthStyle: CSSProperties = {
+  width: 'calc((100% - 2rem) / 3)',
+}
 
-export default function MarketDashboardSunday({ initialData }: MarketDashboardSundayProps) {
+export default function MarketDashboardSunday({
+  initialData,
+  chartOfDaySpec,
+}: MarketDashboardSundayProps) {
   const { timezone } = useTimezone()
   const [data, setData] = useState<AllMarketData>(initialData)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -40,13 +47,9 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
   // Market Trends bullet points state (for MarketInsights component)
   // Initialize from server-fetched cache (shows immediately if available)
   const [responsesApiBullets, setResponsesApiBullets] = useState<MarketTrendsBullet[]>(initialData.marketTrendsBullets || [])
-  const [agentsSdkBullets, setAgentsSdkBullets] = useState<MarketTrendsBullet[]>([])
   const [responsesLoading, setResponsesLoading] = useState(!initialData.marketTrendsBullets?.length)
-  const [agentsLoading, setAgentsLoading] = useState(false)
   const [responsesError, setResponsesError] = useState<string | undefined>()
-  const [agentsError, setAgentsError] = useState<string | undefined>()
   const [responsesGeneratedAt, setResponsesGeneratedAt] = useState<string | undefined>()
-  const [agentsGeneratedAt, setAgentsGeneratedAt] = useState<string | undefined>()
 
 
   // Set initial timestamp on client mount to avoid hydration mismatch
@@ -107,34 +110,6 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     }
   }
 
-  // Function to fetch bullet points from Agents SDK (for MarketInsights/Market Trends)
-  const fetchAgentsBullets = async () => {
-    setAgentsLoading(true)
-    setAgentsError(undefined)
-    try {
-      // Use cash session data for LLM trends (main trading hours)
-      const result = await getMarketTrendsAgents({
-        gainers: data.gainers.cash,
-        losers: data.losers.cash,
-        sectors: data.sectors,
-        indices: data.sparklineIndices,
-        forexBonds: data.forexBonds,
-        vix: data.vix,
-      })
-      if (result.error) {
-        setAgentsError(result.error)
-      } else {
-        setAgentsSdkBullets(result.bullets)
-        setAgentsGeneratedAt(result.generatedAt)
-      }
-    } catch (error) {
-      console.error('Failed to fetch Agents SDK bullets:', error)
-      setAgentsError(error instanceof Error ? error.message : 'Unknown error')
-    } finally {
-      setAgentsLoading(false)
-    }
-  }
-
   // Fetch market summary and bullet points on mount
   useEffect(() => {
     // Only fetch summary if not already loaded from server cache
@@ -145,7 +120,6 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
     if (!initialData.marketTrendsBullets?.length) {
       fetchResponsesBullets()
     }
-    fetchAgentsBullets()
   }, []) // Only run on mount, not on data changes
 
   async function fetchFast() {
@@ -251,55 +225,50 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
           gainers={gainers}
           losers={losers}
           sp500Losers={sp500Losers}
-          marketSummary={summaryBody}
-          marketSummaryLoading={marketSummaryLoading}
-          onRefreshSummary={() => fetchSummary(true)}
-          summaryLastUpdated={summaryLastUpdated}
+          chartOfDaySpec={chartOfDaySpec}
         />
       </div>
 
-      {/* Market Insights (Market Trends with bullet points) */}
-      <div className="mb-8">
-        <MarketInsights
-          responsesApiBullets={responsesApiBullets}
-          agentsSdkBullets={agentsSdkBullets}
-          responsesLoading={responsesLoading}
-          agentsLoading={agentsLoading}
-          responsesError={responsesError}
-          agentsError={agentsError}
-          onRefreshResponses={fetchResponsesBullets}
-          onRefreshAgents={fetchAgentsBullets}
-          responsesGeneratedAt={responsesGeneratedAt}
-          agentsGeneratedAt={agentsGeneratedAt}
-        />
-      </div>
-
-      {/* Main Content Grid - Headlines, Stocks, Sectors */}
-      <div className="grid grid-cols-[1fr_180px_400px] gap-4 mb-8">
-        {/* Headlines & Futures Column */}
-        <div className="flex flex-col gap-4">
-          {marketNews.length > 0 && (
-            <MarketHeadlines news={marketNews} />
-          )}
-          {futures.length > 0 && (
-            <FuturesTable futures={futures} />
-          )}
+      {/* Market Insights + Stocks Table */}
+      <div className="flex gap-4 mb-8 items-stretch">
+        <div className="flex-1 min-w-0">
+          <MarketInsights
+            responsesApiBullets={responsesApiBullets}
+            responsesLoading={responsesLoading}
+            responsesError={responsesError}
+            onRefreshResponses={fetchResponsesBullets}
+            responsesGeneratedAt={responsesGeneratedAt}
+            marketSummary={summaryBody}
+            marketSummaryLoading={marketSummaryLoading}
+            onRefreshSummary={() => fetchSummary(true)}
+            summaryLastUpdated={summaryLastUpdated}
+          />
         </div>
-
-        {/* Stocks Table */}
         {stocks.length > 0 && (
-          <div>
+          <div className="w-[180px] shrink-0 self-stretch">
             <StocksTable stocks={stocks} />
           </div>
         )}
-
-        {/* Sector Column */}
-        <div>
-          {sectors.length > 0 && (
-            <SectorHeatmap sectors={sectors} />
-          )}
-        </div>
       </div>
+
+      {/* Futures, Insider Trades, and Global Markets */}
+      {(futures.length > 0 || largeInsiderTrades.length > 0 || globalIndexQuotes.length > 0 || globalFuturesQuotes.length > 0) && (
+        <div className="mb-4 flex gap-4 items-start">
+          {futures.length > 0 && (
+            <div className="shrink-0 self-stretch" style={tertiaryCardWidthStyle}>
+              <FuturesTable futures={futures} />
+            </div>
+          )}
+          {largeInsiderTrades.length > 0 && (
+            <div className="shrink-0" style={tertiaryCardWidthStyle}>
+              <TopInsiderTrades trades={largeInsiderTrades} />
+            </div>
+          )}
+          <div className="shrink-0 self-stretch" style={tertiaryCardWidthStyle}>
+            <MarketSessions hideTable={true} indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
+          </div>
+        </div>
+      )}
 
       {/* Gainers, Losers */}
       {ENABLE_MOVERS && (
@@ -309,22 +278,12 @@ export default function MarketDashboardSunday({ initialData }: MarketDashboardSu
         </div>
       )}
 
-      {/* Forex & Bonds Table, Insider Trades, and Market Sessions Timeline */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div>
-          {forexBonds.length > 0 && (
-            <ForexBondsTable data={forexBonds} />
-          )}
+      {/* Forex & Bonds Table */}
+      {forexBonds.length > 0 && (
+        <div className="mb-8" style={tertiaryCardWidthStyle}>
+          <ForexBondsTable data={forexBonds} />
         </div>
-        <div>
-          {largeInsiderTrades.length > 0 && (
-            <TopInsiderTrades trades={largeInsiderTrades} />
-          )}
-        </div>
-        <div>
-          <MarketSessions hideTable={true} indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
-        </div>
-      </div>
+      )}
 
       {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}
       {(sp500GainerSparklines.length > 0 || sp500LoserSparklines.length > 0) && (

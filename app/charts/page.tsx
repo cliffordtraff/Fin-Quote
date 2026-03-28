@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { useState, useEffect, useCallback, useRef, useTransition } from 'react'
+import { updateDashboardChartOfTheDayChartSpec } from '@/app/actions/dashboard-chart-of-the-day'
 import Navigation from '@/components/Navigation'
 import MetricSelector from '@/components/MetricSelector'
 import StockSelector, { type StockSelectorHandle } from '@/components/StockSelector'
 import MultiMetricChart, { getMetricColors } from '@/components/MultiMetricChart'
-import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type PeriodType, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
+import { getMultipleMetrics, getAvailableMetrics, type MetricData, type MetricId, type StatementType, type SegmentCategory } from '@/app/actions/chart-metrics'
 import { getAvailableStocks, type Stock } from '@/app/actions/get-stocks'
 import { getMonthlyChartPriceData } from '@/app/actions/chart-price'
 import { isPriceMetric } from '@/lib/price-matcher'
@@ -90,7 +92,54 @@ const COLOR_PALETTE_DARK = [
   '#8888a8', // Light slate (tertiary)
 ]
 
-export default function ChartsPage() {
+interface ChartsPageContentProps {
+  chartOfDayEditor?: boolean
+  initialSpec?: ChartExportSpec | null
+}
+
+interface ChartViewState {
+  chartType: 'bar' | 'line' | 'area'
+  showLabels: boolean
+  stacked: boolean
+  indexToZero: boolean
+}
+
+const DEFAULT_CHART_VIEW_STATE: ChartViewState = {
+  chartType: 'bar',
+  showLabels: true,
+  stacked: false,
+  indexToZero: false,
+}
+
+function buildAutoChartTitle(data: MetricData[]): string | undefined {
+  const seriesWithValues = data.filter((series) => series.data.length > 0)
+  if (seriesWithValues.length === 0) return undefined
+
+  const labels = seriesWithValues.map((series) => series.label).filter(Boolean)
+  const years = Array.from(
+    new Set(
+      seriesWithValues.flatMap((series) =>
+        series.data
+          .map((point) => point.year)
+          .filter((year) => Number.isFinite(year)),
+      ),
+    ),
+  ).sort((left, right) => left - right)
+
+  const yearRange =
+    years.length > 0 ? ` (${years[0]}-${years[years.length - 1]})` : ''
+
+  if (labels.length === 0) return undefined
+
+  return labels.length <= 2
+    ? `${labels.join(' and ')}${yearRange}`
+    : `Financial Metrics${yearRange}`
+}
+
+export function ChartsPageContent({
+  chartOfDayEditor = false,
+  initialSpec = null,
+}: ChartsPageContentProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const COLOR_PALETTE = isDark ? COLOR_PALETTE_DARK : COLOR_PALETTE_LIGHT
@@ -115,7 +164,9 @@ export default function ChartsPage() {
   const [periodType, setPeriodType] = useState<'annual' | 'quarterly'>('annual')
   // Stock price toggle (separate from metric dropdowns)
   const [showStockPrice, setShowStockPrice] = useState(false)
-  const [initialChartType, setInitialChartType] = useState<'bar' | 'line' | 'area' | undefined>(undefined)
+  const [chartViewState, setChartViewState] = useState<ChartViewState>(
+    DEFAULT_CHART_VIEW_STATE,
+  )
   const [metricsData, setMetricsData] = useState<MetricData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,6 +182,9 @@ export default function ChartsPage() {
   // Custom colors for metrics (overrides default colors)
   const [customColors, setCustomColors] = useState<Record<string, string>>({})
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
+  const [chartOfDayNotice, setChartOfDayNotice] = useState<string | null>(null)
+  const [chartOfDayError, setChartOfDayError] = useState<string | null>(null)
+  const [isChartOfDayPending, startChartOfDayTransition] = useTransition()
 
   // Track whether URL params have been applied
   const [urlParamsApplied, setUrlParamsApplied] = useState(false)
@@ -155,12 +209,9 @@ export default function ChartsPage() {
     if (urlParamsApplied || availableMetrics.length === 0) return
 
     const params = new URLSearchParams(window.location.search)
-    if (params.toString() === '') {
-      setUrlParamsApplied(true)
-      return
-    }
+    const spec =
+      params.toString() !== '' ? parseSpecFromParams(params) : initialSpec
 
-    const spec = parseSpecFromParams(params)
     if (!spec) {
       setUrlParamsApplied(true)
       return
@@ -186,20 +237,23 @@ export default function ChartsPage() {
     }
 
     // Apply period type
-    if (spec.periodType) setPeriodType(spec.periodType)
+    setPeriodType(spec.periodType ?? 'annual')
 
     // Apply year range
-    if (spec.minYear) setMinYear(spec.minYear)
-    if (spec.maxYear) setMaxYear(spec.maxYear)
+    setMinYear(spec.minYear ?? null)
+    setMaxYear(spec.maxYear ?? null)
 
     // Apply stock price toggle
-    if (spec.showStockPrice) setShowStockPrice(true)
-
-    // Apply chart type (bar, line, area)
-    if (spec.chartType) setInitialChartType(spec.chartType)
+    setShowStockPrice(spec.showStockPrice ?? false)
+    setChartViewState({
+      chartType: spec.chartType ?? DEFAULT_CHART_VIEW_STATE.chartType,
+      showLabels: spec.showLabels ?? DEFAULT_CHART_VIEW_STATE.showLabels,
+      stacked: spec.stacked ?? DEFAULT_CHART_VIEW_STATE.stacked,
+      indexToZero: spec.indexToZero ?? DEFAULT_CHART_VIEW_STATE.indexToZero,
+    })
 
     setUrlParamsApplied(true)
-  }, [availableMetrics, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
+  }, [availableMetrics, initialSpec, urlParamsApplied]) // eslint-disable-line react-hooks/exhaustive-deps -- one-time URL init
 
   // Keyboard shortcut: '/' to focus stock search
   useEffect(() => {
@@ -613,22 +667,92 @@ export default function ChartsPage() {
     }
   }
 
+  const derivedChartTitle = buildAutoChartTitle(metricsData)
+  const buildCurrentChartSpec = useCallback(
+    (options: { includeTitle?: boolean } = {}): ChartExportSpec => {
+      const spec: ChartExportSpec = {
+        stocks: visibleStocks,
+        metrics: visibleMetrics,
+        periodType,
+        minYear: minYear ?? undefined,
+        maxYear: maxYear ?? undefined,
+        showStockPrice,
+        chartType: chartViewState.chartType,
+        showLabels: chartViewState.showLabels,
+        stacked: chartViewState.stacked,
+        indexToZero: chartViewState.indexToZero,
+        colors:
+          visibleStocks.length === 1 && Object.keys(customColors).length > 0
+            ? customColors
+            : undefined,
+      }
+
+      if (options.includeTitle && derivedChartTitle) {
+        spec.title = derivedChartTitle
+      }
+
+      return spec
+    },
+    [
+      chartViewState.chartType,
+      chartViewState.indexToZero,
+      chartViewState.showLabels,
+      chartViewState.stacked,
+      customColors,
+      derivedChartTitle,
+      maxYear,
+      minYear,
+      periodType,
+      showStockPrice,
+      visibleMetrics,
+      visibleStocks,
+    ],
+  )
+
   // Build a ChartExportSpec from current state and copy the export URL to clipboard
   const handleCopyExportUrl = useCallback(() => {
-    const spec: ChartExportSpec = {
-      stocks: visibleStocks,
-      metrics: visibleMetrics,
-      periodType,
-      minYear: minYear ?? undefined,
-      maxYear: maxYear ?? undefined,
-      showStockPrice,
-      colors: Object.keys(customColors).length > 0 ? customColors : undefined,
-    }
+    const spec = buildCurrentChartSpec()
     const url = buildExportUrl(spec, window.location.origin)
     navigator.clipboard.writeText(url).then(() => {
       // Brief visual feedback could be added here if desired
     })
-  }, [visibleStocks, visibleMetrics, periodType, minYear, maxYear, showStockPrice, customColors])
+  }, [buildCurrentChartSpec])
+
+  const handleSetChartOfDay = useCallback(() => {
+    setChartOfDayNotice(null)
+    setChartOfDayError(null)
+
+    startChartOfDayTransition(async () => {
+      const result = await updateDashboardChartOfTheDayChartSpec(
+        buildCurrentChartSpec({ includeTitle: true }),
+      )
+
+      if (!result.success) {
+        setChartOfDayError(result.error ?? 'Failed to set chart of the day')
+        return
+      }
+
+      setChartOfDayNotice('Dashboard chart of the day updated.')
+    })
+  }, [buildCurrentChartSpec, startChartOfDayTransition])
+
+  const canSetChartOfDay =
+    visibleStocks.length > 0 &&
+    visibleMetrics.length > 0 &&
+    metricsData.length > 0 &&
+    !loading &&
+    !error
+
+  const chartOfDayToolbarLabel = isChartOfDayPending
+    ? 'Saving...'
+    : 'Set as Chart of the Day'
+
+  const chartOfDayBlockingMessage =
+    visibleStocks.length === 0
+      ? 'Pick a stock before setting the dashboard chart.'
+      : visibleMetrics.length === 0
+      ? 'Chart of the day requires at least one fundamentals metric. Stock Price can be an overlay, not the only series.'
+      : null
 
   const handleSliderMinChange = (value: number) => {
     const nextMin = clampToBounds(value)
@@ -671,6 +795,43 @@ export default function ChartsPage() {
       <Navigation />
 
       <main className="max-w-[1600px] mx-auto px-6 py-8">
+        {chartOfDayEditor && (
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">Chart of the Day editor</p>
+                <p className="mt-1 text-blue-700 dark:text-blue-200/80">
+                  This page updates the public dashboard directly. Build the chart here, then use the toolbar button to publish it.
+                </p>
+              </div>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-lg border border-blue-200 bg-white px-3 py-1.5 font-medium text-blue-900 transition hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-100 dark:hover:bg-blue-900/40"
+              >
+                View Dashboard
+              </Link>
+            </div>
+            {(chartOfDayNotice || chartOfDayError || chartOfDayBlockingMessage) && (
+              <div className="flex flex-col gap-2">
+                {chartOfDayNotice && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    {chartOfDayNotice}
+                  </div>
+                )}
+                {chartOfDayError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                    {chartOfDayError}
+                  </div>
+                )}
+                {!chartOfDayError && !chartOfDayNotice && chartOfDayBlockingMessage && (
+                  <div className="rounded-lg border border-blue-200/80 bg-white/70 px-3 py-2 text-blue-800 dark:border-blue-900/40 dark:bg-slate-900/40 dark:text-blue-100/90">
+                    {chartOfDayBlockingMessage}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-cream-300 dark:border-gray-700">
           {/* Controls */}
           <div className="px-4 py-2 select-none">
@@ -961,8 +1122,21 @@ export default function ChartsPage() {
                     : customColors
                 }
                 onReset={handleReset}
+                toolbarAction={
+                  chartOfDayEditor
+                    ? {
+                        label: chartOfDayToolbarLabel,
+                        onClick: handleSetChartOfDay,
+                        disabled: !canSetChartOfDay || isChartOfDayPending,
+                      }
+                    : undefined
+                }
                 onCopyExportUrl={handleCopyExportUrl}
-                initialChartType={initialChartType}
+                initialChartType={chartViewState.chartType}
+                initialShowLabels={chartViewState.showLabels}
+                initialStacked={chartViewState.stacked}
+                initialIndexToZero={chartViewState.indexToZero}
+                onViewStateChange={setChartViewState}
               />
             ) : (
               <div className="h-[650px] flex items-start justify-center pt-24">
@@ -1010,4 +1184,8 @@ export default function ChartsPage() {
       </main>
     </div>
   )
+}
+
+export default function ChartsPage() {
+  return <ChartsPageContent />
 }

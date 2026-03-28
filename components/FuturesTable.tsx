@@ -32,10 +32,13 @@ export default function FuturesTable({ futures }: FuturesTableProps) {
   }
 
   return (
-    <div className="w-full max-w-lg">
-      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
-        {/* Header */}
-        <div className={`grid ${hasSparklineData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-1 bg-cream-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 text-xs font-semibold`}>
+    <div className="w-full max-w-lg h-full">
+      <div className="h-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
+        <div className="px-4 py-3 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
+          <h2 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Futures</h2>
+        </div>
+
+        <div className={`grid ${hasSparklineData ? 'grid-cols-5' : 'grid-cols-4'} gap-3 px-4 py-2 bg-cream-50 dark:bg-gray-800/60 border-b border-cream-300 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-white whitespace-nowrap`}>
           <div>Futures</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>

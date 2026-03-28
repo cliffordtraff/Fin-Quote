@@ -100,6 +100,8 @@ User-facing routes:
 
 Admin routes:
 
+- `/admin`
+- `/admin/chart-of-the-day`
 - `/admin/review`
 - `/admin/validation`
 - `/admin/evaluations`
@@ -174,9 +176,11 @@ DATA_PROVIDER=fmp
 MASSIVE_API_KEY=...
 NEXT_PUBLIC_CHARTING_URL=http://localhost:3001
 NEXT_PUBLIC_COOKIE_DOMAIN=.theintraday.com
+ADMIN_EMAILS=admin@example.com,ops@example.com
 NEXT_PUBLIC_ENABLE_CHAT=false
 NEXT_PUBLIC_ENABLE_LANDING=false
 NEXT_PUBLIC_SHOW_STOCK_V1=false
+NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB=false
 NEXT_PUBLIC_ENABLE_MOVERS=true
 ```
 
@@ -185,6 +189,7 @@ Notes:
 - `NEXT_PUBLIC_CHARTING_URL` is required for the embedded workspace experience.
 - `MASSIVE_API_KEY` is required for real-time streaming and for `DATA_PROVIDER=massive`.
 - `NEXT_PUBLIC_COOKIE_DOMAIN` is used for shared-auth cookie behavior across subdomains.
+- `ADMIN_EMAILS` is the server-side allowlist for `/admin` pages when you want true admin-only access.
 - `.env.local.example` is intentionally small and not exhaustive.
 
 ### 4. Run the app
@@ -301,4 +306,3 @@ This README is intentionally high-level. The repo is active and contains both pr
 - `app/stock/[symbol]/page.tsx`
 - `app/api/ask/route.ts`
 - `app/actions/chart-metrics.ts`
-

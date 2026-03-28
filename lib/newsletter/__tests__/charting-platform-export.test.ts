@@ -4,10 +4,14 @@ import type { ChartExportSpec } from '@/types/chart-export'
 import type { PriceNewsletterChartSpec } from '@/lib/newsletter/types'
 import {
   DEFAULT_LOCAL_CHARTING_BASE_URL,
+  buildRelativeChartingPlatformCapturePath,
+  buildRelativeChartingPlatformDashboardFundamentalsSurfacePath,
   getDefaultChartingBaseUrlForHost,
   getDefaultPublicChartingBaseUrlForHost,
   isLocalChartingHost,
+  resolveChartingPlatformDashboardFundamentalsSurfacePath,
   resolveChartingPlatformNewsletterChart,
+  resolveChartingPlatformNewsletterCapturePath,
 } from '@/lib/newsletter/charting-platform-export'
 
 function decodeBase64UrlJson<T>(rawValue: string): T {
@@ -133,6 +137,95 @@ describe('resolveChartingPlatformNewsletterChart', () => {
       revenue: '#102030',
       netIncome: '#405060',
     })
+  })
+
+  it('can emit relative same-origin capture paths for proxied embeds', () => {
+    const legacySpec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: ['revenue', 'net_income'],
+      periodType: 'annual',
+      chartType: 'bar',
+    }
+
+    const capturePath = resolveChartingPlatformNewsletterCapturePath(legacySpec, {
+      width: 640,
+      height: 360,
+      theme: 'dark',
+    })
+
+    expect(capturePath.startsWith('/tos/export/newsletter?spec=')).toBe(true)
+
+    const captureUrl = new URL(capturePath, 'https://app.theintraday.com')
+    const decodedSpec = decodeBase64UrlJson<Record<string, unknown>>(
+      captureUrl.searchParams.get('spec') || '',
+    )
+
+    expect(decodedSpec.theme).toBe('dark')
+    expect(decodedSpec.width).toBe(640)
+    expect(decodedSpec.height).toBe(360)
+  })
+
+  it('can build a relative path from an existing capture spec payload', () => {
+    const path = buildRelativeChartingPlatformCapturePath({
+      version: 1,
+      mode: 'fundamentals',
+      ticker: 'AAPL',
+      theme: 'light',
+    })
+
+    const url = new URL(path, 'https://app.theintraday.com')
+    const decodedSpec = decodeBase64UrlJson<Record<string, unknown>>(
+      url.searchParams.get('spec') || '',
+    )
+
+    expect(url.pathname).toBe('/tos/export/newsletter')
+    expect(decodedSpec.ticker).toBe('AAPL')
+  })
+
+  it('can build a dashboard fundamentals surface path from an existing capture spec payload', () => {
+    const path = buildRelativeChartingPlatformDashboardFundamentalsSurfacePath({
+      version: 1,
+      mode: 'fundamentals',
+      ticker: 'AAPL',
+      theme: 'dark',
+    })
+
+    const url = new URL(path, 'https://app.theintraday.com')
+    const decodedSpec = decodeBase64UrlJson<Record<string, unknown>>(
+      url.searchParams.get('spec') || '',
+    )
+
+    expect(url.pathname).toBe('/tos/dashboard/fundamentals')
+    expect(decodedSpec.ticker).toBe('AAPL')
+    expect(decodedSpec.theme).toBe('dark')
+  })
+
+  it('builds a dashboard fundamentals surface path with dashboard-safe fund state', () => {
+    const legacySpec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: ['revenue', 'net_income'],
+      periodType: 'annual',
+      chartType: 'bar',
+    }
+
+    const path = resolveChartingPlatformDashboardFundamentalsSurfacePath(legacySpec, {
+      width: 640,
+      height: 360,
+      theme: 'dark',
+    })
+
+    const url = new URL(path, 'https://app.theintraday.com')
+    const decodedSpec = decodeBase64UrlJson<Record<string, unknown>>(
+      url.searchParams.get('spec') || '',
+    )
+    const fundState = decodedSpec.fundState as Record<string, unknown>
+
+    expect(url.pathname).toBe('/tos/dashboard/fundamentals')
+    expect(decodedSpec.width).toBe(640)
+    expect(decodedSpec.height).toBe(360)
+    expect(fundState.sliderOnlyMode).toBe(true)
+    expect(fundState.showTooltip).toBe(false)
+    expect(fundState.hoverFocusEnabled).toBe(false)
   })
 
   it('builds a fundamentals workspace URL for click-through links', () => {

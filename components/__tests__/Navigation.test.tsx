@@ -41,11 +41,13 @@ describe('Navigation', () => {
     mockUsePathname.mockReturnValue('/stock/msft')
     window.history.replaceState({}, '', '/stock/msft')
     process.env.NEXT_PUBLIC_ENABLE_CHAT = 'false'
+    process.env.NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB = 'false'
   })
 
   it('renders workspace links and passes the current pathname into stock search', () => {
     render(<Navigation />)
 
+    expect(screen.queryByRole('link', { name: 'Most Active' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Fundamentals' })).toHaveAttribute('href', '/workspace/fundamentals?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/workspace/overview?symbol=MSFT')
@@ -65,5 +67,13 @@ describe('Navigation', () => {
       expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=NVDA')
       expect(screen.getByRole('link', { name: 'Financials' })).toHaveAttribute('href', '/stock/NVDA')
     })
+  })
+
+  it('shows the Most Active tab only when the feature flag is enabled', () => {
+    process.env.NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB = 'true'
+
+    render(<Navigation />)
+
+    expect(screen.getByRole('link', { name: 'Most Active' })).toHaveAttribute('href', '/dashboard/pulse-today')
   })
 })

@@ -9,8 +9,8 @@ interface StocksTableProps {
 
 export default function StocksTable({ stocks }: StocksTableProps) {
   return (
-    <div className="w-full lg:w-[180px]">
-      <div className="overflow-hidden rounded border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <div className="w-full lg:w-[180px] h-full">
+      <div className="h-full overflow-hidden rounded border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800">
         <table className="w-full">
           <thead className="bg-cream-50 dark:bg-gray-800/50">
             <tr>

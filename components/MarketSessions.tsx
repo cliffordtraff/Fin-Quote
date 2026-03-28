@@ -232,6 +232,11 @@ function areFuturesOpen(): boolean {
 
 export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], hideTable = false }: MarketSessionsProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
+  const isCompactTimeline = hideTable
+  const timelineRowStep = isCompactTimeline ? 24 : 28
+  const timelineBarTop = isCompactTimeline ? 4 : 6
+  const timelineBarHeightClass = isCompactTimeline ? 'h-5' : 'h-6'
+  const timelineBodyHeight = isCompactTimeline ? 252 : 24 + MARKETS.length * 28 + 55
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -253,15 +258,11 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
 
   // Create a map of market name to quote
   const quoteMap = new Map(indexQuotes.map(q => [q.market, q]))
-  const futuresMap = new Map(futuresQuotes.map(q => [q.symbol, q]))
-
-  // Futures trading hours (Sunday 6pm - Friday 5pm ET with 1hr break each day)
-  // Simplified: show as continuous bar
-  const futuresBarLeft = 0 // Starts at 5pm ET (timeline start)
-  const futuresBarWidth = 100 // Full width (24 hours)
+  const futuresBarLeft = 0
+  const futuresBarWidth = 100
 
   return (
-    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+    <div className="w-full h-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
       {/* Header */}
       <div className="bg-cream-50 dark:bg-gray-800 px-4 py-2 border-b border-cream-300 dark:border-gray-700">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Global Markets</h2>
@@ -383,9 +384,9 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
       {/* Visual Timeline */}
       <div className="border-t border-cream-300 dark:border-gray-700">
         {/* Timeline Header with Hour Labels */}
-        <div className="bg-cream-50 dark:bg-gray-800/50 px-4 pt-2 pb-1 relative border-b border-cream-300 dark:border-gray-700">
+        <div className={`bg-cream-50 dark:bg-gray-800/50 px-4 relative border-b border-cream-300 dark:border-gray-700 ${isCompactTimeline ? 'pt-1.5 pb-1' : 'pt-2 pb-1'}`}>
           {/* Hour labels with day indicators inline */}
-          <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 relative h-4">
+          <div className={`flex justify-between text-[10px] text-gray-500 dark:text-gray-400 relative ${isCompactTimeline ? 'h-3.5' : 'h-4'}`}>
             {(() => {
               const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
               const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -420,7 +421,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
         </div>
 
         {/* Market Bars */}
-        <div className="relative px-4 pt-2 pb-3 bg-white dark:bg-gray-800 overflow-visible" style={{ height: `${24 + MARKETS.length * 28 + 55}px` }}>
+        <div className={`relative px-4 bg-white dark:bg-gray-800 overflow-visible ${isCompactTimeline ? 'pt-1.5 pb-2' : 'pt-2 pb-3'}`} style={{ height: `${timelineBodyHeight}px` }}>
           {/* Midnight divider line through bars */}
           {(() => {
             const midnightPos = ((24 - TIMELINE_START_HOUR) / HOURS_IN_TIMELINE) * 100
@@ -483,7 +484,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                 {/* Pre-market bar (US only) - hide on weekends */}
                 {preMarketPos && !isWeekend && (
                   <div
-                    className={`absolute h-6 rounded-l flex items-center px-2 ${
+                    className={`absolute rounded-l flex items-center px-2 ${timelineBarHeightClass} ${
                       extendedStatus === 'pre'
                         ? 'bg-blue-200/60 dark:bg-blue-900/30'
                         : 'bg-gray-100 dark:bg-gray-800'
@@ -491,7 +492,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                     style={{
                       left: `calc(${preMarketPos.left}% + 16px)`,
                       width: `${preMarketPos.width}%`,
-                      top: `${6 + index * 28}px`,
+                      top: `${timelineBarTop + index * timelineRowStep}px`,
                     }}
                   >
                     <span className="text-[10px] text-gray-500 dark:text-gray-500">Pre</span>
@@ -500,12 +501,12 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
 
                 {/* Main market bar */}
                 <div
-                  className={`absolute z-10 h-6 flex items-center justify-between gap-2 px-2 ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
+                  className={`absolute z-10 flex items-center justify-between gap-2 px-2 ${timelineBarHeightClass} ${getBarStyle()} ${preMarketPos && !isWeekend ? '' : 'rounded-l'} ${afterHoursPos && !isWeekend ? '' : 'rounded-r'}`}
                   style={{
                     left: `calc(${left}% + 16px)`,
                     width: `max(${width}%, ${minBarWidthPx}px)`,
                     maxWidth: `calc(100% - ${left}% - 16px)`,
-                    top: `${6 + index * 28}px`,
+                    top: `${timelineBarTop + index * timelineRowStep}px`,
                   }}
                 >
                   <span className={`flex-shrink-0 whitespace-nowrap font-semibold text-xs ${getTextStyle()}`} title={market.name}>
@@ -526,7 +527,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                 {/* After-hours bar (US only) - hide on weekends */}
                 {afterHoursPos && !isWeekend && (
                   <div
-                    className={`absolute h-6 rounded-r flex items-center justify-end px-2 ${
+                    className={`absolute rounded-r flex items-center justify-end px-2 ${timelineBarHeightClass} ${
                       extendedStatus === 'after'
                         ? 'bg-purple-200/60 dark:bg-purple-900/30'
                         : 'bg-gray-100 dark:bg-gray-800'
@@ -534,7 +535,7 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
                     style={{
                       left: `calc(${afterHoursPos.left}% + 16px)`,
                       width: `${afterHoursPos.width}%`,
-                      top: `${6 + index * 28}px`,
+                      top: `${timelineBarTop + index * timelineRowStep}px`,
                     }}
                   >
                     <span className="text-[10px] text-gray-500 dark:text-gray-500">AH</span>
@@ -543,55 +544,6 @@ export default function MarketSessions({ indexQuotes = [], futuresQuotes = [], h
               </div>
             )
           })}
-
-          {/* Futures info at the bottom */}
-          <div className="absolute left-4 right-4 bottom-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Futures</span>
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                areFuturesOpen()
-                  ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-              }`}>
-                {areFuturesOpen() ? 'Open' : 'Closed'}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {['ES', 'NQ'].map((symbol) => {
-                const futures = futuresMap.get(symbol)
-                const isPositive = futures ? futures.changesPercentage >= 0 : true
-                const futuresOpen = areFuturesOpen()
-
-                return (
-                  <div
-                    key={symbol}
-                    className={`px-3 py-1 rounded flex items-center gap-2 ${
-                      futuresOpen
-                        ? 'bg-blue-100 dark:bg-blue-900/30'
-                        : 'bg-gray-100 dark:bg-gray-800'
-                    }`}
-                  >
-                    <span className={`text-xs font-semibold ${
-                      futuresOpen
-                        ? 'text-blue-700 dark:text-blue-300'
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}>
-                      {symbol}
-                    </span>
-                    {futures && futuresOpen && (
-                      <span className={`text-xs font-bold ${
-                        isPositive
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {formatPercent(futures.changesPercentage)}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
         </div>
       </div>
     </div>

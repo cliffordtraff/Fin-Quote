@@ -81,7 +81,7 @@ export interface AllMarketData {
   sp500LoserSparklines: import('@/app/actions/sp500-loser-sparklines').SP500LoserSparklineData[]
   metaSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
   xlbSparkline: import('@/app/actions/stock-sparkline').StockSparklineData | null
-  forexBonds: import('@/app/actions/forex-bonds').ForexBondDataWithYTD[]
+  forexBonds: import('@/app/actions/forex-bonds').ForexBondData[]
   largeInsiderTrades: import('@/app/actions/insider-trading').LargeInsiderTrade[]
   globalIndexQuotes: import('@/app/actions/global-indices').GlobalIndexQuote[]
   globalFuturesQuotes: import('@/app/actions/global-indices').FuturesQuote[]

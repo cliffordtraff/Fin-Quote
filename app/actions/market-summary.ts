@@ -285,6 +285,7 @@ Keep under 300 words total. Use the [[TICKER:+X.XX%]] format for all assets with
 - NEVER use vague explanations like "seasonal rebalancing", "tightening liquidity conditions", "risk-on/risk-off", "rotation dynamics", or similar finance jargon that sounds sophisticated but explains nothing. If you can't explain WHY something is moving with a specific catalyst (earnings, news event, economic data), just state the price movement without speculation
 - NEVER state redundant/obvious information. Examples: Don't say "Russell 2000 fell as small-caps declined" (the Russell 2000 IS small-caps), don't say "VIX rose showing increased volatility" (VIX IS volatility), don't say "Nasdaq outperformed as tech stocks led" (Nasdaq IS tech-heavy). Either explain the actual driver or just state the number.
 - NEVER mention third-party publication names (avoid "AP reported", "Seeking Alpha noted", "MarketWatch said", "Reuters reported", etc.). Just state the facts directly without attribution.
+- NEVER include bullets about Treasury yields, bond yields, borrowing costs, or Fed/monetary policy expectations. Skip these topics entirely — they are covered elsewhere.
 - Use accessible language: prefer "widely expected" over "widely priced in", prefer "likely" over "probability", avoid overly technical jargon when simpler words work.
 - For source links, use this exact format at the end of relevant sentences: [↗](url) - this will render as a small clickable icon. Do NOT include the domain name or full URL text.
 

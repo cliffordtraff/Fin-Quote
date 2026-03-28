@@ -97,8 +97,23 @@ function uniqueStrings(values: string[]): string[] {
 }
 
 function encodeBase64UrlJson(value: unknown): string {
-  return Buffer.from(JSON.stringify(value), 'utf8')
-    .toString('base64')
+  const json = JSON.stringify(value)
+
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(json, 'utf8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '')
+  }
+
+  const bytes = new TextEncoder().encode(json)
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+
+  return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '')
@@ -153,6 +168,36 @@ function buildCaptureUrl(
   const captureUrl = new URL('/tos/export/newsletter', `${chartBaseUrl}/`)
   captureUrl.searchParams.set('spec', encodeBase64UrlJson(captureSpec))
   return captureUrl.toString()
+}
+
+function buildDashboardFundamentalsSurfaceUrl(
+  chartBaseUrl: string,
+  captureSpec: Record<string, unknown>,
+): string {
+  const captureUrl = new URL('/tos/dashboard/fundamentals', `${chartBaseUrl}/`)
+  captureUrl.searchParams.set('spec', encodeBase64UrlJson(captureSpec))
+  return captureUrl.toString()
+}
+
+export function buildRelativeChartingPlatformCapturePath(
+  captureSpec: Record<string, unknown>,
+): string {
+  const captureUrl = new URL(
+    buildCaptureUrl('https://charting-proxy.theintraday.invalid', captureSpec),
+  )
+  return `${captureUrl.pathname}${captureUrl.search}`
+}
+
+export function buildRelativeChartingPlatformDashboardFundamentalsSurfacePath(
+  captureSpec: Record<string, unknown>,
+): string {
+  const captureUrl = new URL(
+    buildDashboardFundamentalsSurfaceUrl(
+      'https://charting-proxy.theintraday.invalid',
+      captureSpec,
+    ),
+  )
+  return `${captureUrl.pathname}${captureUrl.search}`
 }
 
 export function getDefaultChartingBaseUrl(): string {
@@ -224,6 +269,43 @@ export function resolveChartingPlatformNewsletterChart(
   }
 
   return resolveFundamentalsNewsletterChart(spec, options)
+}
+
+export function resolveChartingPlatformNewsletterCapturePath(
+  spec: NewsletterChartSpec,
+  options: Omit<ResolveChartingPlatformNewsletterOptions, 'chartBaseUrl'>,
+): string {
+  return buildRelativeChartingPlatformCapturePath(
+    resolveChartingPlatformNewsletterChart(spec, {
+      ...options,
+      chartBaseUrl: 'https://charting-proxy.theintraday.invalid',
+    }).captureSpec,
+  )
+}
+
+export function resolveChartingPlatformDashboardFundamentalsSurfacePath(
+  spec: NewsletterChartSpec,
+  options: Omit<ResolveChartingPlatformNewsletterOptions, 'chartBaseUrl'>,
+): string {
+  if (isPriceNewsletterChartSpec(spec)) {
+    throw new Error('Dashboard surface requires a fundamentals chart spec')
+  }
+
+  const resolvedChart = resolveChartingPlatformNewsletterChart(spec, {
+    ...options,
+    chartBaseUrl: 'https://charting-proxy.theintraday.invalid',
+  })
+  const dashboardFundState = {
+    ...((resolvedChart.captureSpec.fundState as Record<string, unknown> | undefined) ?? {}),
+    sliderOnlyMode: true,
+    showTooltip: false,
+    hoverFocusEnabled: false,
+  }
+
+  return buildRelativeChartingPlatformDashboardFundamentalsSurfacePath({
+    ...resolvedChart.captureSpec,
+    fundState: dashboardFundState,
+  })
 }
 
 function resolveFundamentalsNewsletterChart(

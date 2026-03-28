@@ -421,6 +421,30 @@ function normalizeFormType(value: string | null | undefined): string {
   return value.trim().toUpperCase()
 }
 
+function formatErrorForLog(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  if (error && typeof error === 'object') {
+    const keys = Object.keys(error)
+
+    if (keys.length > 0) {
+      try {
+        return JSON.stringify(error)
+      } catch {
+        return `[object with keys: ${keys.join(', ')}]`
+      }
+    }
+  }
+
+  return String(error)
+}
+
 function mapDatabaseLargeTradeCandidate(row: DatabaseLargeTradeRow): LargeInsiderTradeCandidate | null {
   const shares = Number(row.shares)
   const price = Number(row.price)
@@ -469,7 +493,7 @@ function isEligibleLargeTradeCandidate(
   return candidate.transactionDate >= fromDate
     && candidate.transactionDate <= toDate
     && ['4', '4/A', '5', '5/A', '144', '144/A'].includes(candidate.formType)
-    && ['P', 'S'].includes(candidate.transactionCode)
+    && ['S', 'P'].includes(candidate.transactionCode)
     && Number.isFinite(candidate.shares)
     && Number.isFinite(candidate.price)
     && candidate.shares > 0
@@ -487,7 +511,7 @@ async function fetchDatabaseLargeTradeCandidates(
     .gte('transaction_date', fromDate)
     .lte('transaction_date', toDate)
     .in('form_type', ['4', '4/A', '5', '5/A', '144', '144/A'])
-    .in('transaction_code', ['P', 'S'])
+    .in('transaction_code', ['S', 'P'])
     .not('value', 'is', null)
     .gt('value', 0)
     .order('value', { ascending: false })
@@ -518,48 +542,53 @@ async function fetchLiveFmpLargeTradeCandidates(
   const maxPages = 30
 
   for (let page = 0; page < maxPages; page++) {
-    const response = await fetch(
-      `https://financialmodelingprep.com/api/v4/insider-trading?page=${page}&limit=${pageSize}&apikey=${apiKey}`,
-      {
-        headers: {
-          Accept: 'application/json',
-        },
-        next: {
-          revalidate: 900,
-        },
-      }
-    )
+    try {
+      const response = await fetch(
+        `https://financialmodelingprep.com/api/v4/insider-trading?page=${page}&limit=${pageSize}&apikey=${apiKey}`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
+          next: {
+            revalidate: 900,
+          },
+        }
+      )
 
-    if (!response.ok) {
-      console.error('FMP insider trade fallback failed:', response.status, response.statusText)
-      break
-    }
-
-    const data: unknown = await response.json()
-
-    if (!Array.isArray(data) || data.length === 0) {
-      break
-    }
-
-    let oldestDateOnPage: string | null = null
-
-    for (const row of data) {
-      const candidate = mapFmpLargeTradeCandidate(row as FmpLargeTradeRow)
-
-      if (!candidate) {
-        continue
+      if (!response.ok) {
+        console.warn('FMP insider trade fallback failed:', response.status, response.statusText)
+        break
       }
 
-      if (oldestDateOnPage === null || candidate.transactionDate < oldestDateOnPage) {
-        oldestDateOnPage = candidate.transactionDate
+      const data: unknown = await response.json()
+
+      if (!Array.isArray(data) || data.length === 0) {
+        break
       }
 
-      if (isEligibleLargeTradeCandidate(candidate, fromDate, toDate)) {
-        candidates.push(candidate)
-      }
-    }
+      let oldestDateOnPage: string | null = null
 
-    if (candidates.length >= targetCount && oldestDateOnPage !== null && oldestDateOnPage < fromDate) {
+      for (const row of data) {
+        const candidate = mapFmpLargeTradeCandidate(row as FmpLargeTradeRow)
+
+        if (!candidate) {
+          continue
+        }
+
+        if (oldestDateOnPage === null || candidate.transactionDate < oldestDateOnPage) {
+          oldestDateOnPage = candidate.transactionDate
+        }
+
+        if (isEligibleLargeTradeCandidate(candidate, fromDate, toDate)) {
+          candidates.push(candidate)
+        }
+      }
+
+      if (candidates.length >= targetCount && oldestDateOnPage !== null && oldestDateOnPage < fromDate) {
+        break
+      }
+    } catch (error) {
+      console.warn('FMP insider trade fallback threw:', formatErrorForLog(error))
       break
     }
   }
@@ -572,7 +601,11 @@ async function fetchLiveFmpLargeTradeCandidates(
  */
 export async function getLargestInsiderTrades(
   weeks: number = 4,
-  limit: number = 6
+  limit: number = 6,
+  options: {
+    saleLimit?: number
+    buyLimit?: number
+  } = {}
 ): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
   try {
     const supabase = await createServerClient()
@@ -583,22 +616,59 @@ export async function getLargestInsiderTrades(
     fromDate.setDate(fromDate.getDate() - weeks * 7)
     const fromDateStr = toIsoDate(fromDate)
 
-    const databaseCandidates = await fetchDatabaseLargeTradeCandidates(supabase, fromDateStr, todayStr)
-    const liveFmpCandidates = await fetchLiveFmpLargeTradeCandidates(
-      fromDateStr,
-      todayStr,
-      Math.max(limit * 100, 650)
-    )
+    const [databaseResult, liveFmpResult] = await Promise.allSettled([
+      fetchDatabaseLargeTradeCandidates(supabase, fromDateStr, todayStr),
+      fetchLiveFmpLargeTradeCandidates(
+        fromDateStr,
+        todayStr,
+        Math.max(limit * 100, 650)
+      ),
+    ])
 
-    const trades = rankLargeInsiderTrades([...databaseCandidates, ...liveFmpCandidates], {
+    const databaseCandidates = databaseResult.status === 'fulfilled' ? databaseResult.value : []
+    const liveFmpCandidates = liveFmpResult.status === 'fulfilled' ? liveFmpResult.value : []
+
+    if (databaseResult.status === 'rejected') {
+      console.warn('Largest insider trades database fetch failed:', formatErrorForLog(databaseResult.reason))
+    }
+
+    if (liveFmpResult.status === 'rejected') {
+      console.warn('Largest insider trades live FMP fetch failed:', formatErrorForLog(liveFmpResult.reason))
+    }
+
+    if (databaseCandidates.length === 0 && liveFmpCandidates.length === 0) {
+      return { error: 'Failed to load insider trading data' }
+    }
+
+    const rankedTrades = rankLargeInsiderTrades([...databaseCandidates, ...liveFmpCandidates], {
       fromDate: fromDateStr,
       toDate: todayStr,
-      limit,
+      limit: options.saleLimit || options.buyLimit ? 500 : limit,
     })
+
+    const trades = (() => {
+      if (!options.saleLimit && !options.buyLimit) {
+        return rankedTrades
+      }
+
+      const saleTrades = options.saleLimit
+        ? rankedTrades
+          .filter((trade) => normalizeTransactionCode(trade.transactionCode) === 'S')
+          .slice(0, options.saleLimit)
+        : []
+
+      const buyTrades = options.buyLimit
+        ? rankedTrades
+          .filter((trade) => normalizeTransactionCode(trade.transactionCode) === 'P')
+          .slice(0, options.buyLimit)
+        : []
+
+      return [...saleTrades, ...buyTrades].slice(0, limit)
+    })()
 
     return { trades }
   } catch (error) {
-    console.error('Error fetching largest insider trades:', error)
+    console.error('Error fetching largest insider trades:', formatErrorForLog(error))
     return { error: 'Failed to load insider trading data' }
   }
 }

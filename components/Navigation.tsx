@@ -23,6 +23,7 @@ function normalizeSymbol(value: string | null | undefined) {
 export default function Navigation() {
   const pathname = usePathname()
   const [workspaceSymbol, setWorkspaceSymbol] = useState<string | null>(null)
+  const showMostActiveTab = process.env.NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB === 'true'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -40,7 +41,9 @@ export default function Navigation() {
 
   const navLinks: NavLink[] = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/dashboard/pulse-today', label: 'Most Active', match: '/dashboard/pulse-today' },
+    ...(showMostActiveTab
+      ? [{ href: '/dashboard/pulse-today', label: 'Most Active', match: '/dashboard/pulse-today' }]
+      : []),
     { href: workspaceHref('/workspace/chart'), label: 'Chart', match: '/workspace/chart' },
     { href: workspaceHref('/workspace/fundamentals'), label: 'Fundamentals', match: '/workspace/fundamentals' },
     { href: workspaceHref('/workspace/overview'), label: 'Overview', match: '/workspace/overview' },

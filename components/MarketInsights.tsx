@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react'
 import type { MarketTrendsBullet } from '@/app/actions/market-trends-responses'
 import { TRENDS_LOADING_STEPS, TRENDS_LOADING_MESSAGES, type TrendsLoadingStep } from '@/lib/loading-steps'
 
-type ApproachType = 'responses-api' | 'agents-sdk' | 'side-by-side'
-
 function TrendsLoadingSteps({ loading }: { loading: boolean }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
@@ -73,32 +71,118 @@ function TrendsLoadingSteps({ loading }: { loading: boolean }) {
 
 interface MarketInsightsProps {
   responsesApiBullets?: MarketTrendsBullet[]
-  agentsSdkBullets?: MarketTrendsBullet[]
   responsesLoading?: boolean
-  agentsLoading?: boolean
   responsesError?: string
-  agentsError?: string
   onRefreshResponses?: () => void
-  onRefreshAgents?: () => void
   responsesGeneratedAt?: string
-  agentsGeneratedAt?: string
+  marketSummary?: string
+  marketSummaryLoading?: boolean
+  onRefreshSummary?: () => void
+  summaryLastUpdated?: Date | null
+}
+
+const SUMMARY_LINE_FILTERS = [
+  /borrowing costs/i,
+  /treasury|treasuries/i,
+  /fed hold|fed rate|monetary policy/i,
+  /employment situation/i,
+]
+
+function filterSummaryLines(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !SUMMARY_LINE_FILTERS.some((re) => re.test(line)))
+    .map((line) => line.replace(/^\* /, ''))
+    .join('\n')
+}
+
+function renderFormattedSummary(text: string) {
+  text = filterSummaryLines(text)
+  // Strip source link icons and surrounding parentheses, e.g. "( [↗](url) )" or "[↗](url)"
+  text = text.replace(/\s*\(\s*\[[^\]]*\]\([^)]*\)\s*\)\s*/g, ' ')
+  text = text.replace(/\s*\[[^\]]*\]\(https?:\/\/[^)]*\)\s*/g, ' ')
+  // Clean up any leftover empty parens
+  text = text.replace(/\(\s*\)/g, '')
+  // Bold patterns
+  const boldPattern = /(\*\*[^*]+\*\*)/g
+  // Ticker indicators [[Name:+1.23%]]
+  const tickerPattern = /\[\[([^\]:]+):([+-]?\d+\.?\d*%?)\]\]/g
+  // Links [↗](url) or [text](url) format
+  const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g
+
+  const allPatterns: { start: number; end: number; element: React.ReactNode }[] = []
+
+  let match
+  while ((match = tickerPattern.exec(text)) !== null) {
+    const name = match[1]
+    const pct = match[2].includes('%') ? match[2] : `${match[2]}%`
+    const numPct = parseFloat(pct)
+    const isPos = numPct >= 0
+    const colorClass = isPos ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+    const borderClass = isPos ? 'border-green-500' : 'border-red-500'
+    const arrow = isPos ? '\u25B2' : '\u25BC'
+    allPatterns.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      element: (
+        <span key={`t-${match.index}`} className="inline-flex items-center gap-1">
+          <span className="font-semibold text-gray-900 dark:text-gray-100">{name}</span>
+          <span className={`text-xs ${colorClass} border-b-2 ${borderClass} pb-0.5`}>{pct}{arrow}</span>
+        </span>
+      ),
+    })
+  }
+
+  while ((match = linkPattern.exec(text)) !== null) {
+    if (allPatterns.some((p) => match!.index >= p.start && match!.index < p.end)) continue
+    const url = match[2]
+    allPatterns.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      element: (
+        <a key={`l-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 ml-0.5" title="View source">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        </a>
+      ),
+    })
+  }
+
+  allPatterns.sort((a, b) => a.start - b.start)
+
+  const result: (string | React.ReactNode)[] = []
+  let lastIndex = 0
+  for (const pattern of allPatterns) {
+    if (pattern.start > lastIndex) result.push(text.slice(lastIndex, pattern.start))
+    result.push(pattern.element)
+    lastIndex = pattern.end
+  }
+  if (lastIndex < text.length) result.push(text.slice(lastIndex))
+
+  return result.map((segment, i) => {
+    if (typeof segment !== 'string') return segment
+    const boldParts = segment.split(boldPattern)
+    return boldParts.map((part, j) => {
+      if (part.startsWith('**') && part.endsWith('**')) return <strong key={`${i}-${j}`}>{part.slice(2, -2)}</strong>
+      return part
+    })
+  })
 }
 
 export default function MarketInsights({
   responsesApiBullets = [],
-  agentsSdkBullets = [],
   responsesLoading = false,
-  agentsLoading = false,
   responsesError,
-  agentsError,
   onRefreshResponses,
-  onRefreshAgents,
   responsesGeneratedAt,
-  agentsGeneratedAt,
+  marketSummary,
+  marketSummaryLoading,
+  onRefreshSummary,
+  summaryLastUpdated,
 }: MarketInsightsProps) {
-  const [approach, setApproach] = useState<ApproachType>('responses-api')
+  const HIDDEN_BULLET_TITLES = ['Worst Sector', 'Volatility Signal', 'Sector Rotation', 'Severe Stock Loss']
 
   const renderBulletList = (bullets: MarketTrendsBullet[], loading: boolean, error?: string, generatedAt?: string) => {
+    bullets = bullets.filter(b => !HIDDEN_BULLET_TITLES.includes(b.title))
     if (loading) {
       return <TrendsLoadingSteps loading={loading} />
     }
@@ -147,93 +231,56 @@ export default function MarketInsights({
   }
 
   return (
-    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden" style={{ height: '400px' }}>
-      {/* Header with toggle */}
+    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      {/* Header */}
       <div className="px-2 py-1 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
         <div className="flex justify-between items-center">
           <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Market Trends</h2>
-          <div className="flex items-center gap-2">
-            {/* Approach Toggle */}
-            <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
-              <button
-                onClick={() => setApproach('responses-api')}
-                className={`px-1.5 py-0.5 text-[8px] ${
-                  approach === 'responses-api'
-                    ? 'bg-sage-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                Responses
-              </button>
-              <button
-                onClick={() => setApproach('agents-sdk')}
-                className={`px-1.5 py-0.5 text-[8px] border-l border-gray-300 dark:border-gray-600 ${
-                  approach === 'agents-sdk'
-                    ? 'bg-sage-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                Agents
-              </button>
-              <button
-                onClick={() => setApproach('side-by-side')}
-                className={`px-1.5 py-0.5 text-[8px] border-l border-gray-300 dark:border-gray-600 ${
-                  approach === 'side-by-side'
-                    ? 'bg-sage-500 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-cream-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                Compare
-              </button>
-            </div>
-            {/* Refresh buttons */}
-            {approach !== 'side-by-side' && (
-              <button
-                onClick={approach === 'responses-api' ? onRefreshResponses : onRefreshAgents}
-                disabled={approach === 'responses-api' ? responsesLoading : agentsLoading}
-                className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
-              >
-                {(approach === 'responses-api' ? responsesLoading : agentsLoading) ? '...' : 'Refresh'}
-              </button>
-            )}
-            {approach === 'side-by-side' && (
-              <button
-                onClick={() => {
-                  onRefreshResponses?.()
-                  onRefreshAgents?.()
-                }}
-                disabled={responsesLoading || agentsLoading}
-                className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
-              >
-                {responsesLoading || agentsLoading ? '...' : 'Both'}
-              </button>
-            )}
-          </div>
+          <button
+            onClick={onRefreshResponses}
+            disabled={responsesLoading}
+            className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
+          >
+            {responsesLoading ? '...' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-2 text-sm text-gray-700 dark:text-gray-300 overflow-y-auto" style={{ height: 'calc(100% - 29px)' }}>
-        {approach === 'side-by-side' ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-[9px] font-semibold text-sage-500 mb-1.5 pb-1 border-b border-cream-200 dark:border-gray-700">
-                Responses API
-              </div>
-              {renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)}
-            </div>
-            <div>
-              <div className="text-[9px] font-semibold text-green-500 mb-1.5 pb-1 border-b border-cream-200 dark:border-gray-700">
-                Agents SDK
-              </div>
-              {renderBulletList(agentsSdkBullets, agentsLoading, agentsError, agentsGeneratedAt)}
+      {/* What's Happening Today */}
+      {(marketSummary || marketSummaryLoading) && (
+        <div className="px-3 py-2 border-b border-cream-200 dark:border-gray-700">
+          <div className="flex justify-between items-center mb-1.5">
+            <div />
+            <div className="flex items-center gap-2">
+              {summaryLastUpdated && (
+                <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                  {summaryLastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
+              {onRefreshSummary && (
+                <button
+                  onClick={onRefreshSummary}
+                  disabled={marketSummaryLoading}
+                  className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
+                >
+                  {marketSummaryLoading ? '...' : 'Refresh'}
+                </button>
+              )}
             </div>
           </div>
-        ) : approach === 'responses-api' ? (
-          renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)
-        ) : (
-          renderBulletList(agentsSdkBullets, agentsLoading, agentsError, agentsGeneratedAt)
-        )}
+          <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+            {marketSummaryLoading ? (
+              <div className="py-1 text-xs text-gray-400 dark:text-gray-500">Loading...</div>
+            ) : marketSummary ? (
+              <div className="whitespace-pre-wrap">{renderFormattedSummary(marketSummary)}</div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Bullet Points */}
+      <div className="p-2 text-sm text-gray-700 dark:text-gray-300 overflow-y-auto">
+        {renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)}
       </div>
     </div>
   )

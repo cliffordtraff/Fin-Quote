@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { isAdminAllowlistConfigured, isAdminUserEmail } from '@/lib/auth/admin-config'
 
 // Routes that require authentication
 const PROTECTED_ROUTES = ['/profile', '/admin']
@@ -10,10 +11,14 @@ const AUTH_ROUTES = ['/auth', '/auth/forgot-password']
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const isPublicChartOfDayAdminRoute =
+    pathname === '/admin/chart-of-the-day' ||
+    pathname.startsWith('/admin/chart-of-the-day/')
 
   // Ignore Next internals + API routes + static files
   if (
     pathname.startsWith('/_next') ||
+    pathname.startsWith('/tos') ||
     pathname.startsWith('/api') ||
     pathname === '/favicon.ico' ||
     pathname.match(/\.(ico|png|jpg|jpeg|svg|gif|webp|css|js|woff|woff2)$/)
@@ -57,10 +62,22 @@ export async function middleware(req: NextRequest) {
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route))
 
   // Redirect unauthenticated users away from protected routes
-  if (isProtectedRoute && !user) {
+  if (isProtectedRoute && !user && !isPublicChartOfDayAdminRoute) {
     const url = req.nextUrl.clone()
     url.pathname = '/auth'
     url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  if (
+    pathname.startsWith('/admin') &&
+    !isPublicChartOfDayAdminRoute &&
+    user &&
+    isAdminAllowlistConfigured() &&
+    !isAdminUserEmail(user.email)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 

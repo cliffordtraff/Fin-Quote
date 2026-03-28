@@ -1,6 +1,6 @@
 'use server'
 
-import { getProvider } from '@/lib/providers'
+import { FMPProvider } from '@/lib/providers/fmp'
 
 export interface ForexBondData {
   symbol: string
@@ -19,7 +19,6 @@ const FOREX_BONDS_SYMBOLS = [
   { symbol: 'EURUSD', name: 'EUR/USD' },
   { symbol: 'USDJPY', name: 'USD/JPY' },
   { symbol: 'GBPUSD', name: 'GBP/USD' },
-  { symbol: 'BTCUSD', name: 'BTC/USD' },
   { symbol: '^FVX', name: '5-Year Treasury' },
   { symbol: '^TNX', name: '10-Year Treasury' },
   { symbol: '^TYX', name: '30-Year Treasury' },
@@ -27,7 +26,10 @@ const FOREX_BONDS_SYMBOLS = [
 
 export async function getForexBondsData(): Promise<{ forexBonds: ForexBondData[] } | { error: string }> {
   try {
-    const provider = getProvider()
+    // This mixed panel needs FX and treasury-yield quotes together.
+    // The Massive provider path does not yet normalize the symbols
+    // used here, so keep this widget on FMP until that mapping is implemented.
+    const provider = new FMPProvider()
     const symbols = FOREX_BONDS_SYMBOLS.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 
@@ -61,7 +63,7 @@ export async function getForexBondsWithYTD(): Promise<{ forexBonds: ForexBondDat
   const yearStart = `${currentYear}-01-01`
 
   try {
-    const provider = getProvider()
+    const provider = new FMPProvider()
     const symbols = FOREX_BONDS_SYMBOLS.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 

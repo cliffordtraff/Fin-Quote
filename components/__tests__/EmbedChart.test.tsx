@@ -32,7 +32,7 @@ describe('EmbedChart', () => {
 
     expect(screen.getByTitle('AAPL price chart')).toHaveAttribute(
       'src',
-      `http://localhost:3001/embed?symbol=AAPL&tf=D&range=1y&theme=light&toolbar=simplified&origin=${encodeURIComponent(expectedHostOrigin())}`
+      `http://localhost:3001/embed?symbol=AAPL&tf=D&range=1y&theme=light&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
     )
   })
 
@@ -43,7 +43,7 @@ describe('EmbedChart', () => {
 
     expect(screen.getByTitle('MSFT price chart')).toHaveAttribute(
       'src',
-      `http://localhost:3001/embed?symbol=MSFT&tf=D&range=1y&theme=dark&toolbar=simplified&origin=${encodeURIComponent(expectedHostOrigin())}`
+      `http://localhost:3001/embed?symbol=MSFT&tf=D&range=1y&theme=dark&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
     )
   })
 })

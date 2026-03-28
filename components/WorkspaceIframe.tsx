@@ -9,6 +9,7 @@ import {
   type NativeTickerSearchCloseDetail,
   type NativeTickerSearchOpenDetail,
 } from '@/lib/native-ticker-search'
+import { WORKSPACE_FOOTER_HEIGHT_PX } from '@/lib/workspace-layout'
 import { useTheme } from './ThemeProvider'
 
 type WorkspaceMode = 'price' | 'fundamentals' | 'overview'
@@ -208,6 +209,7 @@ export default function WorkspaceIframe() {
   const activeMode: WorkspaceMode | null = workspaceMode ?? (searchOverlayActive ? 'price' : null)
   const desiredSurfaceMode: EmbedSurfaceMode = isSearchOnlySurface ? 'search-only' : 'default'
   const searchOnlyModalHeight = `min(80vh, calc(100vh - ${navOffset + 32}px))`
+  const footerOffset = isWorkspaceRoute && workspaceMode !== 'price' ? WORKSPACE_FOOTER_HEIGHT_PX : 0
 
   useEffect(() => {
     const measureNav = () => {
@@ -482,6 +484,7 @@ export default function WorkspaceIframe() {
       className={`fixed left-0 right-0 bottom-0 ${isSearchOnlySurface ? 'bg-transparent' : 'bg-cream-100 dark:bg-gray-900'}`}
       style={{
         top: navOffset,
+        bottom: footerOffset,
         zIndex: searchOverlayActive && !isWorkspaceRoute ? 40 : 10,
         display: iframeVisible ? 'block' : 'none',
       }}
