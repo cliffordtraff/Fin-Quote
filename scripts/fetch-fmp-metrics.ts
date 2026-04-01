@@ -17,7 +17,8 @@ import * as path from 'path'
 
 dotenv.config({ path: '.env.local' })
 
-const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+const FMP_API_KEY = process.env.FMP_API_KEY
+if (!FMP_API_KEY) throw new Error('FMP_API_KEY is required — set it in .env.local')
 
 // Command line arguments: first is symbol, second is period type
 const args = process.argv.slice(2)

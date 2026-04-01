@@ -10,7 +10,11 @@
  *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly
  */
 
-const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
+const FMP_API_KEY = process.env.FMP_API_KEY
+if (!FMP_API_KEY) throw new Error('FMP_API_KEY is required — set it in .env.local')
 
 // Fiscal year end month by symbol (1-12)
 const FISCAL_YEAR_END_MONTH: Record<string, number> = {

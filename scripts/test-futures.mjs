@@ -2,7 +2,11 @@
  * Test script to verify if FMP API provides futures market data
  */
 
-const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
+const apiKey = process.env.FMP_API_KEY
+if (!apiKey) { console.error('FMP_API_KEY is required — set it in .env.local'); process.exit(1) }
 
 console.log('Testing FMP API for futures market data\n')
 console.log('='.repeat(60))
