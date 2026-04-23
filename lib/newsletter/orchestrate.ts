@@ -25,7 +25,11 @@ import {
   fetchTodayQuote,
   recordPick,
 } from './fetch-context'
-import { assembleNewsletterHtml, buildNewsletterHeader } from './assemble'
+import {
+  assembleNewsletterHtml,
+  assembleNewsletterHtmlForBeehiiv,
+  buildNewsletterHeader,
+} from './assemble'
 import { publishChartImages } from './publish'
 import {
   buildCopyGenerationMessages,
@@ -809,6 +813,14 @@ export async function generateNewsletter(
         })
       : undefined
 
+  const assemblyOptions =
+    format === 'market_roundup'
+      ? {
+          headerOverride,
+          introTextOverride: generationResult.editorialHook,
+        }
+      : undefined
+
   let fullHtml = assembleNewsletterHtml(
     generationResult.ticker,
     generationResult.blocks,
@@ -816,17 +828,26 @@ export async function generateNewsletter(
     generationResult.todayQuote,
     generationResult.editorialHook,
     generationResult.subjectLine,
-    format === 'market_roundup'
-      ? {
-          headerOverride,
-          introTextOverride: generationResult.editorialHook,
-        }
-      : undefined,
+    assemblyOptions,
+  )
+
+  let beehiivHtml = assembleNewsletterHtmlForBeehiiv(
+    generationResult.ticker,
+    generationResult.blocks,
+    now,
+    generationResult.todayQuote,
+    generationResult.editorialHook,
+    generationResult.subjectLine,
+    assemblyOptions,
   )
 
   const htmlFilename = `${generationResult.ticker}_newsletter_${runStamp}.html`
   const htmlPath = resolve(absOutputDir, htmlFilename)
   writeFileSync(htmlPath, fullHtml, 'utf-8')
+
+  const beehiivHtmlFilename = `${generationResult.ticker}_newsletter_beehiiv_${runStamp}.html`
+  const beehiivHtmlPath = resolve(absOutputDir, beehiivHtmlFilename)
+  writeFileSync(beehiivHtmlPath, beehiivHtml, 'utf-8')
 
   let previewPath: string | null = null
   if (!skipPreviewCapture) {
@@ -850,15 +871,22 @@ export async function generateNewsletter(
     publishedUrls = await publishChartImages(allImagePaths)
 
     let publishedHtml = fullHtml
+    let publishedBeehiivHtml = beehiivHtml
     for (const [localFilename, publicUrl] of Object.entries(publishedUrls)) {
       publishedHtml = publishedHtml.replaceAll(
+        `src="${localFilename}"`,
+        `src="${publicUrl}"`,
+      )
+      publishedBeehiivHtml = publishedBeehiivHtml.replaceAll(
         `src="${localFilename}"`,
         `src="${publicUrl}"`,
       )
     }
 
     writeFileSync(htmlPath, publishedHtml, 'utf-8')
+    writeFileSync(beehiivHtmlPath, publishedBeehiivHtml, 'utf-8')
     fullHtml = publishedHtml
+    beehiivHtml = publishedBeehiivHtml
     timings.publish = Date.now() - tPublish
   }
 
@@ -878,8 +906,10 @@ export async function generateNewsletter(
     blocks: generationResult.blocks,
     chartSpecs: generationResult.chartSpecs,
     fullHtml,
+    beehiivHtml,
     chartPaths: generationResult.chartPaths,
     htmlPath,
+    beehiivHtmlPath,
     previewPath,
     timings,
     todayQuote: generationResult.todayQuote,

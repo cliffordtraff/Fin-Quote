@@ -3,6 +3,7 @@ import { basename, resolve } from 'path'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import {
   assembleNewsletterHtml,
+  assembleNewsletterHtmlForBeehiiv,
   buildNewsletterHeader,
   buildNewsletterIntroText,
   buildNewsletterStatsCard,
@@ -473,6 +474,44 @@ export function renderNewsletterDraftPreviewHtml(
   })
 
   return assembleNewsletterHtml(
+    normalizedDraft.ticker,
+    blocks,
+    new Date(normalizedDraft.generatedAt),
+    normalizedDraft.todayQuote,
+    normalizedDraft.editorialHook,
+    normalizedDraft.subjectLine,
+    {
+      headerOverride: normalizedDraft.header,
+      introTextOverride: normalizedDraft.introText,
+      statsCardOverride: normalizedDraft.statsCard,
+    },
+  )
+}
+
+/**
+ * Render Beehiiv-compatible HTML for a draft document.
+ * This is a snippet ready to paste into Beehiiv's HTML block.
+ */
+export function renderNewsletterDraftBeehiivHtml(
+  draft: NewsletterDraftDocument,
+  publicChartBaseUrl = getDefaultPublicChartingBaseUrl(),
+): string {
+  const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
+  const blocks = normalizedDraft.blocks.map((block) =>
+    buildNewsletterBlock(block.layoutId, {
+      heading: block.heading,
+      body: block.body,
+      chartImageUrl: block.chartImageUrl,
+      chartAlt: block.chartAlt,
+      chartExportUrl: block.chartExportUrl,
+      caption: block.caption,
+      ctaText: block.ctaText,
+      ctaUrl: block.ctaUrl,
+      footer: block.footer,
+    }),
+  )
+
+  return assembleNewsletterHtmlForBeehiiv(
     normalizedDraft.ticker,
     blocks,
     new Date(normalizedDraft.generatedAt),

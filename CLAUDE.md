@@ -273,3 +273,11 @@ DEXTER_MODEL_PROVIDER=openai
 - Some older AI and evaluation paths still assume AAPL-oriented tooling
 - Feature flags mainly control visibility and entry points, not complete code removal
 - The repository contains both production paths and experimental surfaces; check active usage before deleting old modules
+
+---
+
+## Accounts & Services
+
+| Service | Plan | Cost |
+|---------|------|------|
+| Beehiiv | Scale | $50/month |

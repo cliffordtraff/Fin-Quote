@@ -197,6 +197,13 @@ function renderStatsCardInner(statsCard: NewsletterDraftStatsCard): string {
                 </td></tr>`
 }
 
+export interface AssembleNewsletterResult {
+  /** Full HTML document for standalone use / previews */
+  fullHtml: string
+  /** Beehiiv-compatible snippet (just content, no document wrapper or footer) */
+  beehiivHtml: string
+}
+
 export function assembleNewsletterHtml(
   ticker: string,
   blocks: NewsletterBlock[],
@@ -348,4 +355,116 @@ ${blockHtml}
   </table>
 </body>
 </html>`
+}
+
+/**
+ * Assemble newsletter HTML specifically for Beehiiv's HTML Snippet block.
+ *
+ * Outputs just the content (header + intro + stats + blocks) without:
+ * - Document wrapper (<!DOCTYPE>, <html>, <head>, <body>)
+ * - <style> tags (Beehiiv strips them anyway)
+ * - Footer/unsubscribe (Beehiiv handles this)
+ * - Preheader text (Beehiiv has its own preview text field)
+ *
+ * All styles are inline for maximum compatibility.
+ */
+export function assembleNewsletterHtmlForBeehiiv(
+  ticker: string,
+  blocks: NewsletterBlock[],
+  date: Date,
+  quote?: TodayQuote,
+  editorialHook?: string,
+  subjectLine?: string,
+  options?: AssembleNewsletterOptions,
+): string {
+  const tickerUpper = escapeHtml(ticker.toUpperCase())
+  const header = options?.headerOverride ?? buildNewsletterHeader(ticker, date)
+  const introText = options?.introTextOverride ?? buildNewsletterIntroText(quote, editorialHook)
+  const statsCard = options?.statsCardOverride ?? buildNewsletterStatsCard(quote)
+
+  // Build intro inner HTML (no card wrapper — merged into header card)
+  let introInnerHtml = ''
+  if (options?.introTextOverride) {
+    introInnerHtml = `
+                <tr id="newsletter-preview-intro"><td colspan="2" style="padding:0 32px 24px 32px;border-top:1px solid ${BRAND.cream300};">
+                  <p style="margin:0;padding-top:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
+                    ${escapeHtml(options.introTextOverride)}
+                  </p>
+                </td></tr>`
+  } else if (quote && introText) {
+    const pct = quote.changesPercentage
+    const pctSign = pct >= 0 ? '+' : ''
+    const dollarChange = Math.abs(quote.change)
+    const dollarSign = quote.change >= 0 ? '+' : '-'
+    const hook = editorialHook ? ` ${escapeHtml(editorialHook)}` : ''
+    const name = escapeHtml(quote.name)
+    const moveColor = pct >= 0 ? '#16a34a' : '#dc2626'
+
+    introInnerHtml = `
+                <tr id="newsletter-preview-intro"><td colspan="2" style="padding:0 32px 24px 32px;border-top:1px solid ${BRAND.cream300};">
+                  <p style="margin:0;padding-top:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;color:${BRAND.textDark};line-height:1.6;">
+                    <strong>${name}</strong> (<span style="font-weight:600;">${tickerUpper}</span>) is
+                    <span style="color:${moveColor};font-weight:600;">${pctSign}${pct.toFixed(2)}% (${dollarSign}$${dollarChange.toFixed(2)})</span> today.${hook}
+                  </p>
+                </td></tr>`
+  }
+
+  // Build stats inner HTML (no card wrapper — merged into header card)
+  const statsInnerHtml = statsCard ? renderStatsCardInner(statsCard) : ''
+  // Add divider before stats if both intro and stats are present
+  const statsDivider = introInnerHtml && statsInnerHtml
+    ? `<tr><td colspan="2" style="padding:0 32px;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
+    : statsInnerHtml && !introInnerHtml
+      ? `<tr><td colspan="2" style="padding:0;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
+      : ''
+  const showHeaderLogo = shouldRenderNewsletterHeaderLogo(header)
+
+  const blockHtml = blocks
+    .map(
+      (block) => `
+    <!-- Block -->
+    <tr><td style="padding:0 0 24px 0;">
+      ${block.html}
+    </td></tr>`,
+    )
+    .join('\n')
+
+  // Beehiiv-compatible output: just the content table, no document wrapper
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+
+  <!-- Header + Intro + Stats (unified card) -->
+  <tr id="newsletter-preview-header"><td style="padding:0 0 32px 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+        <tr>
+          <td style="padding:24px 32px;">
+            <h1 style="margin:0 0 4px 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${BRAND.sage700};line-height:1.3;">
+              ${escapeHtml(header.title)}
+            </h1>
+            <p style="margin:0;font-size:13px;color:${BRAND.textMuted};">
+              ${escapeHtml(header.dateText)}
+            </p>
+          </td>
+          <td align="right" valign="middle" style="width:60px;padding:24px 32px 24px 0;">
+            ${showHeaderLogo ? `<img src="${escapeHtml(header.logoUrl || '')}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
+          </td>
+        </tr>
+${introInnerHtml}
+${statsDivider}${statsInnerHtml}
+    </table>
+  </td></tr>
+
+${blockHtml}
+
+  <!-- Minimal footer (Beehiiv handles unsubscribe) -->
+  <tr><td style="padding:8px 0 0 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;">
+      <tr><td style="padding:16px 32px;text-align:center;">
+        <p style="margin:0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;">
+          Data sourced from SEC filings and Financial Modeling Prep. Charts generated by <a href="https://theintraday.com" style="color:${BRAND.sage500};text-decoration:underline;">The Intraday</a>.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+
+</table>`
 }

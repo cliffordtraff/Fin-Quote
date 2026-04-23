@@ -428,8 +428,12 @@ export interface NewsletterResult {
   blocks: NewsletterBlock[]
   chartSpecs: NewsletterChartSpec[]
   fullHtml: string
+  /** Beehiiv-compatible HTML snippet (no document wrapper, ready to paste) */
+  beehiivHtml: string
   chartPaths: string[]
   htmlPath: string
+  /** Path to Beehiiv-compatible HTML file */
+  beehiivHtmlPath: string
   /** Full-page preview screenshot of the assembled newsletter */
   previewPath: string | null
   timings: Record<string, number>

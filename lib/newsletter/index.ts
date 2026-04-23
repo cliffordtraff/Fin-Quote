@@ -77,6 +77,7 @@ export {
   buildNewsletterDraftFromResult,
   normalizeNewsletterDraftDocument,
   renderNewsletterDraftPreviewHtml,
+  renderNewsletterDraftBeehiivHtml,
   listNewsletterDrafts,
   getNewsletterDraft,
   createNewsletterDraft,

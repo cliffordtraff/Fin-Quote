@@ -243,6 +243,8 @@ export default function NewsletterDraftEditor({
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [copiedControlId, setCopiedControlId] = useState<string | null>(null)
+  const [copyingBeehiiv, setCopyingBeehiiv] = useState(false)
+  const [copiedBeehiiv, setCopiedBeehiiv] = useState(false)
   const [dropTarget, setDropTarget] = useState<{
     blockId: string
     position: DropPosition
@@ -661,6 +663,40 @@ export default function NewsletterDraftEditor({
     }
   }
 
+  async function copyBeehiivHtml() {
+    try {
+      setCopyingBeehiiv(true)
+      setCopiedBeehiiv(false)
+      setError(null)
+
+      const response = await fetch(`/api/newsletter/drafts/${draftId}/beehiiv-html`, {
+        credentials: 'include',
+      })
+
+      const payload = (await response.json()) as { html?: string; error?: string }
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to get Beehiiv HTML')
+      }
+
+      if (!payload.html) {
+        throw new Error('No HTML returned')
+      }
+
+      await copyTextToClipboard(payload.html)
+      setCopiedBeehiiv(true)
+      setNotice('Beehiiv HTML copied to clipboard!')
+
+      setTimeout(() => {
+        setCopiedBeehiiv(false)
+      }, 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy Beehiiv HTML')
+    } finally {
+      setCopyingBeehiiv(false)
+    }
+  }
+
   async function regenerateNewsletter() {
     if (dirty) {
       const confirmed = window.confirm(
@@ -811,6 +847,20 @@ export default function NewsletterDraftEditor({
             {regeneratingBlockId === selectedBlock?.id
               ? 'Regenerating…'
               : 'Regenerate chart'}
+          </button>
+
+          <button
+            type="button"
+            onClick={copyBeehiivHtml}
+            disabled={copyingBeehiiv || dirty}
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              copiedBeehiiv
+                ? 'bg-sage-600 text-white'
+                : 'bg-amber-500 text-white hover:bg-amber-600'
+            }`}
+            title={dirty ? 'Save draft first to copy latest HTML' : 'Copy HTML for Beehiiv'}
+          >
+            {copyingBeehiiv ? 'Copying…' : copiedBeehiiv ? 'Copied!' : 'Copy for Beehiiv'}
           </button>
 
           <button

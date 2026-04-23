@@ -210,6 +210,9 @@ async function main() {
   console.log(`\n--- Full HTML ---`)
   console.log(`  ${result.htmlPath}`)
 
+  console.log(`\n--- Beehiiv HTML (paste into HTML Snippet block) ---`)
+  console.log(`  ${result.beehiivHtmlPath}`)
+
   console.log(`\n--- Preview Screenshot ---`)
   console.log(`  ${result.previewPath}`)
 
