@@ -1,16 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { updateDashboardChartOfTheDayChartSpec } from '@/app/actions/dashboard-chart-of-the-day'
 import Navigation from '@/components/Navigation'
 import { useTheme } from '@/components/ThemeProvider'
 import {
-  parseDashboardChartOfTheDayEditorSpecFromUrl,
-  replaceDashboardChartOfTheDayEditorPathTheme,
+  parseDashboardChartOfTheDayEditorSpecFromFundState,
   resolveDashboardChartOfTheDayEditorPath,
+  replaceDashboardChartOfTheDayEditorPathTheme,
 } from '@/lib/dashboard/chart-of-the-day-editor'
 import type { ChartExportSpec } from '@/types/chart-export'
+
+const PM_VERSION = 1
 
 interface AdminChartOfTheDayEditorProps {
   initialSpec: ChartExportSpec
@@ -35,35 +37,80 @@ export default function AdminChartOfTheDayEditor({
   const [error, setError] = useState<string | null>(null)
   const [isSaving, startSaveTransition] = useTransition()
 
-  const readCurrentEditorUrl = () => {
-    const iframeWindow = iframeRef.current?.contentWindow
-    if (!iframeWindow) return null
-
-    try {
-      const href = iframeWindow.location.href
-      return href && href !== 'about:blank' ? href : null
-    } catch {
-      return null
-    }
-  }
+  // Ref to hold a pending resolve callback for the FUND_STATE response
+  const fundStateResolveRef = useRef<((result: {
+    fundState: Record<string, unknown> | null
+    symbol: string
+  } | null) => void) | null>(null)
 
   useEffect(() => {
-    const currentEditorUrl = readCurrentEditorUrl()
     setIframeSrc((current) => {
-      const nextEditorPath = currentEditorUrl
-        ? replaceDashboardChartOfTheDayEditorPathTheme(currentEditorUrl, editorTheme)
-        : replaceDashboardChartOfTheDayEditorPathTheme(
-            current || resolveDashboardChartOfTheDayEditorPath(savedSpec, editorTheme),
-            editorTheme,
-          )
-
-      return current === nextEditorPath ? current : nextEditorPath
+      const next = replaceDashboardChartOfTheDayEditorPathTheme(
+        current || resolveDashboardChartOfTheDayEditorPath(savedSpec, editorTheme),
+        editorTheme,
+      )
+      return current === next ? current : next
     })
   }, [editorTheme, savedSpec])
 
   useEffect(() => {
     setStatus('loading')
   }, [iframeSrc])
+
+  // Listen for FUND_STATE responses from the charting platform
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      const data = event.data
+      if (!data || typeof data !== 'object') return
+      if (data.v !== PM_VERSION || data.type !== 'FUND_STATE') return
+
+      const resolve = fundStateResolveRef.current
+      if (resolve) {
+        fundStateResolveRef.current = null
+        const payload = data.payload as Record<string, unknown> | undefined
+        resolve(
+          payload
+            ? {
+                fundState: (payload.fundState as Record<string, unknown> | null) ?? null,
+                symbol: typeof payload.symbol === 'string' ? payload.symbol : '',
+              }
+            : null,
+        )
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
+  const requestFundState = useCallback((): Promise<{
+    fundState: Record<string, unknown> | null
+    symbol: string
+  } | null> => {
+    return new Promise((resolve) => {
+      const iframeWindow = iframeRef.current?.contentWindow
+      if (!iframeWindow) {
+        resolve(null)
+        return
+      }
+
+      fundStateResolveRef.current = resolve
+
+      // Send GET_FUND_STATE to the charting platform
+      iframeWindow.postMessage(
+        { v: PM_VERSION, type: 'GET_FUND_STATE', payload: {} },
+        '*',
+      )
+
+      // Timeout after 3 seconds
+      setTimeout(() => {
+        if (fundStateResolveRef.current === resolve) {
+          fundStateResolveRef.current = null
+          resolve(null)
+        }
+      }, 3000)
+    })
+  }, [])
 
   const handleReloadSavedChart = () => {
     setNotice(null)
@@ -76,21 +123,29 @@ export default function AdminChartOfTheDayEditor({
     setError(null)
 
     startSaveTransition(async () => {
-      const editorUrl = readCurrentEditorUrl()
-      if (!editorUrl) {
-        setError('Editor state is unavailable. Wait for the chart to finish loading and try again.')
+      const result = await requestFundState()
+      if (!result || !result.fundState) {
+        setError(
+          'Could not read the chart state. Make sure you are on the Fundamentals view and the chart has finished loading.',
+        )
         return
       }
 
-      const nextSpec = parseDashboardChartOfTheDayEditorSpecFromUrl(editorUrl, savedSpec)
+      const nextSpec = parseDashboardChartOfTheDayEditorSpecFromFundState(
+        result.fundState,
+        result.symbol,
+        savedSpec,
+      )
       if (!nextSpec) {
-        setError('Unable to read the current fundamentals state from the editor.')
+        setError(
+          'Could not parse the chart configuration. Make sure at least one metric is selected.',
+        )
         return
       }
 
-      const result = await updateDashboardChartOfTheDayChartSpec(nextSpec)
-      if (!result.success) {
-        setError(result.error ?? 'Failed to update chart of the day')
+      const saveResult = await updateDashboardChartOfTheDayChartSpec(nextSpec)
+      if (!saveResult.success) {
+        setError(saveResult.error ?? 'Failed to update chart of the day')
         return
       }
 
@@ -107,9 +162,9 @@ export default function AdminChartOfTheDayEditor({
         <div className="flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="font-semibold">Chart of the Day editor</p>
+              <p className="font-semibold">Chart of the Day Editor</p>
               <p className="mt-1 text-blue-700 dark:text-blue-200/80">
-                This page now uses the fundamentals charting surface directly. Build the chart in the frame, then publish it to the dashboard.
+                Build the chart in the frame below, then publish it to the dashboard.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

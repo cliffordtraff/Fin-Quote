@@ -3,7 +3,10 @@ import type {
   NewsletterChartSpec,
   PriceNewsletterChartSpec,
 } from './types'
-import { isPriceNewsletterChartSpec } from './chart-spec'
+import {
+  isPriceNewsletterChartSpec,
+  normalizeNewsletterPriceStateSnapshot,
+} from './chart-spec'
 
 export const DEFAULT_CHARTING_BASE_URL = 'https://charts.theintraday.com'
 export const DEFAULT_LOCAL_CHARTING_BASE_URL = 'http://localhost:3001'
@@ -407,7 +410,13 @@ function resolvePriceNewsletterChart(
   const ticker = normalizeTicker(spec.symbol)
   const chartBaseUrl = normalizeBaseUrl(options.chartBaseUrl)
   const theme = options.theme ?? DEFAULT_NEWSLETTER_CHART_THEME
-  const chartType: PriceNewsletterChartSpec['chartType'] = 'candles'
+  const chartType = spec.chartType
+  const priceState = normalizeNewsletterPriceStateSnapshot(spec.priceState, {
+    symbol: ticker,
+    range: spec.range,
+    interval: spec.interval,
+    chartType,
+  })
 
   const captureSpec = {
     version: 1,
@@ -420,6 +429,7 @@ function resolvePriceNewsletterChart(
     theme,
     width: options.width,
     height: options.height,
+    ...(priceState ? { priceState } : {}),
   }
 
   const interactiveUrl = new URL(`/tos/${encodeURIComponent(ticker)}`, `${chartBaseUrl}/`)

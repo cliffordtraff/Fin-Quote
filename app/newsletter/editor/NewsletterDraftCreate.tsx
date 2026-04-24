@@ -10,11 +10,17 @@ interface DraftCreateResponse {
   error?: string
 }
 
-export default function NewsletterDraftCreate() {
+interface NewsletterDraftCreateProps {
+  defaultFormat?: 'single_stock' | 'market_roundup'
+}
+
+export default function NewsletterDraftCreate({
+  defaultFormat = 'single_stock',
+}: NewsletterDraftCreateProps = {}) {
   const router = useRouter()
   const [ticker, setTicker] = useState('')
   const [generationPrompt, setGenerationPrompt] = useState('')
-  const [format, setFormat] = useState<'single_stock' | 'market_roundup'>('single_stock')
+  const [format, setFormat] = useState<'single_stock' | 'market_roundup'>(defaultFormat)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

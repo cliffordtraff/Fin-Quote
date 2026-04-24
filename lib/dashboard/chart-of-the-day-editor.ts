@@ -15,6 +15,17 @@ import type { NewsletterChartSpec } from '@/lib/newsletter/types'
 import type { ChartExportSpec } from '@/types/chart-export'
 
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
+const SPEC_METRIC_LABELS: Record<string, string> = {
+  revenue: 'Revenue',
+  net_income: 'Net Income',
+  free_cash_flow: 'Free Cash Flow',
+  gross_margin: 'Gross Margin',
+  operating_margin: 'Operating Margin',
+  operating_income: 'Operating Income',
+  eps: 'EPS',
+  debt_to_equity_ratio: 'Debt/Equity',
+  rd_pct_revenue: 'R&D % Revenue',
+}
 const CHARTING_TO_SPEC_METRIC_MAP: Record<string, string> = {
   revenue: 'revenue',
   netIncome: 'net_income',
@@ -120,6 +131,47 @@ function normalizeFiniteInteger(value: unknown): number | undefined {
     : undefined
 }
 
+function normalizeFundamentalsChartType(
+  value: unknown,
+): NonNullable<ChartExportSpec['chartType']> {
+  return value === 'line' || value === 'area' ? value : 'bar'
+}
+
+function resolveFundamentalsChartTypeFromState(
+  fundState: Record<string, unknown>,
+  rawMetrics: string[],
+): NonNullable<ChartExportSpec['chartType']> {
+  const metricKeys = rawMetrics.filter((metricId) => metricId !== 'stockPrice')
+  if (metricKeys.length === 0) {
+    return normalizeFundamentalsChartType(fundState.chartType)
+  }
+
+  const metricChartTypes =
+    fundState.metricChartTypes &&
+    typeof fundState.metricChartTypes === 'object' &&
+    !Array.isArray(fundState.metricChartTypes)
+      ? (fundState.metricChartTypes as Record<string, unknown>)
+      : {}
+
+  const resolvedMetricTypes = Array.from(
+    new Set(
+      metricKeys
+        .map((metricId) => metricChartTypes[metricId])
+        .filter((chartType) => chartType === 'bar' || chartType === 'line' || chartType === 'area'),
+    ),
+  ) as NonNullable<ChartExportSpec['chartType']>[]
+
+  if (metricKeys.length === 1 && resolvedMetricTypes.length > 0) {
+    return resolvedMetricTypes[0]
+  }
+
+  if (resolvedMetricTypes.length === 1) {
+    return resolvedMetricTypes[0]
+  }
+
+  return normalizeFundamentalsChartType(fundState.chartType)
+}
+
 function buildDashboardInteractiveUrl(
   interactiveUrl: string,
   fundState: Record<string, unknown>,
@@ -172,6 +224,7 @@ export function resolveDashboardChartOfTheDayEditorPath(
     buildDashboardInteractiveUrl(
       resolvedChart.interactiveUrl,
       editorFundState,
+      { embed: true },
     ),
   )
 }
@@ -234,10 +287,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromUrl(
       minYear: normalizeFiniteInteger(fundState.minYear),
       maxYear: normalizeFiniteInteger(fundState.maxYear),
       showStockPrice,
-      chartType:
-        fundState.chartType === 'line' || fundState.chartType === 'area'
-          ? fundState.chartType
-          : 'bar',
+      chartType: resolveFundamentalsChartTypeFromState(fundState, rawMetrics),
       showLabels: fundState.showLabels !== false,
       stacked: fundState.stacked === true,
       indexToZero: fundState.indexed === true,
@@ -245,6 +295,67 @@ export function parseDashboardChartOfTheDayEditorSpecFromUrl(
         fundState.chartTitleCustomized === true && titleText
           ? titleText
           : undefined,
+      subtitle: fallbackSpec?.subtitle,
+      colors: normalizeMetricColorMap(fundState.metricColors),
+    }
+  } catch {
+    return null
+  }
+}
+
+export function parseDashboardChartOfTheDayEditorSpecFromFundState(
+  fundState: Record<string, unknown>,
+  symbol: string,
+  fallbackSpec: ChartExportSpec | null = null,
+): ChartExportSpec | null {
+  try {
+    const primarySymbol = normalizeTicker(
+      symbol || (typeof fundState.symbol === 'string' ? fundState.symbol : ''),
+    )
+    if (!primarySymbol) return null
+
+    const compareSymbols = normalizeTickerList(fundState.compareSymbols).filter(
+      (s) => s !== primarySymbol,
+    )
+    const visibleMetrics = normalizeMetricList(fundState.visibleMetrics)
+    const addedMetrics = normalizeMetricList(fundState.addedMetrics)
+    const rawMetrics =
+      visibleMetrics.length > 0
+        ? visibleMetrics
+        : addedMetrics.length > 0
+          ? addedMetrics
+          : normalizeMetricList(
+              typeof fundState.activeMetric === 'string' ? [fundState.activeMetric] : [],
+            )
+    const showStockPrice = rawMetrics.includes('stockPrice')
+    const metrics = rawMetrics
+      .filter((metricId) => metricId !== 'stockPrice')
+      .map((metricId) => CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId)
+
+    if (metrics.length === 0) return null
+
+    const titleText =
+      typeof fundState.chartTitleText === 'string'
+        ? fundState.chartTitleText.trim()
+        : ''
+
+    const autoTitle = `${primarySymbol} ${metrics.map((m) => SPEC_METRIC_LABELS[m] ?? m).join(' & ')}`
+
+    return {
+      stocks: [primarySymbol, ...compareSymbols],
+      metrics,
+      periodType: fundState.period === 'quarter' ? 'quarterly' : 'annual',
+      minYear: normalizeFiniteInteger(fundState.minYear),
+      maxYear: normalizeFiniteInteger(fundState.maxYear),
+      showStockPrice,
+      chartType: resolveFundamentalsChartTypeFromState(fundState, rawMetrics),
+      showLabels: fundState.showLabels !== false,
+      stacked: fundState.stacked === true,
+      indexToZero: fundState.indexed === true,
+      title:
+        fundState.chartTitleCustomized === true && titleText
+          ? titleText
+          : autoTitle,
       subtitle: fallbackSpec?.subtitle,
       colors: normalizeMetricColorMap(fundState.metricColors),
     }

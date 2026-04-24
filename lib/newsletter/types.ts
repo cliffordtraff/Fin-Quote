@@ -55,6 +55,8 @@ export type NewsletterPriceChartType =
   | 'line'
   | 'heikin-ashi'
 
+export type NewsletterPriceStateSnapshot = Record<string, unknown>
+
 export interface FundamentalsNewsletterChartSpec extends ChartExportSpec {
   mode?: 'fundamentals'
 }
@@ -65,6 +67,7 @@ export interface PriceNewsletterChartSpec {
   range: NewsletterPriceRange
   interval: NewsletterPriceInterval
   chartType: NewsletterPriceChartType
+  priceState?: NewsletterPriceStateSnapshot
   title?: string
   subtitle?: string
 }
@@ -500,6 +503,7 @@ export interface NewsletterDraftHeader {
   dateText: string
   badgeText: string
   logoUrl?: string
+  logoUrls?: string[]
 }
 
 export interface NewsletterDraftDocument {

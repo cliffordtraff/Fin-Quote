@@ -155,7 +155,7 @@ describe('assembleNewsletterHtml', () => {
     })
   })
 
-  it('builds a market roundup header when requested', () => {
+  it('builds a market roundup header with a logo grid for 2+ featured tickers', () => {
     expect(
       buildNewsletterHeader('MARKET', new Date('2026-03-26T12:00:00.000Z'), {
         format: 'market_roundup',
@@ -165,6 +165,26 @@ describe('assembleNewsletterHtml', () => {
       title: 'Market Roundup — 4 Stocks',
       dateText: 'March 26, 2026',
       badgeText: 'Market Roundup • 4 Stocks',
+      logoUrls: [
+        'https://financialmodelingprep.com/image-stock/AAPL.png',
+        'https://financialmodelingprep.com/image-stock/MSFT.png',
+        'https://financialmodelingprep.com/image-stock/NVDA.png',
+        'https://financialmodelingprep.com/image-stock/TSLA.png',
+      ],
+    })
+  })
+
+  it('builds a market roundup header using the single ticker logo when only 1 is featured', () => {
+    expect(
+      buildNewsletterHeader('MARKET', new Date('2026-03-26T12:00:00.000Z'), {
+        format: 'market_roundup',
+        featuredTickers: ['NVDA'],
+      }),
+    ).toEqual({
+      title: 'Market Roundup — 1 Stocks',
+      dateText: 'March 26, 2026',
+      badgeText: 'Market Roundup • 1 Stocks',
+      logoUrl: 'https://financialmodelingprep.com/image-stock/NVDA.png',
     })
   })
 })

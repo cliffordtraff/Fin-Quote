@@ -16,8 +16,8 @@ const BRAND = {
   white: '#ffffff',
 } as const
 
-const NEWSLETTER_CARD_MAX_WIDTH = 720
-const NEWSLETTER_CHART_WIDTH = 704
+const NEWSLETTER_CARD_MAX_WIDTH = 600
+const NEWSLETTER_CHART_WIDTH = 584
 
 // ---------------------------------------------------------------------------
 // Content → slot mapping
@@ -64,13 +64,35 @@ function renderHeading(text: string): string {
 </td></tr>`
 }
 
+const BODY_ALLOWED_TAGS = new Set(['p', 'strong', 'em', 'br', 'ul', 'ol', 'li'])
+
+function looksLikeHtml(value: string): boolean {
+  return /<\w+[^>]*>/.test(value)
+}
+
+function sanitizeBodyHtml(html: string): string {
+  return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>/g, (match, tagName) => {
+    return BODY_ALLOWED_TAGS.has(String(tagName).toLowerCase()) ? match.replace(/\s[^>]*/, '') : ''
+  })
+}
+
 function renderBody(text: string): string {
-  const escaped = escapeHtml(text)
-  const withBold = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  const paragraphStyle = `margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;color:${BRAND.textDark};line-height:1.65;`
+  const listStyle = `margin:0 0 12px 0;padding-left:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;color:${BRAND.textDark};line-height:1.65;`
+
+  let bodyInner: string
+  if (looksLikeHtml(text)) {
+    bodyInner = sanitizeBodyHtml(text)
+      .replace(/<p>/g, `<p style="${paragraphStyle}">`)
+      .replace(/<(ul|ol)>/g, (_, tag) => `<${tag} style="${listStyle}">`)
+  } else {
+    const escaped = escapeHtml(text)
+    const withBold = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    bodyInner = `<p style="${paragraphStyle}">${withBold}</p>`
+  }
+
   return `<tr><td style="padding:8px 32px 16px 32px;">
-  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:17px;color:${BRAND.textDark};line-height:1.65;">
-    ${withBold}
-  </p>
+  ${bodyInner}
 </td></tr>`
 }
 

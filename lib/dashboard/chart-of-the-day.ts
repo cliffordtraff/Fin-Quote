@@ -141,6 +141,47 @@ function normalizeFiniteInteger(value: unknown): number | undefined {
     : undefined
 }
 
+function normalizeFundamentalsChartType(
+  value: unknown,
+): NonNullable<ChartExportSpec['chartType']> {
+  return value === 'line' || value === 'area' ? value : 'bar'
+}
+
+function resolveFundamentalsChartTypeFromState(
+  fundState: Record<string, unknown>,
+  rawMetrics: string[],
+): NonNullable<ChartExportSpec['chartType']> {
+  const metricKeys = rawMetrics.filter((metricId) => metricId !== 'stockPrice')
+  if (metricKeys.length === 0) {
+    return normalizeFundamentalsChartType(fundState.chartType)
+  }
+
+  const metricChartTypes =
+    fundState.metricChartTypes &&
+    typeof fundState.metricChartTypes === 'object' &&
+    !Array.isArray(fundState.metricChartTypes)
+      ? (fundState.metricChartTypes as Record<string, unknown>)
+      : {}
+
+  const resolvedMetricTypes = Array.from(
+    new Set(
+      metricKeys
+        .map((metricId) => metricChartTypes[metricId])
+        .filter((chartType) => chartType === 'bar' || chartType === 'line' || chartType === 'area'),
+    ),
+  ) as NonNullable<ChartExportSpec['chartType']>[]
+
+  if (metricKeys.length === 1 && resolvedMetricTypes.length > 0) {
+    return resolvedMetricTypes[0]
+  }
+
+  if (resolvedMetricTypes.length === 1) {
+    return resolvedMetricTypes[0]
+  }
+
+  return normalizeFundamentalsChartType(fundState.chartType)
+}
+
 function buildDashboardInteractiveUrl(
   interactiveUrl: string,
   fundState: Record<string, unknown>,
@@ -296,10 +337,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromUrl(
       minYear: normalizeFiniteInteger(fundState.minYear),
       maxYear: normalizeFiniteInteger(fundState.maxYear),
       showStockPrice,
-      chartType:
-        fundState.chartType === 'line' || fundState.chartType === 'area'
-          ? fundState.chartType
-          : 'bar',
+      chartType: resolveFundamentalsChartTypeFromState(fundState, rawMetrics),
       showLabels: fundState.showLabels !== false,
       stacked: fundState.stacked === true,
       indexToZero: fundState.indexed === true,

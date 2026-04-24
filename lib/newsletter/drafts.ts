@@ -22,6 +22,7 @@ import {
 } from './charting-platform-export'
 import {
   isPriceNewsletterChartSpec,
+  normalizeNewsletterPriceStateSnapshot,
   normalizeNewsletterPriceChartType,
   normalizeNewsletterPriceInterval,
   normalizeNewsletterPriceRange,
@@ -126,12 +127,23 @@ function normalizeChartSpec(
   ticker: string,
 ): NewsletterChartSpec {
   if (isPriceNewsletterChartSpec(spec)) {
+    const symbol = normalizeTicker(spec.symbol || ticker)
+    const range = normalizeNewsletterPriceRange(spec.range)
+    const interval = normalizeNewsletterPriceInterval(spec.interval)
+    const chartType = normalizeNewsletterPriceChartType(spec.chartType)
+
     return {
       ...spec,
-      symbol: normalizeTicker(spec.symbol || ticker),
-      range: normalizeNewsletterPriceRange(spec.range),
-      interval: normalizeNewsletterPriceInterval(spec.interval),
-      chartType: normalizeNewsletterPriceChartType(spec.chartType),
+      symbol,
+      range,
+      interval,
+      chartType,
+      priceState: normalizeNewsletterPriceStateSnapshot(spec.priceState, {
+        symbol,
+        range,
+        interval,
+        chartType,
+      }),
       title: spec.title?.trim() || undefined,
       subtitle: spec.subtitle?.trim() || undefined,
     }
@@ -225,11 +237,20 @@ function normalizeDraftHeader(
     featuredTickers,
     subjectLine,
   })
+  const incomingLogoUrls = Array.isArray(header?.logoUrls)
+    ? header!.logoUrls
+        .map((u) => (typeof u === 'string' ? u.trim() : ''))
+        .filter(Boolean)
+    : []
+  const logoUrls =
+    incomingLogoUrls.length >= 2 ? incomingLogoUrls : fallback.logoUrls
+  const logoUrl = header?.logoUrl?.trim() || fallback.logoUrl
   return {
     title: header?.title?.trim() || fallback.title,
     dateText: header?.dateText?.trim() || fallback.dateText,
     badgeText: header?.badgeText?.trim() || fallback.badgeText,
-    logoUrl: header?.logoUrl?.trim() || fallback.logoUrl,
+    ...(logoUrl ? { logoUrl } : {}),
+    ...(logoUrls ? { logoUrls } : {}),
   }
 }
 

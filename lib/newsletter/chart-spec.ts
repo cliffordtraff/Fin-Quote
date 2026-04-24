@@ -3,6 +3,7 @@ import type {
   NewsletterPriceChartType,
   NewsletterPriceInterval,
   NewsletterPriceRange,
+  NewsletterPriceStateSnapshot,
   PriceNewsletterChartSpec,
 } from './types'
 
@@ -34,6 +35,10 @@ export const NEWSLETTER_PRICE_INTERVALS: NewsletterPriceInterval[] = [
 
 export const NEWSLETTER_PRICE_CHART_TYPES: NewsletterPriceChartType[] = [
   'candles',
+  'hollow-candles',
+  'ohlc-bars',
+  'line',
+  'heikin-ashi',
 ]
 
 export function isPriceNewsletterChartSpec(
@@ -67,4 +72,32 @@ export function normalizeNewsletterPriceChartType(
   return NEWSLETTER_PRICE_CHART_TYPES.includes(value as NewsletterPriceChartType)
     ? (value as NewsletterPriceChartType)
     : fallback
+}
+
+export function normalizeNewsletterPriceStateSnapshot(
+  value: unknown,
+  overrides: {
+    symbol?: string
+    range?: NewsletterPriceRange
+    interval?: NewsletterPriceInterval
+    chartType?: NewsletterPriceChartType
+  } = {},
+): NewsletterPriceStateSnapshot | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+
+  try {
+    const snapshot = JSON.parse(JSON.stringify(value)) as NewsletterPriceStateSnapshot
+
+    if (overrides.symbol) {
+      snapshot.symbol = overrides.symbol
+      snapshot.ticker = overrides.symbol
+    }
+    if (overrides.range) snapshot.range = overrides.range
+    if (overrides.interval) snapshot.interval = overrides.interval
+    if (overrides.chartType) snapshot.chartType = overrides.chartType
+
+    return snapshot
+  } catch (_err) {
+    return undefined
+  }
 }

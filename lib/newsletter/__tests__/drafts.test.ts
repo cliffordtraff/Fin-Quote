@@ -174,6 +174,11 @@ describe('newsletter drafts', () => {
             range: '6m',
             interval: 'D',
             chartType: 'candles',
+            priceState: {
+              indicators: [{ kind: 'macd', panel: 'lower-1' }],
+              volumeVisible: false,
+              viewport: { startIndex: 52, visibleBars: 40 },
+            },
             title: 'AAPL Price Trend (6M)',
           },
         ],
@@ -187,12 +192,22 @@ describe('newsletter drafts', () => {
       range: '6m',
       interval: 'D',
       chartType: 'candles',
+      priceState: {
+        symbol: 'AAPL',
+        ticker: 'AAPL',
+        range: '6m',
+        interval: 'D',
+        chartType: 'candles',
+        volumeVisible: false,
+        viewport: { startIndex: 52, visibleBars: 40 },
+        indicators: [{ kind: 'macd', panel: 'lower-1' }],
+      },
     })
     expect(draft.blocks[0]?.chartExportUrl).toContain('view=price')
     expect(draft.blocks[0]?.chartExportUrl).toContain('chartType=candles')
   })
 
-  it('normalizes legacy price-chart draft specs back to candlesticks', () => {
+  it('preserves supported price-chart draft types', () => {
     const draft = normalizeNewsletterDraftDocument(
       {
         ticker: 'TSLA',
@@ -220,6 +235,11 @@ describe('newsletter drafts', () => {
               range: '1y',
               interval: 'D',
               chartType: 'line',
+              priceState: {
+                indicators: [{ kind: 'macd', panel: 'lower-1' }],
+                volumeVisible: false,
+                viewport: { startIndex: 180, visibleBars: 66 },
+              },
             },
           },
         ],
@@ -227,8 +247,18 @@ describe('newsletter drafts', () => {
       'https://charts.theintraday.com',
     )
 
-    expect('chartType' in draft.blocks[0]!.chartSpec && draft.blocks[0]!.chartSpec.chartType).toBe('candles')
-    expect(draft.blocks[0]?.chartExportUrl).toContain('chartType=candles')
+    expect('chartType' in draft.blocks[0]!.chartSpec && draft.blocks[0]!.chartSpec.chartType).toBe('line')
+    expect('priceState' in draft.blocks[0]!.chartSpec && draft.blocks[0]!.chartSpec.priceState).toMatchObject({
+      symbol: 'TSLA',
+      ticker: 'TSLA',
+      range: '1y',
+      interval: 'D',
+      chartType: 'line',
+      volumeVisible: false,
+      viewport: { startIndex: 180, visibleBars: 66 },
+      indicators: [{ kind: 'macd', panel: 'lower-1' }],
+    })
+    expect(draft.blocks[0]?.chartExportUrl).toContain('chartType=line')
   })
 
   it('preserves per-block primary tickers in market roundup drafts', () => {

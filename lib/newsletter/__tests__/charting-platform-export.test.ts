@@ -329,6 +329,27 @@ describe('resolveChartingPlatformNewsletterChart', () => {
       range: '6m',
       interval: 'D',
       chartType: 'line',
+      priceState: {
+        indicators: [{ kind: 'macd', panel: 'lower-1' }],
+        sessionVisibility: 'regularOnly',
+        themeColors: {
+          sessionPreBg: 'rgba(255, 255, 255, 0.031)',
+          sessionPostBg: 'rgba(255, 255, 255, 0.031)',
+        },
+        drawings: [
+          {
+            id: 'draw-1',
+            type: 'arrow',
+            anchors: [
+              { barIndex: 144, price: 248.6 },
+              { barIndex: 170, price: 236.2 },
+            ],
+            style: { color: '#111827', width: 3 },
+          },
+        ],
+        volumeVisible: false,
+        viewport: { startIndex: 144, visibleBars: 58 },
+      },
       title: 'TSLA Price Trend (6M)',
     }
 
@@ -348,7 +369,33 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     expect(decodedSpec.ticker).toBe('TSLA')
     expect(decodedSpec.range).toBe('6m')
     expect(decodedSpec.interval).toBe('D')
-    expect(decodedSpec.chartType).toBe('candles')
+    expect(decodedSpec.chartType).toBe('line')
+    expect(decodedSpec.priceState).toMatchObject({
+      symbol: 'TSLA',
+      ticker: 'TSLA',
+      range: '6m',
+      interval: 'D',
+      chartType: 'line',
+      sessionVisibility: 'regularOnly',
+      themeColors: {
+        sessionPreBg: 'rgba(255, 255, 255, 0.031)',
+        sessionPostBg: 'rgba(255, 255, 255, 0.031)',
+      },
+      volumeVisible: false,
+      viewport: { startIndex: 144, visibleBars: 58 },
+      drawings: [
+        {
+          id: 'draw-1',
+          type: 'arrow',
+          anchors: [
+            { barIndex: 144, price: 248.6 },
+            { barIndex: 170, price: 236.2 },
+          ],
+          style: { color: '#111827', width: 3 },
+        },
+      ],
+      indicators: [{ kind: 'macd', panel: 'lower-1' }],
+    })
     expect(result.fundState).toBeUndefined()
 
     const interactiveUrl = new URL(result.interactiveUrl)
@@ -356,6 +403,6 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     expect(interactiveUrl.searchParams.get('view')).toBe('price')
     expect(interactiveUrl.searchParams.get('range')).toBe('6m')
     expect(interactiveUrl.searchParams.get('interval')).toBe('D')
-    expect(interactiveUrl.searchParams.get('chartType')).toBe('candles')
+    expect(interactiveUrl.searchParams.get('chartType')).toBe('line')
   })
 })

@@ -153,6 +153,45 @@ describe('resolveDashboardChartOfTheDay', () => {
     expect(parsedSpec).toEqual(spec)
   })
 
+  it('recovers saved per-metric fundamentals chart styles from the editor url', () => {
+    const spec: ChartExportSpec = {
+      stocks: ['AMZN'],
+      metrics: ['gross_margin'],
+      periodType: 'annual',
+      chartType: 'line',
+    }
+
+    const editorUrl = new URL(
+      resolveDashboardChartOfTheDayEditorPath(spec, 'light'),
+      'https://app.theintraday.com',
+    )
+    const fundState = decodeBase64UrlJson<Record<string, unknown>>(
+      editorUrl.searchParams.get('fundState') || '',
+    )
+    fundState.metricChartTypes = {
+      grossMargin: 'bar',
+    }
+    editorUrl.searchParams.set(
+      'fundState',
+      Buffer.from(JSON.stringify(fundState), 'utf8')
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, ''),
+    )
+
+    const parsedSpec = parseDashboardChartOfTheDayEditorSpecFromUrl(
+      `${editorUrl.pathname}${editorUrl.search}`,
+      spec,
+    )
+
+    expect(parsedSpec).toMatchObject({
+      stocks: ['AMZN'],
+      metrics: ['gross_margin'],
+      chartType: 'bar',
+    })
+  })
+
   it('exposes a serializable fundamentals spec for client-sized embeds', () => {
     const spec = resolveDashboardChartOfTheDayEmbedSpec()
 

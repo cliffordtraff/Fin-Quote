@@ -17,7 +17,7 @@ const BRAND = {
   white: '#ffffff',
 } as const
 
-const NEWSLETTER_CARD_MAX_WIDTH = 720
+const NEWSLETTER_CARD_MAX_WIDTH = 600
 
 function escapeHtml(str: string): string {
   return str
@@ -122,10 +122,48 @@ function getTickerLogoUrl(ticker: string): string {
   return `https://financialmodelingprep.com/image-stock/${sym}.png`
 }
 
-function shouldRenderNewsletterHeaderLogo(header: NewsletterDraftHeader): boolean {
+const HEADER_LOGO_GRID_MAX = 4
+
+function sanitizeLogoUrls(urls: unknown): string[] {
+  if (!Array.isArray(urls)) return []
+  return urls
+    .map((u) => (typeof u === 'string' ? u.trim() : ''))
+    .filter((u) => u && !/\/MARKET\.png(?:[?#].*)?$/i.test(u))
+}
+
+function getSingleHeaderLogoUrl(header: NewsletterDraftHeader): string {
   const logoUrl = typeof header.logoUrl === 'string' ? header.logoUrl.trim() : ''
-  if (!logoUrl) return false
-  return !/\/MARKET\.png(?:[?#].*)?$/i.test(logoUrl)
+  if (!logoUrl) return ''
+  if (/\/MARKET\.png(?:[?#].*)?$/i.test(logoUrl)) return ''
+  return logoUrl
+}
+
+function renderNewsletterHeaderLogo(header: NewsletterDraftHeader): string {
+  const singleLogoUrl = getSingleHeaderLogoUrl(header)
+  if (singleLogoUrl) {
+    return `<img src="${escapeHtml(singleLogoUrl)}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />`
+  }
+
+  const gridUrls = sanitizeLogoUrls(header.logoUrls).slice(0, HEADER_LOGO_GRID_MAX)
+  if (gridUrls.length >= 2) {
+    const imgStyle = `display:block;width:22px;height:22px;border-radius:4px;border:1px solid ${BRAND.cream300};`
+    const img = (url: string) =>
+      `<img src="${escapeHtml(url)}" alt="" width="22" height="22" style="${imgStyle}" />`
+
+    if (gridUrls.length === 2) {
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="padding-right:4px;">${img(gridUrls[0])}</td><td>${img(gridUrls[1])}</td></tr></table>`
+    }
+
+    const cells = [gridUrls[0] || '', gridUrls[1] || '', gridUrls[2] || '', gridUrls[3] || '']
+    return (
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">` +
+      `<tr><td style="padding:0 2px 2px 0;width:22px;height:22px;">${cells[0] ? img(cells[0]) : ''}</td><td style="padding:0 0 2px 2px;width:22px;height:22px;">${cells[1] ? img(cells[1]) : ''}</td></tr>` +
+      `<tr><td style="padding:2px 2px 0 0;width:22px;height:22px;">${cells[2] ? img(cells[2]) : ''}</td><td style="padding:2px 0 0 2px;width:22px;height:22px;">${cells[3] ? img(cells[3]) : ''}</td></tr>` +
+      `</table>`
+    )
+  }
+
+  return `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`
 }
 
 export function buildNewsletterHeader(
@@ -137,20 +175,38 @@ export function buildNewsletterHeader(
     subjectLine?: string
   } = {},
 ): NewsletterDraftHeader {
-  const featuredCount = options.featuredTickers?.length ?? 0
-  const defaultSubject =
-    options.format === 'market_roundup'
-      ? `Market Roundup${featuredCount > 0 ? ` — ${featuredCount} Stocks` : ''}`
-      : `${ticker.toUpperCase()} Snapshot`
-  const logoUrl = options.format === 'market_roundup' ? '' : getTickerLogoUrl(ticker)
+  const featured = options.featuredTickers ?? []
+  const featuredCount = featured.length
+  const isRoundup = options.format === 'market_roundup'
+  const defaultSubject = isRoundup
+    ? `Market Roundup${featuredCount > 0 ? ` — ${featuredCount} Stocks` : ''}`
+    : `${ticker.toUpperCase()} Snapshot`
+
+  let logoUrl = ''
+  let logoUrls: string[] | undefined
+
+  if (isRoundup) {
+    if (featuredCount === 1) {
+      logoUrl = getTickerLogoUrl(featured[0])
+    } else if (featuredCount >= 2) {
+      const urls = featured
+        .slice(0, HEADER_LOGO_GRID_MAX)
+        .map((t) => getTickerLogoUrl(t))
+        .filter(Boolean)
+      if (urls.length >= 2) logoUrls = urls
+    }
+  } else {
+    logoUrl = getTickerLogoUrl(ticker)
+  }
+
   return {
     title: options.subjectLine?.trim() || defaultSubject,
     dateText: formatDate(date),
-    badgeText:
-      options.format === 'market_roundup'
-        ? `Market Roundup${featuredCount > 0 ? ` • ${featuredCount} Stocks` : ''}`
-        : `${ticker.toUpperCase()} Snapshot`,
+    badgeText: isRoundup
+      ? `Market Roundup${featuredCount > 0 ? ` • ${featuredCount} Stocks` : ''}`
+      : `${ticker.toUpperCase()} Snapshot`,
     ...(logoUrl ? { logoUrl } : {}),
+    ...(logoUrls ? { logoUrls } : {}),
   }
 }
 
@@ -259,7 +315,7 @@ export function assembleNewsletterHtml(
     : statsInnerHtml && !introInnerHtml
       ? `<tr><td colspan="2" style="padding:0;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
       : ''
-  const showHeaderLogo = shouldRenderNewsletterHeaderLogo(header)
+  const headerLogoHtml = renderNewsletterHeaderLogo(header)
 
   const blockHtml = blocks
     .map(
@@ -316,7 +372,7 @@ export function assembleNewsletterHtml(
                     </p>
                   </td>
                   <td align="right" valign="middle" style="width:60px;padding:24px 32px 24px 0;">
-                    ${showHeaderLogo ? `<img src="${escapeHtml(header.logoUrl || '')}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
+                    ${headerLogoHtml}
                   </td>
                 </tr>
 ${introInnerHtml}
@@ -417,7 +473,7 @@ export function assembleNewsletterHtmlForBeehiiv(
     : statsInnerHtml && !introInnerHtml
       ? `<tr><td colspan="2" style="padding:0;"><div style="border-top:1px solid ${BRAND.cream300};"></div></td></tr>`
       : ''
-  const showHeaderLogo = shouldRenderNewsletterHeaderLogo(header)
+  const headerLogoHtml = renderNewsletterHeaderLogo(header)
 
   const blockHtml = blocks
     .map(
@@ -429,12 +485,14 @@ export function assembleNewsletterHtmlForBeehiiv(
     )
     .join('\n')
 
-  // Beehiiv-compatible output: just the content table, no document wrapper
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  // Beehiiv-compatible output: let Beehiiv's post container provide the card
+  // background, width, and padding. No outer max-width; no redundant white card
+  // around the header section.
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
-  <!-- Header + Intro + Stats (unified card) -->
+  <!-- Header + Intro + Stats -->
   <tr id="newsletter-preview-header"><td style="padding:0 0 32px 0;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;background-color:${BRAND.white};border-radius:8px;border:1px solid ${BRAND.cream300};">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
         <tr>
           <td style="padding:24px 32px;">
             <h1 style="margin:0 0 4px 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${BRAND.sage700};line-height:1.3;">
@@ -445,7 +503,7 @@ export function assembleNewsletterHtmlForBeehiiv(
             </p>
           </td>
           <td align="right" valign="middle" style="width:60px;padding:24px 32px 24px 0;">
-            ${showHeaderLogo ? `<img src="${escapeHtml(header.logoUrl || '')}" alt="${escapeHtml(header.badgeText)}" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:8px;border:1px solid ${BRAND.cream300};" />` : `<span style="display:inline-block;padding:6px 16px;background-color:${BRAND.sage500};color:${BRAND.white};font-size:14px;font-weight:600;border-radius:4px;letter-spacing:0.5px;">${escapeHtml(header.badgeText)}</span>`}
+            ${headerLogoHtml}
           </td>
         </tr>
 ${introInnerHtml}
@@ -457,7 +515,7 @@ ${blockHtml}
 
   <!-- Minimal footer (Beehiiv handles unsubscribe) -->
   <tr><td style="padding:8px 0 0 0;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:${NEWSLETTER_CARD_MAX_WIDTH}px;margin:0 auto;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
       <tr><td style="padding:16px 32px;text-align:center;">
         <p style="margin:0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;">
           Data sourced from SEC filings and Financial Modeling Prep. Charts generated by <a href="https://theintraday.com" style="color:${BRAND.sage500};text-decoration:underline;">The Intraday</a>.

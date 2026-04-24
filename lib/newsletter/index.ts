@@ -11,6 +11,7 @@ export type {
   NewsletterPriceRange,
   NewsletterPriceInterval,
   NewsletterPriceChartType,
+  NewsletterPriceStateSnapshot,
   EditorialChartTemplate,
   ResolveChartOptions,
   ResolvedChart,

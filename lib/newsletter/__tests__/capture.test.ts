@@ -102,6 +102,27 @@ describe('newsletter capture', () => {
         range: '1y',
         interval: 'D',
         chartType: 'line',
+        priceState: {
+          indicators: [{ kind: 'macd', panel: 'lower-1' }],
+          sessionVisibility: 'regularOnly',
+          themeColors: {
+            sessionPreBg: 'rgba(255, 255, 255, 0.031)',
+            sessionPostBg: 'rgba(255, 255, 255, 0.031)',
+          },
+          drawings: [
+            {
+              id: 'draw-1',
+              type: 'arrow',
+              anchors: [
+                { barIndex: 88, price: 244.2 },
+                { barIndex: 108, price: 236.7 },
+              ],
+              style: { color: '#111827', width: 3 },
+            },
+          ],
+          volumeVisible: false,
+          viewport: { startIndex: 88, visibleBars: 44 },
+        },
       },
       {
         outputPath: '/tmp/nvda.png',
@@ -114,7 +135,33 @@ describe('newsletter capture', () => {
     expect(body.spec.ticker).toBe('NVDA')
     expect(body.spec.range).toBe('1y')
     expect(body.spec.interval).toBe('D')
-    expect(body.spec.chartType).toBe('candles')
+    expect(body.spec.chartType).toBe('line')
+    expect(body.spec.priceState).toMatchObject({
+      symbol: 'NVDA',
+      ticker: 'NVDA',
+      range: '1y',
+      interval: 'D',
+      chartType: 'line',
+      sessionVisibility: 'regularOnly',
+      themeColors: {
+        sessionPreBg: 'rgba(255, 255, 255, 0.031)',
+        sessionPostBg: 'rgba(255, 255, 255, 0.031)',
+      },
+      volumeVisible: false,
+      viewport: { startIndex: 88, visibleBars: 44 },
+      drawings: [
+        {
+          id: 'draw-1',
+          type: 'arrow',
+          anchors: [
+            { barIndex: 88, price: 244.2 },
+            { barIndex: 108, price: 236.7 },
+          ],
+          style: { color: '#111827', width: 3 },
+        },
+      ],
+      indicators: [{ kind: 'macd', panel: 'lower-1' }],
+    })
     expect(body.spec.fundState).toBeUndefined()
   })
 
