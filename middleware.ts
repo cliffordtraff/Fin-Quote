@@ -14,6 +14,8 @@ export async function middleware(req: NextRequest) {
   const isPublicChartOfDayAdminRoute =
     pathname === '/admin/chart-of-the-day' ||
     pathname.startsWith('/admin/chart-of-the-day/')
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Ignore Next internals + API routes + static files
   if (
@@ -29,10 +31,15 @@ export async function middleware(req: NextRequest) {
   // Create response and supabase client using @supabase/ssr
   const cookieDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined
   let supabaseResponse = NextResponse.next({ request: req })
+  let user = null
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return supabaseResponse
+  }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -53,9 +60,14 @@ export async function middleware(req: NextRequest) {
   )
 
   // Refresh session if needed (use getUser for security — validates with Supabase Auth server)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const {
+      data: { user: resolvedUser },
+    } = await supabase.auth.getUser()
+    user = resolvedUser
+  } catch {
+    user = null
+  }
 
   // Check if route requires authentication
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))

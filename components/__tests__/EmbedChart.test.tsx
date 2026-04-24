@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EmbedChart from '@/components/EmbedChart'
 
@@ -27,23 +27,27 @@ describe('EmbedChart', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses the configured charting URL and current host origin', () => {
+  it('uses the configured charting URL and current host origin', async () => {
     render(<EmbedChart symbol="AAPL" />)
 
-    expect(screen.getByTitle('AAPL price chart')).toHaveAttribute(
-      'src',
-      `http://localhost:3001/embed?symbol=AAPL&tf=D&range=1y&theme=light&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
-    )
+    await waitFor(() => {
+      expect(screen.getByTitle('AAPL price chart')).toHaveAttribute(
+        'src',
+        `http://localhost:3001/embed?symbol=AAPL&tf=D&range=1y&theme=light&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
+      )
+    })
   })
 
-  it('tracks dark mode in the embed iframe src', () => {
+  it('tracks dark mode in the embed iframe src', async () => {
     document.documentElement.classList.add('dark')
 
     render(<EmbedChart symbol="MSFT" />)
 
-    expect(screen.getByTitle('MSFT price chart')).toHaveAttribute(
-      'src',
-      `http://localhost:3001/embed?symbol=MSFT&tf=D&range=1y&theme=dark&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
-    )
+    await waitFor(() => {
+      expect(screen.getByTitle('MSFT price chart')).toHaveAttribute(
+        'src',
+        `http://localhost:3001/embed?symbol=MSFT&tf=D&range=1y&theme=dark&toolbar=simplified&surface=page&origin=${encodeURIComponent(expectedHostOrigin())}`
+      )
+    })
   })
 })

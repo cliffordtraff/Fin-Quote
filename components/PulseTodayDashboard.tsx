@@ -1870,7 +1870,6 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
                 degen={degenOpts}
                 exaggerate={false}
                 referenceLine={coloredRefLine}
-                labelFontSize={10}
                 padding={{ top: 6, right: 56, bottom: 20, left: 6 }}
                 formatValue={formatPrice}
                 formatTime={() => ''}
@@ -2330,7 +2329,6 @@ const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
                   degen={degenOpts}
                   exaggerate={false}
                   referenceLine={coloredRefLine}
-                  labelFontSize={10}
                   padding={{ top: 6, right: 56, bottom: 20, left: 6 }}
                   formatValue={formatPrice}
                   formatTime={() => ''}
