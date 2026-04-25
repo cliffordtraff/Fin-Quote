@@ -6,6 +6,10 @@ import {
   normalizeNewsletterPriceInterval,
   normalizeNewsletterPriceRange,
 } from './chart-spec'
+import {
+  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
+  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
+} from './render-dimensions'
 import type {
   FundamentalsNewsletterChartSpec,
   NewsletterPriceChartType,
@@ -17,6 +21,8 @@ import { resolveChartingPlatformNewsletterChart } from './charting-platform-expo
 // and return a relative path. The app proxies /tos/* to the real charting host
 // via next.config.js rewrites so the iframe is same-origin.
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
+const NEWSLETTER_EDITOR_TARGET_WIDTH = DEFAULT_EDITOR_CHART_RENDER_WIDTH
+const NEWSLETTER_EDITOR_TARGET_HEIGHT = DEFAULT_EDITOR_CHART_RENDER_HEIGHT
 
 function encodeBase64UrlJson(value: unknown): string {
   const json = JSON.stringify(value)
@@ -65,6 +71,10 @@ export function resolveNewsletterChartEditor(
   const url = new URL(resolved.interactiveUrl)
   url.searchParams.set('fundState', encodeBase64UrlJson(editorFundState))
   url.searchParams.set('embed', 'true')
+  url.searchParams.set('newsletterEditor', '1')
+  url.searchParams.set('newsletterEditorTarget', 'fundamentals')
+  url.searchParams.set('newsletterEditorWidth', String(NEWSLETTER_EDITOR_TARGET_WIDTH))
+  url.searchParams.set('newsletterEditorHeight', String(NEWSLETTER_EDITOR_TARGET_HEIGHT))
 
   return {
     iframePath: `${url.pathname}${url.search}`,
@@ -104,6 +114,10 @@ export function resolveNewsletterPriceChartEditor(
   const url = new URL(resolved.interactiveUrl)
   url.searchParams.set('embed', 'true')
   url.searchParams.set('canvasEditor', '1')
+  url.searchParams.set('newsletterEditor', '1')
+  url.searchParams.set('newsletterEditorTarget', 'price')
+  url.searchParams.set('newsletterEditorWidth', String(NEWSLETTER_EDITOR_TARGET_WIDTH))
+  url.searchParams.set('newsletterEditorHeight', String(NEWSLETTER_EDITOR_TARGET_HEIGHT))
 
   const priceState = normalizeNewsletterPriceStateSnapshot(spec.priceState, {
     symbol: resolved.ticker,

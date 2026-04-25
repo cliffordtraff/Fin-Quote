@@ -2,6 +2,8 @@ import type { ChartExportSpec } from '@/types/chart-export'
 
 export type NewsletterPeriodType = 'annual' | 'quarterly'
 export type NewsletterFormat = 'single_stock' | 'market_roundup'
+export type NewsletterGenerationBackend = 'openai_api' | 'local_worker'
+export type NewsletterModelBackend = 'openai_api' | 'ollama' | 'codex_cli'
 
 // ---------------------------------------------------------------------------
 // Year-range strategies — keep templates evergreen
@@ -412,6 +414,10 @@ export interface NewsletterOptions {
   chartRenderWidth?: number
   /** Override chart capture height */
   chartRenderHeight?: number
+  /** Override the generation execution backend. */
+  generationBackend?: NewsletterGenerationBackend
+  /** Override the model backend used inside the generation pipeline. */
+  modelBackend?: NewsletterModelBackend
 }
 
 /** Result returned by generateNewsletter() */
@@ -510,6 +516,7 @@ export interface NewsletterDraftDocument {
   ticker: string
   format: NewsletterFormat
   featuredTickers: string[]
+  manualDraft?: boolean
   generationPrompt?: string
   generatedAt: string
   subjectLine: string

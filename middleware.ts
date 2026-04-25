@@ -132,6 +132,9 @@ export async function middleware(req: NextRequest) {
     'profile',
     'admin',
     'pricing',
+    'newsletter',
+    'workspace',
+    'multi-charts',
   ])
 
   const parts = pathname.split('/').filter(Boolean)

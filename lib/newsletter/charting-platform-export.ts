@@ -3,6 +3,7 @@ import type {
   NewsletterChartSpec,
   PriceNewsletterChartSpec,
 } from './types'
+import { toChartingMetricId } from '@/lib/charting-metric-bridge'
 import {
   isPriceNewsletterChartSpec,
   normalizeNewsletterPriceStateSnapshot,
@@ -11,32 +12,6 @@ import {
 export const DEFAULT_CHARTING_BASE_URL = 'https://charts.theintraday.com'
 export const DEFAULT_LOCAL_CHARTING_BASE_URL = 'http://localhost:3001'
 const DEFAULT_NEWSLETTER_CHART_THEME = 'light'
-
-const LEGACY_TO_CHARTING_METRIC_MAP = {
-  revenue: 'revenue',
-  net_income: 'netIncome',
-  free_cash_flow: 'freeCashFlow',
-  gross_margin: 'grossMargin',
-  operating_margin: 'operatingMargin',
-  operating_income: 'operatingIncome',
-  eps: 'eps',
-  debt_to_equity_ratio: 'debtEquityRatio',
-  rd_pct_revenue: 'rdPctRevenue',
-  stock_price: 'stockPrice',
-} as const
-
-const SUPPORTED_CHARTING_METRICS = new Set<string>([
-  'revenue',
-  'netIncome',
-  'freeCashFlow',
-  'grossMargin',
-  'operatingMargin',
-  'operatingIncome',
-  'eps',
-  'debtEquityRatio',
-  'rdPctRevenue',
-  'stockPrice',
-])
 
 type NewsletterChartTheme = 'light' | 'dark'
 
@@ -123,21 +98,7 @@ function encodeBase64UrlJson(value: unknown): string {
 }
 
 function mapMetricId(metricId: string): string {
-  const trimmed = metricId.trim()
-  if (!trimmed) {
-    throw new Error('Chart export spec contains an empty metric id')
-  }
-
-  const mapped =
-    LEGACY_TO_CHARTING_METRIC_MAP[
-      trimmed as keyof typeof LEGACY_TO_CHARTING_METRIC_MAP
-    ] ?? trimmed
-
-  if (!SUPPORTED_CHARTING_METRICS.has(mapped)) {
-    throw new Error(`Unsupported newsletter metric for Charting Platform: "${metricId}"`)
-  }
-
-  return mapped
+  return toChartingMetricId(metricId)
 }
 
 function mapMetricColors(
@@ -438,6 +399,9 @@ function resolvePriceNewsletterChart(
   interactiveUrl.searchParams.set('range', spec.range)
   interactiveUrl.searchParams.set('interval', spec.interval)
   interactiveUrl.searchParams.set('chartType', chartType)
+  if (priceState) {
+    interactiveUrl.searchParams.set('priceState', encodeBase64UrlJson(priceState))
+  }
 
   return {
     ticker,

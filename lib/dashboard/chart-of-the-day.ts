@@ -15,6 +15,7 @@ import {
 } from './chart-of-the-day-spec'
 import { readFileSync, readdirSync } from 'fs'
 import { resolve } from 'path'
+import { toSpecMetricId } from '@/lib/charting-metric-bridge'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 import {
   getDefaultPublicChartingBaseUrlForHost,
@@ -59,18 +60,6 @@ export interface DashboardChartOfTheDayFallbackPayload {
 }
 
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
-const CHARTING_TO_SPEC_METRIC_MAP: Record<string, string> = {
-  revenue: 'revenue',
-  netIncome: 'net_income',
-  freeCashFlow: 'free_cash_flow',
-  grossMargin: 'gross_margin',
-  operatingMargin: 'operating_margin',
-  operatingIncome: 'operating_income',
-  eps: 'eps',
-  debtEquityRatio: 'debt_to_equity_ratio',
-  rdPctRevenue: 'rd_pct_revenue',
-  stockPrice: 'stock_price',
-}
 
 function normalizeTicker(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim().toUpperCase() : ''
@@ -126,7 +115,7 @@ function normalizeMetricColorMap(value: unknown): Record<string, string> | undef
 
   const entries = Object.entries(value).flatMap(([metricId, color]) => {
     if (typeof color !== 'string' || !color.trim()) return []
-    const mappedMetricId = CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId
+    const mappedMetricId = toSpecMetricId(metricId)
     if (mappedMetricId === 'stock_price') return []
     return [[mappedMetricId, color.trim()] as const]
   })
@@ -321,7 +310,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromUrl(
     const showStockPrice = rawMetrics.includes('stockPrice')
     const metrics = rawMetrics
       .filter((metricId) => metricId !== 'stockPrice')
-      .map((metricId) => CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId)
+      .map((metricId) => toSpecMetricId(metricId))
 
     if (metrics.length === 0) return null
 

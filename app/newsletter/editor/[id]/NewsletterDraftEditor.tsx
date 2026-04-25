@@ -7,6 +7,7 @@ import type {
   NewsletterDraftDocument,
   NewsletterDraftRecord,
 } from '@/lib/newsletter/types'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import { RichTextEditor } from '@/components/newsletter/RichTextEditor'
 import NewsletterChartEditorDrawer from '@/components/newsletter/NewsletterChartEditorDrawer'
 import NewsletterDraftCreate from '@/app/newsletter/editor/NewsletterDraftCreate'
@@ -52,28 +53,6 @@ const BLOCK_PREVIEW_SCROLL_TOP_OFFSET = 120
 const BLOCK_PAGE_SCROLL_TOP_OFFSET = 96
 const DEFAULT_PREVIEW_SCROLL_TOP_OFFSET = 16
 const DEFAULT_PAGE_SCROLL_TOP_OFFSET = 24
-async function copyTextToClipboard(value: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return
-  }
-
-  const fallback = document.createElement('textarea')
-  fallback.value = value
-  fallback.setAttribute('readonly', '')
-  fallback.style.position = 'fixed'
-  fallback.style.opacity = '0'
-  fallback.style.pointerEvents = 'none'
-  document.body.appendChild(fallback)
-  fallback.select()
-
-  const copied = document.execCommand('copy')
-  document.body.removeChild(fallback)
-
-  if (!copied) {
-    throw new Error('Copy failed')
-  }
-}
 
 function CopyIcon({
   copied,
@@ -177,6 +156,7 @@ function CopyableControl({
 export default function NewsletterDraftEditor({
   draftId,
 }: NewsletterDraftEditorProps) {
+  const isNewDraft = draftId === 'new'
   const previewSectionRef = useRef<HTMLElement | null>(null)
   const inspectorSectionRef = useRef<HTMLElement | null>(null)
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
@@ -272,6 +252,14 @@ export default function NewsletterDraftEditor({
   }, [newDraftOpenFormat])
 
   useEffect(() => {
+    if (isNewDraft) {
+      setLoading(false)
+      setError(null)
+      setRecord(null)
+      setDraft(null)
+      return
+    }
+
     let cancelled = false
 
     async function loadDraft() {
@@ -317,7 +305,7 @@ export default function NewsletterDraftEditor({
     return () => {
       cancelled = true
     }
-  }, [draftId])
+  }, [draftId, isNewDraft])
 
   useEffect(() => {
     return () => {
@@ -652,6 +640,13 @@ export default function NewsletterDraftEditor({
   }
 
   async function regenerateNewsletter() {
+    if (draft?.manualDraft) {
+      setError(
+        'Blank manual drafts do not support regenerate. Start with Generate, or keep editing this draft manually.',
+      )
+      return
+    }
+
     if (dirty) {
       const confirmed = window.confirm(
         'Regenerate newsletter will replace your current unsaved edits with a new AI-generated draft for this ticker. Continue?',
@@ -702,6 +697,182 @@ export default function NewsletterDraftEditor({
     return (
       <div className="rounded-2xl border border-gray-300 bg-white p-8 text-sm text-gray-600 shadow-sm">
         Loading newsletter draft…
+      </div>
+    )
+  }
+
+  if (isNewDraft) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-5 py-3.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Link
+                href="/newsletter/editor"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-cream-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-700 transition hover:border-sage-300 hover:bg-sage-50 hover:text-sage-800"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  className="h-3.5 w-3.5"
+                >
+                  <path
+                    d="M9.5 3.5L5 8L9.5 12.5"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Back
+              </Link>
+            </div>
+            <h1 className="text-lg font-semibold tracking-tight text-gray-900">
+              New newsletter draft
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-800">
+              New
+            </span>
+            <div ref={newDraftPopoverRef} className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setNewDraftOpenFormat((prev) => (prev ? null : 'single_stock'))
+                }
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  newDraftOpenFormat
+                    ? 'border-sage-800 bg-sage-800 text-white'
+                    : 'border-sage-700 text-sage-800 hover:bg-sage-50'
+                }`}
+                aria-haspopup="dialog"
+                aria-expanded={newDraftOpenFormat !== null}
+              >
+                + New
+              </button>
+              {newDraftOpenFormat ? (
+                <div className="absolute right-0 top-full z-30 mt-2 w-[420px] max-w-[calc(100vw-2rem)]">
+                  <NewsletterDraftCreate defaultFormat={newDraftOpenFormat} />
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled
+              className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 opacity-40"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              disabled
+              className="rounded-lg border border-gray-900 px-2.5 py-1.5 text-xs font-semibold text-gray-900 opacity-40"
+            >
+              Regenerate
+            </button>
+            <button
+              type="button"
+              disabled
+              className="rounded-lg bg-sage-700 px-2.5 py-1.5 text-xs font-semibold text-white opacity-40"
+            >
+              Edit chart
+            </button>
+            <button
+              type="button"
+              disabled
+              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white opacity-40"
+            >
+              Copy for Beehiiv
+            </button>
+            <button
+              type="button"
+              disabled
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 opacity-40"
+              title="Fullscreen preview"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="10 2 14 2 14 6" />
+                <polyline points="6 14 2 14 2 10" />
+                <line x1="14" y1="2" x2="9.5" y2="6.5" />
+                <line x1="2" y1="14" x2="6.5" y2="9.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="rounded-2xl border border-gray-300 bg-white p-4 shadow-sm xl:sticky xl:top-6 xl:self-start">
+            <div className="space-y-2">
+              {['Subject Line', 'Header', 'Intro', 'Metrics Snapshot'].map((label, index) => (
+                <div
+                  key={label}
+                  className={`w-full rounded-xl px-4 py-3 text-left ${
+                    index === 0
+                      ? 'bg-sage-700 text-white'
+                      : 'bg-cream-100 text-gray-400'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <div className="space-y-2">
+                {[1, 2, 3].map((index) => (
+                  <div
+                    key={index}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-gray-400"
+                  >
+                    <div className="text-sm font-medium">Block {index}</div>
+                    <div className="mt-2 text-sm font-semibold leading-5">
+                      New section
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section className="rounded-2xl border border-gray-300 bg-[#f8f8f5] p-4 shadow-sm">
+            <div className="mx-auto max-w-[760px] overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+              <div className="flex min-h-[58px] items-center border-b border-[#d9d9d4] bg-[#f3f3f0] px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                  <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                  <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+                </div>
+                <div className="ml-auto flex items-center gap-2 text-right">
+                  <div className="text-[13px] font-medium text-[#4b5563]">
+                    Email Style Preview
+                  </div>
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#b9c0cb] text-[10px] font-semibold leading-none text-[#7b8491]">
+                    i
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex h-[1000px] items-center justify-center bg-white px-8 text-center">
+                <div className="max-w-md space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sage-700">
+                    New Newsletter
+                  </p>
+                  <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
+                    Generate a new draft
+                  </h2>
+                  <p className="text-sm leading-6 text-gray-500">
+                    Use the + New button in the top bar to choose a format and
+                    either generate a newsletter or start from a blank draft. The
+                    preview will appear here after creation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     )
   }
@@ -791,7 +962,7 @@ export default function NewsletterDraftEditor({
           <button
             type="button"
             onClick={regenerateNewsletter}
-            disabled={regeneratingNewsletter || saving}
+            disabled={regeneratingNewsletter || saving || draft.manualDraft === true}
             className="rounded-lg border border-gray-900 px-2.5 py-1.5 text-xs font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {regeneratingNewsletter ? 'Regenerating…' : 'Regenerate'}
@@ -942,9 +1113,25 @@ export default function NewsletterDraftEditor({
 
         <section
           ref={previewSectionRef}
-          className="rounded-2xl border border-gray-300 bg-white p-4 shadow-sm"
+          className="rounded-2xl border border-gray-300 bg-[#f8f8f5] p-4 shadow-sm"
         >
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-cream-100">
+          <div className="mx-auto max-w-[760px] overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+            <div className="flex min-h-[58px] items-center border-b border-[#d9d9d4] bg-[#f3f3f0] px-5 py-4">
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+              </div>
+              <div className="ml-auto flex items-center gap-2 text-right">
+                <div className="text-[13px] font-medium text-[#4b5563]">
+                  Email Style Preview
+                </div>
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#b9c0cb] text-[10px] font-semibold leading-none text-[#7b8491]">
+                  i
+                </span>
+              </div>
+            </div>
+
             <iframe
               ref={previewFrameRef}
               key={`${record.id}:${record.updatedAt}`}
@@ -966,7 +1153,7 @@ export default function NewsletterDraftEditor({
         >
           {selectedPanel === 'overview' ? (
             <div className="space-y-3">
-              <label className="block">
+              <div className="block">
                 <CopyableControl
                   copyId="draft-subject-line"
                   value={draft.subjectLine}
@@ -982,11 +1169,11 @@ export default function NewsletterDraftEditor({
                     />
                   )}
                 />
-              </label>
+              </div>
             </div>
           ) : selectedPanel === 'header' && draft.header ? (
             <div className="space-y-3">
-              <label className="block">
+              <div className="block">
                 <CopyableControl
                   copyId="header-title"
                   value={draft.header!.title}
@@ -1001,9 +1188,9 @@ export default function NewsletterDraftEditor({
                     />
                   )}
                 />
-              </label>
+              </div>
 
-              <label className="block">
+              <div className="block">
                 <CopyableControl
                   copyId="header-date-text"
                   value={draft.header!.dateText}
@@ -1018,9 +1205,9 @@ export default function NewsletterDraftEditor({
                     />
                   )}
                 />
-              </label>
+              </div>
 
-              <label className="block">
+              <div className="block">
                 <CopyableControl
                   copyId="header-badge-text"
                   value={draft.header!.badgeText}
@@ -1035,11 +1222,11 @@ export default function NewsletterDraftEditor({
                     />
                   )}
                 />
-              </label>
+              </div>
             </div>
           ) : selectedPanel === 'intro' ? (
             <div className="space-y-3">
-              <label className="block">
+              <div className="block">
                 <CopyableControl
                   copyId="draft-intro-text"
                   value={draft.introText}
@@ -1055,7 +1242,7 @@ export default function NewsletterDraftEditor({
                     />
                   )}
                 />
-              </label>
+              </div>
             </div>
           ) : selectedPanel === 'stats' && draft.statsCard ? (
             <div className="space-y-3">
@@ -1069,7 +1256,7 @@ export default function NewsletterDraftEditor({
                   </p>
 
                   <div className="mt-3 grid gap-3">
-                    <label className="block">
+                    <div className="block">
                       <CopyableControl
                         copyId={`stats-item-${index}-label`}
                         value={item.label}
@@ -1086,9 +1273,9 @@ export default function NewsletterDraftEditor({
                           />
                         )}
                       />
-                    </label>
+                    </div>
 
-                    <label className="block">
+                    <div className="block">
                       <CopyableControl
                         copyId={`stats-item-${index}-value`}
                         value={item.value}
@@ -1105,7 +1292,7 @@ export default function NewsletterDraftEditor({
                           />
                         )}
                       />
-                    </label>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1113,7 +1300,7 @@ export default function NewsletterDraftEditor({
           ) : selectedBlock ? (
             <div className="space-y-3">
               <div className="grid gap-3">
-                <label className="block">
+                <div className="block">
                   <CopyableControl
                     copyId={`${selectedBlock.id}-heading`}
                     value={selectedBlock.heading}
@@ -1130,9 +1317,9 @@ export default function NewsletterDraftEditor({
                       />
                     )}
                   />
-                </label>
+                </div>
 
-                <label className="block">
+                <div className="block">
                   <CopyableControl
                     copyId={`${selectedBlock.id}-body`}
                     value={selectedBlock.body}
@@ -1148,7 +1335,7 @@ export default function NewsletterDraftEditor({
                       />
                     )}
                   />
-                </label>
+                </div>
               </div>
 
             </div>
@@ -1182,9 +1369,25 @@ export default function NewsletterDraftEditor({
             Close
           </button>
 
-          <div className="flex h-full flex-col rounded-3xl border border-gray-200 bg-white shadow-2xl">
+          <div className="flex h-full flex-col rounded-3xl border border-gray-200 bg-[#f8f8f5] shadow-2xl">
             <div className="min-h-0 flex-1 overflow-hidden p-4">
-              <div className="h-full overflow-hidden rounded-2xl border border-gray-200 bg-cream-100">
+              <div className="mx-auto flex h-full max-w-[900px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.12)]">
+                <div className="flex min-h-[58px] items-center border-b border-[#d9d9d4] bg-[#f3f3f0] px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                    <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                    <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+                  </div>
+                  <div className="ml-auto flex items-center gap-2 text-right">
+                    <div className="text-[13px] font-medium text-[#4b5563]">
+                      Email Style Preview
+                    </div>
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#b9c0cb] text-[10px] font-semibold leading-none text-[#7b8491]">
+                      i
+                    </span>
+                  </div>
+                </div>
+
                 <iframe
                   ref={expandedPreviewFrameRef}
                   key={`expanded-${record.id}:${record.updatedAt}`}
@@ -1195,7 +1398,7 @@ export default function NewsletterDraftEditor({
                 if (!shouldAutoScrollSelectedPreviewAnchor) return
                 scrollPreviewToSelectedAnchor(selectedPreviewAnchorId)
               }}
-                  className="h-full w-full bg-white"
+                  className="min-h-0 flex-1 w-full bg-white"
                 />
               </div>
             </div>

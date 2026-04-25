@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateNewsletter } from '@/lib/newsletter/orchestrate'
+import { generateNewsletterWithBackend } from '@/lib/newsletter/generation'
 import {
   getDefaultChartingBaseUrlForHost,
   getDefaultPublicChartingBaseUrlForHost,
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const chartBaseUrl = getDefaultChartingBaseUrlForHost(host)
     const publicChartBaseUrl = getDefaultPublicChartingBaseUrlForHost(host)
 
-    const result = await generateNewsletter(cleanedTicker, {
+    const result = await generateNewsletterWithBackend(cleanedTicker, {
       baseUrl,
       chartBaseUrl,
       publicChartBaseUrl,

@@ -49,6 +49,7 @@ function resolveEditor(block: NewsletterDraftBlock) {
     return {
       kind: 'price' as const,
       iframePath: resolved.iframePath,
+      symbol: resolved.symbol,
     }
   }
   const resolved = resolveNewsletterChartEditor(
@@ -58,6 +59,7 @@ function resolveEditor(block: NewsletterDraftBlock) {
     kind: 'fundamentals' as const,
     iframePath: resolved.iframePath,
     fundState: resolved.fundState,
+    symbol: resolved.symbol,
   }
 }
 
@@ -115,14 +117,26 @@ export default function NewsletterChartEditorDrawer({
             '*',
           )
         } else {
-          iframeWindow.postMessage(
-            {
-              v: PM_VERSION,
-              type: 'SET_WORKSPACE_MODE',
-              payload: { mode: 'price' },
-            },
-            '*',
-          )
+          const syncPriceWorkspace = () => {
+            iframeWindow.postMessage(
+              {
+                v: PM_VERSION,
+                type: 'SET_WORKSPACE_MODE',
+                payload: { mode: 'price' },
+              },
+              '*',
+            )
+            iframeWindow.postMessage(
+              {
+                v: PM_VERSION,
+                type: 'SET_SYMBOL',
+                payload: { symbolId: editor.symbol },
+              },
+              '*',
+            )
+          }
+          syncPriceWorkspace()
+          setTimeout(syncPriceWorkspace, 180)
         }
         // Re-apply theme after the chart reload settles, since the chart may
         // re-initialize with its bootstrap theme and lose our first SET_THEME.
@@ -228,7 +242,8 @@ export default function NewsletterChartEditorDrawer({
     })
   }, [editor.kind])
 
-  async function handleSave() {
+  async function handleSave(options?: { closeAfterSave?: boolean }) {
+    const closeAfterSave = options?.closeAfterSave === true
     setError(null)
     setNotice(null)
     setSaving(true)
@@ -295,7 +310,11 @@ export default function NewsletterChartEditorDrawer({
       }
 
       onSaved(payload.draft)
-      setNotice('Chart saved and newsletter preview refreshed.')
+      if (closeAfterSave) {
+        onClose()
+      } else {
+        setNotice('Chart saved and newsletter preview refreshed.')
+      }
     } catch (err) {
       setNotice(null)
       setError(err instanceof Error ? err.message : 'Failed to save chart edits')
@@ -312,8 +331,8 @@ export default function NewsletterChartEditorDrawer({
             Edit chart — {block.heading || 'Untitled block'}
           </h2>
           <p className="mt-0.5 text-xs text-gray-500">
-            Tweak the chart, then Save to regenerate the newsletter image. Use
-            Newsletter Editor to return to the draft.
+            Tweak the chart, then save to regenerate the newsletter image. Use
+            Save and return to Editor to go back to the draft.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -327,7 +346,7 @@ export default function NewsletterChartEditorDrawer({
           </button>
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             disabled={saving || status !== 'ready'}
             className="rounded-lg bg-sage-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sage-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -335,8 +354,8 @@ export default function NewsletterChartEditorDrawer({
           </button>
           <button
             type="button"
-            onClick={onClose}
-            disabled={saving}
+            onClick={() => void handleSave({ closeAfterSave: true })}
+            disabled={saving || status !== 'ready'}
             className="inline-flex items-center gap-1.5 rounded-lg border border-sage-200 bg-sage-50 px-3 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg
@@ -352,7 +371,7 @@ export default function NewsletterChartEditorDrawer({
               <path d="M6.25 3.25 2.5 7l3.75 3.75" />
               <path d="M3 7h6.25c2.9 0 4.25-1.45 4.25-4.5" />
             </svg>
-            Newsletter Editor
+            {saving ? 'Saving…' : 'Save and return to Editor'}
           </button>
         </div>
       </header>

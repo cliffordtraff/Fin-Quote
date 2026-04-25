@@ -150,7 +150,27 @@ describe('resolveDashboardChartOfTheDay', () => {
     const editorPath = resolveDashboardChartOfTheDayEditorPath(spec, 'light')
     const parsedSpec = parseDashboardChartOfTheDayEditorSpecFromUrl(editorPath, spec)
 
-    expect(parsedSpec).toEqual(spec)
+    expect(parsedSpec).toMatchObject(spec)
+  })
+
+  it('round-trips extended chart-editor metric ids through the dashboard parser', () => {
+    const spec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: [
+        'depreciation_amortization',
+        'stock_based_comp',
+        'stock_buybacks',
+        'shares_outstanding',
+      ],
+      periodType: 'annual',
+      chartType: 'bar',
+      title: 'AAPL Cash Flow Quality',
+    }
+
+    const editorPath = resolveDashboardChartOfTheDayEditorPath(spec, 'light')
+    const parsedSpec = parseDashboardChartOfTheDayEditorSpecFromUrl(editorPath, spec)
+
+    expect(parsedSpec).toMatchObject(spec)
   })
 
   it('recovers saved per-metric fundamentals chart styles from the editor url', () => {

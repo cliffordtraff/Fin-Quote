@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   parseFundamentalsNewsletterChartSpecFromFundState,
+  resolveNewsletterChartEditor,
   parsePriceNewsletterChartSpecFromState,
   resolveNewsletterPriceChartEditor,
 } from '@/lib/newsletter/chart-editor'
@@ -59,6 +60,58 @@ describe('newsletter price chart editor bridge', () => {
     })
   })
 
+  it('maps newer chart-editor metric ids back into newsletter metric ids', () => {
+    const fallback: FundamentalsNewsletterChartSpec = {
+      mode: 'fundamentals',
+      stocks: ['AAPL'],
+      metrics: ['depreciation_amortization'],
+      periodType: 'annual',
+      chartType: 'bar',
+      showLabels: true,
+      stacked: false,
+      indexToZero: false,
+      title: 'AAPL Depreciation & Amortization',
+    }
+
+    const parsed = parseFundamentalsNewsletterChartSpecFromFundState(
+      {
+        symbol: 'aapl',
+        period: 'annual',
+        chartType: 'bar',
+        visibleMetrics: [
+          'depreciationAmortization',
+          'stockBasedCompensation',
+          'commonStockRepurchased',
+          'sharesOutstanding',
+        ],
+        addedMetrics: [
+          'depreciationAmortization',
+          'stockBasedCompensation',
+          'commonStockRepurchased',
+          'sharesOutstanding',
+        ],
+        activeMetric: 'depreciationAmortization',
+        showLabels: true,
+      },
+      'AAPL',
+      fallback,
+    )
+
+    expect(parsed).toMatchObject({
+      mode: 'fundamentals',
+      stocks: ['AAPL'],
+      metrics: [
+        'depreciation_amortization',
+        'stock_based_comp',
+        'stock_buybacks',
+        'shares_outstanding',
+      ],
+      periodType: 'annual',
+      chartType: 'bar',
+      showLabels: true,
+    })
+  })
+
   it('restores saved price workspace state into the embedded editor iframe', () => {
     const spec: PriceNewsletterChartSpec = {
       mode: 'price',
@@ -68,6 +121,7 @@ describe('newsletter price chart editor bridge', () => {
       chartType: 'candles',
       priceState: {
         indicators: [{ kind: 'macd', panel: 'lower-1' }],
+        priceScale: { min: 212.25, max: 287.75 },
         sessionVisibility: 'regularOnly',
         themeColors: {
           sessionPreBg: 'rgba(255, 255, 255, 0.031)',
@@ -101,11 +155,16 @@ describe('newsletter price chart editor bridge', () => {
     expect(iframeUrl.pathname).toBe('/tos/TXN')
     expect(iframeUrl.searchParams.get('embed')).toBe('true')
     expect(iframeUrl.searchParams.get('canvasEditor')).toBe('1')
+    expect(iframeUrl.searchParams.get('newsletterEditor')).toBe('1')
+    expect(iframeUrl.searchParams.get('newsletterEditorTarget')).toBe('price')
+    expect(iframeUrl.searchParams.get('newsletterEditorWidth')).toBe('1200')
+    expect(iframeUrl.searchParams.get('newsletterEditorHeight')).toBe('675')
     expect(decodedState.symbol).toBe('TXN')
     expect(decodedState.ticker).toBe('TXN')
     expect(decodedState.range).toBe('1m')
     expect(decodedState.interval).toBe('D')
     expect(decodedState.chartType).toBe('candles')
+    expect(decodedState.priceScale).toEqual({ min: 212.25, max: 287.75 })
     expect(decodedState.sessionVisibility).toBe('regularOnly')
     expect(decodedState.themeColors).toEqual({
       sessionPreBg: 'rgba(255, 255, 255, 0.031)',
@@ -127,6 +186,33 @@ describe('newsletter price chart editor bridge', () => {
     expect(decodedState.indicators).toEqual([{ kind: 'macd', panel: 'lower-1' }])
   })
 
+  it('requests a newsletter-sized fundamentals editor surface too', () => {
+    const spec: FundamentalsNewsletterChartSpec = {
+      mode: 'fundamentals',
+      stocks: ['NVDA'],
+      metrics: ['revenue', 'net_income'],
+      periodType: 'annual',
+      chartType: 'bar',
+      showLabels: true,
+      stacked: false,
+      indexToZero: false,
+      title: 'NVDA Revenue vs Net Income',
+    }
+
+    const resolved = resolveNewsletterChartEditor(spec, { theme: 'light' })
+    const iframeUrl = new URL(
+      resolved.iframePath,
+      'https://charting-proxy.theintraday.invalid',
+    )
+
+    expect(iframeUrl.pathname).toBe('/tos/NVDA')
+    expect(iframeUrl.searchParams.get('embed')).toBe('true')
+    expect(iframeUrl.searchParams.get('newsletterEditor')).toBe('1')
+    expect(iframeUrl.searchParams.get('newsletterEditorTarget')).toBe('fundamentals')
+    expect(iframeUrl.searchParams.get('newsletterEditorWidth')).toBe('1200')
+    expect(iframeUrl.searchParams.get('newsletterEditorHeight')).toBe('675')
+  })
+
   it('persists normalized price workspace state when saving from the editor', () => {
     const fallback: PriceNewsletterChartSpec = {
       mode: 'price',
@@ -143,6 +229,7 @@ describe('newsletter price chart editor bridge', () => {
         interval: 'D',
         chartType: 'line',
         indicators: [{ kind: 'macd', panel: 'lower-1' }],
+        priceScale: { min: 245.4, max: 366.2 },
         sessionVisibility: 'regularOnly',
         themeColors: {
           sessionPreBg: 'rgba(255, 255, 255, 0.031)',
@@ -179,6 +266,7 @@ describe('newsletter price chart editor bridge', () => {
       range: '1m',
       interval: 'D',
       chartType: 'line',
+      priceScale: { min: 245.4, max: 366.2 },
       sessionVisibility: 'regularOnly',
       themeColors: {
         sessionPreBg: 'rgba(255, 255, 255, 0.031)',

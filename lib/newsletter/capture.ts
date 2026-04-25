@@ -1,22 +1,30 @@
 import { writeFileSync } from 'fs'
 import type { NewsletterChartSpec } from './types'
 import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
+import {
+  DEFAULT_CHART_RENDER_HEIGHT,
+  DEFAULT_CHART_RENDER_WIDTH,
+  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
+  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
+} from './render-dimensions'
 
 type Browser = import('puppeteer').Browser
 const DEFAULT_RENDER_ROUTE_PATH = '/tos/api/newsletter/render'
-export const DEFAULT_CHART_RENDER_WIDTH = 1400
-export const DEFAULT_CHART_RENDER_HEIGHT = 960
-export const DEFAULT_EDITOR_CHART_RENDER_WIDTH = 1280
-export const DEFAULT_EDITOR_CHART_RENDER_HEIGHT = 900
+export {
+  DEFAULT_CHART_RENDER_HEIGHT,
+  DEFAULT_CHART_RENDER_WIDTH,
+  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
+  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
+}
 
 export interface CaptureChartOptions {
   /** File path to save the PNG screenshot */
   outputPath: string
   /** Base URL of the Charting Platform app (e.g. 'http://localhost:3001') */
   chartBaseUrl: string
-  /** Viewport width (default: 1400) */
+  /** Viewport width (default: 1200) */
   width?: number
-  /** Viewport height (default: 960) */
+  /** Viewport height (default: 675) */
   height?: number
   /** Max wait time in ms (default: 30000) */
   timeout?: number

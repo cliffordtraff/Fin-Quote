@@ -329,6 +329,150 @@ Users see a message, not a crash.
 
 ---
 
+## The Newsletter Detour: Separating "Who Starts The Work" From "Who Thinks"
+
+The newsletter system taught a subtle but important engineering lesson: **a button click is not the same thing as a model backend**.
+
+At first, the flow was simple:
+
+```text
+Generate button -> Next.js route -> OpenAI API -> draft editor
+```
+
+That worked, but it mixed two different decisions together:
+
+1. **Execution boundary** — where does the work run?
+2. **Model backend** — which model actually generates the copy?
+
+Those sound similar until they bite you.
+
+The clean fix was to split them apart:
+
+```text
+Generate button -> local CLI worker -> newsletter orchestrator -> model backend
+```
+
+Now the app can keep the same one-click UX while changing the brain behind the scenes.
+
+### Why the local worker mattered
+
+Think of the local worker as the kitchen, not the chef.
+
+- The **UI** is the waiter taking your order.
+- The **CLI worker** is the kitchen receiving the ticket.
+- The **model backend** is whichever chef is on duty.
+
+Before this refactor, the waiter was basically calling one specific chef directly. That made every future change awkward.
+
+After the refactor:
+
+- the UI still just says "generate"
+- the worker still owns the job boundary
+- the model can be swapped from OpenAI API to Codex CLI without rewriting the editor flow
+
+That's good architecture: one surface, one stable contract, multiple interchangeable implementations behind it.
+
+### The bug that proved the boundary mattered
+
+The first version of the worker returned this kind of error:
+
+> `Unexpected token 'd', "[dotenv@17"... is not valid JSON`
+
+That bug had nothing to do with AI quality. It was a systems bug.
+
+What happened:
+
+- the worker was supposed to print pure JSON to stdout
+- `dotenv` printed a startup line first
+- the parent process tried to parse the whole stream as JSON
+- generation failed even though the logic itself was fine
+
+The fix was two-part:
+
+- make the worker load dotenv quietly
+- harden the parent parser so harmless stdout noise does not corrupt the payload
+
+This is classic engineering work. The glamorous part is "use AI to write the newsletter." The real product work is usually "make the boundary impossible to break by accident."
+
+### Moving off the OpenAI API without breaking the button
+
+Once the worker boundary existed, moving off the API got much easier.
+
+We added a second switch inside the newsletter system:
+
+- **generation backend**: direct path vs local worker
+- **model backend**: OpenAI API vs Codex CLI
+
+That meant we could keep the button behavior unchanged while swapping the actual generation runtime from:
+
+- `openai.responses.create(...)`
+
+to:
+
+- the local `codex exec` CLI running under the ChatGPT subscription
+
+This is one of those moments where a good abstraction pays rent immediately. The "one-click Generate" experience stayed the same, but the system stopped depending on paid API calls for newsletter generation.
+
+### The speed trap: fewer model calls is not automatically faster
+
+This was a good reminder that performance work is full of fake intuitions.
+
+We initially assumed:
+
+> "If Codex CLI startup is expensive, then merging several prompts into one giant prompt must be faster."
+
+Reasonable guess. Wrong in practice.
+
+For newsletter generation, the smaller prompts were often faster because:
+
+- each prompt had a tighter job
+- the input payload stayed smaller
+- copy generation could run in parallel across blocks
+
+When we merged too much into one call, the prompt became bloated with raw financial JSON for multiple charts at once. The result: **one big call that thought longer and actually ran slower**.
+
+The better optimization ended up being more boring:
+
+- keep the smaller task boundaries
+- compact the JSON payloads
+- use the lighter Codex model when quality allows
+
+In practice, the prompt-size reduction meant replacing raw annual and quarterly statement dumps with:
+
+- a short editorial snapshot for selection
+- a chart-specific metric slice for copy
+
+That is a better pattern in general. Give the model the data it needs for the decision in front of it, not a giant backpack of everything you happen to have.
+
+This is a classic engineering lesson: **measure before you fall in love with the theory**.
+
+### Pitfalls to remember
+
+- Do not confuse **"runs locally"** with **"is free."** A local worker can still call a paid API if you let it.
+- Do not confuse **"Codex the chat/app"** with **"Codex CLI the callable tool."** The first is a UI, the second is the automation surface your scripts can actually invoke.
+- If two processes talk through stdout, treat stdout like a contract. One noisy log line can break everything.
+- Agentic CLIs are powerful, but they are noisy by default. Use a dedicated output file or strict schema boundary instead of scraping terminal chatter.
+- When you change `.env.local`, remember which process reads it:
+  - the Next dev server reads env on startup
+  - the worker script can load `.env.local` on each run
+- When two parts of the product translate between formats, do not let each side keep its own tiny private map. We hit this in the newsletter chart editor: the editor could emit newer metric ids like `depreciationAmortization`, but the exporter still enforced an older allowlist and crashed on save. The right fix was a shared bridge module with explicit aliases plus generic snake_case/camelCase conversion, not another one-off patch.
+
+### The more general lesson
+
+A lot of "this should be simple" product ideas fail because the boundaries are fuzzy.
+
+The better question is not:
+
+> "Can the button somehow use Codex or AI?"
+
+The better question is:
+
+> "What contract does the button trigger, and which component is responsible for fulfilling it?"
+
+Once you ask it that way, the design becomes much clearer.
+
+---
+
 ## What's Next
 
 The branch structure tells you where this is going:
@@ -352,5 +496,5 @@ That's the difference between a demo and a product.
 
 ---
 
-*Last updated: January 2026*
+*Last updated: April 2026*
 *201 commits and counting*

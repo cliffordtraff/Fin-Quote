@@ -17,7 +17,8 @@ const BRAND = {
 } as const
 
 const NEWSLETTER_CARD_MAX_WIDTH = 600
-const NEWSLETTER_CHART_WIDTH = 584
+const NEWSLETTER_TEXT_COLUMN_PADDING = 32
+const NEWSLETTER_CHART_WIDTH = NEWSLETTER_CARD_MAX_WIDTH
 
 // ---------------------------------------------------------------------------
 // Content → slot mapping
@@ -97,11 +98,11 @@ function renderBody(text: string): string {
 }
 
 function renderChart(imageUrl: string, alt: string, chartUrl?: string): string {
-  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="${NEWSLETTER_CHART_WIDTH}" style="display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid ${BRAND.gray300};" />`
+  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="${NEWSLETTER_CHART_WIDTH}" style="display:block;max-width:100%;height:auto;border-radius:6px;margin:0 auto;" />`
   const content = chartUrl
-    ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:block;text-decoration:none;">${img}</a>`
+    ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:inline-block;text-decoration:none;">${img}</a>`
     : img
-  return `<tr><td style="padding:8px 8px;">
+  return `<tr><td align="center" style="padding:8px 0;text-align:center;">
   ${content}
 </td></tr>`
 }

@@ -1,16 +1,10 @@
-import NewsletterDraftCreate from '../NewsletterDraftCreate'
+import NewsletterDraftEditor from '../[id]/NewsletterDraftEditor'
 
-export default async function NewsletterDraftCreatePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ format?: string }>
-}) {
-  const { format } = await searchParams
-  const defaultFormat = format === 'market_roundup' ? 'market_roundup' : 'single_stock'
+export default function NewsletterDraftCreatePage() {
   return (
     <div className="min-h-screen bg-cream-100 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1600px]">
-        <NewsletterDraftCreate defaultFormat={defaultFormat} />
+      <div className="mx-auto max-w-[1800px]">
+        <NewsletterDraftEditor draftId="new" />
       </div>
     </div>
   )

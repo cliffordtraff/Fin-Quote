@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import OpenAI from 'openai'
 
 import { buildNewsletterBlock } from './build-block'
 import {
@@ -11,11 +10,13 @@ import {
 import {
   captureChart,
   captureFullPage,
+} from './capture'
+import {
   DEFAULT_CHART_RENDER_HEIGHT,
   DEFAULT_CHART_RENDER_WIDTH,
   DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
   DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './capture'
+} from './render-dimensions'
 import { getEditorialTemplate } from './editorial-templates'
 import {
   fetchMarketContext,
@@ -45,7 +46,12 @@ import {
   parseStockPickerResult,
   parseTemplateSelections,
 } from './prompts'
+import { ensureStockMentionInCopy } from './copy-normalization'
 import { resolveEditorialChart } from './resolve-chart'
+import {
+  createNewsletterModelClient,
+  runNewsletterJsonPrompt,
+} from './model-client'
 import type {
   FeaturedStock,
   GeneratedCopy,
@@ -102,41 +108,6 @@ function resolveNewsletterFormat(
   if (ticker) return 'single_stock'
   if (featuredTickers.length > 0) return 'market_roundup'
   return requestedFormat === 'market_roundup' ? 'market_roundup' : 'single_stock'
-}
-
-function buildOpenAiInput(
-  prefix: string,
-  messages: Array<{ role: 'system' | 'user'; content: string }>,
-) {
-  return messages.map((message, index) => ({
-    id: `${prefix}_${index}`,
-    role: message.role,
-    content: [{ type: 'input_text' as const, text: message.content }],
-    type: 'message' as const,
-  }))
-}
-
-async function runJsonPrompt(
-  openai: OpenAI,
-  model: string,
-  isGpt5: boolean,
-  prefix: string,
-  messages: Array<{ role: 'system' | 'user'; content: string }>,
-  options: {
-    temperature?: number
-    maxOutputTokens: number
-  },
-): Promise<string> {
-  const response = await openai.responses.create({
-    model,
-    input: buildOpenAiInput(prefix, messages),
-    ...(isGpt5 ? {} : { temperature: options.temperature ?? 0 }),
-    max_output_tokens: isGpt5 ? 20000 : options.maxOutputTokens,
-    ...(isGpt5 ? { reasoning: { effort: 'minimal' as const } } : {}),
-    text: { format: { type: 'json_object' } },
-  })
-
-  return response.output_text ?? ''
 }
 
 function getCandidatePickSource(
@@ -228,9 +199,7 @@ function scoreRoundupCandidate(
 }
 
 async function selectMarketRoundupStocks(
-  openai: OpenAI,
-  model: string,
-  isGpt5: boolean,
+  modelClient: ReturnType<typeof createNewsletterModelClient>,
   market: Awaited<ReturnType<typeof fetchMarketContext>>,
   roundupSize: number,
   explicitTickers: string[],
@@ -248,10 +217,8 @@ async function selectMarketRoundupStocks(
   let selectedSymbols = fallbackSymbols
 
   if (generationPrompt?.trim()) {
-    const selectionText = await runJsonPrompt(
-      openai,
-      model,
-      isGpt5,
+    const selectionText = await runNewsletterJsonPrompt(
+      modelClient,
       'msg_roundup_pick',
       buildMarketRoundupStockSelectionMessages(market, roundupSize, generationPrompt),
       { temperature: 0, maxOutputTokens: 700 },
@@ -273,9 +240,7 @@ async function selectMarketRoundupStocks(
 }
 
 async function generateSingleStockNewsletter(params: {
-  openai: OpenAI
-  model: string
-  isGpt5: boolean
+  modelClient: ReturnType<typeof createNewsletterModelClient>
   ticker?: string
   maxCharts: number
   chartBaseUrl: string
@@ -301,9 +266,7 @@ async function generateSingleStockNewsletter(params: {
   generationPrompt?: string
 }> {
   const {
-    openai,
-    model,
-    isGpt5,
+    modelClient,
     ticker,
     maxCharts,
     chartBaseUrl,
@@ -332,10 +295,8 @@ async function generateSingleStockNewsletter(params: {
     timings.fetchMarketContext = Date.now() - tMarket
 
     const tPick = Date.now()
-    const pickerText = await runJsonPrompt(
-      openai,
-      model,
-      isGpt5,
+    const pickerText = await runNewsletterJsonPrompt(
+      modelClient,
       'msg_pick',
       buildStockPickerMessages(market, generationPrompt),
       { temperature: 0, maxOutputTokens: 500 },
@@ -366,10 +327,8 @@ async function generateSingleStockNewsletter(params: {
   if (!stockPickerResult) {
     const tHook = Date.now()
     const topHeadlines = await fetchTickerNews(tickerUpper, 5)
-    const hookText = await runJsonPrompt(
-      openai,
-      model,
-      isGpt5,
+    const hookText = await runNewsletterJsonPrompt(
+      modelClient,
       'msg_hook',
       buildEditorialHookMessages(todayQuote, topHeadlines, generationPrompt),
       { temperature: 0.3, maxOutputTokens: 300 },
@@ -393,10 +352,8 @@ async function generateSingleStockNewsletter(params: {
   }
 
   const tSelection = Date.now()
-  const selectionText = await runJsonPrompt(
-    openai,
-    model,
-    isGpt5,
+  const selectionText = await runNewsletterJsonPrompt(
+    modelClient,
     'msg_sel',
     buildTemplateSelectionMessages(context, maxCharts, {
       mode: 'single_stock',
@@ -445,10 +402,8 @@ async function generateSingleStockNewsletter(params: {
         throw new Error(`Unknown editorial template: ${selection.templateId}`)
       }
 
-      const copyText = await runJsonPrompt(
-        openai,
-        model,
-        isGpt5,
+      const copyText = await runNewsletterJsonPrompt(
+        modelClient,
         `msg_copy_${index}`,
         buildCopyGenerationMessages(
           context,
@@ -504,9 +459,7 @@ async function generateSingleStockNewsletter(params: {
 }
 
 async function generateMarketRoundupNewsletter(params: {
-  openai: OpenAI
-  model: string
-  isGpt5: boolean
+  modelClient: ReturnType<typeof createNewsletterModelClient>
   featuredTickers: string[]
   roundupSize: number
   chartBaseUrl: string
@@ -532,9 +485,7 @@ async function generateMarketRoundupNewsletter(params: {
   generationPrompt?: string
 }> {
   const {
-    openai,
-    model,
-    isGpt5,
+    modelClient,
     featuredTickers,
     roundupSize,
     chartBaseUrl,
@@ -556,9 +507,7 @@ async function generateMarketRoundupNewsletter(params: {
   timings.fetchMarketContext = Date.now() - tMarket
 
   const selectedStocks = await selectMarketRoundupStocks(
-    openai,
-    model,
-    isGpt5,
+    modelClient,
     market,
     roundupSize,
     featuredTickers,
@@ -584,10 +533,8 @@ async function generateMarketRoundupNewsletter(params: {
   }
 
   const tIntro = Date.now()
-  const roundupIntroText = await runJsonPrompt(
-    openai,
-    model,
-    isGpt5,
+  const roundupIntroText = await runNewsletterJsonPrompt(
+    modelClient,
     'msg_roundup',
     buildMarketRoundupMessages(selectedStocks, generationPrompt),
     { temperature: 0.3, maxOutputTokens: 300 },
@@ -614,10 +561,8 @@ async function generateMarketRoundupNewsletter(params: {
         throw new Error(`Missing newsletter context for ${stock.ticker}`)
       }
 
-      const selectionText = await runJsonPrompt(
-        openai,
-        model,
-        isGpt5,
+      const selectionText = await runNewsletterJsonPrompt(
+        modelClient,
         `msg_sel_roundup_${index}`,
         buildTemplateSelectionMessages(context, 1, {
           mode: 'market_roundup',
@@ -672,10 +617,8 @@ async function generateMarketRoundupNewsletter(params: {
         throw new Error(`Unknown editorial template: ${plan.selection.templateId}`)
       }
 
-      const copyText = await runJsonPrompt(
-        openai,
-        model,
-        isGpt5,
+      const copyText = await runNewsletterJsonPrompt(
+        modelClient,
         `msg_copy_roundup_${index}`,
         buildCopyGenerationMessages(
           plan.context,
@@ -685,11 +628,12 @@ async function generateMarketRoundupNewsletter(params: {
           plan.resolved.spec,
           plan.stock,
           generationPrompt,
+          { mode: 'market_roundup' },
         ),
         { temperature: 0.3, maxOutputTokens: 500 },
       )
 
-      return parseCopyGeneration(copyText)
+      return ensureStockMentionInCopy(parseCopyGeneration(copyText), plan.stock)
     }),
   )
   timings.aiCopyGeneration = Date.now() - tCopy
@@ -768,16 +712,12 @@ export async function generateNewsletter(
   const absOutputDir = resolve(outputDir)
   mkdirSync(absOutputDir, { recursive: true })
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
-  const isGpt5 = model.includes('gpt-5')
+  const modelClient = createNewsletterModelClient(options?.modelBackend)
 
   const generationResult =
     format === 'market_roundup'
       ? await generateMarketRoundupNewsletter({
-          openai,
-          model,
-          isGpt5,
+          modelClient,
           featuredTickers: normalizedFeaturedTickers,
           roundupSize,
           chartBaseUrl,
@@ -790,9 +730,7 @@ export async function generateNewsletter(
           generationPrompt,
         })
       : await generateSingleStockNewsletter({
-          openai,
-          model,
-          isGpt5,
+          modelClient,
           ticker,
           maxCharts,
           chartBaseUrl,

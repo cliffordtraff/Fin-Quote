@@ -2,6 +2,8 @@
 export type {
   NewsletterPeriodType,
   NewsletterFormat,
+  NewsletterGenerationBackend,
+  NewsletterModelBackend,
   YearRangeStrategy,
   LastNYearsStrategy,
   AllAvailableStrategy,
@@ -86,3 +88,8 @@ export {
   regenerateNewsletterDraftChart,
 } from './drafts'
 export { publishChartImages } from './publish'
+export {
+  createNewsletterModelClient,
+  resolveNewsletterModelBackend,
+  runNewsletterJsonPrompt,
+} from './model-client'

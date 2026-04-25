@@ -21,7 +21,7 @@ export default function NewsletterDraftCreate({
   const [ticker, setTicker] = useState('')
   const [generationPrompt, setGenerationPrompt] = useState('')
   const [format, setFormat] = useState<'single_stock' | 'market_roundup'>(defaultFormat)
-  const [creating, setCreating] = useState(false)
+  const [submittingMode, setSubmittingMode] = useState<'generate' | 'blank' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const normalizedTicker = useMemo(() => ticker.trim().toUpperCase(), [ticker])
@@ -33,11 +33,10 @@ export default function NewsletterDraftCreate({
     [format],
   )
 
-  async function createDraft() {
+  async function createDraft(mode: 'generate' | 'blank') {
     try {
-      setCreating(true)
+      setSubmittingMode(mode)
       setError(null)
-
       const response = await fetch('/api/newsletter/drafts', {
         method: 'POST',
         credentials: 'include',
@@ -47,7 +46,9 @@ export default function NewsletterDraftCreate({
         body: JSON.stringify({
           ticker: format === 'single_stock' ? normalizedTicker || undefined : undefined,
           format,
-          generationPrompt: generationPrompt.trim() || undefined,
+          generationPrompt:
+            mode === 'generate' ? generationPrompt.trim() || undefined : undefined,
+          creationMode: mode,
         }),
       })
 
@@ -61,7 +62,7 @@ export default function NewsletterDraftCreate({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create newsletter draft')
     } finally {
-      setCreating(false)
+      setSubmittingMode(null)
     }
   }
 
@@ -129,11 +130,20 @@ export default function NewsletterDraftCreate({
 
         <button
           type="button"
-          onClick={createDraft}
-          disabled={creating}
+          onClick={() => void createDraft('generate')}
+          disabled={submittingMode !== null}
           className="rounded-xl bg-sage-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sage-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {creating ? 'Generating…' : 'Generate'}
+          {submittingMode === 'generate' ? 'Generating…' : 'Generate'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void createDraft('blank')}
+          disabled={submittingMode !== null}
+          className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition hover:border-sage-300 hover:bg-sage-50 hover:text-sage-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submittingMode === 'blank' ? 'Creating blank draft…' : 'Start blank'}
         </button>
       </div>
 

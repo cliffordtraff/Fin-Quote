@@ -139,11 +139,99 @@ describe('buildCopyGenerationMessages', () => {
     expect(messages[0]?.content).toContain(
       'If a value is null or missing, treat it as unavailable. Never rewrite null as 0, $0, or 0%.',
     )
-    expect(messages[1]?.content).toContain('"freeCashFlow": null')
+    expect(messages[1]?.content).toContain('"free_cash_flow":null')
+  })
+
+  it('requires market roundup copy to name the company or ticker in each section', () => {
+    const messages = buildCopyGenerationMessages(
+      {
+        ticker: 'INTC',
+        financials: [],
+        quarterlyFinancials: [],
+        highlights: {
+          revenueGrowthYoY: null,
+          netIncomeGrowthYoY: null,
+          grossMarginLatest: null,
+          operatingMarginLatest: null,
+          fcfLatest: null,
+        },
+        quarterlyHighlights: {
+          revenueGrowthYoY: null,
+          netIncomeGrowthYoY: null,
+          grossMarginLatest: null,
+          operatingMarginLatest: null,
+          fcfLatest: null,
+          latestPeriodLabel: null,
+        },
+      },
+      'price_reaction_1m',
+      'Price Reaction (1M)',
+      'Earnings reaction is the story.',
+      {
+        mode: 'price',
+        symbol: 'INTC',
+        range: '1m',
+        interval: 'D',
+        chartType: 'candles',
+      },
+      {
+        ticker: 'INTC',
+        name: 'Intel Corporation',
+        changesPercentage: 22.73,
+        editorialHook: 'Intel surged after earnings.',
+        topHeadlines: [],
+      },
+      'Focus on post-earnings breakouts.',
+      { mode: 'market_roundup' },
+    )
+
+    expect(messages[0]?.content).toContain(
+      'Explicitly name the company or ticker in the headline or the first sentence of the body.',
+    )
+    expect(messages[1]?.content).toContain('Company: Intel Corporation (INTC)')
   })
 })
 
 describe('prompt steering', () => {
+  it('limits template-selection prompt history to a compact snapshot', () => {
+    const messages = buildTemplateSelectionMessages(
+      {
+        ticker: 'AMD',
+        financials: [
+          { year: 2019, periodLabel: 'FY2019', revenue: 10, netIncome: 1, grossMargin: 20, operatingMargin: 10, freeCashFlow: 1, eps: 0.5 },
+          { year: 2020, periodLabel: 'FY2020', revenue: 11, netIncome: 1.1, grossMargin: 21, operatingMargin: 11, freeCashFlow: 1.1, eps: 0.6 },
+          { year: 2021, periodLabel: 'FY2021', revenue: 12, netIncome: 1.2, grossMargin: 22, operatingMargin: 12, freeCashFlow: 1.2, eps: 0.7 },
+          { year: 2022, periodLabel: 'FY2022', revenue: 13, netIncome: 1.3, grossMargin: 23, operatingMargin: 13, freeCashFlow: 1.3, eps: 0.8 },
+          { year: 2023, periodLabel: 'FY2023', revenue: 14, netIncome: 1.4, grossMargin: 24, operatingMargin: 14, freeCashFlow: 1.4, eps: 0.9 },
+          { year: 2024, periodLabel: 'FY2024', revenue: 15, netIncome: 1.5, grossMargin: 25, operatingMargin: 15, freeCashFlow: 1.5, eps: 1.0 },
+        ],
+        quarterlyFinancials: [],
+        highlights: {
+          revenueGrowthYoY: 10,
+          netIncomeGrowthYoY: 12,
+          grossMarginLatest: 25,
+          operatingMarginLatest: 15,
+          fcfLatest: 1.5,
+        },
+        quarterlyHighlights: {
+          revenueGrowthYoY: null,
+          netIncomeGrowthYoY: null,
+          grossMarginLatest: null,
+          operatingMarginLatest: null,
+          fcfLatest: null,
+          latestPeriodLabel: null,
+        },
+      },
+      1,
+    )
+
+    expect(messages[1]?.content).toContain('=== Editorial Data Snapshot ===')
+    expect(messages[1]?.content).toContain('"period":"FY2021"')
+    expect(messages[1]?.content).toContain('"period":"FY2024"')
+    expect(messages[1]?.content).not.toContain('"period":"FY2019"')
+    expect(messages[1]?.content).not.toContain('"period":"FY2020"')
+  })
+
   it('includes a user brief in the stock picker prompt when provided', () => {
     const messages = buildStockPickerMessages(
       {

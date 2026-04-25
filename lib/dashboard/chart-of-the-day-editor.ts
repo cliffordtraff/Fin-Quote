@@ -9,35 +9,16 @@ import {
   type DashboardChartOfTheDayChartSpec,
   type DashboardChartOfTheDaySelection,
 } from './chart-of-the-day-spec'
+import {
+  getSpecMetricLabel,
+  toSpecMetricId,
+} from '@/lib/charting-metric-bridge'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 import { resolveChartingPlatformNewsletterChart } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterChartSpec } from '@/lib/newsletter/types'
 import type { ChartExportSpec } from '@/types/chart-export'
 
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
-const SPEC_METRIC_LABELS: Record<string, string> = {
-  revenue: 'Revenue',
-  net_income: 'Net Income',
-  free_cash_flow: 'Free Cash Flow',
-  gross_margin: 'Gross Margin',
-  operating_margin: 'Operating Margin',
-  operating_income: 'Operating Income',
-  eps: 'EPS',
-  debt_to_equity_ratio: 'Debt/Equity',
-  rd_pct_revenue: 'R&D % Revenue',
-}
-const CHARTING_TO_SPEC_METRIC_MAP: Record<string, string> = {
-  revenue: 'revenue',
-  netIncome: 'net_income',
-  freeCashFlow: 'free_cash_flow',
-  grossMargin: 'gross_margin',
-  operatingMargin: 'operating_margin',
-  operatingIncome: 'operating_income',
-  eps: 'eps',
-  debtEquityRatio: 'debt_to_equity_ratio',
-  rdPctRevenue: 'rd_pct_revenue',
-  stockPrice: 'stock_price',
-}
 
 function normalizeTicker(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim().toUpperCase() : ''
@@ -116,7 +97,7 @@ function normalizeMetricColorMap(value: unknown): Record<string, string> | undef
 
   const entries = Object.entries(value).flatMap(([metricId, color]) => {
     if (typeof color !== 'string' || !color.trim()) return []
-    const mappedMetricId = CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId
+    const mappedMetricId = toSpecMetricId(metricId)
     if (mappedMetricId === 'stock_price') return []
     return [[mappedMetricId, color.trim()] as const]
   })
@@ -271,7 +252,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromUrl(
     const showStockPrice = rawMetrics.includes('stockPrice')
     const metrics = rawMetrics
       .filter((metricId) => metricId !== 'stockPrice')
-      .map((metricId) => CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId)
+      .map((metricId) => toSpecMetricId(metricId))
 
     if (metrics.length === 0) return null
 
@@ -330,7 +311,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromFundState(
     const showStockPrice = rawMetrics.includes('stockPrice')
     const metrics = rawMetrics
       .filter((metricId) => metricId !== 'stockPrice')
-      .map((metricId) => CHARTING_TO_SPEC_METRIC_MAP[metricId] ?? metricId)
+      .map((metricId) => toSpecMetricId(metricId))
 
     if (metrics.length === 0) return null
 
@@ -339,7 +320,7 @@ export function parseDashboardChartOfTheDayEditorSpecFromFundState(
         ? fundState.chartTitleText.trim()
         : ''
 
-    const autoTitle = `${primarySymbol} ${metrics.map((m) => SPEC_METRIC_LABELS[m] ?? m).join(' & ')}`
+    const autoTitle = `${primarySymbol} ${metrics.map((m) => getSpecMetricLabel(m)).join(' & ')}`
 
     return {
       stocks: [primarySymbol, ...compareSymbols],

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  deleteNewsletterDraft,
   NewsletterDraftNotFoundError,
   getNewsletterDraft,
   normalizeNewsletterDraftDocument,
@@ -80,6 +81,21 @@ export async function PATCH(
       normalizeStatus(body?.status),
     )
     const response = NextResponse.json({ draft: saved })
+    return attachNewsletterDraftSessionCookie(response, createdSessionId)
+  } catch (error) {
+    return toErrorResponse(error)
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params
+    const { scope, createdSessionId } = await resolveNewsletterDraftScope(request)
+    await deleteNewsletterDraft(scope, id)
+    const response = NextResponse.json({ success: true })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
     return toErrorResponse(error)

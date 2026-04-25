@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  createBlankNewsletterDraft,
   createNewsletterDraft,
   listNewsletterDrafts,
 } from '@/lib/newsletter/drafts'
@@ -19,6 +20,7 @@ import {
 import type { NewsletterOptions } from '@/lib/newsletter/types'
 
 const MAX_GENERATION_PROMPT_LENGTH = 500
+type DraftCreationMode = 'generate' | 'blank'
 
 function getRequestBaseUrl(request: NextRequest): string {
   const proto = request.headers.get('x-forwarded-proto') ?? 'http'
@@ -66,6 +68,10 @@ function normalizeGenerationPrompt(value: unknown): string | undefined {
   return prompt
 }
 
+function normalizeCreationMode(value: unknown): DraftCreationMode {
+  return value === 'blank' ? 'blank' : 'generate'
+}
+
 function toErrorResponse(error: unknown): NextResponse {
   const message =
     error instanceof Error ? error.message : 'Newsletter draft request failed'
@@ -91,6 +97,7 @@ export async function POST(request: NextRequest) {
     const format = normalizeFormat(body?.format)
     const roundupSize = normalizeRoundupSize(body?.roundupSize)
     const generationPrompt = normalizeGenerationPrompt(body?.generationPrompt)
+    const creationMode = normalizeCreationMode(body?.creationMode)
     const host = request.headers.get('host')
 
     if (format === 'market_roundup' && ticker) {
@@ -100,7 +107,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const draft = await createNewsletterDraft(scope, ticker, {
+    const options = {
       baseUrl: getRequestBaseUrl(request),
       chartBaseUrl: getDefaultChartingBaseUrlForHost(host),
       publicChartBaseUrl: getDefaultPublicChartingBaseUrlForHost(host),
@@ -108,7 +115,11 @@ export async function POST(request: NextRequest) {
       format,
       roundupSize,
       generationPrompt,
-    })
+    }
+    const draft =
+      creationMode === 'blank'
+        ? await createBlankNewsletterDraft(scope, ticker, options)
+        : await createNewsletterDraft(scope, ticker, options)
 
     const response = NextResponse.json({ draft }, { status: 201 })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
@@ -116,6 +127,7 @@ export async function POST(request: NextRequest) {
     if (
       error instanceof Error &&
       (error.message.startsWith('Invalid ticker format') ||
+        error.message.startsWith('Ticker is required') ||
         error.message.startsWith('generationPrompt must be'))
     ) {
       return NextResponse.json({ error: error.message }, { status: 400 })

@@ -7,7 +7,9 @@
  *
  * Prerequisites:
  *   - Dev server must be running (npm run dev)
- *   - Environment variables in .env.local (Supabase, OpenAI, FMP)
+ *   - Environment variables in .env.local (Supabase, market data, and model backend)
+ *   - When NEWSLETTER_MODEL_BACKEND=codex_cli, Codex CLI must be installed and logged in
+ *   - When NEWSLETTER_MODEL_BACKEND=ollama, Ollama must be installed locally
  *
  * Usage:
  *   npx tsx scripts/generate-newsletter.ts                    # AI picks stock
@@ -17,7 +19,7 @@
  */
 
 import dotenv from 'dotenv'
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env.local', quiet: true })
 
 import {
   getDefaultChartingBaseUrl,

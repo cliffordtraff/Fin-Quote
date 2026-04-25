@@ -292,6 +292,69 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     })
   })
 
+  it('supports shares outstanding in newsletter chart exports', () => {
+    const legacySpec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: ['eps', 'sharesOutstanding'],
+      periodType: 'annual',
+      chartType: 'bar',
+      colors: {
+        eps: '#223344',
+        sharesOutstanding: '#556677',
+      },
+    }
+
+    const result = resolveChartingPlatformNewsletterChart(legacySpec, {
+      chartBaseUrl: 'http://localhost:3001',
+    })
+
+    expect(result.fundState?.visibleMetrics).toEqual([
+      'eps',
+      'sharesOutstanding',
+    ])
+    expect(result.fundState?.metricColors).toEqual({
+      eps: '#223344',
+      sharesOutstanding: '#556677',
+    })
+  })
+
+  it('supports extended financial metrics used by the chart editor', () => {
+    const legacySpec: ChartExportSpec = {
+      stocks: ['AAPL'],
+      metrics: [
+        'depreciation_amortization',
+        'stock_based_comp',
+        'stock_buybacks',
+        'ps_ratio',
+      ],
+      periodType: 'annual',
+      chartType: 'bar',
+      colors: {
+        depreciation_amortization: '#112233',
+        stock_based_comp: '#223344',
+        stock_buybacks: '#334455',
+        ps_ratio: '#445566',
+      },
+    }
+
+    const result = resolveChartingPlatformNewsletterChart(legacySpec, {
+      chartBaseUrl: 'http://localhost:3001',
+    })
+
+    expect(result.fundState?.visibleMetrics).toEqual([
+      'depreciationAmortization',
+      'stockBasedCompensation',
+      'commonStockRepurchased',
+      'priceSalesRatio',
+    ])
+    expect(result.fundState?.metricColors).toEqual({
+      depreciationAmortization: '#112233',
+      stockBasedCompensation: '#223344',
+      commonStockRepurchased: '#334455',
+      priceSalesRatio: '#445566',
+    })
+  })
+
   it('removes trailing year-range suffixes from newsletter chart titles', () => {
     const legacySpec: ChartExportSpec = {
       stocks: ['AAPL'],
@@ -309,17 +372,17 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     expect(result.fundState?.chartTitleText).toBe('AAPL Net Income vs Free Cash Flow')
   })
 
-  it('throws when a legacy metric cannot be mapped to the Charting Platform', () => {
+  it('falls back to generic snake_case to camelCase metric mapping', () => {
     const legacySpec: ChartExportSpec = {
       stocks: ['AAPL'],
       metrics: ['mystery_metric'],
     }
 
-    expect(() =>
-      resolveChartingPlatformNewsletterChart(legacySpec, {
-        chartBaseUrl: 'http://localhost:3001',
-      }),
-    ).toThrow('Unsupported newsletter metric')
+    const result = resolveChartingPlatformNewsletterChart(legacySpec, {
+      chartBaseUrl: 'http://localhost:3001',
+    })
+
+    expect(result.fundState?.visibleMetrics).toEqual(['mysteryMetric'])
   })
 
   it('builds a real price-tab export spec for price newsletter charts', () => {
@@ -404,5 +467,18 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     expect(interactiveUrl.searchParams.get('range')).toBe('6m')
     expect(interactiveUrl.searchParams.get('interval')).toBe('D')
     expect(interactiveUrl.searchParams.get('chartType')).toBe('line')
+    const interactivePriceState = decodeBase64UrlJson<Record<string, unknown>>(
+      interactiveUrl.searchParams.get('priceState') || '',
+    )
+    expect(interactivePriceState).toMatchObject({
+      symbol: 'TSLA',
+      ticker: 'TSLA',
+      range: '6m',
+      interval: 'D',
+      chartType: 'line',
+      sessionVisibility: 'regularOnly',
+      volumeVisible: false,
+      viewport: { startIndex: 144, visibleBars: 58 },
+    })
   })
 })

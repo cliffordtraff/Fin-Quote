@@ -14,8 +14,145 @@ import { isPriceNewsletterChartSpec } from './chart-spec'
 
 type SelectionEditorialContext = Pick<
   FeaturedStock,
-  'changesPercentage' | 'editorialHook' | 'topHeadlines'
+  'ticker' | 'name' | 'changesPercentage' | 'editorialHook' | 'topHeadlines'
 >
+
+function getTemplateDescriptions(): string {
+  return EDITORIAL_TEMPLATES.map(
+    (template) =>
+      template.mode === 'price'
+        ? `- id: "${template.id}"\n  mode: price\n  label: ${template.label}\n  chartSetup: ${template.chartType}, ${template.interval}, ${template.range}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}`
+        : `- id: "${template.id}"\n  mode: fundamentals\n  label: ${template.label}\n  metrics: ${template.metrics.join(', ')}\n  supportedPeriods: ${template.supportedPeriods.join(', ')}\n  defaultPeriod: ${template.defaultPeriodType}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}`,
+  ).join('\n\n')
+}
+
+function stringifyPromptData(value: unknown): string {
+  return JSON.stringify(value)
+}
+
+const SELECTION_ANNUAL_POINTS = 4
+const SELECTION_QUARTERLY_POINTS = 4
+const COPY_FUNDAMENTALS_POINTS = 5
+
+type PromptMetricId =
+  | 'revenue'
+  | 'net_income'
+  | 'operating_income'
+  | 'gross_margin'
+  | 'operating_margin'
+  | 'free_cash_flow'
+  | 'eps'
+
+function isPromptMetricId(value: string): value is PromptMetricId {
+  return [
+    'revenue',
+    'net_income',
+    'operating_income',
+    'gross_margin',
+    'operating_margin',
+    'free_cash_flow',
+    'eps',
+  ].includes(value)
+}
+
+function getPromptMetricValue(
+  point: NewsletterContext['financials'][number],
+  metricId: PromptMetricId,
+): number | null {
+  switch (metricId) {
+    case 'revenue':
+      return point.revenue ?? null
+    case 'net_income':
+      return point.netIncome ?? null
+    case 'operating_income':
+      return point.revenue != null && point.operatingMargin != null
+        ? Number(((point.revenue * point.operatingMargin) / 100).toFixed(2))
+        : null
+    case 'gross_margin':
+      return point.grossMargin ?? null
+    case 'operating_margin':
+      return point.operatingMargin ?? null
+    case 'free_cash_flow':
+      return point.freeCashFlow ?? null
+    case 'eps':
+      return point.eps ?? null
+    default:
+      return null
+  }
+}
+
+function summarizeFinancialPoints(
+  points: NewsletterContext['financials'],
+  options?: {
+    limit?: number
+    metrics?: string[]
+  },
+) {
+  const limit = options?.limit ?? points.length
+  const selectedMetrics = (options?.metrics ?? [
+    'revenue',
+    'net_income',
+    'gross_margin',
+    'operating_margin',
+    'free_cash_flow',
+    'eps',
+  ]).filter(isPromptMetricId)
+
+  return points.slice(-limit).map((point) => ({
+    period: point.periodLabel,
+    ...(point.fiscalQuarter != null ? { fiscalQuarter: point.fiscalQuarter } : {}),
+    metrics: Object.fromEntries(
+      selectedMetrics.map((metricId) => [metricId, getPromptMetricValue(point, metricId)]),
+    ),
+  }))
+}
+
+function buildSelectionDataSnapshot(context: NewsletterContext) {
+  return {
+    annualHighlights: context.highlights,
+    quarterlyHighlights: context.quarterlyHighlights,
+    annualRecent: summarizeFinancialPoints(context.financials, {
+      limit: SELECTION_ANNUAL_POINTS,
+    }),
+    quarterlyRecent: summarizeFinancialPoints(context.quarterlyFinancials, {
+      limit: SELECTION_QUARTERLY_POINTS,
+    }),
+    ...(context.priceContext ? { priceContext: context.priceContext } : {}),
+  }
+}
+
+function buildCopyDataSnapshot(
+  context: NewsletterContext,
+  chartSpec: NewsletterChartSpec,
+  fundamentalsPeriod: 'annual' | 'quarterly',
+) {
+  if (isPriceNewsletterChartSpec(chartSpec)) {
+    return {
+      chartSpec,
+      priceContext: context.priceContext ?? {},
+      annualHighlights: context.highlights,
+      quarterlyHighlights: context.quarterlyHighlights,
+    }
+  }
+
+  return {
+    chartSpec,
+    highlights:
+      fundamentalsPeriod === 'quarterly'
+        ? context.quarterlyHighlights
+        : context.highlights,
+    series: summarizeFinancialPoints(
+      fundamentalsPeriod === 'quarterly'
+        ? context.quarterlyFinancials
+        : context.financials,
+      {
+        limit: COPY_FUNDAMENTALS_POINTS,
+        metrics: chartSpec.metrics,
+      },
+    ),
+    ...(context.priceContext ? { priceContext: context.priceContext } : {}),
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Stock picker prompt (Step 0)
@@ -454,13 +591,8 @@ export function buildTemplateSelectionMessages(
     generationPrompt?: string
   } = {},
 ): Array<{ role: 'system' | 'user'; content: string }> {
-  const templateDescriptions = EDITORIAL_TEMPLATES.map(
-    (t) =>
-      t.mode === 'price'
-        ? `- id: "${t.id}"\n  mode: price\n  label: ${t.label}\n  chartSetup: ${t.chartType}, ${t.interval}, ${t.range}\n  description: ${t.description}\n  whenToUse: ${t.whenToUse}`
-        : `- id: "${t.id}"\n  mode: fundamentals\n  label: ${t.label}\n  metrics: ${t.metrics.join(', ')}\n  supportedPeriods: ${t.supportedPeriods.join(', ')}\n  defaultPeriod: ${t.defaultPeriodType}\n  description: ${t.description}\n  whenToUse: ${t.whenToUse}`,
-  ).join('\n\n')
   const isRoundup = options.mode === 'market_roundup'
+  const selectionSnapshot = buildSelectionDataSnapshot(context)
 
   const system = [
     'You are a financial newsletter editor for The Intraday.',
@@ -484,17 +616,8 @@ export function buildTemplateSelectionMessages(
   const userParts = [
     `Company: ${context.ticker}`,
     '',
-    '=== Annual Financial Data ===',
-    JSON.stringify(context.financials, null, 2),
-    '',
-    '=== Annual Highlights ===',
-    JSON.stringify(context.highlights, null, 2),
-    '',
-    '=== Quarterly Financial Data ===',
-    JSON.stringify(context.quarterlyFinancials, null, 2),
-    '',
-    '=== Quarterly Highlights ===',
-    JSON.stringify(context.quarterlyHighlights, null, 2),
+    '=== Editorial Data Snapshot ===',
+    stringifyPromptData(selectionSnapshot),
   ]
 
   if (options.generationPrompt?.trim()) {
@@ -502,14 +625,6 @@ export function buildTemplateSelectionMessages(
       '',
       '=== User Brief ===',
       options.generationPrompt.trim(),
-    )
-  }
-
-  if (context.priceContext) {
-    userParts.push(
-      '',
-      '=== Price Context ===',
-      JSON.stringify(context.priceContext, null, 2),
     )
   }
 
@@ -536,7 +651,7 @@ export function buildTemplateSelectionMessages(
   userParts.push(
     '',
     '=== Available Templates ===',
-    templateDescriptions,
+    getTemplateDescriptions(),
   )
 
   const user = userParts.join('\n')
@@ -617,26 +732,23 @@ export function buildCopyGenerationMessages(
   chartSpec: NewsletterChartSpec,
   stockPickerResult?: SelectionEditorialContext,
   generationPrompt?: string,
+  options: {
+    mode?: 'single_stock' | 'market_roundup'
+  } = {},
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const isPriceChart = isPriceNewsletterChartSpec(chartSpec)
+  const isRoundupSlot = options.mode === 'market_roundup'
   const fundamentalsPeriod =
     !isPriceChart && chartSpec.periodType === 'quarterly'
       ? 'quarterly'
       : 'annual'
-  const financialDataset =
-    fundamentalsPeriod === 'quarterly'
-      ? context.quarterlyFinancials
-      : context.financials
-  const highlightDataset =
-    fundamentalsPeriod === 'quarterly'
-      ? context.quarterlyHighlights
-      : context.highlights
+  const copySnapshot = buildCopyDataSnapshot(context, chartSpec, fundamentalsPeriod)
   const systemParts = [
     'You are a financial newsletter copywriter for The Intraday.',
     'Write concise, data-grounded copy for one chart section of a newsletter.',
     '',
     'Rules:',
-    '- headline: 6-12 words, punchy, no ticker symbol, never abbreviate metric names (write "Free Cash Flow" not "FCF")',
+    '- headline: 6-12 words, punchy, never abbreviate metric names (write "Free Cash Flow" not "FCF")',
     '- body: 1-2 sentences maximum. Be punchy.',
     '- Wrap the 2-3 most important numbers in **bold** markers (e.g. **$416.2B**)',
     '- Every sentence must contain at least one specific number from the data',
@@ -647,6 +759,17 @@ export function buildCopyGenerationMessages(
     '- Do not use markdown formatting except for **bold** on key numbers',
     '',
   ]
+
+  if (isRoundupSlot) {
+    systemParts.push(
+      '- This section is part of a market roundup. Explicitly name the company or ticker in the headline or the first sentence of the body.',
+      '- Prefer the company name in the headline when it reads naturally; ticker is acceptable if shorter.',
+    )
+  } else {
+    systemParts.push(
+      '- Do not force the ticker symbol into the headline unless it improves clarity.',
+    )
+  }
 
   if (isPriceChart) {
     systemParts.push(
@@ -685,28 +808,23 @@ export function buildCopyGenerationMessages(
   )
 
   const userParts = [
-    `Company: ${context.ticker}`,
+    `Company: ${stockPickerResult?.name ? `${stockPickerResult.name} (${context.ticker})` : context.ticker}`,
     `Chart template: ${templateLabel} (${templateId})`,
     `Editorial angle: ${editorialAngle}`,
     '',
-    '=== Chart Spec ===',
-    JSON.stringify(chartSpec, null, 2),
+    '=== Chart Data Snapshot ===',
+    stringifyPromptData(copySnapshot),
   ]
 
   if (isPriceChart) {
     userParts.push(
       '',
-      '=== Price Context ===',
-      JSON.stringify(context.priceContext ?? {}, null, 2),
+      'Price charts use the priceContext above. Focus on return, range, and moving-average context.',
     )
   } else {
     userParts.push(
       '',
-      `=== ${fundamentalsPeriod === 'quarterly' ? 'Quarterly' : 'Annual'} Financial Data ===`,
-      JSON.stringify(financialDataset, null, 2),
-      '',
-      `=== ${fundamentalsPeriod === 'quarterly' ? 'Quarterly' : 'Annual'} Highlights ===`,
-      JSON.stringify(highlightDataset, null, 2),
+      `The snapshot above only includes the ${fundamentalsPeriod} metrics needed for this chart.`,
     )
   }
 
@@ -717,15 +835,6 @@ export function buildCopyGenerationMessages(
       generationPrompt.trim(),
     )
   }
-
-  if (!isPriceChart && context.priceContext) {
-    userParts.push(
-      '',
-      '=== Current Price Context ===',
-      JSON.stringify(context.priceContext, null, 2),
-    )
-  }
-
   if (stockPickerResult) {
     const sign = stockPickerResult.changesPercentage >= 0 ? '+' : ''
     userParts.push(

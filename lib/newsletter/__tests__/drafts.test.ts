@@ -1,8 +1,14 @@
+import { mkdirSync, rmSync, writeFileSync } from 'fs'
+import { resolve } from 'path'
+import { randomUUID } from 'crypto'
 import { describe, expect, it } from 'vitest'
 
 import type { NewsletterResult } from '@/lib/newsletter/types'
 import {
   buildNewsletterDraftFromResult,
+  createBlankNewsletterDraft,
+  deleteNewsletterDraft,
+  listNewsletterDrafts,
   normalizeNewsletterDraftDocument,
   renderNewsletterDraftPreviewHtml,
 } from '@/lib/newsletter/drafts'
@@ -131,6 +137,12 @@ describe('newsletter drafts', () => {
     expect(html).toContain('-2.5%')
     expect(html).toContain('src="/newsletter-charts/AAPL_revenue_vs_net_income.png"')
     expect(html).toContain('href="https://charts.theintraday.com/tos/AAPL')
+    expect(html).toContain('Read online')
+    expect(html).toContain('Powered by beehiiv')
+    expect(html).toContain('background: #ffffff;')
+    expect(html).toContain('Data sourced from SEC filings and Financial Modeling Prep.')
+    expect(html).toContain('border-top:1px solid #e5e7eb;padding-top:24px;margin-top:24px;')
+    expect(html).not.toContain('border-top:1px solid #e5e7eb;padding-top:24px;">')
   })
 
   it('strips trailing year-range suffixes from stored chart titles so the editor matches the rendered chart', () => {
@@ -315,5 +327,100 @@ describe('newsletter drafts', () => {
 
     expect('stocks' in draft.blocks[0]!.chartSpec && draft.blocks[0]!.chartSpec.stocks[0]).toBe('AAPL')
     expect('symbol' in draft.blocks[1]!.chartSpec && draft.blocks[1]!.chartSpec.symbol).toBe('MSFT')
+  })
+
+  it('creates blank manual drafts with starter sections and no forced roundup tickers', async () => {
+    const scope = {
+      ownerId: null,
+      sessionId: `test-session-${randomUUID()}`,
+    }
+    const sessionDir = resolve('.newsletter-drafts', scope.sessionId)
+
+    try {
+      const singleStockDraft = await createBlankNewsletterDraft(scope, undefined, {
+        format: 'single_stock',
+        publicChartBaseUrl: 'https://charts.theintraday.com',
+      })
+      const marketRoundupDraft = await createBlankNewsletterDraft(scope, undefined, {
+        format: 'market_roundup',
+        publicChartBaseUrl: 'https://charts.theintraday.com',
+      })
+
+      expect(singleStockDraft.draft.ticker).toBe('TBD')
+      expect(singleStockDraft.draft.manualDraft).toBe(true)
+      expect(singleStockDraft.draft.subjectLine).toBe('Untitled newsletter')
+      expect(singleStockDraft.draft.blocks).toHaveLength(3)
+      expect(singleStockDraft.draft.blocks[0]?.heading).toBe('New section 1')
+      expect(singleStockDraft.draft.blocks[0]?.chartImageUrl).toContain('data:image/svg+xml')
+      expect(singleStockDraft.draft.statsCard?.items).toHaveLength(3)
+      expect(singleStockDraft.draft.header?.logoUrl).toBe('')
+
+      expect(marketRoundupDraft.draft.subjectLine).toBe('Untitled market roundup')
+      expect(marketRoundupDraft.draft.featuredTickers).toEqual([])
+      expect(marketRoundupDraft.draft.statsCard).toBeUndefined()
+
+      const drafts = await listNewsletterDrafts(scope)
+      const roundupSummary = drafts.find((draft) => draft.id === marketRoundupDraft.id)
+
+      expect(roundupSummary?.featuredTickers).toEqual([])
+    } finally {
+      rmSync(sessionDir, {
+        recursive: true,
+        force: true,
+      })
+    }
+  })
+
+  it('deletes local-session drafts so rows disappear from recent drafts', async () => {
+    const scope = {
+      ownerId: null,
+      sessionId: `test-session-${randomUUID()}`,
+    }
+    const draftId = randomUUID()
+    const draft = buildNewsletterDraftFromResult(
+      sampleResult,
+      'https://charts.theintraday.com',
+    )
+    const sessionDir = resolve('.newsletter-drafts', scope.sessionId)
+    const filePath = resolve(sessionDir, `${draftId}.json`)
+    const previewHtml = renderNewsletterDraftPreviewHtml(
+      draft,
+      'https://charts.theintraday.com',
+    )
+    const timestamp = new Date().toISOString()
+
+    try {
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        filePath,
+        JSON.stringify(
+          {
+            id: draftId,
+            owner_id: null,
+            session_id: scope.sessionId,
+            ticker: draft.ticker,
+            status: 'draft',
+            subject_line: draft.subjectLine,
+            preview_html: previewHtml,
+            draft_json: draft,
+            created_at: timestamp,
+            updated_at: timestamp,
+          },
+          null,
+          2,
+        ),
+      )
+
+      expect(await listNewsletterDrafts(scope)).toHaveLength(1)
+
+      await deleteNewsletterDraft(scope, draftId)
+
+      expect(await listNewsletterDrafts(scope)).toHaveLength(0)
+    } finally {
+      rmSync(sessionDir, {
+        recursive: true,
+        force: true,
+      })
+    }
   })
 })

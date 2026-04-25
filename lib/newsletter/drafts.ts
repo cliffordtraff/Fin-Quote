@@ -1,8 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs'
 import { basename, resolve } from 'path'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import {
-  assembleNewsletterHtml,
   assembleNewsletterHtmlForBeehiiv,
   buildNewsletterHeader,
   buildNewsletterIntroText,
@@ -11,9 +10,11 @@ import {
 import { buildNewsletterBlock } from './build-block'
 import {
   captureChart,
+} from './capture'
+import {
   DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
   DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './capture'
+} from './render-dimensions'
 import {
   getDefaultChartingBaseUrl,
   getDefaultPublicChartingBaseUrl,
@@ -27,7 +28,7 @@ import {
   normalizeNewsletterPriceInterval,
   normalizeNewsletterPriceRange,
 } from './chart-spec'
-import { generateNewsletter } from './orchestrate'
+import { generateNewsletterWithBackend } from './generation'
 import type {
   FundamentalsNewsletterChartSpec,
   NewsletterChartSpec,
@@ -45,6 +46,11 @@ import type {
 const NEWSLETTER_DRAFTS_TABLE = 'newsletter_drafts'
 const NEWSLETTER_CHART_OUTPUT_DIR = './public/newsletter-charts'
 const LOCAL_NEWSLETTER_DRAFTS_DIR = './.newsletter-drafts'
+const BLANK_NEWSLETTER_TICKER = 'TBD'
+const BLANK_DRAFT_PLACEHOLDER_CHART_URL = (() => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="338" viewBox="0 0 600 338" fill="none"><rect width="600" height="338" rx="12" fill="#F8F8F5"/><rect x="12" y="12" width="576" height="314" rx="10" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="2" stroke-dasharray="8 8"/><text x="300" y="154" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="22" font-weight="700" fill="#1A1A1A">Chart placeholder</text><text x="300" y="186" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="14" fill="#6B7280">Open Edit chart to choose a chart for this section.</text></svg>`
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+})()
 const NEWSLETTER_DRAFT_SESSION_MIGRATION_HINT =
   'Newsletter drafts are missing the anonymous-session migration. Run supabase migration 20260326000003_allow_anonymous_newsletter_drafts.sql.'
 
@@ -110,6 +116,14 @@ function normalizeTicker(value: string): string {
   return ticker
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 function toRunStamp(date = new Date()): string {
   return date.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
 }
@@ -117,6 +131,7 @@ function toRunStamp(date = new Date()): string {
 function toPublicNewsletterAssetUrl(value: string): string {
   const trimmed = value.trim()
   if (!trimmed) return trimmed
+  if (/^data:/i.test(trimmed)) return trimmed
   if (/^https?:\/\//i.test(trimmed)) return trimmed
   if (trimmed.startsWith('/newsletter-charts/')) return trimmed
   return `/newsletter-charts/${basename(trimmed)}`
@@ -237,20 +252,23 @@ function normalizeDraftHeader(
     featuredTickers,
     subjectLine,
   })
-  const incomingLogoUrls = Array.isArray(header?.logoUrls)
-    ? header!.logoUrls
+  const hasExplicitLogoUrl = typeof header?.logoUrl === 'string'
+  const rawLogoUrl = hasExplicitLogoUrl
+    ? header?.logoUrl?.trim() ?? ''
+    : fallback.logoUrl
+  const hasExplicitLogoUrls = Array.isArray(header?.logoUrls)
+  const rawLogoUrls = hasExplicitLogoUrls
+    ? (header?.logoUrls ?? [])
         .map((u) => (typeof u === 'string' ? u.trim() : ''))
         .filter(Boolean)
-    : []
-  const logoUrls =
-    incomingLogoUrls.length >= 2 ? incomingLogoUrls : fallback.logoUrls
-  const logoUrl = header?.logoUrl?.trim() || fallback.logoUrl
+    : fallback.logoUrls
+
   return {
     title: header?.title?.trim() || fallback.title,
     dateText: header?.dateText?.trim() || fallback.dateText,
     badgeText: header?.badgeText?.trim() || fallback.badgeText,
-    ...(logoUrl ? { logoUrl } : {}),
-    ...(logoUrls ? { logoUrls } : {}),
+    ...(hasExplicitLogoUrl || rawLogoUrl ? { logoUrl: rawLogoUrl } : {}),
+    ...(hasExplicitLogoUrls || rawLogoUrls ? { logoUrls: rawLogoUrls } : {}),
   }
 }
 
@@ -267,7 +285,12 @@ export function normalizeNewsletterDraftDocument(
   const featuredTickers = Array.isArray(draft.featuredTickers)
     ? draft.featuredTickers.map((value) => normalizeTicker(value)).filter(Boolean)
     : []
-  const normalizedFeaturedTickers = featuredTickers.length > 0 ? featuredTickers : [ticker]
+  const normalizedFeaturedTickers =
+    format === 'market_roundup'
+      ? featuredTickers
+      : featuredTickers.length > 0
+        ? featuredTickers
+        : [ticker]
 
   return {
     ...draft,
@@ -330,6 +353,14 @@ function getLocalDraftSessionDir(sessionId: string): string {
   )
 }
 
+function shouldAllowCrossSessionLocalDraftLookup(): boolean {
+  if (process.env.NODE_ENV !== 'production') {
+    return true
+  }
+
+  return process.env.NEWSLETTER_ALLOW_CROSS_SESSION_LOCAL_DRAFT_ACCESS === 'true'
+}
+
 function getLocalDraftFilePath(scope: NewsletterDraftScope, id: string): string {
   return resolve(
     getLocalDraftSessionDir(scope.sessionId),
@@ -363,10 +394,61 @@ function listLocalDraftRows(scope: NewsletterDraftScope): NewsletterDraftRow[] {
   return rows
 }
 
+function findLocalDraftRowAcrossSessions(id: string): NewsletterDraftRow | null {
+  if (!shouldAllowCrossSessionLocalDraftLookup()) {
+    return null
+  }
+
+  if (!existsSync(LOCAL_NEWSLETTER_DRAFTS_DIR)) {
+    return null
+  }
+
+  const sanitizedId = sanitizeDraftStorageKey(id)
+  const sessionDirs = readdirSync(LOCAL_NEWSLETTER_DRAFTS_DIR)
+
+  for (const sessionDir of sessionDirs) {
+    const candidatePath = resolve(
+      LOCAL_NEWSLETTER_DRAFTS_DIR,
+      sessionDir,
+      `${sanitizedId}.json`,
+    )
+
+    if (!existsSync(candidatePath)) {
+      continue
+    }
+
+    return readLocalDraftRowFromFile(candidatePath)
+  }
+
+  return null
+}
+
 function getLocalDraftRow(
   scope: NewsletterDraftScope,
   id: string,
 ): NewsletterDraftRow {
+  const filePath = getLocalDraftFilePath(scope, id)
+  if (!existsSync(filePath)) {
+    const crossSessionRow = findLocalDraftRowAcrossSessions(id)
+    if (!crossSessionRow) {
+      throw new NewsletterDraftNotFoundError(id)
+    }
+    return crossSessionRow
+  }
+
+  const row = readLocalDraftRowFromFile(filePath)
+  if (row.session_id !== scope.sessionId) {
+    const crossSessionRow = findLocalDraftRowAcrossSessions(id)
+    if (!crossSessionRow) {
+      throw new NewsletterDraftNotFoundError(id)
+    }
+    return crossSessionRow
+  }
+
+  return row
+}
+
+function deleteLocalDraftRow(scope: NewsletterDraftScope, id: string) {
   const filePath = getLocalDraftFilePath(scope, id)
   if (!existsSync(filePath)) {
     throw new NewsletterDraftNotFoundError(id)
@@ -377,7 +459,7 @@ function getLocalDraftRow(
     throw new NewsletterDraftNotFoundError(id)
   }
 
-  return row
+  rmSync(filePath, { force: true })
 }
 
 function persistLocalDraftRow(
@@ -449,6 +531,7 @@ export function buildNewsletterDraftFromResult(
     ticker,
     format: result.format,
     featuredTickers: result.featuredTickers.map((value) => normalizeTicker(value)),
+    manualDraft: false,
     generationPrompt: result.generationPrompt?.trim() || undefined,
     generatedAt: result.generatedAt,
     subjectLine: result.subjectLine,
@@ -467,6 +550,115 @@ export function buildNewsletterDraftFromResult(
     autoPickedStock: result.autoPickedStock,
     stockPickerResult: result.stockPickerResult,
     blocks,
+  }
+}
+
+function buildBlankDraftSubjectLine(
+  ticker: string,
+  format: NewsletterDraftDocument['format'],
+): string {
+  if (format === 'market_roundup') {
+    return 'Untitled market roundup'
+  }
+
+  if (ticker === BLANK_NEWSLETTER_TICKER) {
+    return 'Untitled newsletter'
+  }
+
+  return `Untitled ${ticker} newsletter`
+}
+
+function buildBlankDraftHeader(
+  ticker: string,
+  format: NewsletterDraftDocument['format'],
+  generatedAt: string,
+  subjectLine: string,
+): NewsletterDraftHeader {
+  const fallback = buildNewsletterHeader(ticker, new Date(generatedAt), {
+    format,
+    featuredTickers: format === 'market_roundup' ? [] : [ticker],
+    subjectLine,
+  })
+
+  return {
+    ...fallback,
+    title: subjectLine,
+    badgeText:
+      format === 'market_roundup'
+        ? 'Manual Roundup'
+        : ticker === BLANK_NEWSLETTER_TICKER
+          ? 'Manual Draft'
+          : `${ticker} Draft`,
+    logoUrl: '',
+    logoUrls: [],
+  }
+}
+
+function buildBlankDraftStatsCard(
+  format: NewsletterDraftDocument['format'],
+): NewsletterDraftStatsCard | undefined {
+  if (format === 'market_roundup') {
+    return undefined
+  }
+
+  return {
+    items: [
+      { label: 'Metric 1', value: '—' },
+      { label: 'Metric 2', value: '—' },
+      { label: 'Metric 3', value: '—' },
+    ],
+  }
+}
+
+function buildBlankDraftBlocks(
+  ticker: string,
+  format: NewsletterDraftDocument['format'],
+): NewsletterDraftBlock[] {
+  const chartTicker =
+    format === 'market_roundup' || ticker === BLANK_NEWSLETTER_TICKER ? 'AAPL' : ticker
+
+  return Array.from({ length: 3 }, (_, index) => ({
+    id: crypto.randomUUID(),
+    layoutId: 'chart_plus_commentary',
+    templateId: `manual_section_${index + 1}`,
+    selectionReason: 'Manual blank draft starter section.',
+    heading: `New section ${index + 1}`,
+    body: 'Add your commentary here.',
+    chartImageUrl: BLANK_DRAFT_PLACEHOLDER_CHART_URL,
+    chartAlt: 'Blank chart placeholder',
+    chartExportUrl: '',
+    chartSpec: {
+      stocks: [chartTicker],
+      metrics: ['revenue'],
+      title: `${chartTicker} Revenue`,
+      chartType: 'bar',
+      periodType: 'annual',
+      showLabels: true,
+    },
+    chartNeedsRegeneration: false,
+  }))
+}
+
+function buildBlankNewsletterDraftDocument(
+  ticker: string,
+  options?: NewsletterOptions,
+): NewsletterDraftDocument {
+  const format = options?.format === 'market_roundup' ? 'market_roundup' : 'single_stock'
+  const generatedAt = new Date().toISOString()
+  const subjectLine = buildBlankDraftSubjectLine(ticker, format)
+
+  return {
+    ticker,
+    format,
+    featuredTickers: format === 'market_roundup' ? [] : [ticker],
+    manualDraft: true,
+    generatedAt,
+    subjectLine,
+    introText: '',
+    header: buildBlankDraftHeader(ticker, format, generatedAt, subjectLine),
+    statsCard: buildBlankDraftStatsCard(format),
+    autoPickedStock: false,
+    blocks: buildBlankDraftBlocks(ticker, format),
   }
 }
 
@@ -494,7 +686,7 @@ export function renderNewsletterDraftPreviewHtml(
     }
   })
 
-  return assembleNewsletterHtml(
+  const beehiivPreviewHtml = assembleNewsletterHtmlForBeehiiv(
     normalizedDraft.ticker,
     blocks,
     new Date(normalizedDraft.generatedAt),
@@ -507,6 +699,64 @@ export function renderNewsletterDraftPreviewHtml(
       statsCardOverride: normalizedDraft.statsCard,
     },
   )
+
+  const previewYear = new Date(normalizedDraft.generatedAt).getUTCFullYear()
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>${escapeHtml(normalizedDraft.subjectLine)}</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: #374151;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    a { color: #0C4A6E; }
+  </style>
+</head>
+<body>
+  <div style="min-height:100vh;background:#ffffff;padding:24px 0 56px;">
+    <div style="max-width:720px;margin:0 auto;padding:0 20px;">
+      <div style="width:100%;margin:0 0 16px 0;padding-left:8px;">
+        <a href="#" style="font-size:13px;line-height:1.4;color:#6b7280;text-decoration:underline;">Read online</a>
+      </div>
+
+      ${beehiivPreviewHtml}
+
+      <div style="max-width:600px;margin:0 auto;padding:28px 12px 0 12px;">
+        <div style="padding-top:24px;">
+          <p style="margin:0;text-align:center;font-size:13px;line-height:1.6;color:#6b7280;">
+            Data sourced from SEC filings and Financial Modeling Prep. Charts generated by
+            <a href="https://theintraday.com" target="_blank" style="color:#0C4A6E;">The Intraday</a>.
+          </p>
+        </div>
+
+        <div style="border-top:1px solid #e5e7eb;padding-top:24px;margin-top:24px;">
+          <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#374151;">© ${previewYear} The Intraday</p>
+          <p style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:#374151;">
+            400 S 4th St Ste 410 PMB 712176<br />
+            Minneapolis, MN 55415, United States
+          </p>
+          <a href="#" style="font-size:13px;line-height:1.6;color:#0C4A6E;text-decoration:underline;">Unsubscribe</a>
+        </div>
+
+        <div style="padding-top:24px;">
+          <span style="display:inline-block;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;line-height:1;color:#374151;background:#ffffff;">
+            Powered by beehiiv
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
 }
 
 /**
@@ -603,18 +853,24 @@ export async function listNewsletterDrafts(
   scope: NewsletterDraftScope,
 ): Promise<NewsletterDraftSummary[]> {
   if (usesLocalDraftStorage(scope)) {
-    return listLocalDraftRows(scope).map((row) => ({
-      id: row.id,
-      ticker: row.ticker,
-      format: row.draft_json.format ?? 'single_stock',
-      featuredTickers: row.draft_json.featuredTickers ?? [row.ticker],
-      status: row.status,
-      subjectLine: row.subject_line,
-      generatedAt: row.draft_json.generatedAt,
-      blockCount: row.draft_json.blocks.length,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }))
+    return listLocalDraftRows(scope).map((row) => {
+      const format = row.draft_json.format ?? 'single_stock'
+
+      return {
+        id: row.id,
+        ticker: row.ticker,
+        format,
+        featuredTickers:
+          row.draft_json.featuredTickers ??
+          (format === 'market_roundup' ? [] : [row.ticker]),
+        status: row.status,
+        subjectLine: row.subject_line,
+        generatedAt: row.draft_json.generatedAt,
+        blockCount: row.draft_json.blocks.length,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }
+    })
   }
 
   const supabase = getServiceClient()
@@ -635,18 +891,24 @@ export async function listNewsletterDrafts(
     )
   }
 
-  return (data as Array<Omit<NewsletterDraftRow, 'preview_html' | 'owner_id'>>).map((row) => ({
-    id: row.id,
-    ticker: row.ticker,
-    format: row.draft_json.format ?? 'single_stock',
-    featuredTickers: row.draft_json.featuredTickers ?? [row.ticker],
-    status: row.status,
-    subjectLine: row.subject_line,
-    generatedAt: row.draft_json.generatedAt,
-    blockCount: row.draft_json.blocks.length,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }))
+  return (data as Array<Omit<NewsletterDraftRow, 'preview_html' | 'owner_id'>>).map((row) => {
+    const format = row.draft_json.format ?? 'single_stock'
+
+    return {
+      id: row.id,
+      ticker: row.ticker,
+      format,
+      featuredTickers:
+        row.draft_json.featuredTickers ??
+        (format === 'market_roundup' ? [] : [row.ticker]),
+      status: row.status,
+      subjectLine: row.subject_line,
+      generatedAt: row.draft_json.generatedAt,
+      blockCount: row.draft_json.blocks.length,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  })
 }
 
 export async function getNewsletterDraft(
@@ -684,8 +946,25 @@ export async function createNewsletterDraft(
 ): Promise<NewsletterDraftRecord> {
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
-  const result = await generateNewsletter(ticker, options)
+  const result = await generateNewsletterWithBackend(ticker, options)
   const draft = buildNewsletterDraftFromResult(result, publicChartBaseUrl)
+  return persistNewsletterDraftRow(scope, null, draft, 'draft', publicChartBaseUrl)
+}
+
+export async function createBlankNewsletterDraft(
+  scope: NewsletterDraftScope,
+  ticker: string | undefined,
+  options?: NewsletterOptions,
+): Promise<NewsletterDraftRecord> {
+  const format = options?.format === 'market_roundup' ? 'market_roundup' : 'single_stock'
+  const effectiveTicker =
+    format === 'market_roundup'
+      ? 'MARKET'
+      : normalizeTicker(ticker ?? BLANK_NEWSLETTER_TICKER)
+  const publicChartBaseUrl =
+    options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
+  const draft = buildBlankNewsletterDraftDocument(effectiveTicker, options)
+
   return persistNewsletterDraftRow(scope, null, draft, 'draft', publicChartBaseUrl)
 }
 
@@ -698,6 +977,34 @@ export async function saveNewsletterDraft(
   return persistNewsletterDraftRow(scope, id, draft, status)
 }
 
+export async function deleteNewsletterDraft(
+  scope: NewsletterDraftScope,
+  id: string,
+): Promise<void> {
+  if (usesLocalDraftStorage(scope)) {
+    deleteLocalDraftRow(scope, id)
+    return
+  }
+
+  const supabase = getServiceClient()
+  let query = supabase.from(NEWSLETTER_DRAFTS_TABLE).delete().eq('id', id)
+  query = scope.ownerId
+    ? query.eq('owner_id', scope.ownerId)
+    : query.is('owner_id', null).eq('session_id', scope.sessionId)
+
+  const { data, error } = await query.select('id')
+
+  if (error) {
+    throw new Error(
+      `Failed to delete newsletter draft: ${formatNewsletterDraftStorageError(error.message)}`,
+    )
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new NewsletterDraftNotFoundError(id)
+  }
+}
+
 export async function regenerateNewsletterDraft(
   scope: NewsletterDraftScope,
   id: string,
@@ -707,7 +1014,7 @@ export async function regenerateNewsletterDraft(
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
   const isMarketRoundup = existing.draft.format === 'market_roundup'
-  const result = await generateNewsletter(
+  const result = await generateNewsletterWithBackend(
     isMarketRoundup ? undefined : existing.ticker,
     {
       ...options,

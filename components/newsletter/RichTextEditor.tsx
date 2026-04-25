@@ -2,7 +2,7 @@
 
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type MouseEvent } from 'react'
 
 interface RichTextEditorProps {
   value: string
@@ -69,8 +69,19 @@ export function RichTextEditor({
     lastEmittedRef.current = editor.getHTML()
   }, [editor, value])
 
+  function focusEditorFromContainer(event: MouseEvent<HTMLDivElement>) {
+    if (!editor) return
+
+    const target = event.target as HTMLElement | null
+    if (!target) return
+    if (target.closest('[contenteditable="true"]')) return
+
+    editor.commands.focus('end')
+  }
+
   return (
     <div
+      onClick={focusEditorFromContainer}
       className={[
         'w-full rounded-2xl border border-gray-300 bg-white transition',
         'focus-within:border-sage-500 focus-within:ring-2 focus-within:ring-sage-500/20',
