@@ -301,7 +301,7 @@ For price, `parsePriceNewsletterChartSpecFromState()` (`chart-editor.ts:138`) re
 
 ### 5.5 Saving
 
-The new spec replaces the block's `chartSpec` in the draft. The draft is persisted. A separate "regenerate chart PNG" action runs `captureChart()` to produce a new image at editor dimensions, uploads it to `/public/newsletter-charts/...png`, and updates `chartImageUrl` + sets `chartNeedsRegeneration: false`.
+The new spec replaces the block's `chartSpec` in the draft. The draft is persisted. A separate "regenerate chart PNG" action runs `captureChart()` to produce a new image at editor dimensions, writes it to `./.newsletter-output/...png` (served at `/newsletter-charts/...png` by the route handler in `app/newsletter-charts/[...path]/route.ts`), and updates `chartImageUrl` + sets `chartNeedsRegeneration: false`.
 
 ---
 
