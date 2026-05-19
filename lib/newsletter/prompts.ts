@@ -1,5 +1,6 @@
 import { EDITORIAL_TEMPLATES } from './editorial-templates'
 import type {
+  EditorialChartTemplate,
   FeaturedStock,
   NewsletterChartSpec,
   NewsletterContext,
@@ -11,19 +12,30 @@ import type {
   StockNewsItem,
 } from './types'
 import { isPriceNewsletterChartSpec } from './chart-spec'
+import { pickRankedTemplates, type TemplateScore } from './template-scoring'
+
+const DEFAULT_TEMPLATE_TOP_K = 6
 
 type SelectionEditorialContext = Pick<
   FeaturedStock,
   'ticker' | 'name' | 'changesPercentage' | 'editorialHook' | 'topHeadlines'
 >
 
-function getTemplateDescriptions(): string {
-  return EDITORIAL_TEMPLATES.map(
-    (template) =>
-      template.mode === 'price'
-        ? `- id: "${template.id}"\n  mode: price\n  label: ${template.label}\n  chartSetup: ${template.chartType}, ${template.interval}, ${template.range}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}`
-        : `- id: "${template.id}"\n  mode: fundamentals\n  label: ${template.label}\n  metrics: ${template.metrics.join(', ')}\n  supportedPeriods: ${template.supportedPeriods.join(', ')}\n  defaultPeriod: ${template.defaultPeriodType}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}`,
-  ).join('\n\n')
+function getTemplateDescriptions(
+  templates: EditorialChartTemplate[] = EDITORIAL_TEMPLATES,
+  scoreByTemplateId?: Map<string, TemplateScore>,
+): string {
+  return templates
+    .map((template) => {
+      const score = scoreByTemplateId?.get(template.id)
+      const scoreLine = score
+        ? `\n  dataSignal: ${score.score.toFixed(2)} (${score.reason})`
+        : ''
+      return template.mode === 'price'
+        ? `- id: "${template.id}"\n  mode: price\n  label: ${template.label}\n  chartSetup: ${template.chartType}, ${template.interval}, ${template.range}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}${scoreLine}`
+        : `- id: "${template.id}"\n  mode: fundamentals\n  label: ${template.label}\n  metrics: ${template.metrics.join(', ')}\n  supportedPeriods: ${template.supportedPeriods.join(', ')}\n  defaultPeriod: ${template.defaultPeriodType}\n  description: ${template.description}\n  whenToUse: ${template.whenToUse}${scoreLine}`
+    })
+    .join('\n\n')
 }
 
 function stringifyPromptData(value: unknown): string {
@@ -589,16 +601,25 @@ export function buildTemplateSelectionMessages(
     mode?: 'single_stock' | 'market_roundup'
     editorialContext?: SelectionEditorialContext
     generationPrompt?: string
+    topK?: number
   } = {},
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const isRoundup = options.mode === 'market_roundup'
   const selectionSnapshot = buildSelectionDataSnapshot(context)
 
+  const topK = options.topK ?? DEFAULT_TEMPLATE_TOP_K
+  const { templates: rankedTemplates, scores } = pickRankedTemplates(
+    EDITORIAL_TEMPLATES,
+    context,
+    topK,
+  )
+  const scoreById = new Map(scores.map((s) => [s.templateId, s]))
+
   const system = [
     'You are a financial newsletter editor for The Intraday.',
     `Select ${maxSelections} chart templates that tell the most compelling visual story for this company.`,
-    'Pick templates that highlight the most interesting or noteworthy trends in the data.',
-    'Do NOT pick templates whose underlying data is flat or uninteresting.',
+    'The list of templates below has been pre-filtered to those whose underlying data shows the strongest signal — pick from these.',
+    'Each option includes a `dataSignal` score (higher = more visible move/inflection); use it as a tiebreaker, not a sole criterion.',
     'Use price templates when recent market action is the clearest story, and fundamentals templates when the financial trend is stronger.',
     'For fundamentals templates, also choose the best periodType: annual or quarterly.',
     'Prefer quarterly when the story is tied to recent earnings, a fresh inflection, or a catalyst happening right now.',
@@ -650,8 +671,8 @@ export function buildTemplateSelectionMessages(
 
   userParts.push(
     '',
-    '=== Available Templates ===',
-    getTemplateDescriptions(),
+    '=== Available Templates (pre-filtered by data signal) ===',
+    getTemplateDescriptions(rankedTemplates, scoreById),
   )
 
   const user = userParts.join('\n')

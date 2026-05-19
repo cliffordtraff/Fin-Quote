@@ -6,13 +6,11 @@ import {
   normalizeNewsletterPriceInterval,
   normalizeNewsletterPriceRange,
 } from './chart-spec'
-import {
-  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
-  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './render-dimensions'
+import { getNewsletterChartRenderDimensions } from './render-dimensions'
 import type {
   FundamentalsNewsletterChartSpec,
   NewsletterPriceChartType,
+  PriceChartExportSpec,
   PriceNewsletterChartSpec,
 } from './types'
 import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
@@ -21,8 +19,6 @@ import { resolveChartingPlatformNewsletterChart } from './charting-platform-expo
 // and return a relative path. The app proxies /tos/* to the real charting host
 // via next.config.js rewrites so the iframe is same-origin.
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
-const NEWSLETTER_EDITOR_TARGET_WIDTH = DEFAULT_EDITOR_CHART_RENDER_WIDTH
-const NEWSLETTER_EDITOR_TARGET_HEIGHT = DEFAULT_EDITOR_CHART_RENDER_HEIGHT
 
 function encodeBase64UrlJson(value: unknown): string {
   const json = JSON.stringify(value)
@@ -68,13 +64,14 @@ export function resolveNewsletterChartEditor(
     hoverFocusEnabled: true,
   }
 
+  const dimensions = getNewsletterChartRenderDimensions(spec)
   const url = new URL(resolved.interactiveUrl)
   url.searchParams.set('fundState', encodeBase64UrlJson(editorFundState))
   url.searchParams.set('embed', 'true')
   url.searchParams.set('newsletterEditor', '1')
   url.searchParams.set('newsletterEditorTarget', 'fundamentals')
-  url.searchParams.set('newsletterEditorWidth', String(NEWSLETTER_EDITOR_TARGET_WIDTH))
-  url.searchParams.set('newsletterEditorHeight', String(NEWSLETTER_EDITOR_TARGET_HEIGHT))
+  url.searchParams.set('newsletterEditorWidth', String(dimensions.width))
+  url.searchParams.set('newsletterEditorHeight', String(dimensions.height))
 
   return {
     iframePath: `${url.pathname}${url.search}`,
@@ -100,7 +97,339 @@ export function parseFundamentalsNewsletterChartSpecFromFundState(
 export interface NewsletterPriceChartEditorResolution {
   iframePath: string
   symbol: string
+  priceState: Record<string, unknown>
 }
+
+function buildEditorPriceState(
+  spec: PriceNewsletterChartSpec,
+  symbol: string,
+): Record<string, unknown> {
+  return normalizeNewsletterPriceStateSnapshot(spec.priceState, {
+    symbol,
+    range: spec.range,
+    interval: spec.interval,
+    chartType: spec.chartType,
+  }) ?? {
+    symbol,
+    ticker: symbol,
+    range: spec.range,
+    interval: spec.interval,
+    chartType: spec.chartType,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone /export-editor surface (charting-platform v2)
+// ---------------------------------------------------------------------------
+//
+// The charting platform's embedded export editor lives at /export-editor (see
+// `next.config.js` rewrites). It mounts a sidebar + preview iframe + spec
+// emitter. Parent (this app) does:
+//
+//   1. Open <iframe src="/export-editor">
+//   2. Wait for `{ type: 'export-editor:ready' }` from the iframe
+//   3. Post `{ type: 'export-editor:init', baseSpec }` with the seed below
+//   4. Listen for `{ type: 'export-editor:spec-changed', spec }` and store
+//      the latest spec into the newsletter draft (PriceNewsletterChartSpec
+//      .chartExportSpec)
+//   5. On render, POST that spec to /api/chart-export/render to get a PNG
+
+export interface NewsletterPriceExportEditorResolution {
+  /** Iframe src (relative — Fin Quote proxies /export-editor to the charting host). */
+  iframePath: string
+  /** Resolved ticker. */
+  symbol: string
+  /** Seed spec posted via `export-editor:init` after the editor emits ready. */
+  baseSpec: PriceChartExportSpec
+}
+
+const DAY_MS = 86_400_000
+const TRADING_DAYS_PER_WEEK = 5
+const CALENDAR_DAYS_PER_TRADING_DAY = 7 / TRADING_DAYS_PER_WEEK
+const US_MARKET_MINUTES_PER_DAY = 390
+const NEWSLETTER_PRICE_RIGHT_MARGIN_BARS = 10
+
+function rangeToApproxMs(range: string | undefined): number {
+  switch (range) {
+    case '1d': return DAY_MS
+    case '5d': return 7 * DAY_MS
+    case '1m': return 31 * DAY_MS
+    case '3m': return 93 * DAY_MS
+    case '6m': return 184 * DAY_MS
+    case '1y': return 366 * DAY_MS
+    case '2y': return 731 * DAY_MS
+    case '5y': return 1827 * DAY_MS
+    default: return 184 * DAY_MS
+  }
+}
+
+function approximateTradingDaysForRange(range: string | undefined): number {
+  switch (range) {
+    case '1d': return 1
+    case '5d': return 5
+    case '1m': return 22
+    case '3m': return 66
+    case '6m': return 126
+    case '1y': return 252
+    case '2y': return 504
+    case '5y': return 1260
+    default: return 126
+  }
+}
+
+function parseIntervalToken(interval: string | undefined): {
+  amount: number
+  unit: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
+} {
+  const token = String(interval || '').trim().toLowerCase()
+  if (token === 'd' || token === '1d' || token === 'day') {
+    return { amount: 1, unit: 'day' }
+  }
+  if (token === 'w' || token === '1w' || token === 'week') {
+    return { amount: 1, unit: 'week' }
+  }
+  if (token === 'm' || token === '1mo' || token === 'month') {
+    return { amount: 1, unit: 'month' }
+  }
+
+  const match = /^(\d+)\s*(sec|min|hour|day|week|mo|month)s?$/.exec(token)
+  if (!match) return { amount: 1, unit: 'day' }
+  const amount = Math.max(1, Number.parseInt(match[1] || '1', 10))
+  const rawUnit = match[2]
+  if (rawUnit === 'sec') return { amount, unit: 'second' }
+  if (rawUnit === 'min') return { amount, unit: 'minute' }
+  if (rawUnit === 'hour') return { amount, unit: 'hour' }
+  if (rawUnit === 'week') return { amount, unit: 'week' }
+  if (rawUnit === 'mo' || rawUnit === 'month') return { amount, unit: 'month' }
+  return { amount, unit: 'day' }
+}
+
+function approximateBarsPerTradingDay(interval: string | undefined): number {
+  const parsed = parseIntervalToken(interval)
+  switch (parsed.unit) {
+    case 'second':
+      return (US_MARKET_MINUTES_PER_DAY * 60) / parsed.amount
+    case 'minute':
+      return US_MARKET_MINUTES_PER_DAY / parsed.amount
+    case 'hour':
+      return Math.max(1, 6.5 / parsed.amount)
+    case 'day':
+      return 1 / parsed.amount
+    case 'week':
+      return 1 / (TRADING_DAYS_PER_WEEK * parsed.amount)
+    case 'month':
+      return 1 / (21 * parsed.amount)
+  }
+}
+
+function approximateVisibleBarsForRange(
+  range: string | undefined,
+  interval: string | undefined,
+): number {
+  const tradingDays = approximateTradingDaysForRange(range)
+  const barsPerTradingDay = approximateBarsPerTradingDay(interval)
+  return Math.max(1, Math.round(tradingDays * barsPerTradingDay))
+}
+
+function newsletterPriceLookbackBars(
+  range: string | undefined,
+  requestedVisibleBars: number,
+): number {
+  const baseBars = Math.max(1, Math.floor(requestedVisibleBars || 0))
+  switch (range) {
+    case '1d':
+      return Math.max(24, Math.round(baseBars * 3.5))
+    case '5d':
+      return Math.max(20, Math.round(baseBars * 3))
+    case '1m':
+      return Math.max(48, Math.round(baseBars * 3.5))
+    case '3m':
+      return Math.max(72, Math.round(baseBars * 1.8))
+    case '6m':
+      return Math.max(96, Math.round(baseBars * 1.1))
+    case '1y':
+      return Math.max(156, Math.round(baseBars * 0.8))
+    case '2y':
+    case '5y':
+      return Math.max(208, Math.round(baseBars * 0.45))
+    default:
+      return Math.max(40, Math.round(baseBars))
+  }
+}
+
+function approximateCalendarMsForBars(
+  barCount: number,
+  interval: string | undefined,
+): number {
+  const barsPerTradingDay = approximateBarsPerTradingDay(interval)
+  if (barsPerTradingDay > 0) {
+    const tradingDays = Math.ceil(Math.max(0, barCount) / barsPerTradingDay)
+    return Math.ceil(tradingDays * CALENDAR_DAYS_PER_TRADING_DAY) * DAY_MS
+  }
+  return Math.max(0, barCount) * DAY_MS
+}
+
+function warmupPaddingDaysForInterval(interval: string | undefined): number {
+  const parsed = parseIntervalToken(interval)
+  switch (parsed.unit) {
+    case 'second':
+      return 1
+    case 'minute':
+      if (parsed.amount <= 2) return 14
+      if (parsed.amount <= 5) return 21
+      if (parsed.amount <= 15) return 45
+      if (parsed.amount <= 30) return 90
+      if (parsed.amount <= 60) return 180
+      return 365
+    case 'hour':
+      return parsed.amount <= 1 ? 180 : 365
+    case 'day':
+      return parsed.amount === 1 ? 365 : 730
+    case 'week':
+      return 730
+    case 'month':
+      return 1825
+  }
+}
+
+function readTimeRange(value: unknown): { startTime: number; endTime: number } | null {
+  if (!value || typeof value !== 'object') return null
+  const range = value as { startTime?: unknown; endTime?: unknown }
+  const startTime = Number(range.startTime)
+  const endTime = Number(range.endTime)
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) {
+    return null
+  }
+  return { startTime, endTime }
+}
+
+function buildDefaultPriceExportTimeRanges(
+  range: string | undefined,
+  interval: string | undefined,
+): {
+  viewportTimeRange: { startTime: number; endTime: number; visibleBars: number }
+  dataTimeRange: { startTime: number; endTime: number }
+} {
+  const endTime = Date.now()
+  const visibleRangeMs = rangeToApproxMs(range)
+  const requestedVisibleBars = approximateVisibleBarsForRange(range, interval)
+  const lookbackBars = newsletterPriceLookbackBars(range, requestedVisibleBars)
+  const lookbackMs = approximateCalendarMsForBars(lookbackBars, interval)
+  const visibleStartTime = Math.max(0, endTime - visibleRangeMs)
+  const viewportStartTime = Math.max(0, visibleStartTime - lookbackMs)
+  const warmupMs = warmupPaddingDaysForInterval(interval) * DAY_MS
+  const dataStartTime = Math.max(0, visibleStartTime - warmupMs)
+
+  return {
+    viewportTimeRange: {
+      startTime: viewportStartTime,
+      endTime,
+      visibleBars: requestedVisibleBars + lookbackBars + NEWSLETTER_PRICE_RIGHT_MARGIN_BARS,
+    },
+    dataTimeRange: {
+      startTime: Math.min(dataStartTime, viewportStartTime),
+      endTime,
+    },
+  }
+}
+
+function ensureDataRangeIncludesViewport(
+  dataTimeRange: { startTime: number; endTime: number },
+  viewportTimeRange: unknown,
+): { startTime: number; endTime: number } {
+  const viewport = readTimeRange(viewportTimeRange)
+  if (!viewport) return dataTimeRange
+  return {
+    startTime: Math.min(dataTimeRange.startTime, viewport.startTime),
+    endTime: Math.max(dataTimeRange.endTime, viewport.endTime),
+  }
+}
+
+function buildPriceExportEditorBaseSpec(
+  spec: PriceNewsletterChartSpec,
+  options: { theme?: 'light' | 'dark' },
+): PriceChartExportSpec {
+  const dimensions = getNewsletterChartRenderDimensions(spec)
+  const symbol = (spec.symbol || '').trim().toUpperCase()
+  if (!symbol) {
+    throw new Error('Price newsletter chart spec is missing a symbol')
+  }
+  // If a prior session already saved a chartExportSpec on this block, prefer
+  // that as the editor's starting point so user edits round-trip. Backfill
+  // viewportTimeRange / dataTimeRange when they're missing — older saved
+  // specs from before this helper started seeding them don't have them, and
+  // without them the editor falls back to the bars-API warmup window (which
+  // collapses the visible range to ~5 weeks regardless of spec.range).
+  const persisted = spec.chartExportSpec
+  if (persisted && typeof persisted === 'object') {
+    const hasViewport =
+      persisted.viewportTimeRange != null &&
+      typeof persisted.viewportTimeRange === 'object'
+    const hasDataRange =
+      persisted.dataTimeRange != null &&
+      typeof persisted.dataTimeRange === 'object'
+    if (hasViewport && hasDataRange) return persisted
+    const fallbackRange =
+      typeof persisted.range === 'string' && persisted.range
+        ? persisted.range
+        : spec.range
+    const fallbackTimeRanges = buildDefaultPriceExportTimeRanges(
+      fallbackRange,
+      typeof persisted.interval === 'string' && persisted.interval
+        ? persisted.interval
+        : spec.interval,
+    )
+    const viewportTimeRange = hasViewport
+      ? persisted.viewportTimeRange
+      : fallbackTimeRanges.viewportTimeRange
+    return {
+      ...persisted,
+      viewportTimeRange,
+      dataTimeRange: hasDataRange
+        ? persisted.dataTimeRange
+        : ensureDataRangeIncludesViewport(
+            fallbackTimeRanges.dataTimeRange,
+            viewportTimeRange,
+          ),
+    }
+  }
+  // Match the legacy /tos newsletter renderer: price charts show the requested
+  // range plus contextual lookback bars. Without this, clicking an unsaved
+  // draft chart opens the new export editor at a tighter zoom than the static
+  // newsletter image that the user just clicked.
+  const timeRanges = buildDefaultPriceExportTimeRanges(spec.range, spec.interval)
+  return {
+    symbol,
+    interval: spec.interval,
+    range: spec.range,
+    chartType: spec.chartType,
+    theme: options.theme ?? 'light',
+    width: dimensions.width,
+    height: dimensions.height,
+    companyName: '',
+    renderProfile: 'newsletter',
+    viewportTimeRange: timeRanges.viewportTimeRange,
+    dataTimeRange: timeRanges.dataTimeRange,
+  }
+}
+
+export function resolveNewsletterPriceExportEditor(
+  spec: PriceNewsletterChartSpec,
+  options: { theme?: 'light' | 'dark' } = {},
+): NewsletterPriceExportEditorResolution {
+  const baseSpec = buildPriceExportEditorBaseSpec(spec, options)
+  return {
+    iframePath: '/export-editor',
+    symbol: String(baseSpec.symbol).toUpperCase(),
+    baseSpec,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy /tos newsletterEditor surface — kept for fundamentals charts and
+// any callers still on the v1 path. Newsletter draft UI should switch price
+// blocks to resolveNewsletterPriceExportEditor above.
+// ---------------------------------------------------------------------------
 
 export function resolveNewsletterPriceChartEditor(
   spec: PriceNewsletterChartSpec,
@@ -111,27 +440,22 @@ export function resolveNewsletterPriceChartEditor(
     theme: options.theme ?? 'light',
   })
 
+  const dimensions = getNewsletterChartRenderDimensions(spec)
   const url = new URL(resolved.interactiveUrl)
   url.searchParams.set('embed', 'true')
   url.searchParams.set('canvasEditor', '1')
   url.searchParams.set('newsletterEditor', '1')
   url.searchParams.set('newsletterEditorTarget', 'price')
-  url.searchParams.set('newsletterEditorWidth', String(NEWSLETTER_EDITOR_TARGET_WIDTH))
-  url.searchParams.set('newsletterEditorHeight', String(NEWSLETTER_EDITOR_TARGET_HEIGHT))
+  url.searchParams.set('newsletterEditorWidth', String(dimensions.width))
+  url.searchParams.set('newsletterEditorHeight', String(dimensions.height))
 
-  const priceState = normalizeNewsletterPriceStateSnapshot(spec.priceState, {
-    symbol: resolved.ticker,
-    range: spec.range,
-    interval: spec.interval,
-    chartType: spec.chartType,
-  })
-  if (priceState) {
-    url.searchParams.set('priceState', encodeBase64UrlJson(priceState))
-  }
+  const priceState = buildEditorPriceState(spec, resolved.ticker)
+  url.searchParams.set('priceState', encodeBase64UrlJson(priceState))
 
   return {
     iframePath: `${url.pathname}${url.search}`,
     symbol: resolved.ticker,
+    priceState,
   }
 }
 

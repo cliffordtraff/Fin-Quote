@@ -46,7 +46,7 @@ function parseArgs(): CliOptions {
     baseUrl: 'http://localhost:3000',
     chartBaseUrl: getDefaultChartingBaseUrl(),
     publicChartBaseUrl: getDefaultPublicChartingBaseUrl(),
-    outputDir: './public/newsletter-charts',
+    outputDir: './.newsletter-output',
     maxCharts: 3,
     roundupSize: 4,
     publish: false,
@@ -93,7 +93,7 @@ Options:
                        Charting Platform base URL used for chart capture
   --public-chart-base-url <url>
                        Public Charting Platform URL used in newsletter links
-  --output-dir <path>  Output directory for charts + HTML (default: ./public/newsletter-charts)
+  --output-dir <path>  Output directory for charts + HTML (default: ./.newsletter-output)
   --max-charts <n>     Maximum chart sections (default: 3)
   --roundup-size <n>   Number of stocks in market_roundup mode (default: 4, min 3, max 5)
   --publish            Upload chart PNGs to Supabase Storage and rewrite image URLs

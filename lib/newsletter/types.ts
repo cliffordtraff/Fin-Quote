@@ -59,6 +59,29 @@ export type NewsletterPriceChartType =
 
 export type NewsletterPriceStateSnapshot = Record<string, unknown>
 
+/**
+ * Wire-level shape of the spec the charting platform's embedded export editor
+ * emits via postMessage. Strongly typed at the top — passthrough below since
+ * the editor owns dozens of optional fields (indicators[], lowerPanes[],
+ * drawings[], themeOverrides, exportOptions, viewport, etc.) and Fin Quote
+ * stores them verbatim and forwards them to /api/chart-export/render.
+ *
+ * Not to be confused with the fundamentals-side `ChartExportSpec` imported at
+ * the top of this file — different shape, different surface.
+ */
+export interface PriceChartExportSpec {
+  symbol: string
+  interval?: string
+  range?: string
+  chartType?: string
+  theme?: 'light' | 'dark'
+  width?: number
+  height?: number
+  companyName?: string
+  renderProfile?: string
+  [key: string]: unknown
+}
+
 export interface FundamentalsNewsletterChartSpec extends ChartExportSpec {
   mode?: 'fundamentals'
 }
@@ -72,6 +95,14 @@ export interface PriceNewsletterChartSpec {
   priceState?: NewsletterPriceStateSnapshot
   title?: string
   subtitle?: string
+  /**
+   * Spec produced by the embedded export editor. When present, captures the
+   * full visual configuration (indicators, viewport, theme, exportOptions,
+   * etc.) and `captureChart` renders via /api/chart-export/render. When
+   * absent, `captureChart` falls back to the legacy /tos/api/newsletter/render
+   * path that reads `priceState`.
+   */
+  chartExportSpec?: PriceChartExportSpec
 }
 
 export type NewsletterChartSpec =
@@ -392,7 +423,7 @@ export interface NewsletterOptions {
   chartBaseUrl?: string
   /** Public Charting Platform URL used in final newsletter click-through links */
   publicChartBaseUrl?: string
-  /** Directory for saved chart PNGs (default: './public/newsletter-charts') */
+  /** Directory for saved chart PNGs (default: './.newsletter-output') */
   outputDir?: string
   /** Maximum number of chart sections (default: 3) */
   maxCharts?: number

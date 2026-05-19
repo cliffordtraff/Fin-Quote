@@ -12,10 +12,6 @@ import {
   captureChart,
 } from './capture'
 import {
-  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
-  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './render-dimensions'
-import {
   getDefaultChartingBaseUrl,
   getDefaultPublicChartingBaseUrl,
   resolveChartingPlatformNewsletterChart,
@@ -44,7 +40,7 @@ import type {
 } from './types'
 
 const NEWSLETTER_DRAFTS_TABLE = 'newsletter_drafts'
-const NEWSLETTER_CHART_OUTPUT_DIR = './public/newsletter-charts'
+const NEWSLETTER_CHART_OUTPUT_DIR = './.newsletter-output'
 const LOCAL_NEWSLETTER_DRAFTS_DIR = './.newsletter-drafts'
 const BLANK_NEWSLETTER_TICKER = 'TBD'
 const BLANK_DRAFT_PLACEHOLDER_CHART_URL = (() => {
@@ -1038,7 +1034,6 @@ export async function regenerateNewsletterDraftChart(
   options?: {
     chartBaseUrl?: string
     publicChartBaseUrl?: string
-    editorMode?: boolean
     width?: number
     height?: number
   },
@@ -1046,16 +1041,8 @@ export async function regenerateNewsletterDraftChart(
   const chartBaseUrl = options?.chartBaseUrl ?? getDefaultChartingBaseUrl()
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
-  const width =
-    options?.width ??
-    (options?.editorMode === true
-      ? DEFAULT_EDITOR_CHART_RENDER_WIDTH
-      : undefined)
-  const height =
-    options?.height ??
-    (options?.editorMode === true
-      ? DEFAULT_EDITOR_CHART_RENDER_HEIGHT
-      : undefined)
+  const width = options?.width
+  const height = options?.height
   const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
   const block = normalizedDraft.blocks.find((entry) => entry.id === blockId)
 

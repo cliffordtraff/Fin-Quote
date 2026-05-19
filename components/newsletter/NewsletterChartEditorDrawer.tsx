@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   parseFundamentalsNewsletterChartSpecFromFundState,
-  parsePriceNewsletterChartSpecFromState,
   resolveNewsletterChartEditor,
-  resolveNewsletterPriceChartEditor,
+  resolveNewsletterPriceExportEditor,
 } from '@/lib/newsletter/chart-editor'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 import type {
@@ -14,6 +13,7 @@ import type {
   NewsletterDraftBlock,
   NewsletterDraftDocument,
   NewsletterDraftRecord,
+  PriceChartExportSpec,
   PriceNewsletterChartSpec,
 } from '@/lib/newsletter/types'
 
@@ -33,23 +33,19 @@ interface FundStateResponse {
   symbol: string
 }
 
-interface PriceStateResponse {
-  priceState: Record<string, unknown> | null
-  symbol: string
-}
-
 type StateResponse =
   | { kind: 'fundamentals'; response: FundStateResponse | null }
-  | { kind: 'price'; response: PriceStateResponse | null }
+  | { kind: 'price-export'; spec: PriceChartExportSpec | null }
 
 function resolveEditor(block: NewsletterDraftBlock) {
   if (isPriceNewsletterChartSpec(block.chartSpec)) {
     const spec = block.chartSpec as PriceNewsletterChartSpec
-    const resolved = resolveNewsletterPriceChartEditor(spec)
+    const resolved = resolveNewsletterPriceExportEditor(spec)
     return {
-      kind: 'price' as const,
+      kind: 'price-export' as const,
       iframePath: resolved.iframePath,
       symbol: resolved.symbol,
+      baseSpec: resolved.baseSpec,
     }
   }
   const resolved = resolveNewsletterChartEditor(
@@ -75,9 +71,7 @@ export default function NewsletterChartEditorDrawer({
   const fundStateResolveRef = useRef<((result: FundStateResponse | null) => void) | null>(
     null,
   )
-  const priceStateResolveRef = useRef<((result: PriceStateResponse | null) => void) | null>(
-    null,
-  )
+  const priceExportSpecRef = useRef<PriceChartExportSpec | null>(null)
 
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [chartVisible, setChartVisible] = useState(false)
@@ -96,6 +90,37 @@ export default function NewsletterChartEditorDrawer({
 
       const data = event.data
       if (!data || typeof data !== 'object') return
+
+      // New /export-editor protocol — used for price specs.
+      if (editor.kind === 'price-export' && typeof data.type === 'string'
+          && data.type.startsWith('export-editor:')) {
+        if (data.type === 'export-editor:ready') {
+          editorReadyRef.current = true
+          setStatus('ready')
+          iframeWindow.postMessage(
+            { type: 'export-editor:init', baseSpec: editor.baseSpec },
+            '*',
+          )
+          // Seed the spec ref with the initial baseSpec so Save works even if
+          // the user clicks Save before adjusting any control.
+          priceExportSpecRef.current = editor.baseSpec
+          setTimeout(() => setChartVisible(true), 250)
+          return
+        }
+        if (data.type === 'export-editor:spec-changed') {
+          const spec = data.spec
+          if (spec && typeof spec === 'object') {
+            priceExportSpecRef.current = spec as PriceChartExportSpec
+          }
+          return
+        }
+        // 'export-editor:download-requested' could be wired to trigger Save,
+        // but the drawer's top-bar Save button is the canonical path. Ignore
+        // for now.
+        return
+      }
+
+      // Legacy /tos newsletterEditor protocol — used for fundamentals specs.
       if (data.v !== PM_VERSION || typeof data.type !== 'string') return
 
       if (data.type === 'READY') {
@@ -116,27 +141,6 @@ export default function NewsletterChartEditorDrawer({
             },
             '*',
           )
-        } else {
-          const syncPriceWorkspace = () => {
-            iframeWindow.postMessage(
-              {
-                v: PM_VERSION,
-                type: 'SET_WORKSPACE_MODE',
-                payload: { mode: 'price' },
-              },
-              '*',
-            )
-            iframeWindow.postMessage(
-              {
-                v: PM_VERSION,
-                type: 'SET_SYMBOL',
-                payload: { symbolId: editor.symbol },
-              },
-              '*',
-            )
-          }
-          syncPriceWorkspace()
-          setTimeout(syncPriceWorkspace, 180)
         }
         // Re-apply theme after the chart reload settles, since the chart may
         // re-initialize with its bootstrap theme and lose our first SET_THEME.
@@ -162,23 +166,6 @@ export default function NewsletterChartEditorDrawer({
         )
         return
       }
-
-      if (data.type === 'PRICE_STATE') {
-        const resolve = priceStateResolveRef.current
-        if (!resolve) return
-        priceStateResolveRef.current = null
-
-        const payload = data.payload as Record<string, unknown> | undefined
-        resolve(
-          payload
-            ? {
-                priceState:
-                  (payload.priceState as Record<string, unknown> | null) ?? null,
-                symbol: typeof payload.symbol === 'string' ? payload.symbol : '',
-              }
-            : null,
-        )
-      }
     }
 
     window.addEventListener('message', handleMessage)
@@ -202,7 +189,7 @@ export default function NewsletterChartEditorDrawer({
         resolve(
           editor.kind === 'fundamentals'
             ? { kind: 'fundamentals', response: null }
-            : { kind: 'price', response: null },
+            : { kind: 'price-export', spec: null },
         )
         return
       }
@@ -225,20 +212,9 @@ export default function NewsletterChartEditorDrawer({
         return
       }
 
-      const settle = (response: PriceStateResponse | null) => {
-        resolve({ kind: 'price', response })
-      }
-      priceStateResolveRef.current = settle
-      iframeWindow.postMessage(
-        { v: PM_VERSION, type: 'GET_PRICE_STATE', payload: {} },
-        '*',
-      )
-      setTimeout(() => {
-        if (priceStateResolveRef.current === settle) {
-          priceStateResolveRef.current = null
-          settle(null)
-        }
-      }, READ_STATE_TIMEOUT_MS)
+      // price-export: editor pushes spec-changed events as the user edits, so
+      // the latest spec is already in the ref — no round-trip needed.
+      resolve({ kind: 'price-export', spec: priceExportSpecRef.current })
     })
   }, [editor.kind])
 
@@ -268,19 +244,13 @@ export default function NewsletterChartEditorDrawer({
           )
         }
       } else {
-        if (!state.response || !state.response.priceState) {
+        if (!state.spec) {
           throw new Error(
             'Could not read the chart state. Wait for the chart to finish loading and try again.',
           )
         }
-        nextSpec = parsePriceNewsletterChartSpecFromState(
-          state.response.priceState,
-          state.response.symbol,
-          block.chartSpec as PriceNewsletterChartSpec,
-        )
-        if (!nextSpec) {
-          throw new Error('Could not parse the price chart state.')
-        }
+        const existing = block.chartSpec as PriceNewsletterChartSpec
+        nextSpec = { ...existing, chartExportSpec: state.spec }
       }
 
       const nextDraft: NewsletterDraftDocument = {

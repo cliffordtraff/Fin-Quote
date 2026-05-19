@@ -16,7 +16,7 @@ describe('buildNewsletterBlock', () => {
     expect(block.html).toContain(`<strong>$3.31</strong>`)
   })
 
-  it('renders newsletter charts at a true 600px email width with no horizontal chart padding', () => {
+  it('renders newsletter charts at the canonical 620px email width with no horizontal chart padding', () => {
     const priceBlock = buildNewsletterBlock('chart_plus_commentary', {
       heading: 'Price block',
       body: 'Price commentary.',
@@ -33,9 +33,9 @@ describe('buildNewsletterBlock', () => {
       chartExportUrl: 'https://charts.theintraday.com/tos/AMD?view=fundamentals&theme=light',
     })
 
-    expect(priceBlock.html).toContain(`width="600"`)
-    expect(fundamentalsBlock.html).toContain(`width="600"`)
-    expect(priceBlock.html).toContain(`padding:8px 0;text-align:center;`)
-    expect(fundamentalsBlock.html).toContain(`padding:8px 0;text-align:center;`)
+    expect(priceBlock.html).toContain(`width="620"`)
+    expect(fundamentalsBlock.html).toContain(`width="620"`)
+    expect(priceBlock.html).toContain(`padding:8px 20px;text-align:center;`)
+    expect(fundamentalsBlock.html).toContain(`padding:8px 20px;text-align:center;`)
   })
 })

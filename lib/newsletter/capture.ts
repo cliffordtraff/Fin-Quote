@@ -1,30 +1,21 @@
 import { writeFileSync } from 'fs'
-import type { NewsletterChartSpec } from './types'
+import type { NewsletterChartSpec, PriceNewsletterChartSpec } from './types'
+import { isPriceNewsletterChartSpec } from './chart-spec'
 import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
-import {
-  DEFAULT_CHART_RENDER_HEIGHT,
-  DEFAULT_CHART_RENDER_WIDTH,
-  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
-  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './render-dimensions'
+import { getNewsletterChartRenderDimensions } from './render-dimensions'
 
 type Browser = import('puppeteer').Browser
 const DEFAULT_RENDER_ROUTE_PATH = '/tos/api/newsletter/render'
-export {
-  DEFAULT_CHART_RENDER_HEIGHT,
-  DEFAULT_CHART_RENDER_WIDTH,
-  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
-  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-}
+const CHART_EXPORT_RENDER_ROUTE_PATH = '/api/chart-export/render'
 
 export interface CaptureChartOptions {
   /** File path to save the PNG screenshot */
   outputPath: string
   /** Base URL of the Charting Platform app (e.g. 'http://localhost:3001') */
   chartBaseUrl: string
-  /** Viewport width (default: 1200) */
+  /** Override viewport width. Defaults to the canonical width for the spec. */
   width?: number
-  /** Viewport height (default: 675) */
+  /** Override viewport height. Defaults to the canonical height for the spec. */
   height?: number
   /** Max wait time in ms (default: 30000) */
   timeout?: number
@@ -42,6 +33,60 @@ export function getChartingPlatformRenderUrl(chartBaseUrl: string): string {
 }
 
 /**
+ * Endpoint that renders specs produced by the standalone /export-editor
+ * (i.e. price newsletter charts saved with a `chartExportSpec`).
+ */
+export function getChartExportRenderUrl(chartBaseUrl: string): string {
+  const trimmed = chartBaseUrl.trim().replace(/\/+$/, '')
+  if (!trimmed) {
+    throw new Error('chartBaseUrl is required')
+  }
+  return `${trimmed}${CHART_EXPORT_RENDER_ROUTE_PATH}`
+}
+
+async function captureChartFromExportSpec(
+  spec: PriceNewsletterChartSpec,
+  options: CaptureChartOptions,
+): Promise<string> {
+  const chartExportSpec = spec.chartExportSpec
+  if (!chartExportSpec) {
+    throw new Error('captureChartFromExportSpec called without chartExportSpec')
+  }
+  const renderUrl = getChartExportRenderUrl(options.chartBaseUrl)
+  const response = await fetch(renderUrl, {
+    method: 'POST',
+    headers: { Accept: 'image/png', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      spec: chartExportSpec,
+      format: 'png',
+      timeoutMs: options.timeout ?? 30000,
+    }),
+  })
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`.trim()
+    try {
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const payload = (await response.json()) as { error?: string }
+        if (payload && typeof payload.error === 'string' && payload.error.trim()) {
+          detail = payload.error.trim()
+        }
+      } else {
+        const text = (await response.text()).trim()
+        if (text) detail = text
+      }
+    } catch (_err) {}
+    throw new Error(`Chart export render failed: ${detail}`)
+  }
+  const pngBytes = Buffer.from(await response.arrayBuffer())
+  if (pngBytes.length === 0) {
+    throw new Error('Chart export render returned an empty PNG response')
+  }
+  writeFileSync(options.outputPath, pngBytes)
+  return options.outputPath
+}
+
+/**
  * Capture a chart as a PNG by calling the Charting Platform render API.
  *
  * Returns the saved file path.
@@ -50,11 +95,18 @@ export async function captureChart(
   spec: NewsletterChartSpec,
   options: CaptureChartOptions,
 ): Promise<string> {
+  // Price newsletter charts edited in the standalone /export-editor carry a
+  // `chartExportSpec`. Render those through the new /api/chart-export/render
+  // endpoint, which drives /chart-export?spec=... in headless Puppeteer.
+  if (isPriceNewsletterChartSpec(spec) && spec.chartExportSpec) {
+    return captureChartFromExportSpec(spec, options)
+  }
+  const defaultDimensions = getNewsletterChartRenderDimensions(spec)
   const {
     outputPath,
     chartBaseUrl,
-    width = DEFAULT_CHART_RENDER_WIDTH,
-    height = DEFAULT_CHART_RENDER_HEIGHT,
+    width = defaultDimensions.width,
+    height = defaultDimensions.height,
     timeout = 30000,
   } = options
 

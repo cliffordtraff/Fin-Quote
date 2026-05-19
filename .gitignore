@@ -45,7 +45,9 @@ Watchlist/
 /dexter
 
 # Generated newsletter outputs
-public/newsletter-charts/
+.newsletter-output/
 .newsletter-drafts/
+# legacy location — kept ignored so any leftover files don't get committed
+public/newsletter-charts/
 
 # Trigger rebuild

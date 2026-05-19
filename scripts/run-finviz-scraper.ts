@@ -51,9 +51,9 @@ async function run() {
       console.log(`✗ ${symbol}: ${err}`)
     }
 
-    // 2 second delay between requests
+    // 3 second delay between requests
     if (i + 1 < symbols.length) {
-      await new Promise(r => setTimeout(r, 2000))
+      await new Promise(r => setTimeout(r, 3000))
     }
   }
 

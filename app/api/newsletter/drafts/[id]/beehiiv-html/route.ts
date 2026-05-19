@@ -70,15 +70,20 @@ async function resolveImageToPublicUrl(imageUrl: string): Promise<string> {
     return imageUrl
   }
 
-  // Relative path - resolve to local file
-  const relativePath = imageUrl.startsWith('/')
-    ? imageUrl.slice(1)
-    : imageUrl
+  // Relative path like /newsletter-charts/<filename> — resolve to local file
+  // in the new .newsletter-output directory, with a fallback to the legacy
+  // public/newsletter-charts/ location for older drafts.
+  const filename = basename(imageUrl)
+  const newPath = resolve(process.cwd(), '.newsletter-output', filename)
+  const legacyPath = resolve(process.cwd(), 'public/newsletter-charts', filename)
+  const localPath = existsSync(newPath)
+    ? newPath
+    : existsSync(legacyPath)
+      ? legacyPath
+      : null
 
-  const localPath = resolve(process.cwd(), 'public', relativePath)
-
-  if (!existsSync(localPath)) {
-    console.warn(`Image not found locally: ${localPath}`)
+  if (!localPath) {
+    console.warn(`Image not found locally: ${newPath}`)
     return imageUrl // Return as-is, will be broken but at least won't crash
   }
 

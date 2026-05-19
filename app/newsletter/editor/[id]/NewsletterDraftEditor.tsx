@@ -176,6 +176,7 @@ export default function NewsletterDraftEditor({
   const [copiedControlId, setCopiedControlId] = useState<string | null>(null)
   const [copyingBeehiiv, setCopyingBeehiiv] = useState(false)
   const [copiedBeehiiv, setCopiedBeehiiv] = useState(false)
+  const [downloadingHtml, setDownloadingHtml] = useState(false)
   const [chartEditorOpen, setChartEditorOpen] = useState(false)
   const draftRef = useRef<NewsletterDraftDocument | null>(null)
   const [newDraftOpenFormat, setNewDraftOpenFormat] = useState<
@@ -639,6 +640,54 @@ export default function NewsletterDraftEditor({
     }
   }
 
+  async function downloadNewsletterHtml() {
+    try {
+      setDownloadingHtml(true)
+      setError(null)
+      setNotice(null)
+
+      const response = await fetch(`/api/newsletter/drafts/${draftId}/beehiiv-html`, {
+        credentials: 'include',
+      })
+
+      const payload = (await response.json()) as { html?: string; error?: string }
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to get newsletter HTML')
+      }
+
+      if (!payload.html) {
+        throw new Error('No HTML returned')
+      }
+
+      const slugSource =
+        draft?.subjectLine?.trim() || draft?.ticker?.trim() || `newsletter-${draftId}`
+      const safeSlug = slugSource
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || `newsletter-${draftId}`
+      const datePart = new Date().toISOString().slice(0, 10)
+      const filename = `${datePart}-${safeSlug}.html`
+
+      const blob = new Blob([payload.html], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+
+      setNotice(`Downloaded ${filename}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download newsletter HTML')
+    } finally {
+      setDownloadingHtml(false)
+    }
+  }
+
   async function regenerateNewsletter() {
     if (draft?.manualDraft) {
       setError(
@@ -989,6 +1038,16 @@ export default function NewsletterDraftEditor({
             title={dirty ? 'Save draft first to copy latest HTML' : 'Copy HTML for Beehiiv'}
           >
             {copyingBeehiiv ? 'Copying…' : copiedBeehiiv ? 'Copied!' : 'Copy for Beehiiv'}
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadNewsletterHtml}
+            disabled={downloadingHtml || dirty}
+            className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-sage-400 hover:text-sage-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title={dirty ? 'Save draft first to download latest HTML' : 'Download newsletter as HTML file'}
+          >
+            {downloadingHtml ? 'Downloading…' : 'Download'}
           </button>
 
           <button

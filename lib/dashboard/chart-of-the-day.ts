@@ -436,7 +436,7 @@ export function findDashboardChartOfTheDayFallbackImageForSelection(
   selection: DashboardChartOfTheDaySelection,
 ): DashboardChartOfTheDayFallbackImage | null {
   const normalizedSelection = normalizeDashboardChartOfTheDaySelection(selection)
-  const chartDir = resolve(process.cwd(), 'public/newsletter-charts')
+  const chartDir = resolve(process.cwd(), '.newsletter-output')
   const prefix = `${normalizedSelection.ticker}_${normalizedSelection.templateId}_`
 
   try {

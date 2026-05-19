@@ -1,5 +1,10 @@
 import type { NewsletterBlock, NewsletterBlockContent, SlotName } from './types'
 import { getLayoutTemplate } from './layout-templates'
+import {
+  NEWSLETTER_CARD_MAX_WIDTH,
+  NEWSLETTER_CHART_DISPLAY_WIDTH,
+  NEWSLETTER_CHART_SIDE_GUTTER,
+} from './render-dimensions'
 
 // ---------------------------------------------------------------------------
 // Brand colors (from tailwind.config.ts sage/cream tokens)
@@ -16,9 +21,8 @@ const BRAND = {
   white: '#ffffff',
 } as const
 
-const NEWSLETTER_CARD_MAX_WIDTH = 600
 const NEWSLETTER_TEXT_COLUMN_PADDING = 32
-const NEWSLETTER_CHART_WIDTH = NEWSLETTER_CARD_MAX_WIDTH
+const NEWSLETTER_CHART_WIDTH = NEWSLETTER_CHART_DISPLAY_WIDTH
 
 // ---------------------------------------------------------------------------
 // Content → slot mapping
@@ -102,7 +106,7 @@ function renderChart(imageUrl: string, alt: string, chartUrl?: string): string {
   const content = chartUrl
     ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:inline-block;text-decoration:none;">${img}</a>`
     : img
-  return `<tr><td align="center" style="padding:8px 0;text-align:center;">
+  return `<tr><td align="center" style="padding:8px ${NEWSLETTER_CHART_SIDE_GUTTER}px;text-align:center;">
   ${content}
 </td></tr>`
 }

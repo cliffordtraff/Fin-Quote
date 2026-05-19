@@ -41,6 +41,7 @@ export default function Navigation() {
 
   const navLinks: NavLink[] = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/dashboard/premarket', label: 'Pre-Market', match: '/dashboard/premarket' },
     ...(showMostActiveTab
       ? [{ href: '/dashboard/pulse-today', label: 'Most Active', match: '/dashboard/pulse-today' }]
       : []),

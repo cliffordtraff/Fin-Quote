@@ -57,7 +57,6 @@ export async function POST(
       {
         chartBaseUrl: getDefaultChartingBaseUrlForHost(host),
         publicChartBaseUrl: getDefaultPublicChartingBaseUrlForHost(host),
-        editorMode: true,
       },
     )
 

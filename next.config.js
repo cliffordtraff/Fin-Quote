@@ -29,6 +29,29 @@ const nextConfig = {
         source: '/tos/:path*',
         destination: `${chartingProxyBaseUrl}/tos/:path*`,
       },
+      // Newsletter export editor iframe — served standalone by the charting
+      // platform so Fin Quote can host it inside a draft UI.
+      {
+        source: '/export-editor',
+        destination: `${chartingProxyBaseUrl}/export-editor`,
+      },
+      // The editor's preview iframe loads `/chart-export?spec=...` directly,
+      // and headless rendering POSTs to `/api/chart-export/render`. Both must
+      // proxy through to the charting host.
+      {
+        source: '/chart-export',
+        destination: `${chartingProxyBaseUrl}/chart-export`,
+      },
+      {
+        source: '/api/chart-export/:path*',
+        destination: `${chartingProxyBaseUrl}/api/chart-export/:path*`,
+      },
+      // Bundled assets (engine.bundle.js, export-editor.bundle.js, etc.) and
+      // the bars API the chart-export page fetches from.
+      {
+        source: '/embed/:path*',
+        destination: `${chartingProxyBaseUrl}/embed/:path*`,
+      },
     ]
   },
 }

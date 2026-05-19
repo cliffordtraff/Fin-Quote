@@ -5,6 +5,7 @@ import type {
   NewsletterDraftStatsCard,
   TodayQuote,
 } from './types'
+import { NEWSLETTER_CARD_MAX_WIDTH } from './render-dimensions'
 
 // Brand colors (matching build-block.ts)
 const BRAND = {
@@ -16,8 +17,6 @@ const BRAND = {
   textMuted: '#6b7280',
   white: '#ffffff',
 } as const
-
-const NEWSLETTER_CARD_MAX_WIDTH = 600
 
 function escapeHtml(str: string): string {
   return str

@@ -473,6 +473,32 @@ Once you ask it that way, the design becomes much clearer.
 
 ---
 
+## Newsletter Chart Generation: The Boundary Lesson, Again
+
+The newsletter chart pipeline is a perfect example of why "same chart" is not the same as "same contract."
+
+At first glance, we only need one thing: a chart in an email. But the product actually needs three related surfaces:
+
+- a static PNG for email clients
+- a reader click-through chart
+- an editor iframe where we can tweak and save the chart
+
+The early system let those surfaces share loose URL params: `range`, `interval`, `chartType`, `fundState`, `priceState`, `newsletterEditorWidth`, and so on. Fundamentals charts mostly survived because they had a full `fundState` object and the editor force-applied it after the iframe loaded. Price charts were more fragile. They inferred too much from the URL and from whatever the charting workspace already remembered.
+
+That is how we got bugs like:
+
+- a light newsletter editor with a dark chart canvas
+- a one-month price chart with candles crammed into the left side and empty future dates on the right
+- preview PNGs that looked correct while the live editor showed a different viewport
+
+The fix is not another timeout. The fix is to make the chart a **scene**: one explicit object that can be rendered, edited, saved, and linked. Fin Quote should decide the editorial scene. Charting Platform should render and replay that scene. No surface should quietly reconstruct it from half a dozen hints.
+
+The lesson is simple and worth remembering: when two apps collaborate, implicit state is debt. It feels fast until one old localStorage value, one iframe width, or one missing query param changes the product.
+
+Good engineers make the boundary boring.
+
+---
+
 ## What's Next
 
 The branch structure tells you where this is going:
@@ -496,5 +522,5 @@ That's the difference between a demo and a product.
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*
 *201 commits and counting*

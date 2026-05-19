@@ -11,12 +11,6 @@ import {
   captureChart,
   captureFullPage,
 } from './capture'
-import {
-  DEFAULT_CHART_RENDER_HEIGHT,
-  DEFAULT_CHART_RENDER_WIDTH,
-  DEFAULT_EDITOR_CHART_RENDER_HEIGHT,
-  DEFAULT_EDITOR_CHART_RENDER_WIDTH,
-} from './render-dimensions'
 import { getEditorialTemplate } from './editorial-templates'
 import {
   fetchMarketContext,
@@ -48,6 +42,7 @@ import {
 } from './prompts'
 import { ensureStockMentionInCopy } from './copy-normalization'
 import { resolveEditorialChart } from './resolve-chart'
+import { pickFundamentalsYearRange } from './template-scoring'
 import {
   createNewsletterModelClient,
   runNewsletterJsonPrompt,
@@ -67,7 +62,7 @@ import type {
 } from './types'
 
 const DEFAULT_CHART_BASE_URL = getDefaultChartingBaseUrl()
-const DEFAULT_OUTPUT_DIR = './public/newsletter-charts'
+const DEFAULT_OUTPUT_DIR = './.newsletter-output'
 const DEFAULT_MAX_CHARTS = 3
 const DEFAULT_ROUNDUP_SIZE = 4
 
@@ -247,8 +242,8 @@ async function generateSingleStockNewsletter(params: {
   publicChartBaseUrl: string
   absOutputDir: string
   runStamp: string
-  chartRenderWidth: number
-  chartRenderHeight: number
+  chartRenderWidth?: number
+  chartRenderHeight?: number
   timings: Record<string, number>
   generationPrompt?: string
 }): Promise<{
@@ -368,12 +363,22 @@ async function generateSingleStockNewsletter(params: {
   }
   timings.aiTemplateSelection = Date.now() - tSelection
 
-  const resolvedCharts = selections.map((selection) =>
-    resolveEditorialChart(selection.templateId, {
+  const resolvedCharts = selections.map((selection) => {
+    const template = getEditorialTemplate(selection.templateId)
+    const yearOverride =
+      template && template.mode !== 'price'
+        ? pickFundamentalsYearRange(
+            template,
+            context,
+            selection.periodType ?? template.defaultPeriodType,
+          )
+        : null
+    return resolveEditorialChart(selection.templateId, {
       ticker: tickerUpper,
       periodType: selection.periodType,
-    }),
-  )
+      ...(yearOverride ? { yearOverride } : {}),
+    })
+  })
 
   const tCapture = Date.now()
   const chartPaths = await Promise.all(
@@ -466,8 +471,8 @@ async function generateMarketRoundupNewsletter(params: {
   publicChartBaseUrl: string
   absOutputDir: string
   runStamp: string
-  chartRenderWidth: number
-  chartRenderHeight: number
+  chartRenderWidth?: number
+  chartRenderHeight?: number
   timings: Record<string, number>
   generationPrompt?: string
 }): Promise<{
@@ -576,9 +581,19 @@ async function generateMarketRoundupNewsletter(params: {
         throw new Error(`AI selected no valid template for ${stock.ticker}`)
       }
 
+      const roundupTemplate = getEditorialTemplate(selection.templateId)
+      const roundupYearOverride =
+        roundupTemplate && roundupTemplate.mode !== 'price'
+          ? pickFundamentalsYearRange(
+              roundupTemplate,
+              context,
+              selection.periodType ?? roundupTemplate.defaultPeriodType,
+            )
+          : null
       const resolved = resolveEditorialChart(selection.templateId, {
         ticker: stock.ticker,
         periodType: selection.periodType,
+        ...(roundupYearOverride ? { yearOverride: roundupYearOverride } : {}),
       })
 
       return {
@@ -682,12 +697,8 @@ export async function generateNewsletter(
   const publish = options?.publish ?? false
   const editorMode = options?.editorMode === true
   const skipPreviewCapture = options?.skipPreviewCapture ?? editorMode
-  const chartRenderWidth =
-    options?.chartRenderWidth ??
-    (editorMode ? DEFAULT_EDITOR_CHART_RENDER_WIDTH : DEFAULT_CHART_RENDER_WIDTH)
-  const chartRenderHeight =
-    options?.chartRenderHeight ??
-    (editorMode ? DEFAULT_EDITOR_CHART_RENDER_HEIGHT : DEFAULT_CHART_RENDER_HEIGHT)
+  const chartRenderWidth = options?.chartRenderWidth
+  const chartRenderHeight = options?.chartRenderHeight
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ??
     (publish ? getDefaultPublicChartingBaseUrl() : chartBaseUrl)

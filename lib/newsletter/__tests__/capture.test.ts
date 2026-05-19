@@ -56,8 +56,8 @@ describe('newsletter capture', () => {
     expect(body.timeoutMs).toBe(30000)
     expect(body.spec.mode).toBe('fundamentals')
     expect(body.spec.ticker).toBe('AAPL')
-    expect(body.spec.width).toBe(1200)
-    expect(body.spec.height).toBe(675)
+    expect(body.spec.width).toBe(620)
+    expect(body.spec.height).toBe(440)
     expect(body.spec.fundState.visibleMetrics).toEqual(['revenue', 'netIncome'])
 
     expect(writeFileSync).toHaveBeenCalledWith(outputPath, expect.any(Buffer))
