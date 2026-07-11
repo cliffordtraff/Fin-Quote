@@ -59,6 +59,9 @@ Primary related references:
 | 2026-02-03 | `20260203000002_create_market_movers_cache.sql` | Add market-movers cache table |
 | 2026-03-08 | `20260308000001_create_charting_docs_table.sql` | Add `docs` table for charting workspace persistence/cloud sync |
 | 2026-03-25 | `20260325000001_create_stock_why_moving_cache.sql` | Add cache table for stock “why moving” summaries |
+| 2026-05-20 | `20260520200500_create_wiim_runs.sql` | Add WIIM morning brief run + candidate tables |
+| 2026-06-01 | `20260601110000_create_generated_wiim_summaries.sql` | Add generated WIIM summary batch tables |
+| 2026-06-10 | `20260610184500_wiim_data_api_grants.sql` | Explicit Data API grants for WIIM tables |
 
 ## Major Schema Areas
 
@@ -91,6 +94,7 @@ Primary related references:
 - market summary and movers caches
 - charting workspace persistence docs
 - stock “why moving” cache
+- WIIM morning brief runs and generated summary batches
 
 ## Creating New Migrations
 

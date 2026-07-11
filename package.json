@@ -22,7 +22,12 @@
     "generate:catalog": "npx tsx scripts/generate-metrics-catalog.ts",
     "refresh:stocks": "npx tsx scripts/us-stocks/refresh-registry.ts",
     "stocks:status": "npx tsx scripts/us-stocks/check-status.ts",
-    "ingest:segments": "npx tsx scripts/ingest-segment-data-all.ts"
+    "ingest:segments": "npx tsx scripts/ingest-segment-data-all.ts",
+    "wiim:warm": "npx tsx scripts/warm-wiim-cache.ts",
+    "wiim:brief": "npx tsx scripts/run-wiim-brief.ts",
+    "wiim:generate-daily": "npx tsx scripts/generate-daily-wiim-summaries.ts",
+    "wiim:summarize-warm": "npx tsx scripts/summarize-wiim-warm-run.ts",
+    "wiim:summarize-debug": "npx tsx scripts/summarize-finviz-debug.ts"
   },
   "dependencies": {
     "@openai/agents": "^0.4.3",

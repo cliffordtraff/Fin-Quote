@@ -238,6 +238,41 @@ The LLM helps too—the tool selection prompt includes extensive mapping instruc
 
 **Lesson:** Build for how users actually talk, not how your database is structured. Then keep expanding your dictionary.
 
+### 5. Automation Success Is Not the Same as Work Success
+
+This repo has a good example of a subtle operations bug: the **WIIM morning automation looked "failed" for several days even though most of the real work had actually happened**.
+
+What was going on?
+
+- The warm step ran.
+- The daily WIIM generation ran.
+- The morning brief row was often written.
+- But some symbols timed out, or one malformed model JSON response blew up a ticker.
+
+That created a nasty gray zone: the run was not *totally* broken, but it also was not truly complete. Some days we got `499/503` or `498/503` rows in `stock_summaries`. From a human point of view, that is "mostly worked." From an automation point of view, it should be "not done yet."
+
+We fixed this by tightening the contract in `scripts/generate-daily-wiim-summaries.ts`:
+
+- it now **verifies what actually landed in Supabase**
+- it automatically **retries only the missing symbols**
+- it uses a **slower, more patient retry pass** for the stragglers
+- and if rows are still missing after recovery, the command exits non-zero on purpose
+
+We also hardened `lib/generated-stock-why-moving.ts` so slightly malformed model JSON is repaired instead of immediately killing the symbol. That was important because one bad escape sequence should not cost us a whole daily run.
+
+The engineering lesson is simple and worth remembering:
+
+**A background job is not successful because the process finished. It is successful because the state you expected now exists.**
+
+That sounds obvious, but teams forget it all the time. Good engineers verify outputs, not just execution. In practical terms, that means checking:
+
+- did the rows get written?
+- did we get all expected symbols?
+- which exact symbols are missing?
+- was the failure transient enough to recover automatically?
+
+That shift in mindset is what turns "cron-ish scripts" into reliable production workflows.
+
 ### 5. The Quarterly Data Rabbit Hole
 
 Annual data is easy. Quarterly data is a nightmare.

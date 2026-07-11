@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getProvider } from '@/lib/providers'
+import { filterToSP500, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
 import type {
   NewsletterContext,
   NewsletterFinancialPoint,
@@ -315,55 +316,6 @@ export async function fetchNewsletterContext(
 }
 
 // ---------------------------------------------------------------------------
-// S&P 500 constituent symbols (for filtering most-active list)
-// ---------------------------------------------------------------------------
-
-const SP500_SYMBOLS = new Set([
-  'AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'GOOG', 'BRK.B', 'TSLA', 'UNH',
-  'XOM', 'JNJ', 'JPM', 'V', 'PG', 'MA', 'HD', 'CVX', 'MRK', 'ABBV',
-  'LLY', 'PEP', 'KO', 'COST', 'AVGO', 'WMT', 'MCD', 'CSCO', 'TMO', 'ACN',
-  'ABT', 'DHR', 'NEE', 'LIN', 'ADBE', 'WFC', 'NKE', 'PM', 'TXN', 'CRM',
-  'VZ', 'RTX', 'CMCSA', 'BMY', 'HON', 'ORCL', 'QCOM', 'COP', 'T', 'UPS',
-  'MS', 'LOW', 'UNP', 'INTC', 'ELV', 'SPGI', 'IBM', 'CAT', 'PLD', 'BA',
-  'AMD', 'GE', 'INTU', 'AMAT', 'DE', 'AMGN', 'GS', 'SBUX', 'ISRG', 'MDT',
-  'AXP', 'BKNG', 'BLK', 'GILD', 'ADI', 'SYK', 'MDLZ', 'TJX', 'CVS', 'ADP',
-  'REGN', 'LMT', 'CI', 'VRTX', 'PGR', 'MMC', 'SCHW', 'CB', 'ETN', 'ZTS',
-  'MO', 'SO', 'DUK', 'BSX', 'BDX', 'TMUS', 'FI', 'CME', 'EOG', 'SLB',
-  'NOC', 'PNC', 'MU', 'CL', 'ITW', 'AON', 'LRCX', 'CSX', 'EQIX', 'ICE',
-  'WM', 'SHW', 'SNPS', 'CDNS', 'HUM', 'MCK', 'FCX', 'APD', 'KLAC', 'ORLY',
-  'NSC', 'GD', 'EMR', 'MCO', 'PXD', 'PSA', 'NXPI', 'USB', 'MAR', 'ROP',
-  'MNST', 'MSI', 'CTAS', 'AJG', 'ADSK', 'GM', 'F', 'AZO', 'HCA', 'PCAR',
-  'OXY', 'TGT', 'MCHP', 'MSCI', 'TEL', 'TT', 'PAYX', 'AEP', 'KMB', 'TDG',
-  'ANET', 'MET', 'SRE', 'PSX', 'CCI', 'D', 'O', 'KDP', 'APH', 'ECL',
-  'PH', 'WELL', 'CMG', 'AIG', 'CARR', 'AFL', 'STZ', 'IDXX', 'COF', 'HLT',
-  'DVN', 'DXCM', 'FTNT', 'ODFL', 'NEM', 'TRV', 'SPG', 'ALL', 'ROST', 'GWW',
-  'WMB', 'BK', 'KMI', 'IQV', 'PRU', 'HSY', 'DLR', 'CTVA', 'YUM', 'A',
-  'AME', 'KEYS', 'EXC', 'FAST', 'ON', 'EW', 'CPRT', 'DOW', 'DD', 'XEL',
-  'PCG', 'VRSK', 'PPG', 'ED', 'EA', 'AWK', 'HPQ', 'ROK', 'KR', 'GIS',
-  'VICI', 'CSGP', 'EXR', 'DHI', 'OKE', 'WEC', 'MLM', 'LEN', 'VMC', 'CTSH',
-  'HAL', 'BIIB', 'BKR', 'ANSS', 'CDW', 'GLW', 'EBAY', 'RMD', 'CBRE', 'MTD',
-  'ACGL', 'FTV', 'ZBH', 'HES', 'FANG', 'DAL', 'DLTR', 'DFS', 'TSCO', 'WTW',
-  'HPE', 'EFX', 'ALGN', 'LH', 'AVB', 'GPN', 'TROW', 'WY', 'CAH', 'EIX',
-  'STT', 'FE', 'ENPH', 'LYB', 'ES', 'MTB', 'WAB', 'HOLX', 'ILMN', 'RJF',
-  'IR', 'DTE', 'ETR', 'DOV', 'FITB', 'NTRS', 'VTR', 'ARE', 'IFF', 'PPL',
-  'CHD', 'BAX', 'CINF', 'SBAC', 'CLX', 'EXPD', 'PTC', 'TSN', 'AEE', 'LUV',
-  'TDY', 'PKI', 'MKC', 'DRI', 'STLD', 'K', 'STE', 'RF', 'ESS', 'NVR',
-  'HBAN', 'EQR', 'NDAQ', 'GRMN', 'COO', 'WAT', 'CNP', 'TRGP', 'ATO', 'MAA',
-  'J', 'CFG', 'AMCR', 'JBHT', 'IP', 'FMC', 'SWK', 'WRB', 'SYY', 'EXPE',
-  'SEDG', 'CE', 'LKQ', 'TXT', 'BBY', 'FDS', 'CMS', 'AES', 'KEY', 'NTAP',
-  'URI', 'BALL', 'MOH', 'BR', 'DGX', 'SNA', 'IEX', 'L', 'TECH', 'OMC',
-  'MAS', 'CF', 'POOL', 'AKAM', 'BRO', 'TER', 'LNT', 'CAG', 'GPC', 'AVY',
-  'NI', 'UDR', 'SWKS', 'EVRG', 'VTRS', 'HST', 'KIM', 'WDC', 'CHRW', 'MGM',
-  'HRL', 'PEAK', 'CPB', 'TPR', 'TFC', 'NRG', 'LDOS', 'GL', 'PNR', 'BXP',
-  'JKHY', 'RCL', 'AAP', 'CZR', 'WYNN', 'PNW', 'NWS', 'NWSA', 'ROL', 'REG',
-  'BEN', 'MOS', 'PHM', 'HSIC', 'FFIV', 'AAL', 'CCL', 'CPT', 'CRL', 'BWA',
-  'CTLT', 'AIZ', 'WHR', 'DISH', 'IVZ', 'XRAY', 'SEE', 'ALK', 'NCLH', 'HII',
-  'FRT', 'MKTX', 'EMN', 'PFG', 'APA', 'ALLE', 'HAS', 'TAP', 'QRVO', 'LW',
-  'BBWI', 'DXC', 'ZION', 'WBA', 'VFC', 'PARA', 'LUMN', 'DVA', 'PAYC', 'CMA',
-  'GNRC', 'BIO', 'INCY', 'UHS', 'ETSY', 'FOXA', 'FOX', 'NWL', 'MTCH', 'RL',
-])
-
-// ---------------------------------------------------------------------------
 // Earnings calendar fetcher
 // ---------------------------------------------------------------------------
 
@@ -394,13 +346,14 @@ export async function fetchEarningsContext(): Promise<EarningsCandidate[]> {
     if (!Array.isArray(data)) return []
 
     return data
-      .filter((e: any) => SP500_SYMBOLS.has(e.symbol))
+      .filter((e: any) => isSP500(e.symbol))
       .map((e: any) => {
         const reportDate = new Date(e.date)
         const hoursAgo = (now.getTime() - reportDate.getTime()) / (1000 * 60 * 60)
+        const symbol = normalizeSP500Symbol(e.symbol) ?? String(e.symbol).toUpperCase()
 
         return {
-          symbol: e.symbol,
+          symbol,
           date: e.date,
           time: e.time || 'unknown',
           eps: e.eps ?? null,
@@ -437,11 +390,11 @@ export async function fetchGainersLosers(): Promise<StockCandidate[]> {
 
     const all = [...(Array.isArray(gainersData) ? gainersData : []), ...(Array.isArray(losersData) ? losersData : [])]
 
-    return all
-      .filter((s: any) => SP500_SYMBOLS.has(s.symbol) && s.price > 0)
+    return filterToSP500(all)
+      .filter((s: any) => s.price > 0)
       .sort((a: any, b: any) => Math.abs(b.changesPercentage) - Math.abs(a.changesPercentage))
       .map((s: any) => ({
-        symbol: s.symbol,
+        symbol: normalizeSP500Symbol(s.symbol) ?? s.symbol,
         name: s.name,
         price: s.price,
         change: s.change,
@@ -540,8 +493,8 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   }
 
   // Filter actives to S&P 500 — start with top 10
-  const sp500Actives = activesData.filter(
-    (s: any) => SP500_SYMBOLS.has(s.symbol) && s.price > 0,
+  const sp500Actives = filterToSP500(activesData).filter(
+    (s: any) => s.price > 0,
   )
   let initialSlice = 10
 
@@ -557,8 +510,9 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   const candidateMap = new Map<string, StockCandidate>()
 
   for (const s of sp500Actives.slice(0, initialSlice)) {
-    candidateMap.set(s.symbol, {
-      symbol: s.symbol,
+    const symbol = normalizeSP500Symbol(s.symbol) ?? s.symbol
+    candidateMap.set(symbol, {
+      symbol,
       name: s.name,
       price: s.price,
       change: s.change,
@@ -567,8 +521,9 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   }
 
   for (const gl of gainersLosers) {
-    if (!candidateMap.has(gl.symbol)) {
-      candidateMap.set(gl.symbol, gl)
+    const symbol = normalizeSP500Symbol(gl.symbol) ?? gl.symbol
+    if (!candidateMap.has(symbol)) {
+      candidateMap.set(symbol, { ...gl, symbol })
     }
   }
 
@@ -587,10 +542,11 @@ export async function fetchMarketContext(): Promise<MarketContext> {
         const quoteData = await quoteRes.json()
         if (Array.isArray(quoteData)) {
           for (const q of quoteData) {
-            if (q.symbol && q.price > 0) {
-              candidateMap.set(q.symbol, {
-                symbol: q.symbol,
-                name: q.name || q.symbol,
+            const symbol = normalizeSP500Symbol(q.symbol)
+            if (symbol && isSP500(symbol) && q.price > 0) {
+              candidateMap.set(symbol, {
+                symbol,
+                name: q.name || symbol,
                 price: q.price,
                 change: q.change ?? 0,
                 changesPercentage: q.changesPercentage ?? 0,
@@ -625,8 +581,8 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   const newsBySymbol: Record<string, StockNewsItem[]> = {}
   if (Array.isArray(newsData)) {
     for (const item of newsData) {
-      const sym = item.symbol
-      if (!sym) continue
+      const sym = normalizeSP500Symbol(item.symbol)
+      if (!sym || !candidateMap.has(sym)) continue
       if (!newsBySymbol[sym]) newsBySymbol[sym] = []
       if (newsBySymbol[sym].length >= 5) continue
       newsBySymbol[sym].push({

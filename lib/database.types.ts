@@ -1144,6 +1144,137 @@ export interface Database {
         }
         Relationships: []
       }
+      wiim_run_candidates: {
+        Row: {
+          id: string
+          wiim_run_id: string
+          rank: number
+          ticker: string | null
+          theme: string | null
+          headline: string
+          why_it_matters: string
+          confidence_score: number
+          candidate_type: string
+          state_label: string | null
+          signals_json: Json
+          source_refs_json: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          wiim_run_id: string
+          rank: number
+          ticker?: string | null
+          theme?: string | null
+          headline: string
+          why_it_matters: string
+          confidence_score: number
+          candidate_type: string
+          state_label?: string | null
+          signals_json?: Json
+          source_refs_json?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          wiim_run_id?: string
+          rank?: number
+          ticker?: string | null
+          theme?: string | null
+          headline?: string
+          why_it_matters?: string
+          confidence_score?: number
+          candidate_type?: string
+          state_label?: string | null
+          signals_json?: Json
+          source_refs_json?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'wiim_run_candidates_wiim_run_id_fkey'
+            columns: ['wiim_run_id']
+            isOneToOne: false
+            referencedRelation: 'wiim_runs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      wiim_runs: {
+        Row: {
+          id: string
+          run_type: string
+          status: string
+          started_at: string
+          completed_at: string | null
+          summary_text: string | null
+          top_candidate: string | null
+          best_contrarian_candidate: string | null
+          top_five_json: Json | null
+          metadata_json: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          run_type: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          summary_text?: string | null
+          top_candidate?: string | null
+          best_contrarian_candidate?: string | null
+          top_five_json?: Json | null
+          metadata_json?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          run_type?: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          summary_text?: string | null
+          top_candidate?: string | null
+          best_contrarian_candidate?: string | null
+          top_five_json?: Json | null
+          metadata_json?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wiim_summary_runs: {
+        Row: {
+          run_id: string
+          run_date: string
+          ticker_count: number
+          tickers: string[]
+          model: string | null
+          config_version: string | null
+          created_at: string
+        }
+        Insert: {
+          run_id: string
+          run_date: string
+          ticker_count?: number
+          tickers?: string[]
+          model?: string | null
+          config_version?: string | null
+          created_at?: string
+        }
+        Update: {
+          run_id?: string
+          run_date?: string
+          ticker_count?: number
+          tickers?: string[]
+          model?: string | null
+          config_version?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {}
     Functions: {

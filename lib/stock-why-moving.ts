@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
 import type { Database, Json } from '@/lib/database.types'
 
 type CacheRow = Database['public']['Tables']['stock_why_moving_cache']['Row']
@@ -42,6 +44,12 @@ interface StockWhyMovingRecord extends StockWhyMovingResult {
 const FOUND_TTL_MS = 30 * 60 * 1000
 const NOT_FOUND_TTL_MS = 10 * 60 * 1000
 const ERROR_TTL_MS = 5 * 60 * 1000
+
+export const WHY_MOVING_CACHE_TTL = {
+  foundMs: FOUND_TTL_MS,
+  notFoundMs: NOT_FOUND_TTL_MS,
+  errorMs: ERROR_TTL_MS,
+} as const
 const WHY_MOVING_SCRIPT_RE =
   /<script id="why-stock-moving-init-data-\d+" type="application\/json">([\s\S]*?)<\/script>/i
 const memoryCache = new Map<string, StockWhyMovingRecord>()
@@ -55,8 +63,13 @@ function createSupabaseClient(key?: string) {
   return createClient<Database>(url, key)
 }
 
-const supabasePublic = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-const supabaseAdmin = createSupabaseClient(process.env.SUPABASE_SERVICE_ROLE_KEY)
+function getSupabasePublic() {
+  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+}
+
+function getSupabaseAdmin() {
+  return createSupabaseClient(process.env.SUPABASE_SERVICE_ROLE_KEY)
+}
 
 function normalizeSymbol(symbol: string): string {
   return symbol.trim().toUpperCase()
@@ -84,11 +97,62 @@ function normalizeBulletPoints(value: unknown): string[] {
 }
 
 function isLikelyFinvizQuotePage(html: string): boolean {
-  return (
-    html.includes('quote.ashx') &&
-    html.includes('featureFlags') &&
-    html.includes('"stockswhymoving":true')
-  )
+  const hasQuoteTitle = html.includes('Stock Price and Quote')
+  const hasFinvizBranding = html.includes('Stock screener for investors and traders') || html.includes('finviz.com')
+  const hasWhyMovingFeature = html.includes('"stockswhymoving":true') || html.includes('stockswhymoving":true')
+  const hasFeatureFlags = html.includes('featureFlags')
+
+  return hasQuoteTitle && (hasFinvizBranding || hasWhyMovingFeature || hasFeatureFlags)
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function htmlFingerprint(html: string): string {
+  return createHash('sha1').update(html).digest('hex').slice(0, 12)
+}
+
+async function writeDebugParseFailure(input: {
+  symbol: string
+  html: string
+  attempt: number
+  sourceUrl: string
+  reason: string
+}) {
+  const debugDir = process.env.FINVIZ_DEBUG_DIR
+  if (!debugDir) return
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const fingerprint = htmlFingerprint(input.html)
+  const base = `${timestamp}_${input.symbol}_a${input.attempt + 1}_${fingerprint}`
+
+  await mkdir(debugDir, { recursive: true })
+
+  const meta = {
+    symbol: input.symbol,
+    reason: input.reason,
+    attempt: input.attempt + 1,
+    sourceUrl: input.sourceUrl,
+    htmlLength: input.html.length,
+    fingerprint,
+    createdAt: new Date().toISOString(),
+    markers: {
+      hasWhyMovingScript: WHY_MOVING_SCRIPT_RE.test(input.html),
+      hasQuoteTitle: input.html.includes('Stock Price and Quote'),
+      hasFeatureFlags: input.html.includes('featureFlags'),
+      hasWhyMovingFeature: input.html.includes('stockswhymoving'),
+      hasCloudflare: input.html.includes('Cloudflare'),
+      hasJustAMoment: input.html.includes('Just a moment'),
+      hasAccessDenied: input.html.includes('Access denied'),
+      hasEnableJavaScript: input.html.includes('enable JavaScript'),
+    },
+  }
+
+  await Promise.all([
+    writeFile(`${debugDir}/${base}.json`, JSON.stringify(meta, null, 2)),
+    writeFile(`${debugDir}/${base}.html`, input.html),
+  ])
 }
 
 function isMissingCacheTableError(error: { message?: string; code?: string } | null | undefined): boolean {
@@ -196,6 +260,42 @@ function isFreshRecord(record: StockWhyMovingRecord): boolean {
   return Date.now() - fetchedAtMs < cacheTtlMs(record.status)
 }
 
+export function isFreshWhyMovingResult(
+  result: Pick<StockWhyMovingResult, 'status' | 'fetchedAt'>,
+  now = Date.now(),
+): boolean {
+  const fetchedAtMs = new Date(result.fetchedAt).getTime()
+  if (!Number.isFinite(fetchedAtMs)) {
+    return false
+  }
+  return now - fetchedAtMs < cacheTtlMs(result.status)
+}
+
+export async function peekStockWhyMovingCache(symbol: string): Promise<{
+  freshness: 'fresh' | 'stale' | 'missing'
+  result: StockWhyMovingResult | null
+}> {
+  const normalized = normalizeSymbol(symbol)
+  const inMemoryCached = readInMemoryWhyMoving(normalized)
+  if (inMemoryCached) {
+    const result = stripRawPayload(inMemoryCached)
+    return {
+      freshness: isFreshRecord(inMemoryCached) ? 'fresh' : 'stale',
+      result,
+    }
+  }
+
+  const cached = await readCachedWhyMoving(normalized)
+  if (!cached) {
+    return { freshness: 'missing', result: null }
+  }
+
+  return {
+    freshness: isFreshRecord(cached) ? 'fresh' : 'stale',
+    result: stripRawPayload(cached),
+  }
+}
+
 function readInMemoryWhyMoving(symbol: string): StockWhyMovingRecord | null {
   return memoryCache.get(symbol) ?? null
 }
@@ -224,6 +324,7 @@ function writeInMemoryWhyMoving(record: StockWhyMovingRecord): void {
 }
 
 async function readCachedWhyMoving(symbol: string): Promise<StockWhyMovingRecord | null> {
+  const supabasePublic = getSupabasePublic()
   if (!supabasePublic) {
     return null
   }
@@ -253,6 +354,7 @@ async function readCachedWhyMoving(symbol: string): Promise<StockWhyMovingRecord
 }
 
 async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin()
   if (!supabaseAdmin) {
     console.log('[stock-why-moving] Skipping cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
     return
@@ -277,46 +379,30 @@ async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void>
 async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecord> {
   const normalized = normalizeSymbol(symbol)
   const sourceUrl = buildFinvizQuoteUrl(normalized)
-  const fetchedAt = new Date().toISOString()
 
-  try {
-    const response = await fetch(sourceUrl, {
-      cache: 'no-store',
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      signal: AbortSignal.timeout(10_000),
-    })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const fetchedAt = new Date().toISOString()
 
-    if (!response.ok) {
-      return {
-        symbol: normalized,
-        status: 'error',
-        displayText: null,
-        headline: null,
-        summary: null,
-        bulletPoints: [],
-        sentiment: null,
-        source: null,
-        sourceTimestamp: null,
-        isCatalyst: null,
-        sourceUrl,
-        fetchedAt,
-        errorMessage: `Finviz returned ${response.status}`,
-        rawPayload: null,
-      }
-    }
+    try {
+      const response = await fetch(sourceUrl, {
+        cache: 'no-store',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(10_000),
+      })
 
-    const html = await response.text()
-    const parsed = parseFinvizWhyMovingHtml(html)
+      if (!response.ok) {
+        if (attempt < 2) {
+          await sleep(250 * (attempt + 1))
+          continue
+        }
 
-    if (!parsed) {
-      if (isLikelyFinvizQuotePage(html)) {
         return {
           symbol: normalized,
-          status: 'not_found',
+          status: 'error',
           displayText: null,
           headline: null,
           summary: null,
@@ -327,9 +413,89 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
           isCatalyst: null,
           sourceUrl,
           fetchedAt,
-          errorMessage: null,
+          errorMessage: `Finviz returned ${response.status}`,
           rawPayload: null,
         }
+      }
+
+      const html = await response.text()
+      const parsed = parseFinvizWhyMovingHtml(html)
+
+      if (!parsed) {
+        if (isLikelyFinvizQuotePage(html)) {
+          return {
+            symbol: normalized,
+            status: 'not_found',
+            displayText: null,
+            headline: null,
+            summary: null,
+            bulletPoints: [],
+            sentiment: null,
+            source: null,
+            sourceTimestamp: null,
+            isCatalyst: null,
+            sourceUrl,
+            fetchedAt,
+            errorMessage: null,
+            rawPayload: null,
+          }
+        }
+
+        if (attempt < 2) {
+          await sleep(250 * (attempt + 1))
+          continue
+        }
+
+        await writeDebugParseFailure({
+          symbol: normalized,
+          html,
+          attempt,
+          sourceUrl,
+          reason: 'parse_failure_after_retries',
+        })
+
+        return {
+          symbol: normalized,
+          status: 'error',
+          displayText: null,
+          headline: null,
+          summary: null,
+          bulletPoints: [],
+          sentiment: null,
+          source: null,
+          sourceTimestamp: null,
+          isCatalyst: null,
+          sourceUrl,
+          fetchedAt,
+          errorMessage: 'Could not parse Finviz quote page',
+          rawPayload: null,
+        }
+      }
+
+      const bulletPoints = normalizeBulletPoints(parsed.bulletPointsList)
+      const headline = normalizeText(parsed.headline)
+      const summary = normalizeText(parsed.summary)
+
+      return {
+        symbol: normalized,
+        status: 'found',
+        displayText: buildWhyMovingDisplayText({ headline, summary, bulletPoints }),
+        headline,
+        summary,
+        bulletPoints,
+        sentiment: normalizeText(parsed.sentiment),
+        source: normalizeText(parsed.source),
+        sourceTimestamp: normalizeText(parsed.dateTime),
+        isCatalyst: typeof parsed.catalyst === 'boolean' ? parsed.catalyst : null,
+        sourceUrl,
+        fetchedAt,
+        errorMessage: null,
+        rawPayload: parsed as Json,
+      }
+    } catch (error) {
+      if (attempt < 2) {
+        await sleep(250 * (attempt + 1))
+        continue
       }
 
       return {
@@ -345,48 +511,27 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
         isCatalyst: null,
         sourceUrl,
         fetchedAt,
-        errorMessage: 'Could not parse Finviz quote page',
+        errorMessage: error instanceof Error ? error.message : 'Unknown fetch error',
         rawPayload: null,
       }
     }
+  }
 
-    const bulletPoints = normalizeBulletPoints(parsed.bulletPointsList)
-    const headline = normalizeText(parsed.headline)
-    const summary = normalizeText(parsed.summary)
-
-    return {
-      symbol: normalized,
-      status: 'found',
-      displayText: buildWhyMovingDisplayText({ headline, summary, bulletPoints }),
-      headline,
-      summary,
-      bulletPoints,
-      sentiment: normalizeText(parsed.sentiment),
-      source: normalizeText(parsed.source),
-      sourceTimestamp: normalizeText(parsed.dateTime),
-      isCatalyst: typeof parsed.catalyst === 'boolean' ? parsed.catalyst : null,
-      sourceUrl,
-      fetchedAt,
-      errorMessage: null,
-      rawPayload: parsed as Json,
-    }
-  } catch (error) {
-    return {
-      symbol: normalized,
-      status: 'error',
-      displayText: null,
-      headline: null,
-      summary: null,
-      bulletPoints: [],
-      sentiment: null,
-      source: null,
-      sourceTimestamp: null,
-      isCatalyst: null,
-      sourceUrl,
-      fetchedAt,
-      errorMessage: error instanceof Error ? error.message : 'Unknown fetch error',
-      rawPayload: null,
-    }
+  return {
+    symbol: normalized,
+    status: 'error',
+    displayText: null,
+    headline: null,
+    summary: null,
+    bulletPoints: [],
+    sentiment: null,
+    source: null,
+    sourceTimestamp: null,
+    isCatalyst: null,
+    sourceUrl,
+    fetchedAt: new Date().toISOString(),
+    errorMessage: 'Unexpected retry exhaustion',
+    rawPayload: null,
   }
 }
 

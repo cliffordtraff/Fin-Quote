@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWhyMovingDisplayText,
+  isFreshWhyMovingResult,
   parseFinvizWhyMovingHtml,
+  WHY_MOVING_CACHE_TTL,
 } from '@/lib/stock-why-moving'
 
 describe('stock-why-moving parser', () => {
@@ -26,6 +28,23 @@ describe('stock-why-moving parser', () => {
 
   it('returns null when the why-moving script is absent', () => {
     const parsed = parseFinvizWhyMovingHtml('<html><body><div>No why moving payload</div></body></html>')
+    expect(parsed).toBeNull()
+  })
+
+  it('returns null for a normal Finviz quote page without why-moving payload', () => {
+    const html = `
+      <html>
+        <head><title>AAPL - Apple Inc Stock Price and Quote</title></head>
+        <body>
+          <script>
+            const featureFlags = {"stockswhymoving":true};
+          </script>
+          <div>No catalyst payload present</div>
+        </body>
+      </html>
+    `
+
+    const parsed = parseFinvizWhyMovingHtml(html)
     expect(parsed).toBeNull()
   })
 })
@@ -57,5 +76,25 @@ describe('buildWhyMovingDisplayText', () => {
         bulletPoints: ['A supplier deal was announced this morning.'],
       })
     ).toBe('A supplier deal was announced this morning.')
+  })
+})
+
+describe('isFreshWhyMovingResult', () => {
+  it('treats found rows as fresh inside the found TTL window', () => {
+    const now = Date.parse('2026-06-01T12:00:00.000Z')
+    const fetchedAt = new Date(now - WHY_MOVING_CACHE_TTL.foundMs + 60_000).toISOString()
+
+    expect(
+      isFreshWhyMovingResult({ status: 'found', fetchedAt }, now),
+    ).toBe(true)
+  })
+
+  it('treats stale error rows as expired so they can be retried sooner', () => {
+    const now = Date.parse('2026-06-01T12:00:00.000Z')
+    const fetchedAt = new Date(now - WHY_MOVING_CACHE_TTL.errorMs - 1_000).toISOString()
+
+    expect(
+      isFreshWhyMovingResult({ status: 'error', fetchedAt }, now),
+    ).toBe(false)
   })
 })

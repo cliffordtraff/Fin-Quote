@@ -1,10 +1,10 @@
 'use server'
 
-import { getStockWhyMovingData } from '@/lib/stock-why-moving'
+import { getStockWhyMovingDisplayData } from '@/lib/stock-why-moving-display'
 
 export async function getStockWhyMoving(
   symbol: string,
-  options?: { forceRefresh?: boolean }
+  options?: { forceRefresh?: boolean; preferGenerated?: boolean }
 ) {
-  return getStockWhyMovingData(symbol, options)
+  return getStockWhyMovingDisplayData(symbol, options)
 }
