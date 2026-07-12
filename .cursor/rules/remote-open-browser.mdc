@@ -1,0 +1,30 @@
+---
+description: How to open URLs/files in the user's local browser when the agent runs over Remote SSH
+alwaysApply: true
+---
+
+# Opening the browser over Remote SSH
+
+This workspace is edited via Cursor Remote SSH: the agent's shell runs on a
+remote Mac, but the user's browser lives on their local machine. Standard
+commands like `open`, `osascript`, or `xdg-open` run on the *remote* host and
+will NOT reach the local browser (the agent's shell is usually a background
+launchd session with no GUI/TCC access).
+
+## Do this
+Use Cursor's `$BROWSER` helper, which routes the URL through Cursor's IPC back
+to the local client and opens it in the user's real browser:
+
+```bash
+"$BROWSER" http://localhost:3000
+```
+
+- Works for `http(s)://` URLs and local file paths.
+- If `$BROWSER` is empty, tell the user rather than falling back to `open`.
+
+## Do NOT do this (these open on the remote host, not the user's machine)
+```bash
+open http://localhost:3000        # ❌ remote
+osascript -e 'tell app "Google Chrome"...'   # ❌ remote, blocked by TCC
+xdg-open http://localhost:3000    # ❌ remote
+```
