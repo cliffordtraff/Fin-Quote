@@ -337,7 +337,7 @@ The problem is now probably a mix of:
 
 The important change in understanding is:
 
-> This no longer looks like "Finviz is simply broken."  
+> This no longer looks like "Finviz is simply broken."
 > It looks like the current scraper is partly fixed, and the remaining failures are increasingly operational / transient.
 
 ---

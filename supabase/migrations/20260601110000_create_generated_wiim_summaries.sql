@@ -35,6 +35,21 @@ ALTER TABLE public.stock_summaries
   ADD COLUMN IF NOT EXISTS earnings_context JSONB,
   ADD COLUMN IF NOT EXISTS id BIGINT GENERATED ALWAYS AS IDENTITY;
 
+ALTER TABLE public.stock_summaries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wiim_summary_runs ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "Allow public read access to stock summaries"
+  ON public.stock_summaries FOR SELECT
+  USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "Allow public read access to WIIM summary runs"
+  ON public.wiim_summary_runs FOR SELECT
+  USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE INDEX IF NOT EXISTS idx_stock_summaries_symbol_date
   ON public.stock_summaries(symbol, summary_date);
 
