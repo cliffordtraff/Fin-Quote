@@ -557,5 +557,54 @@ That's the difference between a demo and a product.
 
 ---
 
-*Last updated: May 2026*
+*Last updated: July 2026*
 *201 commits and counting*
+
+---
+
+## The Robot That Pretended to Be a Stock
+
+In July 2026, Vercel reported that The Intraday had used more CPU than the
+Hobby plan included. The site had not crashed, but the usage graph was a useful
+warning: a mostly public market-data site was doing far too much repeated work.
+
+The logs revealed the surprise. Bytespider was moving through expensive routes
+in bursts: the homepage, stock pages, insider pages, dashboards, and workspace
+pages. Applebot also requested `/robots.txt`, but because the app did not have
+one and the middleware treated any short path as a ticker, that request became
+`/stock/ROBOTS.TXT`. A missing metadata file had accidentally become a database
+and API workload.
+
+The fix uses several layers because no single cache or bot rule is enough:
+
+- `app/robots.ts` tells cooperative crawlers which areas are off-limits while
+  continuing to allow normal search indexing.
+- Middleware serves metadata before ticker shortcuts and rejects the observed
+  Bytespider user agent before an expensive page function can run.
+- Public pages no longer perform a Supabase authentication round trip. Only
+  protected profile and admin routes need that work.
+- The homepage and premarket dashboard use ISR instead of rebuilding their
+  large data fan-outs for every visitor.
+- Warm Vercel function instances share short-lived market-data promises. The
+  cache also coalesces simultaneous misses, avoiding a “cache stampede.”
+- Stock fundamentals, symbol validation, and insider trades use bounded,
+  per-symbol TTL caches. Slow facts can live longer; prices stay fresh.
+- The sticky price header polls the small quote endpoint instead of invoking a
+  full Server Action, pauses in hidden tabs, and benefits from a short CDN
+  cache.
+
+Think of the architecture like a restaurant. `robots.txt` is the sign on the
+door. Middleware is the host who turns away a known nuisance. ISR is the batch
+of soup prepared once for many tables. The quote endpoint is the waiter
+bringing one small update instead of asking the kitchen to remake the meal.
+
+There are two important limits to remember. A process-level cache lives only
+inside a warm Vercel instance, so it is an optimization rather than durable
+storage. And `robots.txt` is etiquette, not enforcement; malicious crawlers may
+ignore it. That is why the app-level block exists and why any Vercel Firewall
+rule should start in **Log** mode, be reviewed, and only then be changed to
+**Deny**.
+
+The practical lesson: when compute seems inexplicably high, look at routes,
+user agents, and per-request fan-out before buying a larger plan. Scaling an
+unnecessary workload only makes the unnecessary workload more expensive.

@@ -1,5 +1,7 @@
 'use server'
 
+import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
+import { createPublicClient } from '@/lib/supabase/public'
 import { createServerClient } from '@/lib/supabase/server'
 import { rankLargeInsiderTrades, type LargeInsiderTrade, type LargeInsiderTradeCandidate } from '@/lib/insider-large-trades'
 
@@ -42,6 +44,15 @@ interface DatabaseInsiderTradeRow {
   insider_id: string | null
 }
 
+type InsiderTradesResult =
+  | { trades: InsiderTrade[] }
+  | { error: string }
+
+const getCachedInsiderTrades = createKeyedAsyncTTLCache<
+  string,
+  InsiderTradesResult
+>(5 * 60 * 1000, 500)
+
 /**
  * Fetch latest insider trades from the database
  */
@@ -83,29 +94,39 @@ export async function getInsiderTradesBySymbol(
     return { error: 'Symbol is required' }
   }
 
-  try {
-    const supabase = await createServerClient()
+  const normalizedSymbol = symbol.toUpperCase()
+  const normalizedLimit = Math.min(Math.max(limit, 1), 200)
 
-    const { data, error } = await supabase
-      .from('insider_transactions')
-      .select('*')
-      .eq('symbol', symbol.toUpperCase())
-      .order('transaction_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(limit)
+  return getCachedInsiderTrades(
+    `${normalizedSymbol}:${normalizedLimit}`,
+    async () => {
+      try {
+        const supabase = createPublicClient()
 
-    if (error) {
-      console.error('Error fetching insider trades for symbol:', error)
-      return { error: 'Failed to load insider trading data' }
+        const { data, error } = await supabase
+          .from('insider_transactions')
+          .select('*')
+          .eq('symbol', normalizedSymbol)
+          .order('transaction_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(normalizedLimit)
+
+        if (error) {
+          console.error('Error fetching insider trades for symbol:', error)
+          return { error: 'Failed to load insider trading data' }
+        }
+
+        const trades: InsiderTrade[] = (data || []).map((row) =>
+          mapInsiderTradeRow(row as DatabaseInsiderTradeRow)
+        )
+
+        return { trades }
+      } catch (error) {
+        console.error('Error fetching insider trading data for symbol:', error)
+        return { error: 'Failed to load insider trading data' }
+      }
     }
-
-    const trades: InsiderTrade[] = (data || []).map((row) => mapInsiderTradeRow(row as DatabaseInsiderTradeRow))
-
-    return { trades }
-  } catch (error) {
-    console.error('Error fetching insider trading data for symbol:', error)
-    return { error: 'Failed to load insider trading data' }
-  }
+  )
 }
 
 /**

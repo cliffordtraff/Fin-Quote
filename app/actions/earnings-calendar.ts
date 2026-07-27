@@ -54,7 +54,7 @@ export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
 
     const response = await fetch(
       `https://financialmodelingprep.com/api/v3/earning_calendar?from=${fromDate}&to=${toDate}&apikey=${apiKey}`,
-      { cache: 'no-store' } // Disable cache to get fresh data
+      { next: { revalidate: 300 } }
     )
 
     if (!response.ok) {
