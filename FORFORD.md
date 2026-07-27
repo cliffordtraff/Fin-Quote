@@ -608,3 +608,40 @@ rule should start in **Log** mode, be reviewed, and only then be changed to
 The practical lesson: when compute seems inexplicably high, look at routes,
 user agents, and per-request fan-out before buying a larger plan. Scaling an
 unnecessary workload only makes the unnecessary workload more expensive.
+
+### The caches that looked active but were not
+
+The first CPU pass added `revalidate` values to several pages, but production
+headers exposed a second problem: `/dashboard`, `/dashboard/premarket`,
+`/insiders`, and stock pages still returned `private, no-store`. Declaring ISR
+is only a promise; one request-bound dependency anywhere in the render can
+break that promise.
+
+Three examples made the rule concrete:
+
+- Public insider reads were creating the cookie-aware Supabase client. Reading
+  cookies makes the render request-specific even though the database policies
+  already grant anonymous read access. These reads now use the anonymous
+  client, while protected pages keep the authenticated client.
+- The premarket brief made four explicit `no-store` requests for extended-hours
+  movers. The brief itself is cached for five minutes, so those subrequests now
+  use the same five-minute lifetime.
+- A stock-page cache miss could launch a live Finviz scrape, including retries.
+  Page rendering now reads only generated or persisted catalyst data. The
+  explicit API endpoint still owns live refreshes.
+
+The dashboard also used to request its slow snapshot immediately after
+hydrating with the same slow data from the server. That was like serving a meal
+and instantly ordering a duplicate. Long-lived tabs already have a ten-minute
+refresh timer, so the redundant mount request was removed.
+
+The experimental `/concept` page had a sharper version of the same problem. It
+could request S&P 500 and roughly 3,000-symbol NYSE quote batches every two
+minutes even when the market was closed or the tab was hidden. Those polls now
+run only during the cash session in a visible tab, and their computed snapshots
+share a two-minute persistent cache across visitors.
+
+The engineering lesson is that cacheability is end-to-end. A cached page that
+calls one cookie reader or one `no-store` fetch is still a dynamic page. Verify
+the result with production response headers and Vercel route metrics, not just
+the `revalidate` line in source.

@@ -2,7 +2,6 @@
 
 import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
 import { createPublicClient } from '@/lib/supabase/public'
-import { createServerClient } from '@/lib/supabase/server'
 import { rankLargeInsiderTrades, type LargeInsiderTrade, type LargeInsiderTradeCandidate } from '@/lib/insider-large-trades'
 
 export type { LargeInsiderTrade } from '@/lib/insider-large-trades'
@@ -53,34 +52,49 @@ const getCachedInsiderTrades = createKeyedAsyncTTLCache<
   InsiderTradesResult
 >(5 * 60 * 1000, 500)
 
+type LargeInsiderTradesResult =
+  | { trades: LargeInsiderTrade[] }
+  | { error: string }
+
+const getCachedLargeInsiderTrades = createKeyedAsyncTTLCache<
+  string,
+  LargeInsiderTradesResult
+>(15 * 60 * 1000, 20)
+
 /**
  * Fetch latest insider trades from the database
  */
 export async function getLatestInsiderTrades(
   limit: number = 100
 ): Promise<{ trades: InsiderTrade[] } | { error: string }> {
-  try {
-    const supabase = await createServerClient()
+  const normalizedLimit = Math.min(Math.max(limit, 1), 500)
 
-    const { data, error } = await supabase
-      .from('insider_transactions')
-      .select('*')
-      .order('transaction_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(limit)
+  return getCachedInsiderTrades(`latest:${normalizedLimit}`, async () => {
+    try {
+      const supabase = createPublicClient()
 
-    if (error) {
-      console.error('Error fetching insider trades:', error)
+      const { data, error } = await supabase
+        .from('insider_transactions')
+        .select('*')
+        .order('transaction_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(normalizedLimit)
+
+      if (error) {
+        console.error('Error fetching insider trades:', error)
+        return { error: 'Failed to load insider trading data' }
+      }
+
+      const trades: InsiderTrade[] = (data || []).map((row) =>
+        mapInsiderTradeRow(row as DatabaseInsiderTradeRow)
+      )
+
+      return { trades }
+    } catch (error) {
+      console.error('Error fetching insider trading data:', error)
       return { error: 'Failed to load insider trading data' }
     }
-
-    const trades: InsiderTrade[] = (data || []).map((row) => mapInsiderTradeRow(row as DatabaseInsiderTradeRow))
-
-    return { trades }
-  } catch (error) {
-    console.error('Error fetching insider trading data:', error)
-    return { error: 'Failed to load insider trading data' }
-  }
+  })
 }
 
 /**
@@ -144,7 +158,7 @@ export async function getTopInsiderTrades(
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     // Calculate date range
     const today = new Date()
@@ -191,7 +205,7 @@ export async function searchInsiderTradesByName(
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     const { data, error } = await supabase
       .from('insider_transactions')
@@ -240,7 +254,7 @@ export async function getInsiderById(
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     // Fetch insider info
     const { data: insiderData, error: insiderError } = await supabase
@@ -306,7 +320,7 @@ export async function getInsiderByName(
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     // Normalize the name the same way as the database function
     const normalized = name.toLowerCase().trim().replace(/\s+/g, ' ')
@@ -522,7 +536,7 @@ function isEligibleLargeTradeCandidate(
 }
 
 async function fetchDatabaseLargeTradeCandidates(
-  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  supabase: ReturnType<typeof createPublicClient>,
   fromDate: string,
   toDate: string
 ): Promise<LargeInsiderTradeCandidate[]> {
@@ -620,7 +634,7 @@ async function fetchLiveFmpLargeTradeCandidates(
 /**
  * Fetch largest insider trades by value (shares * price) within a date range
  */
-export async function getLargestInsiderTrades(
+async function loadLargestInsiderTrades(
   weeks: number = 4,
   limit: number = 6,
   options: {
@@ -629,7 +643,7 @@ export async function getLargestInsiderTrades(
   } = {}
 ): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     const today = new Date()
     const todayStr = toIsoDate(today)
@@ -692,4 +706,36 @@ export async function getLargestInsiderTrades(
     console.error('Error fetching largest insider trades:', formatErrorForLog(error))
     return { error: 'Failed to load insider trading data' }
   }
+}
+
+export async function getLargestInsiderTrades(
+  weeks: number = 4,
+  limit: number = 6,
+  options: {
+    saleLimit?: number
+    buyLimit?: number
+  } = {}
+): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
+  const normalizedWeeks = Math.min(Math.max(weeks, 1), 52)
+  const normalizedLimit = Math.min(Math.max(limit, 1), 100)
+  const normalizedSaleLimit = options.saleLimit
+    ? Math.min(Math.max(options.saleLimit, 1), normalizedLimit)
+    : 0
+  const normalizedBuyLimit = options.buyLimit
+    ? Math.min(Math.max(options.buyLimit, 1), normalizedLimit)
+    : 0
+
+  const cacheKey = [
+    normalizedWeeks,
+    normalizedLimit,
+    normalizedSaleLimit,
+    normalizedBuyLimit,
+  ].join(':')
+
+  return getCachedLargeInsiderTrades(cacheKey, () =>
+    loadLargestInsiderTrades(normalizedWeeks, normalizedLimit, {
+      saleLimit: normalizedSaleLimit || undefined,
+      buyLimit: normalizedBuyLimit || undefined,
+    })
+  )
 }

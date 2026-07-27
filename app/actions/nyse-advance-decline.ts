@@ -2,6 +2,7 @@
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { unstable_cache } from 'next/cache'
 import { getProvider } from '@/lib/providers'
 
 export interface NYSEAdvanceDeclineSnapshot {
@@ -44,7 +45,7 @@ async function getNYSEConstituents(): Promise<NYSEConstituent[]> {
  * Get a single snapshot of advance-decline data for the NYSE
  * Returns the current count of advancing vs declining stocks
  */
-export async function getNYSEAdvanceDeclineSnapshot(): Promise<{ data: NYSEAdvanceDeclineSnapshot } | { error: string }> {
+async function loadNYSEAdvanceDeclineSnapshot(): Promise<{ data: NYSEAdvanceDeclineSnapshot } | { error: string }> {
   try {
     const constituents = await getNYSEConstituents()
 
@@ -114,4 +115,14 @@ export async function getNYSEAdvanceDeclineSnapshot(): Promise<{ data: NYSEAdvan
     console.error('Error fetching NYSE advance-decline data:', error)
     return { error: 'Failed to load NYSE advance-decline data' }
   }
+}
+
+const getCachedNYSEAdvanceDeclineSnapshot = unstable_cache(
+  loadNYSEAdvanceDeclineSnapshot,
+  ['nyse-advance-decline-snapshot-v1'],
+  { revalidate: 120 },
+)
+
+export async function getNYSEAdvanceDeclineSnapshot(): Promise<{ data: NYSEAdvanceDeclineSnapshot } | { error: string }> {
+  return getCachedNYSEAdvanceDeclineSnapshot()
 }

@@ -394,7 +394,7 @@ async function fetchFromFMP(
   const url = `https://financialmodelingprep.com/api/v3/${endpoint}?apikey=${apiKey}`
 
   try {
-    const response = await fetch(url, { cache: 'no-store' })
+    const response = await fetch(url, { next: { revalidate: 60 } })
 
     if (!response.ok) {
       console.error(`FMP API error for ${session} ${direction}: ${response.status}`)

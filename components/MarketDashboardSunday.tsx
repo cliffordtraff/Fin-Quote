@@ -141,9 +141,6 @@ export default function MarketDashboardSunday({
       setLastUpdated(new Date())
     }
 
-    // Refresh slow once on mount (long-lived tabs)
-    fetchSlow().then(apply).catch((e) => console.error('Failed to refresh slow market data:', e))
-
     const fastInterval = setInterval(async () => {
       try {
         apply(await fetchFast())

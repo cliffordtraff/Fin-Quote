@@ -457,12 +457,26 @@ export default function ConceptChartPage() {
     }
 
     if (marketSession === 'open') {
-      void fetchLiveCashDistributionSnapshot()
+      const refreshDistribution = (background: boolean) => {
+        if (document.visibilityState === 'visible') {
+          void fetchLiveCashDistributionSnapshot(background)
+        }
+      }
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          refreshDistribution(false)
+        }
+      }
+
+      refreshDistribution(false)
       distributionPollingRef.current = setInterval(() => {
-        void fetchLiveCashDistributionSnapshot(true)
+        refreshDistribution(true)
       }, DISTRIBUTION_POLL_INTERVAL)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
 
       return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
         if (distributionPollingRef.current) {
           clearInterval(distributionPollingRef.current)
           distributionPollingRef.current = null
@@ -553,18 +567,35 @@ export default function ConceptChartPage() {
 
   // Poll for advance-decline data
   useEffect(() => {
-    // Fetch initial snapshot
-    fetchAdSnapshot()
+    if (!isSessionReady || marketSession !== 'open') {
+      setAdLoading(false)
+      return
+    }
 
-    // Set up polling
-    adPollingRef.current = setInterval(fetchAdSnapshot, AD_POLL_INTERVAL)
-
-    return () => {
-      if (adPollingRef.current) {
-        clearInterval(adPollingRef.current)
+    const pollAdvanceDecline = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchAdSnapshot()
       }
     }
-  }, [fetchAdSnapshot])
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollAdvanceDecline()
+      }
+    }
+
+    pollAdvanceDecline()
+    adPollingRef.current = setInterval(pollAdvanceDecline, AD_POLL_INTERVAL)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (adPollingRef.current) {
+        clearInterval(adPollingRef.current)
+        adPollingRef.current = null
+      }
+    }
+  }, [fetchAdSnapshot, isSessionReady, marketSession])
 
   // Fetch NYSE advance-decline snapshot and convert to candle
   const fetchNyseSnapshot = useCallback(async () => {
@@ -626,18 +657,35 @@ export default function ConceptChartPage() {
 
   // Poll for NYSE advance-decline data
   useEffect(() => {
-    // Fetch initial snapshot
-    fetchNyseSnapshot()
+    if (!isSessionReady || marketSession !== 'open') {
+      setNyseLoading(false)
+      return
+    }
 
-    // Set up polling
-    nysePollingRef.current = setInterval(fetchNyseSnapshot, AD_POLL_INTERVAL)
-
-    return () => {
-      if (nysePollingRef.current) {
-        clearInterval(nysePollingRef.current)
+    const pollNyseAdvanceDecline = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchNyseSnapshot()
       }
     }
-  }, [fetchNyseSnapshot])
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollNyseAdvanceDecline()
+      }
+    }
+
+    pollNyseAdvanceDecline()
+    nysePollingRef.current = setInterval(pollNyseAdvanceDecline, AD_POLL_INTERVAL)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (nysePollingRef.current) {
+        clearInterval(nysePollingRef.current)
+        nysePollingRef.current = null
+      }
+    }
+  }, [fetchNyseSnapshot, isSessionReady, marketSession])
 
   // Calculate axis range - fixed at -7.5% to +7.5%
   const axisRange = useMemo(() => {

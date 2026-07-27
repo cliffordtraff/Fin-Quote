@@ -56,7 +56,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-// ISR with 60s revalidation
+// Public market data only: render on demand, then serve through ISR.
+export const dynamic = 'force-static'
 export const revalidate = 60
 
 // Helper function to format values
