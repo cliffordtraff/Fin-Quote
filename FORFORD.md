@@ -635,6 +635,12 @@ hydrating with the same slow data from the server. That was like serving a meal
 and instantly ordering a duplicate. Long-lived tabs already have a ten-minute
 refresh timer, so the redundant mount request was removed.
 
+The experimental `/concept` page had a sharper version of the same problem. It
+could request S&P 500 and roughly 3,000-symbol NYSE quote batches every two
+minutes even when the market was closed or the tab was hidden. Those polls now
+run only during the cash session in a visible tab, and their computed snapshots
+share a two-minute persistent cache across visitors.
+
 The engineering lesson is that cacheability is end-to-end. A cached page that
 calls one cookie reader or one `no-store` fetch is still a dynamic page. Verify
 the result with production response headers and Vercel route metrics, not just
