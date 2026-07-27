@@ -3,8 +3,7 @@ import Navigation from '@/components/Navigation'
 import DashboardFooter from '@/components/DashboardFooter'
 import { getPremarketBrief, type CatalystItem, type PremarketBriefRow, type PremarketMover } from '@/lib/premarket-brief'
 
-export const revalidate = 60
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 function formatPct(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a'

@@ -2,103 +2,38 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isAdminAllowlistConfigured, isAdminUserEmail } from '@/lib/auth/admin-config'
+import { isBlockedCrawlerUserAgent, isStaticOrMetadataPath } from '@/lib/request-policy'
 
 // Routes that require authentication
 const PROTECTED_ROUTES = ['/profile', '/admin']
-
-// Routes that should redirect to home if already authenticated
-const AUTH_ROUTES = ['/auth', '/auth/forgot-password']
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const isPublicChartOfDayAdminRoute =
     pathname === '/admin/chart-of-the-day' ||
     pathname.startsWith('/admin/chart-of-the-day/')
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Ignore Next internals + API routes + static files
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/tos') ||
-    pathname.startsWith('/api') ||
-    pathname === '/favicon.ico' ||
-    pathname.match(/\.(ico|png|jpg|jpeg|svg|gif|webp|css|js|woff|woff2)$/)
-  ) {
+  // Always let crawlers read the policy that applies to them.
+  if (pathname === '/robots.txt') {
     return NextResponse.next()
   }
 
-  // Create response and supabase client using @supabase/ssr
-  const cookieDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined
-  let supabaseResponse = NextResponse.next({ request: req })
-  let user = null
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return supabaseResponse
-  }
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request: req })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              domain: cookieDomain,
-            })
-          )
-        },
+  // Bytespider was responsible for repeated bursts across expensive routes.
+  // Stop it before a page or API function runs.
+  if (isBlockedCrawlerUserAgent(req.headers.get('user-agent'))) {
+    return new NextResponse(null, {
+      status: 403,
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
       },
-    }
-  )
-
-  // Refresh session if needed (use getUser for security — validates with Supabase Auth server)
-  try {
-    const {
-      data: { user: resolvedUser },
-    } = await supabase.auth.getUser()
-    user = resolvedUser
-  } catch {
-    user = null
+    })
   }
 
-  // Check if route requires authentication
-  const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
-  const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route))
-
-  // Redirect unauthenticated users away from protected routes
-  if (isProtectedRoute && !user && !isPublicChartOfDayAdminRoute) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/auth'
-    url.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(url)
+  // Ignore Next internals + API routes + static files for normal traffic.
+  if (isStaticOrMetadataPath(pathname)) {
+    return NextResponse.next()
   }
-
-  if (
-    pathname.startsWith('/admin') &&
-    !isPublicChartOfDayAdminRoute &&
-    user &&
-    isAdminAllowlistConfigured() &&
-    !isAdminUserEmail(user.email)
-  ) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  // Redirect authenticated users away from auth pages (optional - can be commented out if you want to allow access)
-  // if (isAuthRoute && user && !pathname.includes('reset-password')) {
-  //   const url = req.nextUrl.clone()
-  //   url.pathname = '/'
-  //   return NextResponse.redirect(url)
-  // }
 
   // Consolidate: /company/:symbol → /stock/:symbol
   if (pathname.startsWith('/company/')) {
@@ -135,6 +70,9 @@ export async function middleware(req: NextRequest) {
     'newsletter',
     'workspace',
     'multi-charts',
+    'robots.txt',
+    'sitemap.xml',
+    'manifest.webmanifest',
   ])
 
   const parts = pathname.split('/').filter(Boolean)
@@ -148,6 +86,74 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(url)
       }
     }
+  }
+
+  // Public pages do not need an authenticated Supabase round trip. Session
+  // validation still happens before access to protected routes.
+  const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
+  if (!isProtectedRoute || isPublicChartOfDayAdminRoute) {
+    return NextResponse.next()
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const cookieDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined
+  let supabaseResponse = NextResponse.next({ request: req })
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/auth'
+    url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  const supabase = createServerClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request: req })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              domain: cookieDomain,
+            })
+          )
+        },
+      },
+    }
+  )
+
+  let user = null
+  try {
+    const {
+      data: { user: resolvedUser },
+    } = await supabase.auth.getUser()
+    user = resolvedUser
+  } catch {
+    user = null
+  }
+
+  if (!user) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/auth'
+    url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  if (
+    pathname.startsWith('/admin') &&
+    isAdminAllowlistConfigured() &&
+    !isAdminUserEmail(user.email)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
   }
 
   return supabaseResponse

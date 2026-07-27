@@ -1,6 +1,7 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache';
+import { createPublicClient } from '@/lib/supabase/public';
 
 interface FinancialYear {
   year: number;
@@ -117,14 +118,18 @@ interface AllFinancials {
   cashFlow: CashFlowYear[];
 }
 
+const getCachedFinancials = createKeyedAsyncTTLCache<string, AllFinancials>(
+  60 * 60 * 1000
+);
+
 /**
  * Get all financial statements for the last 8 years
  * Returns income statement, balance sheet, and cash flow data
  * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
-export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
+async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
   try {
-    const supabase = await createServerClient();
+    const supabase = createPublicClient();
 
     // Fetch last 8 years of annual financial data from financials_std
     const { data: financialsData, error } = await supabase
@@ -343,4 +348,11 @@ export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
       cashFlow: [],
     };
   }
+}
+
+export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
+  const normalizedSymbol = symbol.toUpperCase();
+  return getCachedFinancials(normalizedSymbol, () =>
+    loadAllFinancials(normalizedSymbol)
+  );
 }

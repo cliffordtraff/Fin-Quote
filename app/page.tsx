@@ -5,7 +5,7 @@ import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export default async function Home() {
   if (process.env.NEXT_PUBLIC_ENABLE_LANDING === 'true') {

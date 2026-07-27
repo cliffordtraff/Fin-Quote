@@ -21,7 +21,12 @@ import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
 import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-indices'
 import { getCachedMarketSummary } from '@/app/actions/market-summary'
 import { getCachedMarketTrendsBullets } from '@/app/actions/market-trends-responses'
+import { createAsyncTTLCache } from '@/lib/async-ttl-cache'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
+
+const getCachedFastMarketData = createAsyncTTLCache<Partial<AllMarketData>>(15_000)
+const getCachedSlowMarketData = createAsyncTTLCache<Partial<AllMarketData>>(5 * 60_000)
+const getCachedAllMarketData = createAsyncTTLCache<AllMarketData>(60_000)
 
 /**
  * Fetches all market data in parallel.
@@ -31,7 +36,7 @@ import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketDa
  *
  * Each section that fails returns null/empty, others continue to display.
  */
-export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
+async function loadFastMarketData(): Promise<Partial<AllMarketData>> {
   const [
     spxResult,
     nasdaqResult,
@@ -79,7 +84,11 @@ export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
   }
 }
 
-export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
+export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
+  return getCachedFastMarketData(loadFastMarketData)
+}
+
+async function loadSlowMarketData(): Promise<Partial<AllMarketData>> {
   const [
     esFuturesResult,
     futuresResult,
@@ -127,6 +136,10 @@ export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
   }
 }
 
+export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
+  return getCachedSlowMarketData(loadSlowMarketData)
+}
+
 /**
  * Fetches all market data in parallel.
  * Can be called from:
@@ -135,7 +148,7 @@ export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
  *
  * Each section that fails returns null/empty, others continue to display.
  */
-export async function fetchAllMarketData(): Promise<AllMarketData> {
+async function loadAllMarketData(): Promise<AllMarketData> {
   const [
     spxResult,
     nasdaqResult,
@@ -234,4 +247,8 @@ export async function fetchAllMarketData(): Promise<AllMarketData> {
     marketSummary: marketSummaryResult || '',
     marketTrendsBullets: marketTrendsBulletsResult || []
   }
+}
+
+export async function fetchAllMarketData(): Promise<AllMarketData> {
+  return getCachedAllMarketData(loadAllMarketData)
 }

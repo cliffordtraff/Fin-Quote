@@ -5,6 +5,7 @@ import { getProvider } from '@/lib/providers'
 import { FMPProvider } from '@/lib/providers/fmp'
 import { MassiveProvider } from '@/lib/providers/massive'
 import type { MarketDataProvider, ProviderCandle, ProviderNews, ProviderQuote } from '@/lib/providers/types'
+import { createAsyncTTLCache } from '@/lib/async-ttl-cache'
 import { getSP500Gainers, getSP500Losers, type SP500MoverData } from '@/app/actions/sp500-movers'
 
 export type PremarketBriefRow = {
@@ -108,6 +109,8 @@ const FMP_EXTENDED_ENDPOINTS = {
   afterHoursGainers: 'aftermarket_gainers',
   afterHoursLosers: 'aftermarket_losers',
 } as const
+
+const getCachedPremarketBrief = createAsyncTTLCache<PremarketBrief>(5 * 60_000)
 
 function shiftDate(dateStr: string, deltaDays: number): string {
   const date = new Date(`${dateStr}T12:00:00Z`)
@@ -481,7 +484,7 @@ async function getMarketNews(provider: MarketDataProvider): Promise<ProviderNews
   }
 }
 
-export async function getPremarketBrief(): Promise<PremarketBrief> {
+async function loadPremarketBrief(): Promise<PremarketBrief> {
   const status = getMarketStatus()
   const tradingDate = getTradingDate()
   const previousDate = previousTradingDate(tradingDate)
@@ -546,4 +549,8 @@ export async function getPremarketBrief(): Promise<PremarketBrief> {
     semiRead: buildSemiRead(semiconductorRows),
     marketNews,
   }
+}
+
+export async function getPremarketBrief(): Promise<PremarketBrief> {
+  return getCachedPremarketBrief(loadPremarketBrief)
 }

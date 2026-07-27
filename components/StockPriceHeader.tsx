@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getStockOverview } from '@/app/actions/stock-overview'
 
 interface StockPriceHeaderProps {
   symbol: string
@@ -11,6 +10,13 @@ interface StockPriceHeaderProps {
   initialPriceChange: number
   initialPriceChangePercent: number
   initialMarketStatus: 'open' | 'closed' | 'premarket' | 'afterhours'
+}
+
+interface QuoteResponse {
+  price: number
+  change: number
+  changesPercentage: number
+  marketStatus: 'open' | 'closed' | 'premarket' | 'afterhours'
 }
 
 export default function StockPriceHeader({
@@ -27,24 +33,43 @@ export default function StockPriceHeader({
   const [priceChangePercent, setPriceChangePercent] = useState(initialPriceChangePercent)
   const [marketStatus, setMarketStatus] = useState(initialMarketStatus)
 
-  // Polling effect - refresh price every 60 seconds
+  // Poll a small cacheable GET endpoint instead of invoking a Server Action.
   useEffect(() => {
-    const interval = setInterval(async () => {
+    let cancelled = false
+
+    const refreshPrice = async () => {
+      if (document.visibilityState !== 'visible') return
+
       try {
-        const data = await getStockOverview(symbol)
-        if (data) {
-          setPrice(data.currentPrice)
-          setPriceChange(data.priceChange)
-          setPriceChangePercent(data.priceChangePercent)
+        const response = await fetch(`/api/quote/${encodeURIComponent(symbol)}`)
+        if (!response.ok) return
+
+        const data = await response.json() as QuoteResponse
+        if (!cancelled) {
+          setPrice(data.price)
+          setPriceChange(data.change)
+          setPriceChangePercent(data.changesPercentage)
           setMarketStatus(data.marketStatus)
         }
       } catch (error) {
         console.error('Failed to refresh stock price:', error)
-        // Keep showing last good data on error
       }
-    }, 60000)
+    }
 
-    return () => clearInterval(interval)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshPrice()
+      }
+    }
+
+    const interval = window.setInterval(refreshPrice, 60_000)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [symbol])
 
   const normalizedCompanyName = companyName.trim()

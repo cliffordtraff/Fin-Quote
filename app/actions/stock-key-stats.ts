@@ -1,6 +1,7 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache';
+import { createPublicClient } from '@/lib/supabase/public';
 
 interface StockKeyStats {
   // Column 1: Company Info
@@ -111,12 +112,16 @@ interface StockKeyStats {
   dividendYield: number;
 }
 
+const getCachedStockKeyStats = createKeyedAsyncTTLCache<string, StockKeyStats>(
+  5 * 60 * 1000
+);
+
 /**
  * Get key statistics for stock detail page
  * Combines data from financial_metrics table and FMP API
  * @param symbol - Stock symbol (e.g., 'AAPL', 'MSFT')
  */
-export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
+async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
   const apiKey = process.env.FMP_API_KEY;
 
   if (!apiKey) {
@@ -124,7 +129,7 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
   }
 
   try {
-    const supabase = await createServerClient();
+    const supabase = createPublicClient();
 
     // Fetch latest metrics from financial_metrics table (key-value format)
     const { data: metricsData, error: metricsError } = await supabase
@@ -467,4 +472,11 @@ export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
       dividendYield: 0,
     };
   }
+}
+
+export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
+  const normalizedSymbol = symbol.toUpperCase();
+  return getCachedStockKeyStats(normalizedSymbol, () =>
+    loadStockKeyStats(normalizedSymbol)
+  );
 }

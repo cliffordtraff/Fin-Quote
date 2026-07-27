@@ -12,7 +12,8 @@
  * 4. Return null if no match found
  */
 
-import { createServerClient } from './supabase/server'
+import { createKeyedAsyncTTLCache } from './async-ttl-cache'
+import { createPublicClient } from './supabase/public'
 
 // Common name-to-symbol aliases for popular companies
 // These handle common variations users might type
@@ -143,6 +144,10 @@ const SYMBOL_ALIASES: Record<string, string> = {
 let symbolCache: Map<string, { symbol: string; name: string }> | null = null
 let cacheTimestamp: number = 0
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const getCachedSymbolValidity = createKeyedAsyncTTLCache<string, boolean>(
+  30 * 60 * 1000,
+  2_000
+)
 
 export interface SymbolResolution {
   symbol: string | null
@@ -164,7 +169,7 @@ async function loadSymbolCache(): Promise<Map<string, { symbol: string; name: st
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     // Try us_stocks table first (has all US stocks)
     // Note: Supabase default limit is 1000, we need all ~10k stocks
@@ -286,33 +291,37 @@ export async function resolveSymbol(input: string): Promise<SymbolResolution> {
  * @returns True if symbol exists, false otherwise
  */
 export async function isValidSymbol(symbol: string): Promise<boolean> {
-  try {
-    const supabase = await createServerClient()
+  const normalizedSymbol = symbol.toUpperCase()
 
-    // Try us_stocks first
-    const { data, error } = await supabase
-      .from('us_stocks')
-      .select('symbol')
-      .eq('symbol', symbol.toUpperCase())
-      .eq('is_active', true)
-      .single()
+  return getCachedSymbolValidity(normalizedSymbol, async () => {
+    try {
+      const supabase = createPublicClient()
 
-    if (!error && data) {
-      return true
+      // Try us_stocks first
+      const { data, error } = await supabase
+        .from('us_stocks')
+        .select('symbol')
+        .eq('symbol', normalizedSymbol)
+        .eq('is_active', true)
+        .single()
+
+      if (!error && data) {
+        return true
+      }
+
+      // Fallback to sp500_constituents
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('sp500_constituents')
+        .select('symbol')
+        .eq('symbol', normalizedSymbol)
+        .eq('is_active', true)
+        .single()
+
+      return !fallbackError && !!fallbackData
+    } catch {
+      return false
     }
-
-    // Fallback to sp500_constituents
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from('sp500_constituents')
-      .select('symbol')
-      .eq('symbol', symbol.toUpperCase())
-      .eq('is_active', true)
-      .single()
-
-    return !fallbackError && !!fallbackData
-  } catch {
-    return false
-  }
+  })
 }
 
 /**
@@ -361,7 +370,7 @@ export async function searchSymbols(
   const normalizedQueryLower = query.toLowerCase()
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicClient()
 
     // Query us_stocks directly with pattern matching
     // Try us_stocks first, fallback to sp500_constituents
