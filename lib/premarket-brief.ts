@@ -6,6 +6,7 @@ import { FMPProvider } from '@/lib/providers/fmp'
 import { MassiveProvider } from '@/lib/providers/massive'
 import type { MarketDataProvider, ProviderCandle, ProviderNews, ProviderQuote } from '@/lib/providers/types'
 import { createAsyncTTLCache } from '@/lib/async-ttl-cache'
+import { unstable_cache } from 'next/cache'
 import { getSP500Gainers, getSP500Losers, type SP500MoverData } from '@/app/actions/sp500-movers'
 
 export type PremarketBriefRow = {
@@ -224,7 +225,7 @@ async function fetchFmpExtendedMovers(endpoint: keyof typeof FMP_EXTENDED_ENDPOI
   try {
     const response = await fetch(
       `https://financialmodelingprep.com/api/v3/${FMP_EXTENDED_ENDPOINTS[endpoint]}?apikey=${apiKey}`,
-      { cache: 'no-store' },
+      { next: { revalidate: 300 } },
     )
 
     if (!response.ok) return []
@@ -551,6 +552,12 @@ async function loadPremarketBrief(): Promise<PremarketBrief> {
   }
 }
 
+const getPersistedPremarketBrief = unstable_cache(
+  loadPremarketBrief,
+  ['premarket-brief-v1'],
+  { revalidate: 300 },
+)
+
 export async function getPremarketBrief(): Promise<PremarketBrief> {
-  return getCachedPremarketBrief(loadPremarketBrief)
+  return getCachedPremarketBrief(getPersistedPremarketBrief)
 }

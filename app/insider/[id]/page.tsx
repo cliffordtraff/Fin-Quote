@@ -8,6 +8,9 @@ interface InsiderPageProps {
   params: Promise<{ id: string }>
 }
 
+export const dynamic = 'force-static'
+export const revalidate = 300
+
 function formatCurrency(value: number): string {
   if (value >= 1_000_000_000) {
     return `$${(value / 1_000_000_000).toFixed(2)}B`

@@ -1,5 +1,6 @@
 'use server'
 
+import { unstable_cache } from 'next/cache'
 import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData, getESFuturesMarketData } from '@/app/actions/market-data'
 import { getFuturesWithYTDSparkline, getFuturesWithHistory } from '@/app/actions/futures'
 import { getAllSessionMovers } from '@/app/actions/market-movers'
@@ -249,6 +250,12 @@ async function loadAllMarketData(): Promise<AllMarketData> {
   }
 }
 
+const getPersistedAllMarketData = unstable_cache(
+  loadAllMarketData,
+  ['all-market-data-v1'],
+  { revalidate: 60 }
+)
+
 export async function fetchAllMarketData(): Promise<AllMarketData> {
-  return getCachedAllMarketData(loadAllMarketData)
+  return getCachedAllMarketData(getPersistedAllMarketData)
 }
