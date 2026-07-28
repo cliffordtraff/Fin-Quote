@@ -26,10 +26,11 @@ function formatCurrency(value: number): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  return new Date(`${dateStr.split('T')[0]}T12:00:00Z`).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

@@ -11,15 +11,20 @@ interface StockInsiderTradesProps {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+  const date = new Date(`${dateStr.split('T')[0]}T12:00:00Z`)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: '2-digit',
+    timeZone: 'UTC',
+  })
 }
 
 function formatShares(shares: number): string {
   if (!shares || shares === 0) return '—'
   if (shares >= 1_000_000) return `${(shares / 1_000_000).toFixed(1)}M`
   if (shares >= 1_000) return `${(shares / 1_000).toFixed(1)}K`
-  return shares.toLocaleString()
+  return shares.toLocaleString('en-US')
 }
 
 function formatValue(shares: number, price: number | null): string {

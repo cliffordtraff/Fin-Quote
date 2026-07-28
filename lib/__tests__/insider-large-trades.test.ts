@@ -146,4 +146,57 @@ describe('rankLargeInsiderTrades', () => {
       value: 84_022_542,
     }))
   })
+
+  it('does not square an aggregate principal amount reported for a debt purchase', () => {
+    const [trade] = rankLargeInsiderTrades([
+      {
+        symbol: 'FINS',
+        reportingName: 'MetLife Investment Management, LLC',
+        transactionDate: '2026-07-08',
+        transactionCode: 'P',
+        shares: 40_000_000,
+        price: 40_000_000,
+        securityName: '5.364% Series C Senior Unsecured Notes due July 8, 2030',
+        acquisitionDisposition: 'A',
+        formType: '4',
+      },
+    ], {
+      fromDate: '2026-07-01',
+      toDate: '2026-07-27',
+      limit: 6,
+    })
+
+    expect(trade).toEqual(expect.objectContaining({
+      symbol: 'FINS',
+      shares: 40_000_000,
+      price: 1,
+      value: 40_000_000,
+    }))
+  })
+
+  it('preserves legitimate multi-billion-dollar equity trades', () => {
+    const [trade] = rankLargeInsiderTrades([
+      {
+        symbol: 'BIG',
+        reportingName: 'Institutional Holder',
+        transactionDate: '2026-07-08',
+        transactionCode: 'P',
+        shares: 50_000_000,
+        price: 100,
+        securityName: 'Class A Common Stock',
+        acquisitionDisposition: 'A',
+        formType: '4',
+      },
+    ], {
+      fromDate: '2026-07-01',
+      toDate: '2026-07-27',
+      limit: 6,
+    })
+
+    expect(trade).toEqual(expect.objectContaining({
+      shares: 50_000_000,
+      price: 100,
+      value: 5_000_000_000,
+    }))
+  })
 })

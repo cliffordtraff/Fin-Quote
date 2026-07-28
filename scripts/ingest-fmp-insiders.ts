@@ -35,6 +35,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 // Batch size for database inserts
 const BATCH_SIZE = 100
+const TRANSACTION_FORM_TYPES = new Set(['4', '4/A', '5', '5/A', '144', '144/A'])
 
 interface FMPInsiderTrade {
   symbol: string
@@ -108,6 +109,10 @@ function normalizeAcqDisp(value: string | null): string | null {
   return firstChar === 'A' || firstChar === 'D' ? firstChar : null
 }
 
+function normalizeFormType(value: string | null): string {
+  return value?.trim().toUpperCase() || '4'
+}
+
 function hashString(str: string): string {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
@@ -159,12 +164,21 @@ async function main() {
     console.log(`Fetched ${trades.length} trades`)
 
     // Filter valid trades
-    const validTrades = trades.filter(t =>
-      t.symbol &&
-      t.reportingName &&
-      t.transactionDate &&
-      t.securitiesTransacted > 0
-    )
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const validTrades = trades.filter((trade) => {
+      const transactionCode = normalizeTransactionCode(trade.transactionType)
+      const formType = normalizeFormType(trade.formType)
+
+      return Boolean(
+        trade.symbol
+        && trade.reportingName
+        && trade.transactionDate
+        && trade.transactionDate <= todayStr
+        && trade.securitiesTransacted > 0
+        && transactionCode
+        && TRANSACTION_FORM_TYPES.has(formType)
+      )
+    })
     console.log(`Valid trades: ${validTrades.length}`)
 
     // Process each trade individually (partial indexes don't work with bulk upsert)
@@ -194,7 +208,7 @@ async function main() {
         owner_type: trade.typeOfOwner || null,
         officer_title: null,
         security_name: trade.securityName || null,
-        form_type: trade.formType || '4',
+        form_type: normalizeFormType(trade.formType),
         source: 'fmp',
         source_id: trade.link ? hashString(trade.link) : null,
         sec_link: trade.link || null
