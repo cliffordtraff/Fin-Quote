@@ -5,6 +5,7 @@ export interface LargeInsiderTradeCandidate {
   transactionCode: string
   shares: number
   price: number
+  securityName?: string
   acquisitionDisposition: string
   formType: string
 }
@@ -23,6 +24,8 @@ export interface LargeInsiderTrade {
 
 const ELIGIBLE_FORM_TYPES = new Set(['4', '4/A', '5', '5/A', '144', '144/A'])
 const ELIGIBLE_TRANSACTION_CODES = new Set(['P', 'S'])
+const AGGREGATE_PRINCIPAL_SECURITY_PATTERN = /\b(?:bonds?|debentures?|notes?)\b/i
+const MIN_AGGREGATE_PRINCIPAL_AMOUNT = 1_000_000
 
 function normalizeDate(date: string): string {
   return date.split('T')[0]
@@ -58,6 +61,28 @@ function canonicalizeAcquisitionDisposition(transactionCode: string, acquisition
 
 function normalizeFormType(formType: string): string {
   return formType.trim().toUpperCase()
+}
+
+function normalizeSecurityName(securityName: string | undefined): string {
+  return securityName?.trim().replace(/\s+/g, ' ') || ''
+}
+
+export function normalizeInsiderTradeUnitPrice(
+  shares: number,
+  price: number,
+  securityName: string | undefined
+): number {
+  const normalizedSecurityName = normalizeSecurityName(securityName)
+  const isAggregatePrincipalAmount =
+    shares >= MIN_AGGREGATE_PRINCIPAL_AMOUNT
+    && price === shares
+    && AGGREGATE_PRINCIPAL_SECURITY_PATTERN.test(normalizedSecurityName)
+
+  // Some debt Form 4 filings put the aggregate principal amount in both the
+  // shares and price-per-share fields, with a footnote explaining the
+  // exception. Treat each dollar of principal as one unit so the transaction
+  // value remains the disclosed principal amount instead of squaring it.
+  return isAggregatePrincipalAmount ? 1 : price
 }
 
 function exactCandidateKey(candidate: LargeInsiderTradeCandidate): string {
@@ -104,7 +129,9 @@ export function rankLargeInsiderTrades(
     )
     const formType = normalizeFormType(candidate.formType)
     const shares = Number(candidate.shares)
-    const price = Number(candidate.price)
+    const rawPrice = Number(candidate.price)
+    const securityName = normalizeSecurityName(candidate.securityName)
+    const price = normalizeInsiderTradeUnitPrice(shares, rawPrice, securityName)
 
     if (!symbol || !reportingName || !transactionDate) {
       continue
@@ -118,7 +145,7 @@ export function rankLargeInsiderTrades(
       continue
     }
 
-    if (!Number.isFinite(shares) || !Number.isFinite(price) || shares <= 0 || price <= 0) {
+    if (!Number.isFinite(shares) || !Number.isFinite(rawPrice) || shares <= 0 || rawPrice <= 0) {
       continue
     }
 
@@ -129,6 +156,7 @@ export function rankLargeInsiderTrades(
       transactionCode,
       shares,
       price,
+      securityName,
       acquisitionDisposition,
       formType,
     }

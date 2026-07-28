@@ -2,7 +2,12 @@
 
 import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
 import { createPublicClient } from '@/lib/supabase/public'
-import { rankLargeInsiderTrades, type LargeInsiderTrade, type LargeInsiderTradeCandidate } from '@/lib/insider-large-trades'
+import {
+  normalizeInsiderTradeUnitPrice,
+  rankLargeInsiderTrades,
+  type LargeInsiderTrade,
+  type LargeInsiderTradeCandidate,
+} from '@/lib/insider-large-trades'
 
 export type { LargeInsiderTrade } from '@/lib/insider-large-trades'
 
@@ -61,6 +66,8 @@ const getCachedLargeInsiderTrades = createKeyedAsyncTTLCache<
   LargeInsiderTradesResult
 >(15 * 60 * 1000, 20)
 
+const INSIDER_TRANSACTION_FORM_TYPES = ['4', '4/A', '5', '5/A', '144', '144/A']
+
 /**
  * Fetch latest insider trades from the database
  */
@@ -68,14 +75,17 @@ export async function getLatestInsiderTrades(
   limit: number = 100
 ): Promise<{ trades: InsiderTrade[] } | { error: string }> {
   const normalizedLimit = Math.min(Math.max(limit, 1), 500)
+  const todayStr = toIsoDate(new Date())
 
-  return getCachedInsiderTrades(`latest:${normalizedLimit}`, async () => {
+  return getCachedInsiderTrades(`latest:${todayStr}:${normalizedLimit}`, async () => {
     try {
       const supabase = createPublicClient()
 
       const { data, error } = await supabase
         .from('insider_transactions')
         .select('*')
+        .lte('transaction_date', todayStr)
+        .in('form_type', INSIDER_TRANSACTION_FORM_TYPES)
         .order('transaction_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(normalizedLimit)
@@ -110,9 +120,10 @@ export async function getInsiderTradesBySymbol(
 
   const normalizedSymbol = symbol.toUpperCase()
   const normalizedLimit = Math.min(Math.max(limit, 1), 200)
+  const todayStr = toIsoDate(new Date())
 
   return getCachedInsiderTrades(
-    `${normalizedSymbol}:${normalizedLimit}`,
+    `${normalizedSymbol}:${todayStr}:${normalizedLimit}`,
     async () => {
       try {
         const supabase = createPublicClient()
@@ -121,6 +132,8 @@ export async function getInsiderTradesBySymbol(
           .from('insider_transactions')
           .select('*')
           .eq('symbol', normalizedSymbol)
+          .lte('transaction_date', todayStr)
+          .in('form_type', INSIDER_TRANSACTION_FORM_TYPES)
           .order('transaction_date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(normalizedLimit)
@@ -206,11 +219,14 @@ export async function searchInsiderTradesByName(
 
   try {
     const supabase = createPublicClient()
+    const todayStr = toIsoDate(new Date())
 
     const { data, error } = await supabase
       .from('insider_transactions')
       .select('*')
       .ilike('reporting_name', `%${query.trim()}%`)
+      .lte('transaction_date', todayStr)
+      .in('form_type', INSIDER_TRANSACTION_FORM_TYPES)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -255,6 +271,7 @@ export async function getInsiderById(
 
   try {
     const supabase = createPublicClient()
+    const todayStr = toIsoDate(new Date())
 
     // Fetch insider info
     const { data: insiderData, error: insiderError } = await supabase
@@ -273,6 +290,8 @@ export async function getInsiderById(
       .from('insider_transactions')
       .select('*')
       .eq('insider_id', insiderId)
+      .lte('transaction_date', todayStr)
+      .in('form_type', INSIDER_TRANSACTION_FORM_TYPES)
       .order('transaction_date', { ascending: false })
 
     if (tradesError) {
@@ -349,6 +368,7 @@ interface DatabaseLargeTradeRow {
   transaction_code: string | null
   shares: number | string
   price: number | string | null
+  security_name: string | null
   acquisition_disposition: string | null
   form_type: string | null
 }
@@ -360,6 +380,7 @@ interface FmpLargeTradeRow {
   transactionType: string | null
   securitiesTransacted: number
   price: number | null
+  securityName: string | null
   acquistionOrDisposition: string | null
   formType: string | null
 }
@@ -404,6 +425,11 @@ function canonicalAcquisitionDisposition(
 
 function mapInsiderTradeRow(row: DatabaseInsiderTradeRow): InsiderTrade {
   const transactionType = row.transaction_code || row.transaction_type || ''
+  const securitiesTransacted = Number(row.shares) || 0
+  const rawPrice = row.price === null ? null : Number(row.price)
+  const price = rawPrice !== null && Number.isFinite(rawPrice)
+    ? normalizeInsiderTradeUnitPrice(securitiesTransacted, rawPrice, row.security_name || '')
+    : null
 
   return {
     symbol: row.symbol,
@@ -412,14 +438,14 @@ function mapInsiderTradeRow(row: DatabaseInsiderTradeRow): InsiderTrade {
     reportingName: row.reporting_name,
     typeOfOwner: row.owner_type || '',
     transactionType,
-    securitiesTransacted: Number(row.shares) || 0,
-    price: row.price ? Number(row.price) : null,
+    securitiesTransacted,
+    price,
     securitiesOwned: row.shares_owned_after ? Number(row.shares_owned_after) : 0,
     securityName: row.security_name || '',
     link: row.sec_link || '',
     acquistionOrDisposition: canonicalAcquisitionDisposition(transactionType, row.acquisition_disposition),
     formType: row.form_type || '4',
-    value: row.value ? Number(row.value) : null,
+    value: price === null ? null : securitiesTransacted * price,
     insiderId: row.insider_id || null,
   }
 }
@@ -495,6 +521,7 @@ function mapDatabaseLargeTradeCandidate(row: DatabaseLargeTradeRow): LargeInside
     transactionCode: normalizeTransactionCode(row.transaction_code),
     shares,
     price,
+    securityName: row.security_name || '',
     acquisitionDisposition: canonicalAcquisitionDisposition(row.transaction_code, row.acquisition_disposition),
     formType: normalizeFormType(row.form_type),
   }
@@ -515,6 +542,7 @@ function mapFmpLargeTradeCandidate(row: FmpLargeTradeRow): LargeInsiderTradeCand
     transactionCode: normalizeTransactionCode(row.transactionType),
     shares,
     price,
+    securityName: row.securityName || '',
     acquisitionDisposition: canonicalAcquisitionDisposition(row.transactionType, row.acquistionOrDisposition),
     formType: normalizeFormType(row.formType),
   }
@@ -542,7 +570,7 @@ async function fetchDatabaseLargeTradeCandidates(
 ): Promise<LargeInsiderTradeCandidate[]> {
   const { data, error } = await supabase
     .from('insider_transactions')
-    .select('symbol, reporting_name, transaction_date, transaction_code, shares, price, acquisition_disposition, form_type')
+    .select('symbol, reporting_name, transaction_date, transaction_code, shares, price, security_name, acquisition_disposition, form_type')
     .gte('transaction_date', fromDate)
     .lte('transaction_date', toDate)
     .in('form_type', ['4', '4/A', '5', '5/A', '144', '144/A'])

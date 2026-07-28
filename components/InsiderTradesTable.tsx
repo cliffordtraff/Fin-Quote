@@ -68,8 +68,13 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '—'
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+    const date = new Date(`${dateStr.split('T')[0]}T12:00:00Z`)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: '2-digit',
+      timeZone: 'UTC',
+    })
   }
 
   const formatPrice = (price: number | null) => {
@@ -81,7 +86,7 @@ export default function InsiderTradesTable({ trades, defaultSortByValue = false 
     if (!shares || shares === 0) return '—'
     if (shares >= 1_000_000) return `${(shares / 1_000_000).toFixed(1)}M`
     if (shares >= 1_000) return `${(shares / 1_000).toFixed(1)}K`
-    return shares.toLocaleString()
+    return shares.toLocaleString('en-US')
   }
 
   const formatValue = (shares: number, price: number | null) => {

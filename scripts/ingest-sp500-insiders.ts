@@ -29,6 +29,7 @@ if (!FMP_API_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+const TRANSACTION_FORM_TYPES = new Set(['4', '4/A', '5', '5/A', '144', '144/A'])
 
 interface FMPInsiderTrade {
   symbol: string
@@ -86,6 +87,10 @@ function normalizeAcqDisp(value: string | null): string | null {
   return firstChar === 'A' || firstChar === 'D' ? firstChar : null
 }
 
+function normalizeFormType(value: string | null): string {
+  return value?.trim().toUpperCase() || '4'
+}
+
 function hashString(str: string): string {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
@@ -131,6 +136,7 @@ async function main() {
   let totalInserted = 0
   let totalSkipped = 0
   let totalErrors = 0
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   try {
     // Get S&P 500 symbols
@@ -158,7 +164,17 @@ async function main() {
 
         // Process each trade
         for (const trade of trades) {
-          if (!trade.symbol || !trade.reportingName || !trade.transactionDate || !trade.securitiesTransacted) {
+          const transactionCode = normalizeTransactionCode(trade.transactionType)
+          const formType = normalizeFormType(trade.formType)
+          if (
+            !trade.symbol
+            || !trade.reportingName
+            || !trade.transactionDate
+            || trade.transactionDate > todayStr
+            || !trade.securitiesTransacted
+            || !transactionCode
+            || !TRANSACTION_FORM_TYPES.has(formType)
+          ) {
             totalSkipped++
             continue
           }
@@ -176,7 +192,7 @@ async function main() {
             filing_date: trade.filingDate,
             transaction_date: trade.transactionDate,
             transaction_type: trade.transactionType || null,
-            transaction_code: normalizeTransactionCode(trade.transactionType),
+            transaction_code: transactionCode,
             acquisition_disposition: normalizeAcqDisp(trade.acquistionOrDisposition),
             shares: Math.abs(trade.securitiesTransacted),
             price: trade.price || null,
@@ -185,7 +201,7 @@ async function main() {
             owner_type: trade.typeOfOwner || null,
             officer_title: null,
             security_name: trade.securityName || null,
-            form_type: trade.formType || '4',
+            form_type: formType,
             source: 'fmp',
             source_id: trade.link ? hashString(trade.link) : null,
             sec_link: trade.link || null
