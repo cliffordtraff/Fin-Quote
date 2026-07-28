@@ -1,0 +1,2 @@
+-- Compatibility marker: the real migration was moved to 20260201000004 so it
+-- runs after the us_stocks table is created.

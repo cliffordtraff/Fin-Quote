@@ -1,0 +1,2 @@
+-- Compatibility marker: company_metrics is recreated by 20260111210626 after
+-- the imported remote-schema migration removes the legacy table.
