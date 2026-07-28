@@ -1,4 +1,4 @@
--- Add segment tracking columns to us_stocks table
+-- Add segment tracking columns after the us_stocks table is created.
 ALTER TABLE us_stocks ADD COLUMN IF NOT EXISTS segment_status TEXT DEFAULT 'pending';
 ALTER TABLE us_stocks ADD COLUMN IF NOT EXISTS segment_updated_at TIMESTAMP;
 
