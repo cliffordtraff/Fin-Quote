@@ -1,6 +1,11 @@
 'use server'
 
 import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
+import {
+  getEasternCalendarDate,
+  getEasternCalendarDateRange,
+  shiftIsoCalendarDate,
+} from '@/lib/calendar-date'
 import { createPublicClient } from '@/lib/supabase/public'
 import {
   normalizeInsiderTradeUnitPrice,
@@ -75,7 +80,7 @@ export async function getLatestInsiderTrades(
   limit: number = 100
 ): Promise<{ trades: InsiderTrade[] } | { error: string }> {
   const normalizedLimit = Math.min(Math.max(limit, 1), 500)
-  const todayStr = toIsoDate(new Date())
+  const todayStr = getEasternCalendarDate()
 
   return getCachedInsiderTrades(`latest:${todayStr}:${normalizedLimit}`, async () => {
     try {
@@ -120,7 +125,7 @@ export async function getInsiderTradesBySymbol(
 
   const normalizedSymbol = symbol.toUpperCase()
   const normalizedLimit = Math.min(Math.max(limit, 1), 200)
-  const todayStr = toIsoDate(new Date())
+  const todayStr = getEasternCalendarDate()
 
   return getCachedInsiderTrades(
     `${normalizedSymbol}:${todayStr}:${normalizedLimit}`,
@@ -172,32 +177,31 @@ export async function getTopInsiderTrades(
 
   try {
     const supabase = createPublicClient()
-
-    // Calculate date range
-    const today = new Date()
-    const todayStr = toIsoDate(today)
-    const fromDate = new Date(today)
-    fromDate.setDate(fromDate.getDate() - days)
-    const fromDateStr = toIsoDate(fromDate)
+    const normalizedDays = Math.min(Math.max(Math.trunc(days), 1), 365)
+    const normalizedLimit = Math.min(Math.max(Math.trunc(limit), 1), 500)
+    const { fromDate, toDate } = getEasternCalendarDateRange(normalizedDays)
+    const formTypes = ['4', '4/A', '5', '5/A']
 
     const { data, error } = await supabase
       .from('insider_transactions')
       .select('*')
-      .gte('transaction_date', fromDateStr)
-      .lte('transaction_date', todayStr)
-      .in('form_type', ['4', '4/A', '5', '5/A'])
+      .gte('transaction_date', fromDate)
+      .lte('transaction_date', toDate)
+      .in('form_type', formTypes)
       .in('transaction_code', ['P', 'S'])
       .not('value', 'is', null)
       .gt('value', 0)
       .order('value', { ascending: false })
-      .limit(limit)
+      .limit(normalizedLimit)
 
     if (error) {
       console.error('Error fetching top insider trades:', error)
       return { error: 'Failed to load insider trading data' }
     }
 
-    const trades: InsiderTrade[] = (data || []).map((row) => mapInsiderTradeRow(row as DatabaseInsiderTradeRow))
+    const trades = (data || []).map((row) =>
+      mapInsiderTradeRow(row as DatabaseInsiderTradeRow)
+    )
 
     return { trades }
   } catch (error) {
@@ -219,7 +223,7 @@ export async function searchInsiderTradesByName(
 
   try {
     const supabase = createPublicClient()
-    const todayStr = toIsoDate(new Date())
+    const todayStr = getEasternCalendarDate()
 
     const { data, error } = await supabase
       .from('insider_transactions')
@@ -271,7 +275,7 @@ export async function getInsiderById(
 
   try {
     const supabase = createPublicClient()
-    const todayStr = toIsoDate(new Date())
+    const todayStr = getEasternCalendarDate()
 
     // Fetch insider info
     const { data: insiderData, error: insiderError } = await supabase
@@ -383,10 +387,6 @@ interface FmpLargeTradeRow {
   securityName: string | null
   acquistionOrDisposition: string | null
   formType: string | null
-}
-
-function toIsoDate(date: Date): string {
-  return date.toISOString().split('T')[0]
 }
 
 function normalizeTransactionCode(value: string | null | undefined): string {
@@ -568,12 +568,13 @@ async function fetchDatabaseLargeTradeCandidates(
   fromDate: string,
   toDate: string
 ): Promise<LargeInsiderTradeCandidate[]> {
+  const formTypes = ['4', '4/A', '5', '5/A', '144', '144/A']
   const { data, error } = await supabase
     .from('insider_transactions')
     .select('symbol, reporting_name, transaction_date, transaction_code, shares, price, security_name, acquisition_disposition, form_type')
     .gte('transaction_date', fromDate)
     .lte('transaction_date', toDate)
-    .in('form_type', ['4', '4/A', '5', '5/A', '144', '144/A'])
+    .in('form_type', formTypes)
     .in('transaction_code', ['S', 'P'])
     .not('value', 'is', null)
     .gt('value', 0)
@@ -665,6 +666,7 @@ async function fetchLiveFmpLargeTradeCandidates(
 async function loadLargestInsiderTrades(
   weeks: number = 4,
   limit: number = 6,
+  asOfDate: string = getEasternCalendarDate(),
   options: {
     saleLimit?: number
     buyLimit?: number
@@ -672,12 +674,8 @@ async function loadLargestInsiderTrades(
 ): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
   try {
     const supabase = createPublicClient()
-
-    const today = new Date()
-    const todayStr = toIsoDate(today)
-    const fromDate = new Date(today)
-    fromDate.setDate(fromDate.getDate() - weeks * 7)
-    const fromDateStr = toIsoDate(fromDate)
+    const todayStr = asOfDate
+    const fromDateStr = shiftIsoCalendarDate(todayStr, -weeks * 7)
 
     const [databaseResult, liveFmpResult] = await Promise.allSettled([
       fetchDatabaseLargeTradeCandidates(supabase, fromDateStr, todayStr),
@@ -752,8 +750,10 @@ export async function getLargestInsiderTrades(
   const normalizedBuyLimit = options.buyLimit
     ? Math.min(Math.max(options.buyLimit, 1), normalizedLimit)
     : 0
+  const asOfDate = getEasternCalendarDate()
 
   const cacheKey = [
+    asOfDate,
     normalizedWeeks,
     normalizedLimit,
     normalizedSaleLimit,
@@ -761,7 +761,7 @@ export async function getLargestInsiderTrades(
   ].join(':')
 
   return getCachedLargeInsiderTrades(cacheKey, () =>
-    loadLargestInsiderTrades(normalizedWeeks, normalizedLimit, {
+    loadLargestInsiderTrades(normalizedWeeks, normalizedLimit, asOfDate, {
       saleLimit: normalizedSaleLimit || undefined,
       buyLimit: normalizedBuyLimit || undefined,
     })

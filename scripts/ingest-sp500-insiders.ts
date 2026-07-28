@@ -11,6 +11,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
+import { getEasternCalendarDate } from '../lib/calendar-date'
+import { normalizeInsiderTradeUnitPrice } from '../lib/insider-large-trades'
 
 dotenv.config({ path: '.env.local' })
 
@@ -134,9 +136,10 @@ async function main() {
 
   let totalFetched = 0
   let totalInserted = 0
+  let totalUpdated = 0
   let totalSkipped = 0
   let totalErrors = 0
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = getEasternCalendarDate()
 
   try {
     // Get S&P 500 symbols
@@ -184,6 +187,11 @@ async function main() {
             p_name: trade.reportingName,
             p_cik: trade.reportingCik || null
           })
+          const shares = Math.abs(trade.securitiesTransacted)
+          const rawPrice = trade.price === null ? null : Number(trade.price)
+          const price = rawPrice !== null && Number.isFinite(rawPrice)
+            ? normalizeInsiderTradeUnitPrice(shares, rawPrice, trade.securityName)
+            : null
 
           const record = {
             insider_id: insiderId || null,
@@ -194,8 +202,8 @@ async function main() {
             transaction_type: trade.transactionType || null,
             transaction_code: transactionCode,
             acquisition_disposition: normalizeAcqDisp(trade.acquistionOrDisposition),
-            shares: Math.abs(trade.securitiesTransacted),
-            price: trade.price || null,
+            shares,
+            price,
             shares_owned_after: trade.securitiesOwned || null,
             reporting_name: trade.reportingName,
             owner_type: trade.typeOfOwner || null,
@@ -205,6 +213,30 @@ async function main() {
             source: 'fmp',
             source_id: trade.link ? hashString(trade.link) : null,
             sec_link: trade.link || null
+          }
+
+          if (rawPrice !== null && price !== null && price !== rawPrice) {
+            const { data: repairedRows, error: repairError } = await supabase
+              .from('insider_transactions')
+              .update({ price })
+              .eq('symbol', record.symbol)
+              .eq('reporting_name', record.reporting_name)
+              .eq('transaction_date', record.transaction_date)
+              .eq('transaction_code', record.transaction_code)
+              .eq('shares', shares)
+              .eq('price', rawPrice)
+              .eq('filing_date', record.filing_date)
+              .select('id')
+
+            if (repairError) {
+              totalErrors++
+              continue
+            }
+
+            if ((repairedRows || []).length > 0) {
+              totalUpdated += repairedRows.length
+              continue
+            }
           }
 
           const { error: insertError } = await supabase
@@ -247,6 +279,7 @@ async function main() {
           status: totalErrors > 0 ? 'partial' : 'success',
           rows_fetched: totalFetched,
           rows_inserted: totalInserted,
+          rows_updated: totalUpdated,
           rows_skipped: totalSkipped,
           error_message: totalErrors > 0 ? `${totalErrors} errors` : null,
           duration_ms: duration
@@ -260,6 +293,7 @@ async function main() {
     console.log(`  Symbols processed: ${symbols.length}`)
     console.log(`  Trades fetched: ${totalFetched}`)
     console.log(`  Inserted: ${totalInserted}`)
+    console.log(`  Updated: ${totalUpdated}`)
     console.log(`  Skipped (dupes): ${totalSkipped}`)
     console.log(`  Errors: ${totalErrors}`)
     console.log(`  Duration: ${(duration / 1000).toFixed(1)}s`)

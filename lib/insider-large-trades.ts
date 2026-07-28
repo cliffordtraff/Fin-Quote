@@ -72,17 +72,22 @@ export function normalizeInsiderTradeUnitPrice(
   price: number,
   securityName: string | undefined
 ): number {
+  // Certain debt filings put the aggregate principal amount in both numeric
+  // fields. Treat each principal dollar as one unit instead of squaring it.
+  return isAggregatePrincipalInsiderTrade(shares, price, securityName) ? 1 : price
+}
+
+export function isAggregatePrincipalInsiderTrade(
+  shares: number,
+  price: number,
+  securityName: string | undefined
+): boolean {
   const normalizedSecurityName = normalizeSecurityName(securityName)
-  const isAggregatePrincipalAmount =
+  return (
     shares >= MIN_AGGREGATE_PRINCIPAL_AMOUNT
     && price === shares
     && AGGREGATE_PRINCIPAL_SECURITY_PATTERN.test(normalizedSecurityName)
-
-  // Some debt Form 4 filings put the aggregate principal amount in both the
-  // shares and price-per-share fields, with a footnote explaining the
-  // exception. Treat each dollar of principal as one unit so the transaction
-  // value remains the disclosed principal amount instead of squaring it.
-  return isAggregatePrincipalAmount ? 1 : price
+  )
 }
 
 function exactCandidateKey(candidate: LargeInsiderTradeCandidate): string {
