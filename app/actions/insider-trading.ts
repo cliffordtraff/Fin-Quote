@@ -1,8 +1,14 @@
 'use server'
 
 import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
+import {
+  getEasternCalendarDate,
+  getEasternCalendarDateRange,
+  shiftIsoCalendarDate,
+} from '@/lib/calendar-date'
 import { createPublicClient } from '@/lib/supabase/public'
 import {
+  isAggregatePrincipalInsiderTrade,
   normalizeInsiderTradeUnitPrice,
   rankLargeInsiderTrades,
   type LargeInsiderTrade,
@@ -30,6 +36,7 @@ export interface InsiderTrade {
 }
 
 interface DatabaseInsiderTradeRow {
+  id?: string
   symbol: string
   filing_date: string
   transaction_date: string
@@ -75,7 +82,7 @@ export async function getLatestInsiderTrades(
   limit: number = 100
 ): Promise<{ trades: InsiderTrade[] } | { error: string }> {
   const normalizedLimit = Math.min(Math.max(limit, 1), 500)
-  const todayStr = toIsoDate(new Date())
+  const todayStr = getEasternCalendarDate()
 
   return getCachedInsiderTrades(`latest:${todayStr}:${normalizedLimit}`, async () => {
     try {
@@ -120,7 +127,7 @@ export async function getInsiderTradesBySymbol(
 
   const normalizedSymbol = symbol.toUpperCase()
   const normalizedLimit = Math.min(Math.max(limit, 1), 200)
-  const todayStr = toIsoDate(new Date())
+  const todayStr = getEasternCalendarDate()
 
   return getCachedInsiderTrades(
     `${normalizedSymbol}:${todayStr}:${normalizedLimit}`,
@@ -172,32 +179,44 @@ export async function getTopInsiderTrades(
 
   try {
     const supabase = createPublicClient()
-
-    // Calculate date range
-    const today = new Date()
-    const todayStr = toIsoDate(today)
-    const fromDate = new Date(today)
-    fromDate.setDate(fromDate.getDate() - days)
-    const fromDateStr = toIsoDate(fromDate)
+    const normalizedDays = Math.min(Math.max(Math.trunc(days), 1), 365)
+    const normalizedLimit = Math.min(Math.max(Math.trunc(limit), 1), 500)
+    const { fromDate, toDate } = getEasternCalendarDateRange(normalizedDays)
+    const formTypes = ['4', '4/A', '5', '5/A']
+    const aggregatePrincipalRows = await fetchPotentialAggregatePrincipalRows(
+      supabase,
+      fromDate,
+      toDate,
+      formTypes
+    )
+    const malformedRowCount = aggregatePrincipalRows.filter(isRawAggregatePrincipalRow).length
 
     const { data, error } = await supabase
       .from('insider_transactions')
       .select('*')
-      .gte('transaction_date', fromDateStr)
-      .lte('transaction_date', todayStr)
-      .in('form_type', ['4', '4/A', '5', '5/A'])
+      .gte('transaction_date', fromDate)
+      .lte('transaction_date', toDate)
+      .in('form_type', formTypes)
       .in('transaction_code', ['P', 'S'])
       .not('value', 'is', null)
       .gt('value', 0)
       .order('value', { ascending: false })
-      .limit(limit)
+      // Each malformed aggregate-principal row can displace at most one
+      // legitimate row from the raw database ranking.
+      .limit(normalizedLimit + malformedRowCount)
 
     if (error) {
       console.error('Error fetching top insider trades:', error)
       return { error: 'Failed to load insider trading data' }
     }
 
-    const trades: InsiderTrade[] = (data || []).map((row) => mapInsiderTradeRow(row as DatabaseInsiderTradeRow))
+    const trades = rankInsiderTradeRows(
+      [
+        ...((data || []) as DatabaseInsiderTradeRow[]),
+        ...aggregatePrincipalRows,
+      ],
+      normalizedLimit
+    )
 
     return { trades }
   } catch (error) {
@@ -219,7 +238,7 @@ export async function searchInsiderTradesByName(
 
   try {
     const supabase = createPublicClient()
-    const todayStr = toIsoDate(new Date())
+    const todayStr = getEasternCalendarDate()
 
     const { data, error } = await supabase
       .from('insider_transactions')
@@ -271,7 +290,7 @@ export async function getInsiderById(
 
   try {
     const supabase = createPublicClient()
-    const todayStr = toIsoDate(new Date())
+    const todayStr = getEasternCalendarDate()
 
     // Fetch insider info
     const { data: insiderData, error: insiderError } = await supabase
@@ -385,10 +404,6 @@ interface FmpLargeTradeRow {
   formType: string | null
 }
 
-function toIsoDate(date: Date): string {
-  return date.toISOString().split('T')[0]
-}
-
 function normalizeTransactionCode(value: string | null | undefined): string {
   if (!value) {
     return ''
@@ -448,6 +463,51 @@ function mapInsiderTradeRow(row: DatabaseInsiderTradeRow): InsiderTrade {
     value: price === null ? null : securitiesTransacted * price,
     insiderId: row.insider_id || null,
   }
+}
+
+function isRawAggregatePrincipalRow(row: DatabaseInsiderTradeRow): boolean {
+  const shares = Number(row.shares)
+  const price = Number(row.price)
+
+  return Number.isFinite(shares)
+    && Number.isFinite(price)
+    && isAggregatePrincipalInsiderTrade(shares, price, row.security_name || '')
+}
+
+function normalizedTradeKey(trade: InsiderTrade): string {
+  return [
+    trade.symbol.toUpperCase(),
+    trade.reportingName.trim().replace(/\s+/g, ' '),
+    trade.transactionDate.split('T')[0],
+    normalizeTransactionCode(trade.transactionType),
+    trade.securitiesTransacted.toFixed(4),
+    trade.price?.toFixed(4) || '',
+    trade.formType.trim().toUpperCase(),
+  ].join('|')
+}
+
+function rankInsiderTradeRows(
+  rows: DatabaseInsiderTradeRow[],
+  limit: number
+): InsiderTrade[] {
+  const deduped = new Map<string, InsiderTrade>()
+
+  for (const row of rows) {
+    const trade = mapInsiderTradeRow(row)
+    deduped.set(normalizedTradeKey(trade), trade)
+  }
+
+  return Array.from(deduped.values())
+    .sort((left, right) => {
+      const valueDelta = (right.value || 0) - (left.value || 0)
+
+      if (valueDelta !== 0) {
+        return valueDelta
+      }
+
+      return right.transactionDate.localeCompare(left.transactionDate)
+    })
+    .slice(0, limit)
 }
 
 function getTradeDirection(trade: Pick<InsiderTrade, 'transactionType' | 'acquistionOrDisposition'>): 'buy' | 'sell' | null {
@@ -568,25 +628,72 @@ async function fetchDatabaseLargeTradeCandidates(
   fromDate: string,
   toDate: string
 ): Promise<LargeInsiderTradeCandidate[]> {
+  const formTypes = ['4', '4/A', '5', '5/A', '144', '144/A']
+  const aggregatePrincipalRows = await fetchPotentialAggregatePrincipalRows(
+    supabase,
+    fromDate,
+    toDate,
+    formTypes
+  )
+  const malformedRowCount = aggregatePrincipalRows.filter(isRawAggregatePrincipalRow).length
   const { data, error } = await supabase
     .from('insider_transactions')
     .select('symbol, reporting_name, transaction_date, transaction_code, shares, price, security_name, acquisition_disposition, form_type')
     .gte('transaction_date', fromDate)
     .lte('transaction_date', toDate)
-    .in('form_type', ['4', '4/A', '5', '5/A', '144', '144/A'])
+    .in('form_type', formTypes)
     .in('transaction_code', ['S', 'P'])
     .not('value', 'is', null)
     .gt('value', 0)
     .order('value', { ascending: false })
-    .limit(500)
+    .limit(500 + malformedRowCount)
 
   if (error) {
     throw error
   }
 
-  return (data || [])
+  return [
+    ...(data || []),
+    ...aggregatePrincipalRows,
+  ]
     .map((row) => mapDatabaseLargeTradeCandidate(row as DatabaseLargeTradeRow))
     .filter((candidate): candidate is LargeInsiderTradeCandidate => candidate !== null)
+}
+
+async function fetchPotentialAggregatePrincipalRows(
+  supabase: ReturnType<typeof createPublicClient>,
+  fromDate: string,
+  toDate: string,
+  formTypes: string[]
+): Promise<DatabaseInsiderTradeRow[]> {
+  const rows: DatabaseInsiderTradeRow[] = []
+  const pageSize = 1000
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('insider_transactions')
+      .select('*')
+      .gte('transaction_date', fromDate)
+      .lte('transaction_date', toDate)
+      .in('form_type', formTypes)
+      .in('transaction_code', ['S', 'P'])
+      .or('security_name.ilike.%note%,security_name.ilike.%bond%,security_name.ilike.%debenture%')
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) {
+      throw error
+    }
+
+    const page = (data || []) as DatabaseInsiderTradeRow[]
+    rows.push(...page)
+
+    if (page.length < pageSize) {
+      break
+    }
+  }
+
+  return rows
 }
 
 async function fetchLiveFmpLargeTradeCandidates(
@@ -665,6 +772,7 @@ async function fetchLiveFmpLargeTradeCandidates(
 async function loadLargestInsiderTrades(
   weeks: number = 4,
   limit: number = 6,
+  asOfDate: string = getEasternCalendarDate(),
   options: {
     saleLimit?: number
     buyLimit?: number
@@ -672,12 +780,8 @@ async function loadLargestInsiderTrades(
 ): Promise<{ trades: LargeInsiderTrade[] } | { error: string }> {
   try {
     const supabase = createPublicClient()
-
-    const today = new Date()
-    const todayStr = toIsoDate(today)
-    const fromDate = new Date(today)
-    fromDate.setDate(fromDate.getDate() - weeks * 7)
-    const fromDateStr = toIsoDate(fromDate)
+    const todayStr = asOfDate
+    const fromDateStr = shiftIsoCalendarDate(todayStr, -weeks * 7)
 
     const [databaseResult, liveFmpResult] = await Promise.allSettled([
       fetchDatabaseLargeTradeCandidates(supabase, fromDateStr, todayStr),
@@ -752,8 +856,10 @@ export async function getLargestInsiderTrades(
   const normalizedBuyLimit = options.buyLimit
     ? Math.min(Math.max(options.buyLimit, 1), normalizedLimit)
     : 0
+  const asOfDate = getEasternCalendarDate()
 
   const cacheKey = [
+    asOfDate,
     normalizedWeeks,
     normalizedLimit,
     normalizedSaleLimit,
@@ -761,7 +867,7 @@ export async function getLargestInsiderTrades(
   ].join(':')
 
   return getCachedLargeInsiderTrades(cacheKey, () =>
-    loadLargestInsiderTrades(normalizedWeeks, normalizedLimit, {
+    loadLargestInsiderTrades(normalizedWeeks, normalizedLimit, asOfDate, {
       saleLimit: normalizedSaleLimit || undefined,
       buyLimit: normalizedBuyLimit || undefined,
     })

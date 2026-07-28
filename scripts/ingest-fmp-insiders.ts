@@ -13,6 +13,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
+import { getEasternCalendarDate } from '../lib/calendar-date'
+import { normalizeInsiderTradeUnitPrice } from '../lib/insider-large-trades'
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' })
@@ -155,6 +157,7 @@ async function main() {
   const logId = logEntry?.id
 
   let inserted = 0
+  let updated = 0
   let skipped = 0
   let errors = 0
 
@@ -164,7 +167,7 @@ async function main() {
     console.log(`Fetched ${trades.length} trades`)
 
     // Filter valid trades
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = getEasternCalendarDate()
     const validTrades = trades.filter((trade) => {
       const transactionCode = normalizeTransactionCode(trade.transactionType)
       const formType = normalizeFormType(trade.formType)
@@ -184,6 +187,13 @@ async function main() {
     // Process each trade individually (partial indexes don't work with bulk upsert)
     for (let i = 0; i < validTrades.length; i++) {
       const trade = validTrades[i]
+      const transactionCode = normalizeTransactionCode(trade.transactionType)
+      const formType = normalizeFormType(trade.formType)
+      const shares = Math.abs(trade.securitiesTransacted)
+      const rawPrice = trade.price === null ? null : Number(trade.price)
+      const price = rawPrice !== null && Number.isFinite(rawPrice)
+        ? normalizeInsiderTradeUnitPrice(shares, rawPrice, trade.securityName)
+        : null
 
       // Get or create insider
       const { data: insiderId } = await supabase.rpc('get_or_create_insider', {
@@ -199,19 +209,46 @@ async function main() {
         filing_date: trade.filingDate,
         transaction_date: trade.transactionDate,
         transaction_type: trade.transactionType || null,
-        transaction_code: normalizeTransactionCode(trade.transactionType),
+        transaction_code: transactionCode,
         acquisition_disposition: normalizeAcqDisp(trade.acquistionOrDisposition),
-        shares: Math.abs(trade.securitiesTransacted),
-        price: trade.price || null,
+        shares,
+        price,
         shares_owned_after: trade.securitiesOwned || null,
         reporting_name: trade.reportingName,
         owner_type: trade.typeOfOwner || null,
         officer_title: null,
         security_name: trade.securityName || null,
-        form_type: normalizeFormType(trade.formType),
+        form_type: formType,
         source: 'fmp',
         source_id: trade.link ? hashString(trade.link) : null,
         sec_link: trade.link || null
+      }
+
+      // Repair a previously stored raw aggregate-principal row instead of
+      // inserting a second normalized copy with a different price.
+      if (rawPrice !== null && price !== null && price !== rawPrice) {
+        const { data: repairedRows, error: repairError } = await supabase
+          .from('insider_transactions')
+          .update({ price })
+          .eq('symbol', record.symbol)
+          .eq('reporting_name', record.reporting_name)
+          .eq('transaction_date', record.transaction_date)
+          .eq('transaction_code', record.transaction_code)
+          .eq('shares', shares)
+          .eq('price', rawPrice)
+          .eq('filing_date', record.filing_date)
+          .select('id')
+
+        if (repairError) {
+          console.error(`Repair error for ${trade.symbol}:`, repairError.message)
+          errors++
+          continue
+        }
+
+        if ((repairedRows || []).length > 0) {
+          updated += repairedRows.length
+          continue
+        }
       }
 
       // Insert (duplicates will fail on unique constraint)
@@ -237,7 +274,7 @@ async function main() {
       }
     }
 
-    skipped = trades.length - validTrades.length
+    skipped += trades.length - validTrades.length
 
     const duration = Date.now() - startTime
 
@@ -250,6 +287,7 @@ async function main() {
           status: errors > 0 ? 'partial' : 'success',
           rows_fetched: trades.length,
           rows_inserted: inserted,
+          rows_updated: updated,
           rows_skipped: skipped,
           error_message: errors > 0 ? `${errors} errors` : null,
           duration_ms: duration
@@ -262,6 +300,7 @@ async function main() {
     console.log('COMPLETE')
     console.log(`  Fetched: ${trades.length}`)
     console.log(`  Inserted: ${inserted}`)
+    console.log(`  Updated: ${updated}`)
     console.log(`  Skipped: ${skipped}`)
     console.log(`  Errors: ${errors}`)
     console.log(`  Duration: ${(duration / 1000).toFixed(1)}s`)
