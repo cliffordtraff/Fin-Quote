@@ -40,7 +40,7 @@ Primary related references:
 | 2025-01-06 | `20250106_conversations.sql` | Add conversations and messages tables |
 | 2026-02-01 | `20260201000004_add_segment_status_to_us_stocks.sql` | Add segment-ingestion status tracking for US stocks after table creation |
 | 2025-11-07 | `20251107_evaluation_annotations.sql` | Add evaluation-annotation support |
-| 2025-11-15 | `20251115000001_create_company_metrics_table.sql` | Add dimensional/company metrics table for segments and derived company data |
+| 2026-01-11 | `20260111210626_create_company_metrics_table.sql` | Recreate dimensional/company metrics after the imported remote-schema cleanup |
 | 2026-01-11 | `20260111210625_remote_schema.sql` | Re-align local migrations with remote schema snapshot |
 | 2026-01-15 | `20260115000001_add_quarterly_support.sql` | Add quarterly financial/metric support |
 | 2026-01-15 | `20260115000002_update_financial_metrics_constraint.sql` | Update financial-metrics uniqueness/constraint rules |

@@ -1,4 +1,5 @@
--- Create company_metrics table for company-specific, dimensioned metrics
+-- Recreate company_metrics after the imported remote-schema migration removes
+-- the legacy table.
 -- Examples: revenue by region/product, units shipped by product line
 
 CREATE TABLE IF NOT EXISTS company_metrics (
