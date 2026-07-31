@@ -235,15 +235,15 @@ function renderStatsCardInner(statsCard: NewsletterDraftStatsCard): string {
                 <tr id="newsletter-preview-stats"><td colspan="2" style="padding:0;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                     <tr>
-                      <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
+                      <td style="padding:16px 8px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
                         <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[0].label)}</p>
                         <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[0].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[0].value)}</p>
                       </td>
-                      <td style="padding:16px 32px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
+                      <td style="padding:16px 8px;width:33%;text-align:center;border-right:1px solid ${BRAND.cream300};">
                         <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[1].label)}</p>
                         <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[1].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[1].value)}</p>
                       </td>
-                      <td style="padding:16px 32px;width:34%;text-align:center;">
+                      <td style="padding:16px 8px;width:34%;text-align:center;">
                         <p style="margin:0 0 2px 0;font-size:11px;color:${BRAND.textMuted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(normalizedItems[2].label)}</p>
                         <p style="margin:0;font-size:18px;font-weight:700;color:${normalizedItems[2].valueColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(normalizedItems[2].value)}</p>
                       </td>

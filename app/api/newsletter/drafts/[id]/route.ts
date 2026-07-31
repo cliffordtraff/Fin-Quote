@@ -1,12 +1,14 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+import { isDeepStrictEqual } from 'node:util'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   deleteNewsletterDraft,
   NewsletterDraftNotFoundError,
   getNewsletterDraft,
   normalizeNewsletterDraftDocument,
+  preserveNewsletterDraftServerMetadata,
   renderNewsletterDraftPreviewHtml,
   saveNewsletterDraft,
 } from '@/lib/newsletter/drafts'
@@ -16,6 +18,11 @@ import {
 } from '@/lib/newsletter/draft-session'
 import { getDefaultPublicChartingBaseUrlForHost } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterDraftDocument, NewsletterDraftStatus } from '@/lib/newsletter/types'
+import {
+  canSetNewsletterDraftStatus,
+  isNewsletterDraftStatus,
+  resolveNewsletterDraftSaveStatus,
+} from '@/lib/newsletter/workflow'
 
 function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof NewsletterDraftNotFoundError) {
@@ -27,8 +34,15 @@ function toErrorResponse(error: unknown): NextResponse {
   return NextResponse.json({ error: message }, { status: 500 })
 }
 
-function normalizeStatus(value: unknown): NewsletterDraftStatus {
-  return value === 'published' ? 'published' : 'draft'
+function normalizeStatus(
+  value: unknown,
+  fallback: NewsletterDraftStatus,
+): NewsletterDraftStatus {
+  if (value === undefined) return fallback
+  if (!isNewsletterDraftStatus(value)) {
+    throw new Error('Invalid newsletter draft status')
+  }
+  return value
 }
 
 export async function GET(
@@ -74,15 +88,54 @@ export async function PATCH(
       return NextResponse.json({ error: 'draft is required' }, { status: 400 })
     }
 
+    const existing = await getNewsletterDraft(scope, id)
+    const host = request.headers.get('host')
+    const publicChartBaseUrl = getDefaultPublicChartingBaseUrlForHost(host)
+    const normalizedDraft = normalizeNewsletterDraftDocument(
+      preserveNewsletterDraftServerMetadata(existing.draft, draft),
+      publicChartBaseUrl,
+    )
+    const normalizedExistingDraft = normalizeNewsletterDraftDocument(
+      existing.draft,
+      publicChartBaseUrl,
+    )
+    const hasExplicitStatus = Object.prototype.hasOwnProperty.call(body, 'status')
+    const requestedStatus = normalizeStatus(body?.status, existing.status)
+    const nextStatus = resolveNewsletterDraftSaveStatus({
+      currentStatus: existing.status,
+      requestedStatus,
+      hasExplicitStatus,
+      contentChanged: !isDeepStrictEqual(
+        normalizedExistingDraft,
+        normalizedDraft,
+      ),
+    })
+    const readiness = canSetNewsletterDraftStatus(normalizedDraft, nextStatus)
+    if (!readiness.ready) {
+      return NextResponse.json(
+        {
+          error: 'Draft is not ready for that publishing stage',
+          issues: readiness.issues,
+        },
+        { status: 422 },
+      )
+    }
+
     const saved = await saveNewsletterDraft(
       scope,
       id,
-      draft,
-      normalizeStatus(body?.status),
+      normalizedDraft,
+      nextStatus,
     )
     const response = NextResponse.json({ draft: saved })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'Invalid newsletter draft status'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return toErrorResponse(error)
   }
 }

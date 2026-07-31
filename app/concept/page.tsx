@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import Navigation from '@/components/Navigation'
+import AppShell from '@/components/AppShell'
 import { getMag7Returns, type Mag7StockReturn } from '@/app/actions/mag7-returns'
 import { getSP500Distribution, type SP500DistributionData } from '@/app/actions/sp500-distribution'
 import { getAdvanceDeclineSnapshot, type AdvanceDeclineSnapshot } from '@/app/actions/advance-decline'
@@ -820,8 +820,10 @@ export default function ConceptChartPage() {
     setStockTooltip(null)
   }
 
+  const isExpectedClosedState = error?.startsWith('No cash-session') ?? false
+
   return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
+    <AppShell mainClassName="mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
       {/* KDE Tooltip */}
       {kdeTooltip && (
         <div
@@ -857,11 +859,17 @@ export default function ConceptChartPage() {
         </div>
       )}
 
-      <Navigation />
+        <header className="mb-6">
+          <p className="text-xs font-medium uppercase text-sage-700 dark:text-sage-300">
+            Market Breadth
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">
+            Market Internals
+          </h1>
+        </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Distribution Card */}
-        <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden mt-4">
+        <div className="overflow-hidden rounded-lg border border-cream-300 bg-white dark:border-gray-700 dark:bg-gray-800">
           {/* Card Header */}
           <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -918,12 +926,19 @@ export default function ConceptChartPage() {
           {/* Card Body */}
           <div className="px-4 pb-4 pt-2">
             {loading ? (
-              <div className="h-[500px] flex items-center justify-center">
-                <div className="text-gray-400">Loading S&P 500 data...</div>
+              <div className="flex min-h-48 items-center justify-center">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Loading S&P 500 data...</div>
               </div>
             ) : error ? (
-              <div className="h-[500px] flex items-center justify-center">
-                <div className="text-red-500">{error}</div>
+              <div
+                role="status"
+                className={`flex min-h-40 items-center justify-center px-5 text-center text-sm leading-6 ${
+                  isExpectedClosedState
+                    ? 'text-gray-500 dark:text-gray-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}
+              >
+                <div className="max-w-xl">{error}</div>
               </div>
             ) : (
               <div className="relative">
@@ -1590,7 +1605,6 @@ export default function ConceptChartPage() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+    </AppShell>
   )
 }

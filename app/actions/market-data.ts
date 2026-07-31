@@ -2,6 +2,15 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
+
+const MARKET_DATA_DEBUG = process.env.MARKET_DATA_DEBUG === 'true'
+
+function debugMarketData(...values: unknown[]) {
+  if (MARKET_DATA_DEBUG) {
+    console.info(...values)
+  }
+}
 
 /**
  * Aggregate 1-minute candles into 10-minute candles by TIME SLOT
@@ -162,7 +171,7 @@ export async function getAaplMarketData() {
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
     if (intradayCandles.length > 0) {
-      console.log('FMP Intraday Response (1-min):', {
+      debugMarketData('Provider intraday response (1-min):', {
         totalCandles: intradayCandles.length,
         firstCandle: intradayCandles[0],
         lastCandle: intradayCandles[intradayCandles.length - 1]
@@ -175,7 +184,7 @@ export async function getAaplMarketData() {
       const uniqueDates = [...new Set(intradayCandles.map(c => c.date.split(' ')[0]))] as string[]
       const previousDate = uniqueDates.length > 1 ? uniqueDates[1] : null
 
-      console.log(`SPX: Most recent date: ${mostRecentDate}, Previous date: ${previousDate}`)
+      debugMarketData(`SPX: Most recent date: ${mostRecentDate}, Previous date: ${previousDate}`)
 
       // Get previous day's last 2 hours (2pm-4pm = slots 27-38, which is 14:00-15:50)
       let prevDayCandles: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
@@ -191,7 +200,7 @@ export async function getAaplMarketData() {
           return hour >= 14 && hour < 16
         })
 
-        console.log(`SPX: Previous day ${previousDate} has ${prevDayCandles.length} 1-min candles from 2pm-4pm`)
+        debugMarketData(`SPX: Previous day ${previousDate} has ${prevDayCandles.length} 1-min candles from 2pm-4pm`)
       }
 
       // Get today's candles
@@ -199,7 +208,7 @@ export async function getAaplMarketData() {
         c.date.startsWith(mostRecentDate)
       )
 
-      console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate}`)
+      debugMarketData(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate}`)
 
       // Aggregate previous day's last 2 hours (use negative slot offset to position before today)
       const prevDayTenMin = prevDayCandles.length > 0
@@ -209,17 +218,17 @@ export async function getAaplMarketData() {
       // Aggregate today's candles (no offset)
       const todayTenMin = aggregateTo10MinCandles(todayCandles)
 
-      console.log(`SPX: Aggregated ${prevDayTenMin.length} prev day 10-min candles + ${todayTenMin.length} today 10-min candles`)
+      debugMarketData(`SPX: Aggregated ${prevDayTenMin.length} prev day 10-min candles + ${todayTenMin.length} today 10-min candles`)
 
       // Combine: previous day's last 2 hours + today
       priceHistory = [...prevDayTenMin, ...todayTenMin]
     } else {
-      console.log('Intraday: No data available (possibly weekend/market closed)')
+      debugMarketData('Intraday: No data available (possibly weekend/market closed)')
     }
 
     // Fallback to daily data if no intraday data available (markets closed, weekend, etc)
     if (priceHistory.length === 0) {
-      console.log('No intraday data, fetching daily historical data instead')
+      debugMarketData('No intraday data, fetching daily historical data instead')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       const dailyCandles = await provider.getHistoricalDaily('AAPL', ninetyDaysAgo.toISOString().split('T')[0])
@@ -232,7 +241,7 @@ export async function getAaplMarketData() {
         low: c.low,
         close: c.close,
       }))
-      console.log('Daily data fetched:', {
+      debugMarketData('Daily data fetched:', {
         count: priceHistory.length,
         first: priceHistory[0],
         last: priceHistory[priceHistory.length - 1]
@@ -256,7 +265,7 @@ export async function getAaplMarketData() {
       priceHistory: priceHistory,
     }
   } catch (error) {
-    console.error('Error in getAaplMarketData:', error)
+    console.error('Error in getAaplMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
 }
@@ -280,7 +289,7 @@ export async function getNasdaqMarketData() {
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
     if (intradayCandles.length > 0) {
-      console.log('FMP Intraday Response (1-min) Nasdaq:', {
+      debugMarketData('Provider intraday response (1-min) Nasdaq:', {
         totalCandles: intradayCandles.length,
         firstCandle: intradayCandles[0],
         lastCandle: intradayCandles[intradayCandles.length - 1]
@@ -294,17 +303,17 @@ export async function getNasdaqMarketData() {
         c.date.startsWith(mostRecentDate)
       )
 
-      console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Nasdaq)`)
+      debugMarketData(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Nasdaq)`)
 
       // Aggregate 1-minute candles into 10-minute candles
       const tenMinCandles = aggregateTo10MinCandles(todayCandles)
 
-      console.log(`Aggregated into ${tenMinCandles.length} 10-min candles (Nasdaq)`)
+      debugMarketData(`Aggregated into ${tenMinCandles.length} 10-min candles (Nasdaq)`)
 
       // Log first candle details to debug color issue
       if (tenMinCandles.length > 0) {
         const firstCandle = tenMinCandles[tenMinCandles.length - 1]
-        console.log('NASDAQ First 10-min candle (9:30-9:39):', {
+        debugMarketData('NASDAQ First 10-min candle (9:30-9:39):', {
           open: firstCandle.open,
           close: firstCandle.close,
           high: firstCandle.high,
@@ -316,12 +325,12 @@ export async function getNasdaqMarketData() {
 
       priceHistory = tenMinCandles
     } else {
-      console.log('Intraday: No data available (possibly weekend/market closed)')
+      debugMarketData('Intraday: No data available (possibly weekend/market closed)')
     }
 
     // Fallback to daily data if no intraday data available (markets closed, weekend, etc)
     if (priceHistory.length === 0) {
-      console.log('No intraday data, fetching daily historical data instead (Nasdaq)')
+      debugMarketData('No intraday data, fetching daily historical data instead (Nasdaq)')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       const dailyCandles = await provider.getHistoricalDaily('^IXIC', ninetyDaysAgo.toISOString().split('T')[0])
@@ -333,7 +342,7 @@ export async function getNasdaqMarketData() {
         low: c.low,
         close: c.close,
       }))
-      console.log('Daily data fetched (Nasdaq):', {
+      debugMarketData('Daily data fetched (Nasdaq):', {
         count: priceHistory.length,
         first: priceHistory[0],
         last: priceHistory[priceHistory.length - 1]
@@ -357,7 +366,7 @@ export async function getNasdaqMarketData() {
       priceHistory: priceHistory,
     }
   } catch (error) {
-    console.error('Error in getNasdaqMarketData:', error)
+    console.error('Error in getNasdaqMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
 }
@@ -381,7 +390,7 @@ export async function getDowMarketData() {
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
     if (intradayCandles.length > 0) {
-      console.log('FMP Intraday Response (1-min) Dow:', {
+      debugMarketData('Provider intraday response (1-min) Dow:', {
         totalCandles: intradayCandles.length,
         firstCandle: intradayCandles[0],
         lastCandle: intradayCandles[intradayCandles.length - 1]
@@ -395,21 +404,21 @@ export async function getDowMarketData() {
         c.date.startsWith(mostRecentDate)
       )
 
-      console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Dow)`)
+      debugMarketData(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Dow)`)
 
       // Aggregate 1-minute candles into 10-minute candles
       const tenMinCandles = aggregateTo10MinCandles(todayCandles)
 
-      console.log(`Aggregated into ${tenMinCandles.length} 10-min candles (Dow)`)
+      debugMarketData(`Aggregated into ${tenMinCandles.length} 10-min candles (Dow)`)
 
       priceHistory = tenMinCandles
     } else {
-      console.log('Intraday: No data available (possibly weekend/market closed)')
+      debugMarketData('Intraday: No data available (possibly weekend/market closed)')
     }
 
     // Fallback to daily data if no intraday data available (markets closed, weekend, etc)
     if (priceHistory.length === 0) {
-      console.log('No intraday data, fetching daily historical data instead (Dow)')
+      debugMarketData('No intraday data, fetching daily historical data instead (Dow)')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       const dailyCandles = await provider.getHistoricalDaily('^DJI', ninetyDaysAgo.toISOString().split('T')[0])
@@ -421,7 +430,7 @@ export async function getDowMarketData() {
         low: c.low,
         close: c.close,
       }))
-      console.log('Daily data fetched (Dow):', {
+      debugMarketData('Daily data fetched (Dow):', {
         count: priceHistory.length,
         first: priceHistory[0],
         last: priceHistory[priceHistory.length - 1]
@@ -445,7 +454,7 @@ export async function getDowMarketData() {
       priceHistory: priceHistory,
     }
   } catch (error) {
-    console.error('Error in getDowMarketData:', error)
+    console.error('Error in getDowMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
 }
@@ -469,7 +478,7 @@ export async function getRussellMarketData() {
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
     if (intradayCandles.length > 0) {
-      console.log('FMP Intraday Response (1-min) Russell:', {
+      debugMarketData('Provider intraday response (1-min) Russell:', {
         totalCandles: intradayCandles.length,
         firstCandle: intradayCandles[0],
         lastCandle: intradayCandles[intradayCandles.length - 1]
@@ -483,21 +492,21 @@ export async function getRussellMarketData() {
         c.date.startsWith(mostRecentDate)
       )
 
-      console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Russell)`)
+      debugMarketData(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (Russell)`)
 
       // Aggregate 1-minute candles into 10-minute candles
       const tenMinCandles = aggregateTo10MinCandles(todayCandles)
 
-      console.log(`Aggregated into ${tenMinCandles.length} 10-min candles (Russell)`)
+      debugMarketData(`Aggregated into ${tenMinCandles.length} 10-min candles (Russell)`)
 
       priceHistory = tenMinCandles
     } else {
-      console.log('Intraday: No data available (possibly weekend/market closed)')
+      debugMarketData('Intraday: No data available (possibly weekend/market closed)')
     }
 
     // Fallback to daily data if no intraday data available (markets closed, weekend, etc)
     if (priceHistory.length === 0) {
-      console.log('No intraday data, fetching daily historical data instead (Russell)')
+      debugMarketData('No intraday data, fetching daily historical data instead (Russell)')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       const dailyCandles = await provider.getHistoricalDaily('^RUT', ninetyDaysAgo.toISOString().split('T')[0])
@@ -509,7 +518,7 @@ export async function getRussellMarketData() {
         low: c.low,
         close: c.close,
       }))
-      console.log('Daily data fetched (Russell):', {
+      debugMarketData('Daily data fetched (Russell):', {
         count: priceHistory.length,
         first: priceHistory[0],
         last: priceHistory[priceHistory.length - 1]
@@ -533,7 +542,7 @@ export async function getRussellMarketData() {
       priceHistory: priceHistory,
     }
   } catch (error) {
-    console.error('Error in getRussellMarketData:', error)
+    console.error('Error in getRussellMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
 }
@@ -558,7 +567,7 @@ export async function getESFuturesMarketData() {
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
     if (intradayCandles.length > 0) {
-      console.log('FMP Intraday Response (1-min) ES Futures:', {
+      debugMarketData('Provider intraday response (1-min) ES Futures:', {
         totalCandles: intradayCandles.length,
         firstCandle: intradayCandles[0],
         lastCandle: intradayCandles[intradayCandles.length - 1]
@@ -572,21 +581,21 @@ export async function getESFuturesMarketData() {
         c.date.startsWith(mostRecentDate)
       )
 
-      console.log(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (ES Futures)`)
+      debugMarketData(`Filtered to ${todayCandles.length} 1-min candles from ${mostRecentDate} (ES Futures)`)
 
       // Aggregate 1-minute candles into 10-minute candles
       const tenMinCandles = aggregateTo10MinCandles(todayCandles)
 
-      console.log(`Aggregated into ${tenMinCandles.length} 10-min candles (ES Futures)`)
+      debugMarketData(`Aggregated into ${tenMinCandles.length} 10-min candles (ES Futures)`)
 
       priceHistory = tenMinCandles
     } else {
-      console.log('Intraday: No intraday data available (ES Futures), trying daily data')
+      debugMarketData('Intraday: No intraday data available (ES Futures), trying daily data')
     }
 
     // Fallback to daily data if no intraday data available
     if (priceHistory.length === 0) {
-      console.log('Fetching daily historical data for ES Futures')
+      debugMarketData('Fetching daily historical data for ES Futures')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       const dailyCandles = await provider.getHistoricalDaily('ES=F', ninetyDaysAgo.toISOString().split('T')[0])
@@ -598,7 +607,7 @@ export async function getESFuturesMarketData() {
         low: c.low,
         close: c.close,
       }))
-      console.log('Daily data fetched (ES Futures):', {
+      debugMarketData('Daily data fetched (ES Futures):', {
         count: priceHistory.length,
         first: priceHistory[0],
         last: priceHistory[priceHistory.length - 1]
@@ -622,7 +631,7 @@ export async function getESFuturesMarketData() {
       priceHistory: priceHistory,
     }
   } catch (error) {
-    console.error('Error in getESFuturesMarketData:', error)
+    console.error('Error in getESFuturesMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
 }
@@ -642,13 +651,13 @@ export async function getAaplFinancialHistory() {
       .limit(5)
 
     if (error) {
-      console.error('Error fetching financial history:', error)
+      console.error('Error fetching financial history:', safeErrorMessage(error))
       return { error: 'Failed to fetch financial history' }
     }
 
     return { data: data?.reverse() || [] }
   } catch (error) {
-    console.error('Error in getAaplFinancialHistory:', error)
+    console.error('Error in getAaplFinancialHistory:', safeErrorMessage(error))
     return { error: 'Failed to fetch financial history' }
   }
 }

@@ -15,11 +15,25 @@ import type {
 } from './types'
 
 const FMP_BASE = 'https://financialmodelingprep.com/api'
+const FMP_FUTURES_SYMBOLS: Record<string, string> = {
+  'ES=F': 'ESUSD',
+  'NQ=F': 'NQUSD',
+  'YM=F': 'YMUSD',
+  'RTY=F': 'RTYUSD',
+  'CL=F': 'CLUSD',
+  'NG=F': 'NGUSD',
+  'GC=F': 'GCUSD',
+  'SI=F': 'SIUSD',
+}
 
 function getApiKey(): string {
   const key = process.env.FMP_API_KEY
   if (!key) throw new Error('FMP_API_KEY not set')
   return key
+}
+
+function toFmpRequestSymbol(symbol: string): string {
+  return FMP_FUTURES_SYMBOLS[symbol] ?? symbol
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +110,8 @@ export class FMPProvider implements MarketDataProvider {
 
   async getQuote(symbol: string): Promise<ProviderQuote | null> {
     const key = getApiKey()
-    const res = await fetch(`${FMP_BASE}/v3/quote/${encodeURIComponent(symbol)}?apikey=${key}`, {
+    const requestSymbol = toFmpRequestSymbol(symbol)
+    const res = await fetch(`${FMP_BASE}/v3/quote/${encodeURIComponent(requestSymbol)}?apikey=${key}`, {
       next: { revalidate: 60 },
     })
     if (!res.ok) return null
@@ -110,7 +125,7 @@ export class FMPProvider implements MarketDataProvider {
   async getQuotes(symbols: string[]): Promise<ProviderQuote[]> {
     if (symbols.length === 0) return []
     const key = getApiKey()
-    const joined = symbols.map(s => encodeURIComponent(s)).join(',')
+    const joined = symbols.map(s => encodeURIComponent(toFmpRequestSymbol(s))).join(',')
     const res = await fetch(`${FMP_BASE}/v3/quote/${joined}?apikey=${key}`, {
       next: { revalidate: 60 },
     })
@@ -134,8 +149,9 @@ export class FMPProvider implements MarketDataProvider {
     const key = getApiKey()
     const endpoint = fmpCandleEndpoint(multiplier, timespan)
     const isDaily = endpoint === 'historical-price-full'
+    const requestSymbol = toFmpRequestSymbol(symbol)
 
-    let url = `${FMP_BASE}/v3/${endpoint}/${encodeURIComponent(symbol)}?apikey=${key}`
+    let url = `${FMP_BASE}/v3/${endpoint}/${encodeURIComponent(requestSymbol)}?apikey=${key}`
     if (from) url += `&from=${from}`
     if (to) url += `&to=${to}`
 
@@ -163,7 +179,8 @@ export class FMPProvider implements MarketDataProvider {
     to?: string,
   ): Promise<ProviderCandle[]> {
     const key = getApiKey()
-    let url = `${FMP_BASE}/v3/historical-price-full/${encodeURIComponent(symbol)}?apikey=${key}&from=${from}`
+    const requestSymbol = toFmpRequestSymbol(symbol)
+    let url = `${FMP_BASE}/v3/historical-price-full/${encodeURIComponent(requestSymbol)}?apikey=${key}&from=${from}`
     if (to) url += `&to=${to}`
 
     const res = await fetch(url, { next: { revalidate: 3600 } })

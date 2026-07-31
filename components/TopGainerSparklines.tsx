@@ -18,54 +18,55 @@ function MiniSparkline({ data, isLoser }: { data: SparklineData; isLoser: boolea
     const canvas = canvasRef.current
     if (!canvas || data.priceHistory.length === 0) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const draw = () => {
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-    // Get device pixel ratio for sharp rendering
-    const dpr = window.devicePixelRatio || 1
-    const width = 200
-    const height = 60
+      const dpr = window.devicePixelRatio || 1
+      const width = Math.max(120, Math.round(canvas.clientWidth))
+      const height = 60
 
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
-    ctx.scale(dpr, dpr)
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, width, height)
 
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height)
+      const prices = data.priceHistory.map(point => point.close)
+      const minPrice = Math.min(...prices)
+      const maxPrice = Math.max(...prices)
+      const priceRange = maxPrice - minPrice || 1
+      const padding = 4
 
-    const prices = data.priceHistory.map(d => d.close)
-    const minPrice = Math.min(...prices)
-    const maxPrice = Math.max(...prices)
-    const priceRange = maxPrice - minPrice || 1
+      ctx.beginPath()
+      ctx.strokeStyle = 'rgba(180, 180, 180, 0.8)'
+      ctx.lineWidth = 1.5
 
-    const padding = 4
+      prices.forEach((price, index) => {
+        const denominator = Math.max(1, prices.length - 1)
+        const x = padding + (index / denominator) * (width - padding * 2)
+        const y = padding + (1 - (price - minPrice) / priceRange) * (height - padding * 2)
 
-    // Draw line
-    ctx.beginPath()
-    ctx.strokeStyle = 'rgba(180, 180, 180, 0.8)'
-    ctx.lineWidth = 1.5
+        if (index === 0) {
+          ctx.moveTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      })
 
-    prices.forEach((price, i) => {
-      const x = padding + (i / (prices.length - 1)) * (width - padding * 2)
-      const y = padding + (1 - (price - minPrice) / priceRange) * (height - padding * 2)
+      ctx.stroke()
+    }
 
-      if (i === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
-      }
-    })
-
-    ctx.stroke()
+    draw()
+    const observer = new ResizeObserver(draw)
+    observer.observe(canvas)
+    return () => observer.disconnect()
   }, [data])
 
   if (data.priceHistory.length === 0) {
     return (
-      <div className="flex flex-col items-center">
+      <div className="flex min-w-0 flex-col items-center">
         <span className="text-sm font-medium text-gray-400 mb-2">{data.symbol}</span>
-        <div className="w-[200px] h-[60px] flex items-center justify-center text-xs text-gray-500">
+        <div className="flex h-[60px] w-full items-center justify-center text-xs text-gray-500">
           No data
         </div>
       </div>
@@ -76,14 +77,14 @@ function MiniSparkline({ data, isLoser }: { data: SparklineData; isLoser: boolea
   const changePrefix = isLoser ? '' : '+'
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex min-w-0 flex-col items-center">
       <div className="flex items-center gap-2 mb-2">
         <span className="text-sm font-medium text-gray-400">{data.symbol}</span>
         <span className={`text-sm font-medium ${changeColor}`}>
           {changePrefix}{data.changesPercentage.toFixed(2)}%
         </span>
       </div>
-      <canvas ref={canvasRef} />
+      <canvas ref={canvasRef} className="h-[60px] w-full" />
     </div>
   )
 }
@@ -115,6 +116,7 @@ export default function TopGainerSparklines({ sparklines, loserSparklines = [] }
       {hasToggle && (
         <div className="flex justify-center gap-2 mb-2">
           <button
+            type="button"
             onClick={() => setShowLosers(false)}
             className={`text-xs px-2 py-0.5 rounded transition-colors ${
               !showLosers
@@ -125,6 +127,7 @@ export default function TopGainerSparklines({ sparklines, loserSparklines = [] }
             Top Gainers
           </button>
           <button
+            type="button"
             onClick={() => setShowLosers(true)}
             className={`text-xs px-2 py-0.5 rounded transition-colors ${
               showLosers
@@ -138,7 +141,7 @@ export default function TopGainerSparklines({ sparklines, loserSparklines = [] }
       )}
 
       {/* Sparklines */}
-      <div className="flex gap-8 justify-center py-4">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5 py-4 sm:grid-cols-4">
         {currentSparklines.map((sparkline) => (
           <MiniSparkline key={sparkline.symbol} data={sparkline} isLoser={showLosers} />
         ))}

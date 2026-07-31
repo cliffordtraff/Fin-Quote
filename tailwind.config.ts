@@ -23,10 +23,10 @@ const config: Config = {
           900: '#2b3223',
         },
         cream: {
-          50: '#fdfdfb',
-          100: '#f5f5f0',   // Main background
-          200: '#ededea',
-          300: '#e5e5e0',   // Borders
+          50: '#fafafa',
+          100: '#f4f4f5',
+          200: '#e4e4e7',
+          300: '#d4d4d8',
         },
       },
       fontFamily: {

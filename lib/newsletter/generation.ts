@@ -13,9 +13,12 @@ export function resolveNewsletterGenerationBackend(
     return override
   }
 
-  return process.env.NEWSLETTER_GENERATION_BACKEND === 'openai_api'
-    ? 'openai_api'
-    : 'local_worker'
+  const configured = process.env.NEWSLETTER_GENERATION_BACKEND
+  if (configured === 'local_worker' || configured === 'openai_api') {
+    return configured
+  }
+
+  return process.env.NODE_ENV === 'production' ? 'openai_api' : 'local_worker'
 }
 
 function stripGenerationBackendOption(

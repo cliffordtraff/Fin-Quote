@@ -245,8 +245,18 @@ describe('newsletter price chart editor bridge', () => {
       expect(resolved.symbol).toBe('GOOGL')
       expect(resolved.baseSpec.range).toBe('1m')
       expect(resolved.baseSpec.interval).toBe('D')
-      expect(resolved.baseSpec.width).toBe(620)
-      expect(resolved.baseSpec.height).toBe(440)
+      expect(resolved.baseSpec.width).toBe(1860)
+      expect(resolved.baseSpec.height).toBe(1320)
+      expect(resolved.baseSpec.companyName).toBe('GOOGL - Daily')
+      expect(resolved.baseSpec.exportOptions).toMatchObject({
+        displayWidth: 620,
+        displayHeight: 440,
+        exportScale: 3,
+        visibleRange: 'current',
+        chartTitle: 'GOOGL - Daily',
+        showTitle: true,
+        showLowerPane: false,
+      })
       expect(viewportTimeRange.endTime).toBe(Date.now())
       expect(viewportTimeRange.visibleBars).toBe(109)
       expect(Math.round((viewportTimeRange.endTime - viewportTimeRange.startTime) / DAY_MS)).toBe(139)
@@ -257,7 +267,7 @@ describe('newsletter price chart editor bridge', () => {
     }
   })
 
-  it('keeps a saved export-editor viewport when reopening a price chart', () => {
+  it('keeps a saved export-editor viewport while adding render defaults', () => {
     const chartExportSpec = {
       symbol: 'GOOGL',
       range: '1m',
@@ -283,7 +293,81 @@ describe('newsletter price chart editor bridge', () => {
       chartExportSpec,
     })
 
-    expect(resolved.baseSpec).toBe(chartExportSpec)
+    expect(resolved.baseSpec).not.toBe(chartExportSpec)
+    expect(resolved.baseSpec.viewportTimeRange).toEqual(chartExportSpec.viewportTimeRange)
+    expect(resolved.baseSpec.dataTimeRange).toEqual(chartExportSpec.dataTimeRange)
+    expect(resolved.baseSpec.width).toBe(1860)
+    expect(resolved.baseSpec.height).toBe(1320)
+    expect(resolved.baseSpec.exportOptions).toMatchObject({
+      displayWidth: 620,
+      displayHeight: 440,
+      exportScale: 3,
+      visibleRange: 'current',
+      chartTitle: 'GOOGL - Daily',
+    })
+  })
+
+  it('preserves saved export-editor options when reopening a price chart', () => {
+    const chartExportSpec = {
+      symbol: 'GOOGL',
+      range: '1m',
+      interval: 'D',
+      chartType: 'candles',
+      width: 2400,
+      height: 1800,
+      companyName: 'Custom Title',
+      viewportTimeRange: {
+        startTime: 1_775_520_000_000,
+        endTime: 1_779_206_400_000,
+        visibleBars: 42,
+      },
+      dataTimeRange: {
+        startTime: 1_735_603_200_000,
+        endTime: 1_779_206_400_000,
+      },
+      exportOptions: {
+        displayWidth: 1200,
+        displayHeight: 900,
+        exportScale: 2,
+        visibleRange: 'custom',
+        chartTitle: 'Custom Title',
+        titleSize: 42,
+        axisLabelSize: 13,
+        showTitle: true,
+      },
+      themeOverrides: {
+        fontSizeHeader: 42,
+        fontSizeTick: 13,
+        fontSizeTimeAxis: 13,
+      },
+    }
+
+    const resolved = resolveNewsletterPriceExportEditor({
+      mode: 'price',
+      symbol: 'GOOGL',
+      range: '1m',
+      interval: 'D',
+      chartType: 'candles',
+      chartExportSpec,
+    })
+
+    expect(resolved.baseSpec.width).toBe(2400)
+    expect(resolved.baseSpec.height).toBe(1800)
+    expect(resolved.baseSpec.companyName).toBe('Custom Title')
+    expect(resolved.baseSpec.exportOptions).toMatchObject({
+      displayWidth: 1200,
+      displayHeight: 900,
+      exportScale: 2,
+      visibleRange: 'custom',
+      chartTitle: 'Custom Title',
+      titleSize: 42,
+      axisLabelSize: 13,
+    })
+    expect(resolved.baseSpec.themeOverrides).toMatchObject({
+      fontSizeHeader: 42,
+      fontSizeTick: 13,
+      fontSizeTimeAxis: 13,
+    })
   })
 
   it('requests a newsletter-sized fundamentals editor surface too', () => {

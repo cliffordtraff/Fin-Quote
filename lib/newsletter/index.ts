@@ -36,12 +36,24 @@ export type {
   RecentPick,
   EarningsCandidate,
   NewsletterDraftStatus,
+  NewsletterDraftSourceType,
+  NewsletterDraftSource,
+  NewsletterDraftPublication,
+  NewsletterDraftEvent,
+  NewsletterDraftEventType,
   NewsletterDraftBlock,
   NewsletterDraftDocument,
   NewsletterDraftRecord,
   NewsletterDraftSummary,
 } from './types'
 export { isPriceNewsletterChartSpec } from './chart-spec'
+export {
+  canSetNewsletterDraftStatus,
+  getNewsletterDraftReadiness,
+  getNewsletterWorkflowStage,
+  isNewsletterDraftStatus,
+  NEWSLETTER_WORKFLOW_STAGES,
+} from './workflow'
 
 // Editorial chart templates
 export {
@@ -82,11 +94,22 @@ export {
   renderNewsletterDraftPreviewHtml,
   renderNewsletterDraftBeehiivHtml,
   listNewsletterDrafts,
+  listNewsletterDraftEvents,
   getNewsletterDraft,
+  findNewsletterDraftBySourceReviewKey,
+  createNewsletterDraftFromDocument,
   createNewsletterDraft,
   saveNewsletterDraft,
   regenerateNewsletterDraftChart,
 } from './drafts'
+export {
+  buildApprovedCatalystNewsletterDraft,
+  ensureApprovedCatalystNewsletterDraft,
+} from './catalyst-workflow'
+export {
+  normalizeNewsletterPublicationUrl,
+  recordNewsletterPublication,
+} from './publication'
 export { publishChartImages } from './publish'
 export {
   createNewsletterModelClient,

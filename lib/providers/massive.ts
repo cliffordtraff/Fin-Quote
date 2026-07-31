@@ -20,6 +20,7 @@ import {
   MASSIVE_TO_FMP_SYMBOLS,
 } from './utils'
 import { resolveFrontMonth, getFuturesSnapshot } from './futures-resolver'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 const MASSIVE_BASE = 'https://api.massive.com'
 const TOP_MOVER_CANDIDATE_LIMIT = 60
@@ -102,7 +103,7 @@ function mapAggCandle(bar: any): ProviderCandle {
 // ---------------------------------------------------------------------------
 
 export class MassiveProvider implements MarketDataProvider {
-  private futuresFallbackProvider: FMPProvider | null = null
+  private fmpFallbackProvider: FMPProvider | null = null
 
   // ---- Quotes ----
 
@@ -133,7 +134,7 @@ export class MassiveProvider implements MarketDataProvider {
 
       return mapStockSnapshot(ticker, symbol)
     } catch (err) {
-      console.error(`[massive] getQuote error for ${symbol}:`, err)
+      console.error(`[massive] getQuote error for ${symbol}:`, safeErrorMessage(err))
       return null
     }
   }
@@ -183,7 +184,7 @@ export class MassiveProvider implements MarketDataProvider {
           }
         }
       } catch (err) {
-        console.error('[massive] getQuotes stock batch error:', err)
+        console.error('[massive] getQuotes stock batch error:', safeErrorMessage(err))
       }
     }
 
@@ -208,7 +209,18 @@ export class MassiveProvider implements MarketDataProvider {
           }
         }
       } catch (err) {
-        console.error('[massive] getQuotes index batch error:', err)
+        console.error('[massive] getQuotes index batch error:', safeErrorMessage(err))
+      }
+
+      // Some Massive plans return partial or empty results from the batch
+      // index endpoint while the single-index snapshot endpoint still works.
+      const resolvedSymbols = new Set(results.map(result => result.symbol))
+      const missingIndices = indices.filter(symbol => !resolvedSymbols.has(symbol))
+      const fallbackQuotes = await Promise.all(
+        missingIndices.map(symbol => this.getIndexQuote(symbol, resolveSymbol(symbol))),
+      )
+      for (const quote of fallbackQuotes) {
+        if (quote) results.push(quote)
       }
     }
 
@@ -263,7 +275,7 @@ export class MassiveProvider implements MarketDataProvider {
         .filter(q => q.price >= 0.10)
         .slice(0, TOP_MOVER_CANDIDATE_LIMIT)
     } catch (err) {
-      console.error('[massive] getGainers error:', err)
+      console.error('[massive] getGainers error:', safeErrorMessage(err))
       return []
     }
   }
@@ -284,7 +296,7 @@ export class MassiveProvider implements MarketDataProvider {
         .filter(q => q.price >= 0.10)
         .slice(0, TOP_MOVER_CANDIDATE_LIMIT)
     } catch (err) {
-      console.error('[massive] getLosers error:', err)
+      console.error('[massive] getLosers error:', safeErrorMessage(err))
       return []
     }
   }
@@ -309,7 +321,7 @@ export class MassiveProvider implements MarketDataProvider {
 
       return tickerList.map(t => mapStockSnapshot(t))
     } catch (err) {
-      console.error('[massive] getSnapshot error:', err)
+      console.error('[massive] getSnapshot error:', safeErrorMessage(err))
       return []
     }
   }
@@ -338,7 +350,7 @@ export class MassiveProvider implements MarketDataProvider {
         symbol,
       }))
     } catch (err) {
-      console.error(`[massive] getNews error for ${symbol}:`, err)
+      console.error(`[massive] getNews error for ${symbol}:`, safeErrorMessage(err))
       return []
     }
   }
@@ -370,15 +382,25 @@ export class MassiveProvider implements MarketDataProvider {
     try {
       const url = `${MASSIVE_BASE}/v2/aggs/ticker/${massiveSymbol}/range/${multiplier}/${timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=50000`
       const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
-      if (!res.ok) return []
+      if (!res.ok) {
+        return isIndex(massiveSymbol)
+          ? this.getIndexFallbackCandles(symbol, multiplier, timespan, from, to)
+          : []
+      }
 
       const json = await res.json()
       const results: any[] = json?.results ?? []
 
+      if (results.length === 0 && isIndex(massiveSymbol)) {
+        return this.getIndexFallbackCandles(symbol, multiplier, timespan, from, to)
+      }
+
       return results.map(mapAggCandle)
     } catch (err) {
-      console.error(`[massive] fetchAggs error for ${symbol}:`, err)
-      return []
+      console.error(`[massive] fetchAggs error for ${symbol}:`, safeErrorMessage(err))
+      return isIndex(massiveSymbol)
+        ? this.getIndexFallbackCandles(symbol, multiplier, timespan, from, to)
+        : []
     }
   }
 
@@ -434,16 +456,16 @@ export class MassiveProvider implements MarketDataProvider {
         `${MASSIVE_BASE}/v3/snapshot/indices?ticker.any_of=${massiveSymbol}&limit=1`,
         { headers: authHeaders(), cache: 'no-store' },
       )
-      if (!res.ok) return null
+      if (!res.ok) return this.getIndexFallbackQuote(originalSymbol)
 
       const json = await res.json()
       const results: any[] = json?.results ?? []
-      if (results.length === 0) return null
+      if (results.length === 0) return this.getIndexFallbackQuote(originalSymbol)
 
       return mapIndexSnapshot(results[0], originalSymbol)
     } catch (err) {
-      console.error(`[massive] getIndexQuote error for ${originalSymbol}:`, err)
-      return null
+      console.error(`[massive] getIndexQuote error for ${originalSymbol}:`, safeErrorMessage(err))
+      return this.getIndexFallbackQuote(originalSymbol)
     }
   }
 
@@ -485,18 +507,49 @@ export class MassiveProvider implements MarketDataProvider {
     }
   }
 
-  private getFuturesFallbackProvider(): FMPProvider {
-    if (!this.futuresFallbackProvider) {
-      this.futuresFallbackProvider = new FMPProvider()
+  private getFmpFallbackProvider(): FMPProvider {
+    if (!this.fmpFallbackProvider) {
+      this.fmpFallbackProvider = new FMPProvider()
     }
-    return this.futuresFallbackProvider
+    return this.fmpFallbackProvider
+  }
+
+  private async getIndexFallbackQuote(symbol: string): Promise<ProviderQuote | null> {
+    try {
+      return await this.getFmpFallbackProvider().getQuote(symbol)
+    } catch (err) {
+      console.error(`[massive] index quote fallback failed for ${symbol}:`, safeErrorMessage(err))
+      return null
+    }
+  }
+
+  private async getIndexFallbackCandles(
+    symbol: string,
+    multiplier: number,
+    timespan: CandleTimespan,
+    from?: string,
+    to?: string,
+  ): Promise<ProviderCandle[]> {
+    const provider = this.getFmpFallbackProvider()
+
+    try {
+      if (timespan === 'minute' || timespan === 'hour') {
+        return await provider.getIntraday(symbol, multiplier, timespan, from, to)
+      }
+
+      const fromParam = from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      return await provider.getHistoricalDaily(symbol, fromParam, to)
+    } catch (err) {
+      console.error(`[massive] index candle fallback failed for ${symbol}:`, safeErrorMessage(err))
+      return []
+    }
   }
 
   private async getFuturesFallbackQuote(symbol: string): Promise<ProviderQuote | null> {
     try {
-      return await this.getFuturesFallbackProvider().getQuote(symbol)
+      return await this.getFmpFallbackProvider().getQuote(symbol)
     } catch (err) {
-      console.error(`[massive] futures quote fallback failed for ${symbol}:`, err)
+      console.error(`[massive] futures quote fallback failed for ${symbol}:`, safeErrorMessage(err))
       return null
     }
   }
@@ -508,7 +561,7 @@ export class MassiveProvider implements MarketDataProvider {
     from?: string,
     to?: string,
   ): Promise<ProviderCandle[]> {
-    const provider = this.getFuturesFallbackProvider()
+    const provider = this.getFmpFallbackProvider()
 
     try {
       if (timespan === 'minute' || timespan === 'hour') {
@@ -522,7 +575,7 @@ export class MassiveProvider implements MarketDataProvider {
 
       return []
     } catch (err) {
-      console.error(`[massive] futures candle fallback failed for ${symbol}:`, err)
+      console.error(`[massive] futures candle fallback failed for ${symbol}:`, safeErrorMessage(err))
       return []
     }
   }

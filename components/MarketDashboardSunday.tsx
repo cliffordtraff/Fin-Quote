@@ -1,25 +1,28 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties } from 'react'
-import FuturesTable from '@/components/FuturesTable'
-import MarketMoversTable from '@/components/MarketMoversTable'
-import StocksTable from '@/components/StocksTable'
-import SectorHeatmap from '@/components/SectorHeatmap'
-import MarketHeadlines from '@/components/MarketHeadlines'
-import IndexSparklines from '@/components/IndexSparklines'
-import MarketTrendsCombined from '@/components/MarketTrendsCombined'
-import SP500PerformanceChart from '@/components/SP500PerformanceChart'
-import MarketInsights from '@/components/MarketInsights'
-import TopGainerSparklines from '@/components/TopGainerSparklines'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import EconomicCalendar from '@/components/EconomicCalendar'
+import EarningsCalendar from '@/components/EarningsCalendar'
 import ForexBondsTable from '@/components/ForexBondsTable'
+import FuturesTable from '@/components/FuturesTable'
+import IndexSparklines from '@/components/IndexSparklines'
+import MarketHeadlines from '@/components/MarketHeadlines'
+import MarketInsights from '@/components/MarketInsights'
 import MarketSessions from '@/components/MarketSessions'
+import MarketTrendsCombined from '@/components/MarketTrendsCombined'
+import SectorHeatmap from '@/components/SectorHeatmap'
+import StocksTable from '@/components/StocksTable'
+import TopGainerSparklines from '@/components/TopGainerSparklines'
 import TopInsiderTrades from '@/components/TopInsiderTrades'
 import { getMarketSummary } from '@/app/actions/market-summary'
-import { getMarketTrendsResponses, type MarketTrendsBullet } from '@/app/actions/market-trends-responses'
-
+import {
+  getMarketTrendsResponses,
+  type MarketTrendsBullet,
+} from '@/app/actions/market-trends-responses'
 import type { AllMarketData } from '@/lib/market-types'
 import type { NewsletterChartSpec } from '@/lib/newsletter/types'
-import { useTimezone, getTimezoneAbbr } from '@/lib/timezone-context'
+import { safeErrorMessage } from '@/lib/safe-logging'
+import { getTimezoneAbbr, useTimezone } from '@/lib/timezone-context'
 import { formatTimeInTimezone } from '@/lib/timezone-utils'
 
 interface MarketDashboardSundayProps {
@@ -27,9 +30,75 @@ interface MarketDashboardSundayProps {
   chartOfDaySpec: NewsletterChartSpec
 }
 
-const ENABLE_MOVERS = process.env.NEXT_PUBLIC_ENABLE_MOVERS === 'true'
-const tertiaryCardWidthStyle: CSSProperties = {
-  width: 'calc((100% - 2rem) / 3)',
+const SESSION_LABELS = {
+  premarket: 'Pre-market',
+  cash: 'Regular session',
+  afterhours: 'After-hours',
+  closed: 'Markets closed',
+} as const
+
+async function fetchMarketPatch(
+  endpoint: '/api/market-snapshot/fast' | '/api/market-snapshot/slow',
+): Promise<Partial<AllMarketData>> {
+  const response = await fetch(endpoint, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Market snapshot returned ${response.status}`)
+  }
+  return response.json() as Promise<Partial<AllMarketData>>
+}
+
+function SectionHeading({
+  title,
+  meta,
+}: {
+  title: string
+  meta?: ReactNode
+}) {
+  return (
+    <div className="mb-3 flex min-h-8 flex-wrap items-end justify-between gap-3">
+      <h2 className="text-base font-semibold text-gray-950 dark:text-white">
+        {title}
+      </h2>
+      {meta ? (
+        <div className="text-xs text-gray-500 dark:text-gray-400">{meta}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function DataUnavailable({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      className="flex min-h-36 items-center justify-center rounded-lg border border-gray-200 bg-white px-5 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+    >
+      {label} data is currently unavailable.
+    </div>
+  )
+}
+
+function extractSummary(summary: string) {
+  if (!summary) {
+    return { headline: '', body: '' }
+  }
+
+  const parts = summary.split(/\n\n/)
+  if (parts.length > 1) {
+    return {
+      headline: parts[0].trim(),
+      body: parts.slice(1).join('\n\n').trim(),
+    }
+  }
+
+  const firstSentence = summary.match(/^[^.!?]+[.!?]/)?.[0]
+  if (!firstSentence) {
+    return { headline: '', body: summary }
+  }
+
+  return {
+    headline: firstSentence.trim(),
+    body: summary.slice(firstSentence.length).trim(),
+  }
 }
 
 export default function MarketDashboardSunday({
@@ -37,57 +106,65 @@ export default function MarketDashboardSunday({
   chartOfDaySpec,
 }: MarketDashboardSundayProps) {
   const { timezone } = useTimezone()
-  const [data, setData] = useState<AllMarketData>(initialData)
+  const [data, setData] = useState(initialData)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  // Initialize from server-fetched cache (shows immediately if available)
-  const [marketSummary, setMarketSummary] = useState<string>(initialData.marketSummary || '')
-  const [marketSummaryLoading, setMarketSummaryLoading] = useState(!initialData.marketSummary)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [marketSummary, setMarketSummary] = useState(
+    initialData.marketSummary || '',
+  )
+  const [marketSummaryLoading, setMarketSummaryLoading] = useState(
+    !initialData.marketSummary,
+  )
   const [summaryLastUpdated, setSummaryLastUpdated] = useState<Date | null>(null)
-
-  // Market Trends bullet points state (for MarketInsights component)
-  // Initialize from server-fetched cache (shows immediately if available)
-  const [responsesApiBullets, setResponsesApiBullets] = useState<MarketTrendsBullet[]>(initialData.marketTrendsBullets || [])
-  const [responsesLoading, setResponsesLoading] = useState(!initialData.marketTrendsBullets?.length)
+  const [responsesApiBullets, setResponsesApiBullets] = useState<
+    MarketTrendsBullet[]
+  >(initialData.marketTrendsBullets || [])
+  const [responsesLoading, setResponsesLoading] = useState(
+    !initialData.marketTrendsBullets?.length,
+  )
   const [responsesError, setResponsesError] = useState<string | undefined>()
-  const [responsesGeneratedAt, setResponsesGeneratedAt] = useState<string | undefined>()
+  const [responsesGeneratedAt, setResponsesGeneratedAt] = useState<
+    string | undefined
+  >()
 
-
-  // Set initial timestamp on client mount to avoid hydration mismatch
   useEffect(() => {
     setLastUpdated(new Date())
   }, [])
 
-  // Function to fetch market summary (for "What's Happening Today")
-  const fetchSummary = async (forceRefresh = false) => {
+  async function fetchSummary(forceRefresh = false) {
     setMarketSummaryLoading(true)
+
     try {
-      // Use cash session data for LLM summary (main trading hours)
-      const result = await getMarketSummary({
-        gainers: data.gainers.cash,
-        losers: data.losers.cash,
-        sectors: data.sectors,
-        indices: data.sparklineIndices,
-        forexBonds: data.forexBonds,
-        vix: data.vix,
-        marketNews: data.marketNews,
-      }, forceRefresh)
+      const result = await getMarketSummary(
+        {
+          gainers: data.gainers.cash,
+          losers: data.losers.cash,
+          sectors: data.sectors,
+          indices: data.sparklineIndices,
+          forexBonds: data.forexBonds,
+          vix: data.vix,
+          marketNews: data.marketNews,
+        },
+        forceRefresh,
+      )
+
       if (result.summary) {
         setMarketSummary(result.summary)
         setSummaryLastUpdated(new Date())
       }
     } catch (error) {
-      console.error('Failed to fetch market summary:', error)
+      console.error('Failed to fetch market summary:', safeErrorMessage(error))
     } finally {
       setMarketSummaryLoading(false)
     }
   }
 
-  // Function to fetch bullet points from Responses API (for MarketInsights/Market Trends)
-  const fetchResponsesBullets = async () => {
+  async function fetchResponsesBullets() {
     setResponsesLoading(true)
     setResponsesError(undefined)
+
     try {
-      // Use cash session data for LLM trends (main trading hours)
       const result = await getMarketTrendsResponses({
         gainers: data.gainers.cash,
         losers: data.losers.cash,
@@ -96,6 +173,7 @@ export default function MarketDashboardSunday({
         forexBonds: data.forexBonds,
         vix: data.vix,
       })
+
       if (result.error) {
         setResponsesError(result.error)
       } else {
@@ -103,191 +181,334 @@ export default function MarketDashboardSunday({
         setResponsesGeneratedAt(result.generatedAt)
       }
     } catch (error) {
-      console.error('Failed to fetch Responses API bullets:', error)
-      setResponsesError(error instanceof Error ? error.message : 'Unknown error')
+      const message = safeErrorMessage(error)
+      console.error('Failed to fetch market trends:', message)
+      setResponsesError('Market trends are currently unavailable.')
     } finally {
       setResponsesLoading(false)
     }
   }
 
-  // Fetch market summary and bullet points on mount
   useEffect(() => {
-    // Only fetch summary if not already loaded from server cache
     if (!initialData.marketSummary) {
-      fetchSummary()
+      void fetchSummary()
     }
-    // Only fetch trends bullets if not already loaded from server cache
     if (!initialData.marketTrendsBullets?.length) {
-      fetchResponsesBullets()
+      void fetchResponsesBullets()
     }
-  }, []) // Only run on mount, not on data changes
+    // Initial cached values decide whether these one-time requests are needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  async function fetchFast() {
-    const res = await fetch('/api/market-snapshot/fast')
-    if (!res.ok) throw new Error(`fast snapshot fetch failed: ${res.status}`)
-    return (await res.json()) as Partial<AllMarketData>
-  }
-
-  async function fetchSlow() {
-    const res = await fetch('/api/market-snapshot/slow')
-    if (!res.ok) throw new Error(`slow snapshot fetch failed: ${res.status}`)
-    return (await res.json()) as Partial<AllMarketData>
-  }
-
-  // Polling effect - fast data every 60s, slow data every 10 min
   useEffect(() => {
-    const apply = (patch: Partial<AllMarketData>) => {
-      setData((prev) => ({ ...prev, ...patch }))
-      setLastUpdated(new Date())
+    let disposed = false
+
+    const refreshFastData = async () => {
+      if (document.visibilityState !== 'visible') return
+
+      try {
+        const patch = await fetchMarketPatch('/api/market-snapshot/fast')
+        if (!disposed) {
+          setData((current) => ({ ...current, ...patch }))
+          setLastUpdated(new Date())
+        }
+      } catch (error) {
+        console.error(
+          'Failed to refresh market snapshot:',
+          safeErrorMessage(error),
+        )
+      }
     }
 
-    const fastInterval = setInterval(async () => {
-      try {
-        apply(await fetchFast())
-      } catch (error) {
-        console.error('Failed to refresh fast market data:', error)
-      }
-    }, 60000)
+    const interval = window.setInterval(() => {
+      void refreshFastData()
+    }, 60_000)
 
-    const slowInterval = setInterval(async () => {
-      try {
-        apply(await fetchSlow())
-      } catch (error) {
-        console.error('Failed to refresh slow market data:', error)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshFastData()
       }
-    }, 600000)
+    }
 
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
-      clearInterval(fastInterval)
-      clearInterval(slowInterval)
+      disposed = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
 
-  const { futures, gainers, losers, stocks, sectors, economicEvents, marketNews, sparklineIndices, sp500Gainers, sp500Losers, earnings, earningsTotalCount, sp500GainerSparklines, sp500LoserSparklines, metaSparkline, xlbSparkline, forexBonds, largeInsiderTrades, globalIndexQuotes, globalFuturesQuotes } = data
+  async function refreshDashboard() {
+    setRefreshing(true)
+    setRefreshError(null)
 
-  // Extract the opening line from market summary (first line before double newline)
-  // This gives us the market status/date line to show at the top of the page
-  const { topSummary, summaryBody } = (() => {
-    if (!marketSummary) {
-      return { topSummary: '', summaryBody: '' }
+    const [fastResult, slowResult] = await Promise.allSettled([
+      fetchMarketPatch('/api/market-snapshot/fast'),
+      fetchMarketPatch('/api/market-snapshot/slow'),
+    ])
+
+    const patches = [fastResult, slowResult].flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    )
+
+    if (patches.length > 0) {
+      setData((current) =>
+        patches.reduce<AllMarketData>(
+          (next, patch) => ({ ...next, ...patch }),
+          current,
+        ),
+      )
+      setLastUpdated(new Date())
     }
-    // Split on double newline to separate headline from body
-    const parts = marketSummary.split(/\n\n/)
-    if (parts.length > 1) {
-      return { topSummary: parts[0].trim(), summaryBody: parts.slice(1).join('\n\n').trim() }
+
+    if (patches.length < 2) {
+      setRefreshError(
+        patches.length === 0
+          ? 'Market data could not be refreshed.'
+          : 'Core prices refreshed; some slower sections remain on their previous snapshot.',
+      )
     }
-    // Fallback: use first sentence
-    const firstSentenceMatch = marketSummary.match(/^[^.!?]+[.!?]/)
-    if (firstSentenceMatch) {
-      return {
-        topSummary: firstSentenceMatch[0].trim(),
-        summaryBody: marketSummary.slice(firstSentenceMatch[0].length).trim()
-      }
-    }
-    return { topSummary: '', summaryBody: marketSummary }
-  })()
+
+    setRefreshing(false)
+  }
+
+  const { headline: summaryHeadline, body: summaryBody } = useMemo(
+    () => extractSummary(marketSummary),
+    [marketSummary],
+  )
+
+  const {
+    futures,
+    gainers,
+    losers,
+    stocks,
+    sectors,
+    economicEvents,
+    marketNews,
+    sparklineIndices,
+    earnings,
+    earningsTotalCount,
+    sp500GainerSparklines,
+    sp500LoserSparklines,
+    forexBonds,
+    largeInsiderTrades,
+    globalIndexQuotes,
+    globalFuturesQuotes,
+  } = data
+
+  const dateLabel = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: timezone,
+  }).format(lastUpdated ?? new Date())
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-6">
-      {/* Last Updated Note */}
-      {lastUpdated && (
-        <div className="text-right mb-2 text-xs text-gray-500 dark:text-gray-400">
-          Last updated: {formatTimeInTimezone(lastUpdated, timezone)} {getTimezoneAbbr(timezone)}
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+      <header className="border-b border-gray-200 pb-5 dark:border-gray-800">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+              <span>{dateLabel}</span>
+              <span aria-hidden="true">·</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 rounded-full ${
+                    gainers.currentSession === 'closed'
+                      ? 'bg-gray-400'
+                      : 'bg-emerald-500'
+                  }`}
+                />
+                {SESSION_LABELS[gainers.currentSession]}
+              </span>
+            </div>
+            <h1 className="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
+              Market Overview
+            </h1>
+            <div className="mt-2 min-h-6 max-w-5xl">
+              {marketSummaryLoading ? (
+                <div className="h-4 w-full max-w-3xl animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+              ) : summaryHeadline ? (
+                <p className="text-sm leading-6 text-gray-600 dark:text-gray-300">
+                  {summaryHeadline}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Live market snapshot
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            {lastUpdated ? (
+              <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
+                Updated {formatTimeInTimezone(lastUpdated, timezone, {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  second: undefined,
+                })}{' '}
+                {getTimezoneAbbr(timezone)}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void refreshDashboard()}
+              disabled={refreshing}
+              className="min-h-9 rounded bg-gray-950 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+            >
+              {refreshing ? 'Refreshing' : 'Refresh data'}
+            </button>
+          </div>
         </div>
-      )}
+      </header>
 
-      {/* Market Summary Sentence (extracted from LLM summary) */}
-      <div className="mb-3">
-        {marketSummaryLoading ? (
-          <p className="text-base text-gray-400 dark:text-gray-500 leading-relaxed animate-pulse">
-            Loading market summary...
-          </p>
-        ) : topSummary ? (
-          <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
-            {topSummary}
-          </p>
-        ) : null}
-      </div>
+      {refreshError ? (
+        <div
+          role="status"
+          className="mt-4 border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          {refreshError}
+        </div>
+      ) : null}
 
-      {/* Index Sparklines - Top Row */}
-      {sparklineIndices.length > 0 && (
-        <div className="mb-4">
+      <section aria-labelledby="market-tape-heading" className="mt-7">
+        <SectionHeading
+          title="Market Tape"
+          meta={`${sparklineIndices.length} major markets`}
+        />
+        <div id="market-tape-heading" className="sr-only">
+          Major market charts
+        </div>
+        {sparklineIndices.length > 0 ? (
           <IndexSparklines indices={sparklineIndices} />
-        </div>
-      )}
+        ) : (
+          <DataUnavailable label="Major index" />
+        )}
+      </section>
 
-      {/* Combined Market Trends Table (Gainers, Losers, What's Happening Today) */}
-      <div className="mb-8">
+      <section aria-labelledby="price-action-heading" className="mt-8">
+        <SectionHeading title="Price Action" />
+        <div id="price-action-heading" className="sr-only">
+          Chart and market movers
+        </div>
         <MarketTrendsCombined
           gainers={gainers}
           losers={losers}
-          sp500Losers={sp500Losers}
           chartOfDaySpec={chartOfDaySpec}
         />
-      </div>
+      </section>
 
-      {/* Market Insights + Stocks Table */}
-      <div className="flex gap-4 mb-8 items-stretch">
-        <div className="flex-1 min-w-0">
+      <section aria-labelledby="market-context-heading" className="mt-8">
+        <SectionHeading title="Market Context" />
+        <div id="market-context-heading" className="sr-only">
+          Market context and watchlist
+        </div>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
           <MarketInsights
             responsesApiBullets={responsesApiBullets}
             responsesLoading={responsesLoading}
             responsesError={responsesError}
-            onRefreshResponses={fetchResponsesBullets}
+            onRefreshResponses={() => void fetchResponsesBullets()}
             responsesGeneratedAt={responsesGeneratedAt}
             marketSummary={summaryBody}
             marketSummaryLoading={marketSummaryLoading}
-            onRefreshSummary={() => fetchSummary(true)}
+            onRefreshSummary={() => void fetchSummary(true)}
             summaryLastUpdated={summaryLastUpdated}
           />
-        </div>
-        {stocks.length > 0 && (
-          <div className="w-[180px] shrink-0 self-stretch">
+          {stocks.length > 0 ? (
             <StocksTable stocks={stocks} />
-          </div>
-        )}
-      </div>
-
-      {/* Futures, Insider Trades, and Global Markets */}
-      {(futures.length > 0 || largeInsiderTrades.length > 0 || globalIndexQuotes.length > 0 || globalFuturesQuotes.length > 0) && (
-        <div className="mb-4 flex gap-4 items-start">
-          {futures.length > 0 && (
-            <div className="shrink-0 self-stretch" style={tertiaryCardWidthStyle}>
-              <FuturesTable futures={futures} />
-            </div>
+          ) : (
+            <DataUnavailable label="Watchlist" />
           )}
-          {largeInsiderTrades.length > 0 && (
-            <div className="shrink-0" style={tertiaryCardWidthStyle}>
-              <TopInsiderTrades trades={largeInsiderTrades} />
-            </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="cross-asset-heading" className="mt-8">
+        <SectionHeading title="Cross-Asset" />
+        <div id="cross-asset-heading" className="sr-only">
+          Futures, sectors, currencies, and rates
+        </div>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-3">
+          {futures.length > 0 ? (
+            <FuturesTable futures={futures} />
+          ) : (
+            <DataUnavailable label="Futures" />
           )}
-          <div className="shrink-0 self-stretch" style={tertiaryCardWidthStyle}>
-            <MarketSessions hideTable={true} indexQuotes={globalIndexQuotes} futuresQuotes={globalFuturesQuotes} />
+          {sectors.length > 0 ? (
+            <SectorHeatmap sectors={sectors} />
+          ) : (
+            <DataUnavailable label="Sector performance" />
+          )}
+          {forexBonds.length > 0 ? (
+            <ForexBondsTable data={forexBonds} />
+          ) : (
+            <DataUnavailable label="Forex and rates" />
+          )}
+        </div>
+      </section>
+
+      <section aria-labelledby="catalysts-heading" className="mt-8">
+        <SectionHeading title="Catalysts" />
+        <div id="catalysts-heading" className="sr-only">
+          Economic calendar, earnings, and headlines
+        </div>
+        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {economicEvents.length > 0 ? (
+            <EconomicCalendar events={economicEvents} />
+          ) : (
+            <DataUnavailable label="Economic calendar" />
+          )}
+          {earnings.length > 0 ? (
+            <EarningsCalendar
+              earnings={earnings}
+              totalCount={earningsTotalCount}
+            />
+          ) : (
+            <DataUnavailable label="Earnings calendar" />
+          )}
+          {marketNews.length > 0 ? (
+            <MarketHeadlines news={marketNews} />
+          ) : (
+            <DataUnavailable label="Market headlines" />
+          )}
+        </div>
+      </section>
+
+      <section aria-labelledby="flows-heading" className="mt-8">
+        <SectionHeading title="Flows and Global Sessions" />
+        <div id="flows-heading" className="sr-only">
+          Insider activity and global market sessions
+        </div>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(460px,0.8fr)]">
+          {largeInsiderTrades.length > 0 ? (
+            <TopInsiderTrades trades={largeInsiderTrades} />
+          ) : (
+            <DataUnavailable label="Insider activity" />
+          )}
+          <MarketSessions
+            hideTable
+            indexQuotes={globalIndexQuotes}
+            futuresQuotes={globalFuturesQuotes}
+          />
+        </div>
+      </section>
+
+      {sp500GainerSparklines.length > 0 ||
+      sp500LoserSparklines.length > 0 ? (
+        <section aria-labelledby="sp500-movers-heading" className="mt-8">
+          <SectionHeading title="S&P 500 Movers" />
+          <div id="sp500-movers-heading" className="sr-only">
+            S&P 500 intraday mover charts
           </div>
-        </div>
-      )}
-
-      {/* Gainers, Losers */}
-      {ENABLE_MOVERS && (
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <MarketMoversTable title="Gainers" data={gainers} />
-          <MarketMoversTable title="Losers" data={losers} />
-        </div>
-      )}
-
-      {/* Forex & Bonds Table */}
-      {forexBonds.length > 0 && (
-        <div className="mb-8" style={tertiaryCardWidthStyle}>
-          <ForexBondsTable data={forexBonds} />
-        </div>
-      )}
-
-      {/* Top S&P 500 Gainer/Loser Sparklines Carousel */}
-      {(sp500GainerSparklines.length > 0 || sp500LoserSparklines.length > 0) && (
-        <div className="mb-8">
-          <TopGainerSparklines sparklines={sp500GainerSparklines} loserSparklines={sp500LoserSparklines} />
-        </div>
-      )}
+          <TopGainerSparklines
+            sparklines={sp500GainerSparklines}
+            loserSparklines={sp500LoserSparklines}
+          />
+        </section>
+      ) : null}
     </div>
   )
 }

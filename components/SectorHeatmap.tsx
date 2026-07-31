@@ -17,8 +17,8 @@ export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
 
   if (sectors.length === 0) {
     return (
-      <div className="w-full max-w-sm">
-        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-4">
+      <div className="w-full">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             Loading sector performance...
           </div>
@@ -38,17 +38,17 @@ export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700">
+    <div className="w-full">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         {/* Header */}
-        <div className="grid grid-cols-3 gap-3 px-4 py-1 bg-cream-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 text-xs font-semibold">
-          <div>Sector</div>
+        <div className="grid min-h-11 grid-cols-3 items-center gap-3 border-b border-gray-200 px-4 text-xs font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400">
+          <div className="text-sm font-semibold text-gray-950 dark:text-white">Sectors</div>
           <div className="text-right">Change %</div>
           <div className="text-right">YTD</div>
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-cream-200 dark:divide-gray-700">
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {sortedSectors.map((sector) => {
             const percentage = parsePercentage(sector.changesPercentage)
             const isPositive = percentage >= 0
@@ -60,7 +60,7 @@ export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
             return (
               <div
                 key={sector.sector}
-                className="grid grid-cols-3 gap-3 px-4 py-1.5 items-center hover:bg-cream-50 dark:hover:bg-gray-800/50 transition-colors"
+                className="grid grid-cols-3 items-center gap-3 px-4 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/70"
               >
                 <div className="text-sage-600 dark:text-sage-400 font-medium text-xs truncate">
                   {sector.sector}

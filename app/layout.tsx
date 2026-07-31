@@ -48,12 +48,12 @@ export default function RootLayout({
         const root = document.documentElement;
         if (theme === 'dark') {
           root.classList.add('dark');
-          root.style.backgroundColor = '#111827';
-          document.body && (document.body.style.backgroundColor = '#111827');
+          root.style.backgroundColor = '#030712';
+          document.body && (document.body.style.backgroundColor = '#030712');
         } else {
           root.classList.remove('dark');
-          root.style.backgroundColor = '#f5f5f0';
-          document.body && (document.body.style.backgroundColor = '#f5f5f0');
+          root.style.backgroundColor = '#f4f4f5';
+          document.body && (document.body.style.backgroundColor = '#f4f4f5');
         }
       } catch (e) {}
     })();
@@ -64,7 +64,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={`${inter.className} bg-cream-100 dark:bg-gray-900 min-h-full`}>
+      <body className={`${inter.className} min-h-full bg-cream-100 dark:bg-gray-950`}>
         <ThemeProvider>
           <TimezoneProvider>
             {children}

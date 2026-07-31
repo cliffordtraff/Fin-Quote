@@ -17,6 +17,19 @@ export { fetchWiimCandidates } from './fetch-candidates'
 export { rankWiimCandidates, summarizeWiimRun } from './rank'
 export { formatWiimBrief } from './format'
 export { computeWiimDelta } from './delta'
+export { runWiimBrief } from './run-brief'
+export type {
+  RunWiimBriefOptions,
+  RunWiimBriefResult,
+} from './run-brief'
+export {
+  generateDailySummaryBatch,
+  getDailySummaryCoverage,
+} from './daily-summaries'
+export type {
+  DailySummaryBatchResult,
+  DailySummaryCoverage,
+} from './daily-summaries'
 export { createWiimRun, storeWiimCandidates, completeWiimRun, getLatestWiimRun } from './store'
 export {
   WIIM_WARM_PROFILES,

@@ -41,13 +41,31 @@ describe('Navigation', () => {
     mockUsePathname.mockReturnValue('/stock/msft')
     window.history.replaceState({}, '', '/stock/msft')
     process.env.NEXT_PUBLIC_ENABLE_CHAT = 'false'
-    process.env.NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB = 'false'
   })
 
   it('renders workspace links and passes the current pathname into stock search', () => {
     render(<Navigation />)
 
-    expect(screen.queryByRole('link', { name: 'Most Active' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Pulse Today' })).toHaveAttribute(
+      'href',
+      '/dashboard/pulse-today',
+    )
+    expect(screen.getByRole('link', { name: 'Morning Brief' })).toHaveAttribute(
+      'href',
+      '/dashboard/morning-brief',
+    )
+    expect(screen.getByRole('link', { name: 'Mid-Morning Brief' })).toHaveAttribute(
+      'href',
+      '/dashboard/mid-morning-brief',
+    )
+    expect(screen.getByRole('link', { name: 'Newsletter Ops' })).toHaveAttribute(
+      'href',
+      '/newsletter/operations',
+    )
+    expect(screen.getByRole('link', { name: 'Market Overview' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    )
     expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Fundamentals' })).toHaveAttribute('href', '/workspace/fundamentals?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/workspace/overview?symbol=MSFT')
@@ -69,11 +87,49 @@ describe('Navigation', () => {
     })
   })
 
-  it('shows the Most Active tab only when the feature flag is enabled', () => {
-    process.env.NEXT_PUBLIC_SHOW_MOST_ACTIVE_TAB = 'true'
+  it('marks the Morning Brief tab as the current page', () => {
+    mockUsePathname.mockReturnValue('/dashboard/morning-brief')
+    window.history.replaceState({}, '', '/dashboard/morning-brief')
 
     render(<Navigation />)
 
-    expect(screen.getByRole('link', { name: 'Most Active' })).toHaveAttribute('href', '/dashboard/pulse-today')
+    expect(screen.getByRole('link', { name: 'Morning Brief' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Market Overview' })).not.toHaveAttribute(
+      'aria-current',
+    )
   })
+
+  it('marks the Mid-Morning Brief tab as the current page', () => {
+    mockUsePathname.mockReturnValue('/dashboard/mid-morning-brief')
+    window.history.replaceState({}, '', '/dashboard/mid-morning-brief')
+
+    render(<Navigation />)
+
+    expect(screen.getByRole('link', { name: 'Mid-Morning Brief' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Morning Brief' })).not.toHaveAttribute(
+      'aria-current',
+    )
+  })
+
+  it('marks Newsletter Ops without also selecting Morning Report', () => {
+    mockUsePathname.mockReturnValue('/newsletter/operations')
+    window.history.replaceState({}, '', '/newsletter/operations')
+
+    render(<Navigation />)
+
+    expect(screen.getByRole('link', { name: 'Newsletter Ops' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Morning Report' })).not.toHaveAttribute(
+      'aria-current',
+    )
+  })
+
 })

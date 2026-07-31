@@ -34,7 +34,7 @@ export default function EarningsCalendar({ earnings, expanded = false, summary, 
   if (earnings.length === 0) {
     return (
       <div className="w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-4">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             No upcoming earnings...
           </div>
@@ -46,16 +46,16 @@ export default function EarningsCalendar({ earnings, expanded = false, summary, 
   const displayCount = expanded ? 15 : 6
 
   return (
-    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden" style={{ height: '400px' }}>
-      <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
-        <h2 className={`font-semibold text-gray-700 dark:text-gray-300 ${expanded ? 'text-sm' : 'text-[10px]'}`}>
+    <div className="h-[400px] w-full overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+      <div className="flex min-h-14 items-center justify-between gap-3 border-b border-gray-200 px-3 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-950 dark:text-white">
           Earnings Calendar
         </h2>
-        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 italic">
+        <p className="text-right text-xs text-gray-500 dark:text-gray-400">
           {summary || `${totalCount || earnings.length} (${Math.round(((totalCount || earnings.length) / 500) * 100)}%) of the S&P 500 is reporting this week`}
         </p>
       </div>
-      <div className="divide-y divide-cream-200 dark:divide-gray-800 overflow-y-auto" style={{ height: 'calc(100% - 37px)' }}>
+      <div className="h-[calc(400px-56px)] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800">
         {earnings.slice(0, displayCount).map((earning, index) => {
           const { month, day, full } = formatDate(earning.date)
           const timeLabel = getTimeLabel(earning.time)
@@ -63,10 +63,10 @@ export default function EarningsCalendar({ earnings, expanded = false, summary, 
           return (
             <div
               key={`${earning.symbol}-${index}`}
-              className="flex items-center gap-2 px-2 py-1.5 hover:bg-cream-50 dark:hover:bg-gray-800/50"
+              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               {/* Date box */}
-              <div className="flex flex-col items-center justify-center w-8 h-8 rounded bg-cream-50 dark:bg-gray-800">
+              <div className="flex h-8 w-8 flex-col items-center justify-center rounded bg-gray-100 dark:bg-gray-800">
                 <span className="text-[8px] font-medium text-sage-600 dark:text-sage-400">{month}</span>
                 <span className="text-xs font-semibold text-sage-600 dark:text-sage-400">{day}</span>
               </div>

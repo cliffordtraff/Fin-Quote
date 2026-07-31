@@ -6,6 +6,11 @@ export const dynamic = 'force-dynamic'
 
 const ADMIN_LINKS = [
   {
+    href: '/admin/why-moved',
+    title: 'Why This Stock Moved',
+    description: "Approve, revise, or dismiss the catalysts attached to today's top movers.",
+  },
+  {
     href: '/admin/chart-of-the-day',
     title: 'Chart of the Day',
     description: 'Choose the dashboard chart that appears on the public homepage.',

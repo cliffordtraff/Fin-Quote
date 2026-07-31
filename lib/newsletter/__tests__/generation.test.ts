@@ -42,10 +42,13 @@ const sampleResult: NewsletterResult = {
 }
 
 describe('newsletter generation backend', () => {
+  const mutableEnv = process.env as Record<string, string | undefined>
   const originalBackend = process.env.NEWSLETTER_GENERATION_BACKEND
+  const originalNodeEnv = process.env.NODE_ENV
 
   beforeEach(() => {
     delete process.env.NEWSLETTER_GENERATION_BACKEND
+    mutableEnv.NODE_ENV = 'test'
     generateNewsletterMock.mockReset()
     runLocalNewsletterWorkerMock.mockReset()
     generateNewsletterMock.mockResolvedValue(sampleResult)
@@ -58,6 +61,7 @@ describe('newsletter generation backend', () => {
     } else {
       process.env.NEWSLETTER_GENERATION_BACKEND = originalBackend
     }
+    mutableEnv.NODE_ENV = originalNodeEnv
   })
 
   it('uses the direct in-process path when configured', async () => {
@@ -110,6 +114,15 @@ describe('newsletter generation backend', () => {
     expect(resolveNewsletterGenerationBackend()).toBe('local_worker')
 
     process.env.NEWSLETTER_GENERATION_BACKEND = 'something-else'
+    expect(resolveNewsletterGenerationBackend()).toBe('local_worker')
+  })
+
+  it('defaults to the in-process API backend in production', () => {
+    mutableEnv.NODE_ENV = 'production'
+
+    expect(resolveNewsletterGenerationBackend()).toBe('openai_api')
+
+    process.env.NEWSLETTER_GENERATION_BACKEND = 'local_worker'
     expect(resolveNewsletterGenerationBackend()).toBe('local_worker')
   })
 })

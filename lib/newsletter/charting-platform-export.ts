@@ -182,13 +182,13 @@ export function getDefaultChartingBaseUrl(): string {
 export function getDefaultChartingBaseUrlForHost(
   hostHeader: string | null | undefined,
 ): string {
+  if (isLocalChartingHost(hostHeader)) {
+    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
+  }
+
   const configured = process.env.NEXT_PUBLIC_CHARTING_URL?.trim()
   if (configured) {
     return normalizeBaseUrl(configured)
-  }
-
-  if (isLocalChartingHost(hostHeader)) {
-    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
   }
 
   return getDefaultChartingBaseUrl()

@@ -4,8 +4,8 @@ This directory is the schema history for the app's Supabase project.
 
 Current state:
 
-- 35 SQL migrations
-- Span: October 2024 to March 2026
+- 58 SQL migrations
+- Span: October 2024 to July 2026
 - Covers core financial tables, filings search, chatbot evaluation/review infrastructure, S&P 500 expansion, insider data, cache tables, and charting-workspace persistence
 
 ## How To Read This Folder
@@ -38,10 +38,11 @@ Primary related references:
 | 2024-11-02 | `20241102000003_add_cost_tracking.sql` | Add token and cost tracking fields |
 | 2024-11-06 | `20241106000001_create_financial_metrics_table.sql` | Add extended financial metrics table |
 | 2025-01-06 | `20250106_conversations.sql` | Add conversations and messages tables |
-| 2026-02-01 | `20260201000004_add_segment_status_to_us_stocks.sql` | Add segment-ingestion status tracking for US stocks after table creation |
+| 2025-02-03 | `20250203000001_add_segment_status_to_us_stocks.sql` | Add initial segment-ingestion status tracking for US stocks |
 | 2025-11-07 | `20251107_evaluation_annotations.sql` | Add evaluation-annotation support |
-| 2026-01-11 | `20260111210626_create_company_metrics_table.sql` | Recreate dimensional/company metrics after the imported remote-schema cleanup |
+| 2025-11-15 | `20251115000001_create_company_metrics_table.sql` | Add dimensional/company metrics for segments and derived company data |
 | 2026-01-11 | `20260111210625_remote_schema.sql` | Re-align local migrations with remote schema snapshot |
+| 2026-01-11 | `20260111210626_create_company_metrics_table.sql` | Recreate dimensional/company metrics after the imported remote-schema cleanup |
 | 2026-01-15 | `20260115000001_add_quarterly_support.sql` | Add quarterly financial/metric support |
 | 2026-01-15 | `20260115000002_update_financial_metrics_constraint.sql` | Update financial-metrics uniqueness/constraint rules |
 | 2026-01-16 | `20260116000001_add_ticker_filter_to_search.sql` | Add ticker-aware search filtering |
@@ -56,12 +57,31 @@ Primary related references:
 | 2026-02-01 | `20260201000001_create_market_summary_cache.sql` | Add cache table for market summaries |
 | 2026-02-01 | `20260201000002_lock_down_llm_cache_policies.sql` | Remove anonymous write access from LLM cache tables |
 | 2026-02-01 | `20260201000003_create_us_stocks_table.sql` | Add broader US stocks registry table |
+| 2026-02-01 | `20260201000004_add_segment_status_to_us_stocks.sql` | Restore segment-ingestion status tracking after the US stocks table creation |
 | 2026-02-03 | `20260203000002_create_market_movers_cache.sql` | Add market-movers cache table |
 | 2026-03-08 | `20260308000001_create_charting_docs_table.sql` | Add `docs` table for charting workspace persistence/cloud sync |
 | 2026-03-25 | `20260325000001_create_stock_why_moving_cache.sql` | Add cache table for stock “why moving” summaries |
-| 2026-05-20 | `20260520200500_create_wiim_runs.sql` | Add WIIM morning brief run + candidate tables |
+| 2026-03-26 | `20260326000002_create_newsletter_drafts_table.sql` | Add editable newsletter draft persistence |
+| 2026-03-26 | `20260326000003_allow_anonymous_newsletter_drafts.sql` | Add anonymous session support for newsletter drafts |
+| 2026-03-27 | `20260327000001_create_dashboard_chart_of_day_settings.sql` | Add dashboard chart-of-the-day settings |
+| 2026-03-27 | `20260327000002_add_chart_spec_to_dashboard_chart_of_day_settings.sql` | Store chart specs for dashboard chart-of-the-day settings |
+| 2026-03-27 | `20260327000003_create_newsletter_chart_library.sql` | Add reusable newsletter chart library metadata and Storage bucket |
+| 2026-05-20 | `20260520200500_create_wiim_runs.sql` | Add WIIM morning brief run and candidate tables |
+| 2026-05-31 | `20260531162000_enable_rls_on_remaining_public_tables.sql` | Enable RLS on remaining public tables |
+| 2026-05-31 | `20260531170000_explicit_data_api_grants.sql` | Add explicit Data API grants for public tables |
 | 2026-06-01 | `20260601110000_create_generated_wiim_summaries.sql` | Add generated WIIM summary batch tables |
-| 2026-06-10 | `20260610184500_wiim_data_api_grants.sql` | Explicit Data API grants for WIIM tables |
+| 2026-06-10 | `20260610184500_wiim_data_api_grants.sql` | Add explicit Data API grants for WIIM tables |
+| 2026-07-28 | `20260728000001_expand_newsletter_draft_workflow.sql` | Expand newsletter drafts to Draft, Review, Ready, and Published stages |
+| 2026-07-28 | `20260728000002_create_stock_why_moving_reviews.sql` | Add persistent editorial review state for daily stock catalysts |
+| 2026-07-28 | `20260728003000_normalize_insider_aggregate_principal.sql` | Normalize insider aggregate principals and supporting indexes |
+| 2026-07-29 | `20260729095500_expand_wiim_run_types.sql` | Store mid-morning WIIM snapshots separately from morning runs |
+| 2026-07-29 | `20260729103000_add_catalyst_newsletter_workflow.sql` | Link approved catalysts to idempotent newsletter drafts and track Beehiiv publication history |
+| 2026-07-29 | `20260729183000_create_newsletter_daily_runs.sql` | Persist daily 30–50 issue newsletter settings, runs, run items, WIIM metadata, and retry state |
+| 2026-07-29 | `20260729190000_default_newsletter_generation_to_eight.sql` | Default daily newsletter generation to 8:00 AM ET |
+| 2026-07-30 | `20260730090000_create_newsletter_daily_automation_runs.sql` | Add leased, resumable morning automation state and stage counters |
+| 2026-07-30 | `20260730100000_schedule_newsletter_daily_automation.sql` | Add the protected Supabase cron invocation for weekday morning production |
+| 2026-07-30 | `20260730120000_create_beehiiv_mcp_delivery.sql` | Persist encrypted Beehiiv MCP connections and idempotent draft deliveries |
+| 2026-07-30 | `20260730143000_complete_newsletter_operations.sql` | Add notifications, Beehiiv lifecycle reconciliation, mid-morning automation, and all three operating cron schedules |
 
 ## Major Schema Areas
 
@@ -93,7 +113,10 @@ Primary related references:
 - insider-trading tables
 - market summary and movers caches
 - charting workspace persistence docs
-- stock “why moving” cache
+- stock "why moving" cache and editorial review queue
+- newsletter drafts, publishing workflow, reusable chart library, daily and
+  mid-morning production runs, durable notifications, and Beehiiv lifecycle
+  reconciliation
 - WIIM morning brief runs and generated summary batches
 
 ## Creating New Migrations

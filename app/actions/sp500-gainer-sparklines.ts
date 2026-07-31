@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 import { getSP500Gainers } from './sp500-movers'
 
 export interface SP500GainerSparklineData {
@@ -18,13 +19,11 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
     const gainersResult = await getSP500Gainers()
 
     if ('error' in gainersResult || !gainersResult.gainers) {
-      console.log('SP500 Gainer Sparklines: No gainers data')
       return { sparklines: [] }
     }
 
     // Take top 4 S&P 500 gainers
     const top4 = gainersResult.gainers.slice(0, 4)
-    console.log('SP500 Gainer Sparklines: Top 4 symbols:', top4.map(g => g.symbol))
 
     if (top4.length === 0) {
       return { sparklines: [] }
@@ -41,7 +40,6 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
       if (intradayData.length > 0) {
         // Get the most recent trading day's data
         const mostRecentDate = intradayData[0]?.date?.split(' ')[0]
-        console.log(`SP500 Gainer Sparklines: ${gainer.symbol} most recent date: ${mostRecentDate}`)
 
         const todayData = intradayData
           .filter((d) => d.date.startsWith(mostRecentDate))
@@ -51,8 +49,6 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
             close: d.close
           }))
 
-        console.log(`SP500 Gainer Sparklines: ${gainer.symbol} has ${todayData.length} data points`)
-
         sparklines.push({
           symbol: gainer.symbol,
           changesPercentage: gainer.changesPercentage,
@@ -61,10 +57,9 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
       }
     }
 
-    console.log('SP500 Gainer Sparklines: Returning', sparklines.length, 'sparklines')
     return { sparklines }
   } catch (error) {
-    console.error('Error fetching S&P 500 gainer sparklines:', error)
+    console.error('Error fetching S&P 500 gainer sparklines:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 gainer sparklines' }
   }
 }

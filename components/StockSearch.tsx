@@ -202,6 +202,7 @@ export default function StockSearch({ pathname }: StockSearchProps) {
       <input
         ref={inputRef}
         type="text"
+        name="ticker-search"
         readOnly={isWorkspaceSearch}
         disabled={!isConfigured}
         value={isWorkspaceSearch ? '' : query}

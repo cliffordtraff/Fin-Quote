@@ -75,8 +75,9 @@ function normalizeSymbol(symbol: string): string {
   return symbol.trim().toUpperCase()
 }
 
-function buildFinvizQuoteUrl(symbol: string): string {
-  return `https://finviz.com/quote.ashx?t=${encodeURIComponent(symbol)}&p=d`
+export function buildFinvizQuoteUrl(symbol: string): string {
+  const finvizSymbol = normalizeSymbol(symbol).replace(/\./g, '-')
+  return `https://finviz.com/quote.ashx?t=${encodeURIComponent(finvizSymbol)}&p=d`
 }
 
 function normalizeText(value: string | null | undefined): string | null {

@@ -223,6 +223,8 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
+              aria-pressed={activeView === tab.id}
               onClick={() => handleViewChange(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeView === tab.id
@@ -240,8 +242,10 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       <div className="flex flex-wrap items-center gap-4">
         {/* Transaction Type Filter */}
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-600 dark:text-gray-400">Type:</label>
+          <label htmlFor="insider-transaction-filter" className="text-xs text-gray-600 dark:text-gray-400">Type:</label>
           <select
+            id="insider-transaction-filter"
+            name="transactionType"
             value={transactionFilter}
             onChange={(e) => setTransactionFilter(e.target.value)}
             className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
@@ -258,8 +262,10 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
         {/* Date Range Filter - hidden for "top" view */}
         {activeView !== 'top' && (
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-600 dark:text-gray-400">Date:</label>
+            <label htmlFor="insider-date-filter" className="text-xs text-gray-600 dark:text-gray-400">Date:</label>
             <select
+              id="insider-date-filter"
+              name="dateRange"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
               className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
@@ -285,6 +291,8 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
           <div className="flex items-center gap-2 ml-auto">
             <input
               type="text"
+              name="tickerSearch"
+              aria-label="Search insider trades by ticker"
               value={tickerQuery}
               onChange={(e) => setTickerQuery(e.target.value.toUpperCase())}
               placeholder="Enter symbol (e.g., AAPL)"
@@ -301,6 +309,8 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
           <div className="flex items-center gap-2 ml-auto">
             <input
               type="text"
+              name="insiderSearch"
+              aria-label="Search insider trades by name"
               value={insiderQuery}
               onChange={(e) => setInsiderQuery(e.target.value)}
               placeholder="Search insider name..."
@@ -333,6 +343,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
           </div>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -340,6 +351,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               Previous
             </button>
             <button
+              type="button"
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"

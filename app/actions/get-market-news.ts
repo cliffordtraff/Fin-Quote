@@ -1,5 +1,7 @@
 'use server';
 
+import { safeErrorMessage } from '@/lib/safe-logging';
+
 export interface MarketNewsItem {
   title: string;
   text: string;
@@ -46,7 +48,7 @@ export async function getMarketNews(limit: number = 5): Promise<MarketNewsItem[]
       site: item.site || '',
     }));
   } catch (error) {
-    console.error('Error fetching market news:', error);
+    console.error('Error fetching market news:', safeErrorMessage(error));
     return [];
   }
 }

@@ -2,6 +2,7 @@
 
 // Always use FMP for futures — Massive plan doesn't include futures data
 import { FMPProvider } from '@/lib/providers/fmp'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 interface FutureData {
   symbol: string
@@ -51,7 +52,7 @@ export async function getFuturesData() {
 
   try {
     const provider = new FMPProvider()
-    const symbols = futuresSymbols.map(f => f.symbol)
+    const symbols = futuresSymbols.map(f => f.fmpSymbol)
     const quotes = await provider.getQuotes(symbols)
 
     // Map quotes back to our format with display names
@@ -72,7 +73,7 @@ export async function getFuturesData() {
 
     return { futures: futuresData }
   } catch (error) {
-    console.error('Error fetching futures data:', error)
+    console.error('Error fetching futures data:', safeErrorMessage(error))
     return { error: 'Failed to load futures data' }
   }
 }
@@ -83,7 +84,7 @@ export async function getFuturesData() {
 export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
   try {
     const provider = new FMPProvider()
-    const symbols = FUTURES_SYMBOLS.map(f => f.symbol)
+    const symbols = FUTURES_SYMBOLS.map(f => f.fmpSymbol)
     const quotes = await provider.getQuotes(symbols)
 
     // Calculate a from-date ~60 days back to cover 30 trading days
@@ -97,7 +98,7 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
         if (!quote) return null
 
         // Fetch daily historical data via provider
-        const candles = await provider.getHistoricalDaily(symbol, fromDate)
+        const candles = await provider.getHistoricalDaily(fmpSymbol, fromDate)
 
         // Candles come newest-first; take 30, reverse for chronological order
         const priceHistory = candles.slice(0, 30).reverse().map(c => ({
@@ -128,7 +129,7 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
 
     return { futuresWithHistory: validFutures }
   } catch (error) {
-    console.error('Error fetching futures with history:', error)
+    console.error('Error fetching futures with history:', safeErrorMessage(error))
     return { error: 'Failed to load futures data' }
   }
 }
@@ -145,7 +146,7 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
 
   try {
     const provider = new FMPProvider()
-    const symbols = futuresSymbols.map(f => f.symbol)
+    const symbols = futuresSymbols.map(f => f.fmpSymbol)
     const quotes = await provider.getQuotes(symbols)
 
     const futuresData = await Promise.all(
@@ -154,7 +155,7 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
         if (!quote) return null
 
         // Fetch YTD historical data via provider
-        const candles = await provider.getHistoricalDaily(symbol, yearStart)
+        const candles = await provider.getHistoricalDaily(fmpSymbol, yearStart)
 
         // Candles come newest-first; reverse for chronological order
         const ytdPriceHistory = candles
@@ -186,7 +187,7 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
 
     return { futures: validFutures }
   } catch (error) {
-    console.error('Error fetching futures with YTD sparkline:', error)
+    console.error('Error fetching futures with YTD sparkline:', safeErrorMessage(error))
     return { error: 'Failed to load futures data' }
   }
 }

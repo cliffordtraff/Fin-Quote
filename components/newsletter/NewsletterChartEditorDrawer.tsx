@@ -19,6 +19,7 @@ import type {
 
 const PM_VERSION = 1
 const READ_STATE_TIMEOUT_MS = 3000
+const PRICE_EXPORT_STATE_TIMEOUT_MS = 1200
 
 interface NewsletterChartEditorDrawerProps {
   draftId: string
@@ -36,6 +37,11 @@ interface FundStateResponse {
 type StateResponse =
   | { kind: 'fundamentals'; response: FundStateResponse | null }
   | { kind: 'price-export'; spec: PriceChartExportSpec | null }
+
+interface PriceExportSpecRequest {
+  requestId: string
+  resolve: (spec: PriceChartExportSpec | null) => void
+}
 
 function resolveEditor(block: NewsletterDraftBlock) {
   if (isPriceNewsletterChartSpec(block.chartSpec)) {
@@ -72,6 +78,7 @@ export default function NewsletterChartEditorDrawer({
     null,
   )
   const priceExportSpecRef = useRef<PriceChartExportSpec | null>(null)
+  const priceExportSpecRequestRef = useRef<PriceExportSpecRequest | null>(null)
 
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [chartVisible, setChartVisible] = useState(false)
@@ -111,6 +118,26 @@ export default function NewsletterChartEditorDrawer({
           const spec = data.spec
           if (spec && typeof spec === 'object') {
             priceExportSpecRef.current = spec as PriceChartExportSpec
+          }
+          return
+        }
+        if (data.type === 'export-editor:spec') {
+          const spec =
+            data.spec && typeof data.spec === 'object'
+              ? (data.spec as PriceChartExportSpec)
+              : null
+          if (spec) {
+            priceExportSpecRef.current = spec
+          }
+
+          const pending = priceExportSpecRequestRef.current
+          if (
+            pending &&
+            (typeof data.requestId !== 'string' ||
+              data.requestId === pending.requestId)
+          ) {
+            priceExportSpecRequestRef.current = null
+            pending.resolve(spec)
           }
           return
         }
@@ -212,9 +239,26 @@ export default function NewsletterChartEditorDrawer({
         return
       }
 
-      // price-export: editor pushes spec-changed events as the user edits, so
-      // the latest spec is already in the ref — no round-trip needed.
-      resolve({ kind: 'price-export', spec: priceExportSpecRef.current })
+      // Ask the iframe for a synchronous snapshot during Save. Slider edits
+      // also push spec-changed events, but a user can click Save before the
+      // preview debounce has flushed.
+      const fallbackSpec = priceExportSpecRef.current
+      const requestId = `price-export-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const settle = (spec: PriceChartExportSpec | null) => {
+        resolve({ kind: 'price-export', spec: spec ?? fallbackSpec })
+      }
+      priceExportSpecRequestRef.current = { requestId, resolve: settle }
+      iframeWindow.postMessage(
+        { type: 'export-editor:get-spec', requestId },
+        '*',
+      )
+      setTimeout(() => {
+        const pending = priceExportSpecRequestRef.current
+        if (pending?.requestId === requestId) {
+          priceExportSpecRequestRef.current = null
+          settle(null)
+        }
+      }, PRICE_EXPORT_STATE_TIMEOUT_MS)
     })
   }, [editor.kind])
 

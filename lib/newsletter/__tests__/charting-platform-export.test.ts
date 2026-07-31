@@ -59,16 +59,16 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     }
   })
 
-  it('prefers configured charting urls over the localhost fallback when env overrides exist', () => {
+  it('keeps local render traffic local while preserving the configured public chart url', () => {
     const originalChartUrl = process.env.NEXT_PUBLIC_CHARTING_URL
     const originalPublicUrl = process.env.NEWSLETTER_PUBLIC_CHARTING_URL
 
-    process.env.NEXT_PUBLIC_CHARTING_URL = 'http://localhost:3001'
+    process.env.NEXT_PUBLIC_CHARTING_URL = 'https://charts.theintraday.com'
     process.env.NEWSLETTER_PUBLIC_CHARTING_URL = 'https://charts.theintraday.com'
 
     try {
       expect(getDefaultChartingBaseUrlForHost('localhost:3005')).toBe(
-        'http://localhost:3001',
+        DEFAULT_LOCAL_CHARTING_BASE_URL,
       )
       expect(getDefaultPublicChartingBaseUrlForHost('localhost:3005')).toBe(
         'https://charts.theintraday.com',

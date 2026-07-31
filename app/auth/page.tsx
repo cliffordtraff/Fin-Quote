@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Logo from '@/components/Logo'
+import { resolveAuthRedirect } from '@/lib/auth/redirect'
 
 export default function AuthPage() {
   return (
@@ -27,7 +28,7 @@ function AuthPageContent() {
   const [message, setMessage] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const redirectTo = resolveAuthRedirect(searchParams.get('redirect'))
   const supabase = createClient()
 
   // Show error from callback if present
@@ -183,10 +184,15 @@ function AuthPageContent() {
                 setLoading(true)
                 setError('')
                 try {
+                  const callbackUrl = new URL(
+                    '/auth/callback',
+                    window.location.origin,
+                  )
+                  callbackUrl.searchParams.set('redirect', redirectTo)
                   const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                      redirectTo: `${window.location.origin}/auth/callback`,
+                      redirectTo: callbackUrl.toString(),
                     },
                   })
                   if (error) throw error

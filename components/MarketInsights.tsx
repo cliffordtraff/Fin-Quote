@@ -49,7 +49,7 @@ function TrendsLoadingSteps({ loading }: { loading: boolean }) {
         return (
           <div key={step} className="flex items-center gap-2 text-xs">
             {isCompleted ? (
-              <span className="text-green-500 w-3 text-center">✓</span>
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
             ) : isCurrent ? (
               <span className="w-3 h-3 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
             ) : (
@@ -189,8 +189,8 @@ export default function MarketInsights({
 
     if (error) {
       return (
-        <div className="text-red-500 text-sm py-4">
-          Error: {error}
+        <div className="py-4 text-sm text-red-600 dark:text-red-400">
+          {error}
         </div>
       )
     }
@@ -210,7 +210,10 @@ export default function MarketInsights({
             key={index}
             className="flex items-start gap-2"
           >
-            <span className="text-sm flex-shrink-0">{bullet.emoji}</span>
+            <span
+              aria-hidden="true"
+              className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sage-500"
+            />
             <div className="min-w-0">
               <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
                 {bullet.title}:
@@ -231,24 +234,25 @@ export default function MarketInsights({
   }
 
   return (
-    <div className="w-full rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+    <div className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
       {/* Header */}
-      <div className="px-2 py-1 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
-        <div className="flex justify-between items-center">
-          <h2 className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">Market Trends</h2>
+      <div className="flex min-h-11 items-center border-b border-gray-200 px-3 dark:border-gray-700">
+        <div className="flex w-full items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-gray-950 dark:text-white">Market Trends</h2>
           <button
+            type="button"
             onClick={onRefreshResponses}
             disabled={responsesLoading}
-            className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
+            className="min-h-8 rounded border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            {responsesLoading ? '...' : 'Refresh'}
+            {responsesLoading ? 'Refreshing' : 'Refresh'}
           </button>
         </div>
       </div>
 
       {/* What's Happening Today */}
       {(marketSummary || marketSummaryLoading) && (
-        <div className="px-3 py-2 border-b border-cream-200 dark:border-gray-700">
+        <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
           <div className="flex justify-between items-center mb-1.5">
             <div />
             <div className="flex items-center gap-2">
@@ -259,11 +263,12 @@ export default function MarketInsights({
               )}
               {onRefreshSummary && (
                 <button
+                  type="button"
                   onClick={onRefreshSummary}
                   disabled={marketSummaryLoading}
-                  className="text-[8px] px-1.5 py-0.5 rounded bg-sage-500 hover:bg-sage-600 disabled:bg-gray-400 text-white"
+                  className="min-h-7 rounded border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
                 >
-                  {marketSummaryLoading ? '...' : 'Refresh'}
+                  {marketSummaryLoading ? 'Refreshing' : 'Refresh summary'}
                 </button>
               )}
             </div>
@@ -279,7 +284,7 @@ export default function MarketInsights({
       )}
 
       {/* Bullet Points */}
-      <div className="p-2 text-sm text-gray-700 dark:text-gray-300 overflow-y-auto">
+      <div className="overflow-y-auto p-4 text-sm text-gray-700 dark:text-gray-300">
         {renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)}
       </div>
     </div>

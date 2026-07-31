@@ -67,26 +67,28 @@ export default function MarketHeadlines({ news }: MarketHeadlinesProps) {
   }
 
   return (
-    <div className="rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800 pt-1 px-2 pb-1">
-      <h3 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-        Headlines
-      </h3>
-      <div className="space-y-0.5">
+    <div className="h-[400px] overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+      <div className="flex min-h-11 items-center border-b border-gray-200 px-3 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-950 dark:text-white">
+          Headlines
+        </h2>
+      </div>
+      <div className="h-[calc(400px-44px)] space-y-1 overflow-y-auto p-3">
         {news.map((item, index) => (
           <a
             key={index}
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-start gap-1.5 group"
+            className="group grid grid-cols-[34px_54px_minmax(0,1fr)] items-start gap-2 rounded px-1 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
-            <span className="text-[10px] font-bold text-gray-700 dark:text-white w-7 flex-shrink-0">
+            <span className="text-[10px] font-semibold text-gray-700 dark:text-white">
               {getSiteAbbreviation(item.site)}
             </span>
-            <span className="text-xs text-gray-700 dark:text-white w-16 flex-shrink-0">
+            <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
               {formatPublishedDate(item.publishedDate)}
             </span>
-            <span className="text-xs text-sky-600 dark:text-sky-400 group-hover:underline line-clamp-1">
+            <span className="line-clamp-2 text-xs leading-5 text-sky-700 group-hover:underline dark:text-sky-400">
               {item.title}
             </span>
           </a>

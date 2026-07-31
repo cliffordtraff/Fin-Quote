@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface SP500MoverData {
   symbol: string
@@ -79,7 +80,7 @@ export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; e
 
     return { gainers }
   } catch (error) {
-    console.error('Error fetching S&P 500 gainers:', error)
+    console.error('Error fetching S&P 500 gainers:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 gainers' }
   }
 }
@@ -107,7 +108,7 @@ export async function getSP500Losers(): Promise<{ losers?: SP500MoverData[]; err
 
     return { losers }
   } catch (error) {
-    console.error('Error fetching S&P 500 losers:', error)
+    console.error('Error fetching S&P 500 losers:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 losers' }
   }
 }

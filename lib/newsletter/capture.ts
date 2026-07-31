@@ -1,12 +1,17 @@
 import { writeFileSync } from 'fs'
 import type { NewsletterChartSpec, PriceNewsletterChartSpec } from './types'
 import { isPriceNewsletterChartSpec } from './chart-spec'
+import { buildPriceExportEditorBaseSpec } from './chart-editor'
 import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
 import { getNewsletterChartRenderDimensions } from './render-dimensions'
 
 type Browser = import('puppeteer').Browser
 const DEFAULT_RENDER_ROUTE_PATH = '/tos/api/newsletter/render'
 const CHART_EXPORT_RENDER_ROUTE_PATH = '/api/chart-export/render'
+const DEFAULT_RENDER_ATTEMPTS = 4
+const DEFAULT_RETRY_DELAY_MS = 1_000
+const MAX_RETRY_DELAY_MS = 65_000
+const RETRYABLE_RENDER_STATUSES = new Set([408, 425, 429, 502, 503, 504])
 
 export interface CaptureChartOptions {
   /** File path to save the PNG screenshot */
@@ -19,6 +24,21 @@ export interface CaptureChartOptions {
   height?: number
   /** Max wait time in ms (default: 30000) */
   timeout?: number
+  /** Total render attempts for transient failures (default: 4). */
+  maxAttempts?: number
+  /** Base delay when the service does not return Retry-After (default: 1000). */
+  retryDelayMs?: number
+}
+
+class ChartRenderRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterMs: number | null,
+  ) {
+    super(message)
+    this.name = 'ChartRenderRequestError'
+  }
 }
 
 /**
@@ -44,43 +64,156 @@ export function getChartExportRenderUrl(chartBaseUrl: string): string {
   return `${trimmed}${CHART_EXPORT_RENDER_ROUTE_PATH}`
 }
 
+function renderHeaders(): Record<string, string> {
+  const apiKey = process.env.NEWSLETTER_RENDER_API_KEY?.trim()
+  return {
+    Accept: 'image/png',
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-Newsletter-Render-Key': apiKey } : {}),
+  }
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers.get('retry-after')?.trim()
+  if (!raw) return null
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, Math.min(MAX_RETRY_DELAY_MS, seconds * 1_000))
+  }
+  const timestamp = Date.parse(raw)
+  if (!Number.isFinite(timestamp)) return null
+  return Math.max(0, Math.min(MAX_RETRY_DELAY_MS, timestamp - Date.now()))
+}
+
+async function renderErrorDetail(response: Response): Promise<string> {
+  let detail = `${response.status} ${response.statusText}`.trim()
+  try {
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as { error?: string }
+      if (payload && typeof payload.error === 'string' && payload.error.trim()) {
+        detail = payload.error.trim()
+      }
+    } else {
+      const text = (await response.text()).trim()
+      if (text) detail = text
+    }
+  } catch (_err) {}
+  return detail
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+async function requestChartImage(
+  renderUrl: string,
+  body: Record<string, unknown>,
+  errorPrefix: string,
+  options: CaptureChartOptions,
+): Promise<Buffer> {
+  const maxAttempts = Math.max(
+    1,
+    Math.min(6, Math.floor(options.maxAttempts ?? DEFAULT_RENDER_ATTEMPTS)),
+  )
+  const baseDelayMs = Math.max(
+    0,
+    Math.min(
+      10_000,
+      Math.floor(options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS),
+    ),
+  )
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(renderUrl, {
+        method: 'POST',
+        headers: renderHeaders(),
+        body: JSON.stringify(body),
+      })
+      if (!response.ok) {
+        throw new ChartRenderRequestError(
+          `${errorPrefix}: ${await renderErrorDetail(response)}`,
+          response.status,
+          retryAfterMs(response),
+        )
+      }
+
+      const pngBytes = Buffer.from(await response.arrayBuffer())
+      if (pngBytes.length === 0) {
+        throw new Error(`${errorPrefix} returned an empty PNG response`)
+      }
+      return pngBytes
+    } catch (error) {
+      lastError = error
+      const retryable =
+        error instanceof ChartRenderRequestError
+          ? RETRYABLE_RENDER_STATUSES.has(error.status)
+          : true
+      if (!retryable || attempt >= maxAttempts) throw error
+
+      const fallbackDelay = Math.min(
+        MAX_RETRY_DELAY_MS,
+        baseDelayMs * 2 ** (attempt - 1),
+      )
+      await wait(
+        error instanceof ChartRenderRequestError &&
+          error.retryAfterMs != null
+          ? error.retryAfterMs
+          : fallbackDelay,
+      )
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`${errorPrefix} failed`)
+}
+
 async function captureChartFromExportSpec(
   spec: PriceNewsletterChartSpec,
   options: CaptureChartOptions,
 ): Promise<string> {
-  const chartExportSpec = spec.chartExportSpec
+  const chartExportSpec = buildPriceExportEditorBaseSpec(spec, {
+    theme: spec.chartExportSpec?.theme === 'dark' ? 'dark' : 'light',
+  })
   if (!chartExportSpec) {
     throw new Error('captureChartFromExportSpec called without chartExportSpec')
   }
-  const renderUrl = getChartExportRenderUrl(options.chartBaseUrl)
-  const response = await fetch(renderUrl, {
-    method: 'POST',
-    headers: { Accept: 'image/png', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      spec: chartExportSpec,
-      format: 'png',
-      timeoutMs: options.timeout ?? 30000,
-    }),
-  })
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`.trim()
-    try {
-      const contentType = response.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) {
-        const payload = (await response.json()) as { error?: string }
-        if (payload && typeof payload.error === 'string' && payload.error.trim()) {
-          detail = payload.error.trim()
-        }
-      } else {
-        const text = (await response.text()).trim()
-        if (text) detail = text
-      }
-    } catch (_err) {}
-    throw new Error(`Chart export render failed: ${detail}`)
-  }
-  const pngBytes = Buffer.from(await response.arrayBuffer())
-  if (pngBytes.length === 0) {
-    throw new Error('Chart export render returned an empty PNG response')
+  let pngBytes: Buffer
+  try {
+    pngBytes = await requestChartImage(
+      getChartExportRenderUrl(options.chartBaseUrl),
+      {
+        spec: chartExportSpec,
+        format: 'png',
+        timeoutMs: options.timeout ?? 30000,
+      },
+      'Chart export render failed',
+      options,
+    )
+  } catch (error) {
+    const routeUnavailable =
+      error instanceof ChartRenderRequestError &&
+      [404, 405, 501].includes(error.status)
+    if (!routeUnavailable) throw error
+
+    const { captureSpec } = resolveChartingPlatformNewsletterChart(spec, {
+      chartBaseUrl: options.chartBaseUrl,
+      width: options.width ?? chartExportSpec.width,
+      height: options.height ?? chartExportSpec.height,
+      theme: chartExportSpec.theme === 'dark' ? 'dark' : 'light',
+    })
+    pngBytes = await requestChartImage(
+      getChartingPlatformRenderUrl(options.chartBaseUrl),
+      {
+        spec: captureSpec,
+        timeoutMs: options.timeout ?? 30000,
+      },
+      'Legacy chart render failed',
+      options,
+    )
   }
   writeFileSync(options.outputPath, pngBytes)
   return options.outputPath
@@ -117,39 +250,15 @@ export async function captureChart(
   })
   const renderUrl = getChartingPlatformRenderUrl(chartBaseUrl)
 
-  const response = await fetch(renderUrl, {
-    method: 'POST',
-    headers: {
-      Accept: 'image/png',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  const pngBytes = await requestChartImage(
+    renderUrl,
+    {
       spec: captureSpec,
       timeoutMs: timeout,
-    }),
-  })
-
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`.trim()
-    try {
-      const contentType = response.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) {
-        const payload = await response.json() as { error?: string }
-        if (payload && typeof payload.error === 'string' && payload.error.trim()) {
-          detail = payload.error.trim()
-        }
-      } else {
-        const text = (await response.text()).trim()
-        if (text) detail = text
-      }
-    } catch (_err) {}
-    throw new Error(`Chart render failed: ${detail}`)
-  }
-
-  const pngBytes = Buffer.from(await response.arrayBuffer())
-  if (pngBytes.length === 0) {
-    throw new Error('Chart render returned an empty PNG response')
-  }
+    },
+    'Chart render failed',
+    options,
+  )
 
   writeFileSync(outputPath, pngBytes)
   return outputPath

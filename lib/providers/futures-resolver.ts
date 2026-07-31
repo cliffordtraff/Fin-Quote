@@ -7,6 +7,8 @@
  * contracts endpoint, with a 1-hour in-memory cache (rollovers are quarterly).
  */
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 const MASSIVE_BASE = 'https://api.massive.com'
 
 function getApiKey(): string {
@@ -77,6 +79,9 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
 
     const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
     if (!res.ok) {
+      if (res.status === 404) {
+        return null
+      }
       if (res.status === 401 || res.status === 403) {
         console.warn(`[futures-resolver] Contract lookup unavailable for ${code}: ${res.status}`)
       } else {
@@ -100,7 +105,7 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
 
     return ticker
   } catch (err) {
-    console.error(`[futures-resolver] Error resolving ${code}:`, err)
+    console.error(`[futures-resolver] Error resolving ${code}:`, safeErrorMessage(err))
     return null
   }
 }
@@ -149,7 +154,7 @@ export async function getFuturesSnapshot(contractTicker: string): Promise<{
       low: session.l ?? 0,
     }
   } catch (err) {
-    console.error(`[futures-resolver] Snapshot error for ${contractTicker}:`, err)
+    console.error(`[futures-resolver] Snapshot error for ${contractTicker}:`, safeErrorMessage(err))
     return null
   }
 }
@@ -193,7 +198,7 @@ export async function getFuturesCandles(
       timestampMs: r.window_start ? Math.floor(r.window_start / 1_000_000) : 0,
     }))
   } catch (err) {
-    console.error(`[futures-resolver] Candles error for ${contractTicker}:`, err)
+    console.error(`[futures-resolver] Candles error for ${contractTicker}:`, safeErrorMessage(err))
     return []
   }
 }

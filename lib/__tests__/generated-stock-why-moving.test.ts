@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { __testOnly } from '@/lib/generated-stock-why-moving'
+import {
+  __testOnly,
+  filterTimelySummaryNews,
+  WIIM_SUMMARY_MAX_CHARACTERS,
+  WIIM_SUMMARY_NEWS_LOOKBACK_DAYS,
+} from '@/lib/generated-stock-why-moving'
+
+function news(publishedDate: string) {
+  return {
+    title: publishedDate,
+    text: '',
+    url: `https://example.com/${publishedDate}`,
+    image: null,
+    publishedDate,
+    site: 'Example',
+    symbol: 'AAPL',
+  }
+}
 
 describe('generated stock why moving JSON parsing', () => {
   it('parses clean JSON responses', () => {
@@ -42,5 +59,44 @@ describe('generated stock why moving JSON parsing', () => {
 
     expect(parsed.summary).toBeNull()
     expect(parsed.no_summary_reason).toBe('quiet_tape')
+  })
+
+  it('truncates long summaries at a complete word', () => {
+    const summary = __testOnly.normalizeSummaryText(
+      `A ${'complete '.repeat(40)}sentence.`,
+    )
+
+    expect(summary?.length).toBeLessThanOrEqual(WIIM_SUMMARY_MAX_CHARACTERS)
+    expect(summary).toMatch(/complete\.\.\.$/)
+  })
+})
+
+describe('generated stock why moving news window', () => {
+  it('keeps only news from the report date and configured lookback window', () => {
+    const filtered = filterTimelySummaryNews([
+      news('2026-07-29T12:00:00Z'),
+      news('2026-07-22T12:00:00Z'),
+      news('2026-07-21T12:00:00Z'),
+      news('2026-07-30T12:00:00Z'),
+    ], '2026-07-29')
+
+    expect(WIIM_SUMMARY_NEWS_LOOKBACK_DAYS).toBe(7)
+    expect(filtered.map((item) => item.publishedDate)).toEqual([
+      '2026-07-29T12:00:00Z',
+      '2026-07-22T12:00:00Z',
+    ])
+  })
+
+  it('uses the Eastern calendar date near the UTC day boundary', () => {
+    const filtered = filterTimelySummaryNews([
+      news('2026-07-30T02:30:00Z'),
+      news('2026-07-29 12:00:00'),
+      news('not-a-date'),
+    ], '2026-07-29')
+
+    expect(filtered.map((item) => item.publishedDate)).toEqual([
+      '2026-07-30T02:30:00Z',
+      '2026-07-29 12:00:00',
+    ])
   })
 })

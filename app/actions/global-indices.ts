@@ -1,6 +1,7 @@
 'use server'
 
 import { FMPProvider } from '@/lib/providers/fmp'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface GlobalIndexQuote {
   market: string
@@ -56,7 +57,7 @@ async function fetchYTDChanges(symbols: string[]): Promise<Map<string, number>> 
       }
     }
   } catch (error) {
-    console.error('Error fetching YTD changes:', error)
+    console.error('Error fetching YTD changes:', safeErrorMessage(error))
   }
   return ytdMap
 }
@@ -97,7 +98,7 @@ export async function getGlobalIndexQuotes(): Promise<GlobalIndexQuote[]> {
 
     return quotes
   } catch (error) {
-    console.error('Error fetching global index quotes:', error)
+    console.error('Error fetching global index quotes:', safeErrorMessage(error))
     return []
   }
 }
@@ -130,7 +131,7 @@ export async function getFuturesQuotes(): Promise<FuturesQuote[]> {
 
     return quotes
   } catch (error) {
-    console.error('Error fetching futures quotes:', error)
+    console.error('Error fetching futures quotes:', safeErrorMessage(error))
     return []
   }
 }

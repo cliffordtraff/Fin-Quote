@@ -27,9 +27,14 @@
     "wiim:brief": "npx tsx scripts/run-wiim-brief.ts",
     "wiim:generate-daily": "npx tsx scripts/generate-daily-wiim-summaries.ts",
     "wiim:summarize-warm": "npx tsx scripts/summarize-wiim-warm-run.ts",
-    "wiim:summarize-debug": "npx tsx scripts/summarize-finviz-debug.ts"
+    "wiim:summarize-debug": "npx tsx scripts/summarize-finviz-debug.ts",
+    "newsletter:run-automation": "npx tsx scripts/run-daily-newsletter-automation.ts",
+    "newsletter:run-mid-morning": "npx tsx scripts/run-mid-morning-newsletter-automation.ts",
+    "newsletter:verify-daily": "npx tsx scripts/verify-daily-newsletter-run.ts",
+    "verify:catalyst-newsletter": "npx tsx scripts/verify-catalyst-newsletter-workflow.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.25.3",
     "@openai/agents": "^0.4.3",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.39.3",
@@ -43,6 +48,7 @@
     "highcharts-react-official": "^3.2.3",
     "lightweight-charts": "^5.0.9",
     "liveline": "^0.0.6",
+    "lucide-react": "^0.468.0",
     "next": "^15.5.6",
     "openai": "^6.8.0",
     "puppeteer": "^24.39.0",

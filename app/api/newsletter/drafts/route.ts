@@ -92,6 +92,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { scope, createdSessionId } = await resolveNewsletterDraftScope(request)
+    if (process.env.NODE_ENV === 'production' && !scope.ownerId) {
+      return NextResponse.json(
+        { error: 'Sign in to create and save newsletter drafts.' },
+        { status: 401 },
+      )
+    }
+
     const body = await request.json().catch(() => ({}))
     const ticker = normalizeTicker(body?.ticker)
     const format = normalizeFormat(body?.format)

@@ -102,6 +102,7 @@ describe('assembleNewsletterHtml', () => {
     expect(html).toContain('210.0x')
     expect(html).toContain('+12.0%')
     expect(html).not.toContain('-15.0%')
+    expect(html.match(/padding:16px 8px/g)).toHaveLength(3)
   })
 
   it('builds a reusable stats card from quote data for draft seeding', () => {

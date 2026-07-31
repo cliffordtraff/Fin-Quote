@@ -10,6 +10,7 @@ import {
   deleteNewsletterDraft,
   listNewsletterDrafts,
   normalizeNewsletterDraftDocument,
+  preserveNewsletterDraftServerMetadata,
   renderNewsletterDraftPreviewHtml,
 } from '@/lib/newsletter/drafts'
 
@@ -70,6 +71,54 @@ const sampleResult: NewsletterResult = {
 }
 
 describe('newsletter drafts', () => {
+  it('keeps catalyst provenance and publication metadata server-owned', () => {
+    const existing = {
+      ...buildNewsletterDraftFromResult(sampleResult),
+      source: {
+        type: 'catalyst' as const,
+        catalyst: {
+          reviewId: 'review-1',
+          reviewKey: '2026-07-29:cash:gainer:AAPL',
+          symbol: 'AAPL',
+          marketDate: '2026-07-29',
+          session: 'cash',
+          direction: 'gainer' as const,
+          headline: 'Approved catalyst',
+          summary: 'Approved summary',
+          bulletPoints: [],
+          source: 'Finviz',
+          sourceUrl: 'https://finviz.com/quote.ashx?t=AAPL&p=d',
+          reviewNotes: '',
+          reviewedAt: '2026-07-29T14:00:00.000Z',
+        },
+        attachedChartIds: ['chart-1'],
+        automatedAt: '2026-07-29T14:01:00.000Z',
+        automationStatus: 'complete' as const,
+      },
+      publication: {
+        beehiivUrl: 'https://theintraday.beehiiv.com/p/apple',
+        publishedAt: '2026-07-29T20:00:00.000Z',
+      },
+    }
+    const incoming = {
+      ...existing,
+      source: undefined,
+      publication: {
+        beehiivUrl: 'https://attacker.example/fake',
+        publishedAt: '2000-01-01T00:00:00.000Z',
+      },
+      subjectLine: 'Legitimate copy edit',
+    }
+
+    expect(
+      preserveNewsletterDraftServerMetadata(existing, incoming),
+    ).toMatchObject({
+      subjectLine: 'Legitimate copy edit',
+      source: existing.source,
+      publication: existing.publication,
+    })
+  })
+
   it('seeds a structured draft from a generated newsletter result', () => {
     const draft = buildNewsletterDraftFromResult(
       sampleResult,
@@ -352,6 +401,20 @@ describe('newsletter drafts', () => {
       expect(singleStockDraft.draft.blocks).toHaveLength(3)
       expect(singleStockDraft.draft.blocks[0]?.heading).toBe('New section 1')
       expect(singleStockDraft.draft.blocks[0]?.chartImageUrl).toContain('data:image/svg+xml')
+      expect(singleStockDraft.draft.blocks[0]?.chartAlt).toBe('AAPL manual price chart')
+      expect(singleStockDraft.draft.blocks[0]?.chartNeedsRegeneration).toBe(true)
+      expect(
+        'mode' in singleStockDraft.draft.blocks[0]!.chartSpec &&
+          singleStockDraft.draft.blocks[0]!.chartSpec.mode,
+      ).toBe('price')
+      expect(
+        'symbol' in singleStockDraft.draft.blocks[0]!.chartSpec &&
+          singleStockDraft.draft.blocks[0]!.chartSpec.symbol,
+      ).toBe('AAPL')
+      expect(
+        'chartExportSpec' in singleStockDraft.draft.blocks[0]!.chartSpec &&
+          singleStockDraft.draft.blocks[0]!.chartSpec.chartExportSpec?.renderProfile,
+      ).toBe('newsletter')
       expect(singleStockDraft.draft.statsCard?.items).toHaveLength(3)
       expect(singleStockDraft.draft.header?.logoUrl).toBe('')
 

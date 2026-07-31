@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface StockSparklineData {
   symbol: string
@@ -45,7 +46,7 @@ export async function getStockSparkline(symbol: string): Promise<{ sparkline?: S
       }
     }
   } catch (error) {
-    console.error(`Error fetching sparkline for ${symbol}:`, error)
+    console.error(`Error fetching sparkline for ${symbol}:`, safeErrorMessage(error))
     return { error: `Failed to load sparkline for ${symbol}` }
   }
 }

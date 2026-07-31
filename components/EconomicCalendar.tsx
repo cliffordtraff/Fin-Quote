@@ -36,7 +36,7 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
   if (events.length === 0) {
     return (
       <div className="w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700 p-4">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
           <div className="text-center text-gray-500 dark:text-gray-400 text-xs">
             Loading economic events...
           </div>
@@ -55,17 +55,17 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
   }, {} as Record<string, EconomicEvent[]>)
 
   return (
-    <div className="w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-cream-300 dark:border-gray-700" style={{ height: '400px' }}>
-      <div className="px-3 py-2 border-b border-cream-300 dark:border-gray-700 bg-cream-50 dark:bg-gray-800">
-        <h2 className={`font-semibold text-gray-700 dark:text-gray-300 ${expanded ? 'text-sm' : 'text-[10px]'}`}>
-          Economic Calendar (US)
+    <div className="h-[400px] w-full overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+      <div className="flex min-h-14 items-center justify-between gap-3 border-b border-gray-200 px-3 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-950 dark:text-white">
+          US Economic Calendar
         </h2>
-        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 italic">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           {summary || `${events.length} ${events.length === 1 ? 'event' : 'events'} scheduled`}
         </p>
       </div>
 
-      <div className={`space-y-4 overflow-y-auto ${expanded ? 'p-5' : 'p-4'}`} style={{ height: 'calc(100% - 37px)' }}>
+      <div className={`h-[calc(400px-56px)] space-y-4 overflow-y-auto ${expanded ? 'p-5' : 'p-4'}`}>
         {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
           const { month, day } = formatDate(dateEvents[0].date)
 
@@ -88,7 +88,7 @@ export default function EconomicCalendar({ events, expanded = false, summary }: 
                     : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
 
                   return (
-                    <div key={index} className="p-2 rounded hover:bg-cream-50 dark:hover:bg-gray-800 transition-colors">
+                    <div key={index} className="rounded p-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
                       <div className="flex items-start gap-2">
                         <div className="text-[9px] text-gray-500 dark:text-gray-400 min-w-[50px]">
                           {time}

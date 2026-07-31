@@ -72,7 +72,7 @@ export default function NewsletterDraftCreate({
         Start A Draft
       </label>
       <p className="mt-2 text-sm text-gray-600">
-        Choose a single-stock deep dive or a 3-5 stock market roundup.
+        Generate with AI, or start from a blank manual draft you fill in yourself.
       </p>
       <div className="mt-4 grid gap-3">
         <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-white p-1">
@@ -111,7 +111,7 @@ export default function NewsletterDraftCreate({
 
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-600">
-            What should this newsletter focus on?
+            AI generation prompt
           </label>
           <p className="mt-2 text-sm text-gray-500">
             {format === 'market_roundup'
@@ -145,6 +145,10 @@ export default function NewsletterDraftCreate({
         >
           {submittingMode === 'blank' ? 'Creating blank draft…' : 'Start blank'}
         </button>
+        <p className="text-xs leading-5 text-gray-500">
+          Start blank skips AI generation and creates editable sections with chart
+          blocks ready for the Chart Builder.
+        </p>
       </div>
 
       {error ? (

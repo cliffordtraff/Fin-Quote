@@ -46,6 +46,7 @@ import {
 } from '@/lib/newsletter/model-client'
 
 describe('newsletter model client', () => {
+  const mutableEnv = process.env as Record<string, string | undefined>
   const originalModelBackend = process.env.NEWSLETTER_MODEL_BACKEND
   const originalOpenAiKey = process.env.OPENAI_API_KEY
   const originalOpenAiModel = process.env.OPENAI_MODEL
@@ -53,8 +54,10 @@ describe('newsletter model client', () => {
   const originalOllamaModel = process.env.NEWSLETTER_OLLAMA_MODEL
   const originalOllamaApiKey = process.env.NEWSLETTER_OLLAMA_API_KEY
   const originalCodexModel = process.env.NEWSLETTER_CODEX_MODEL
+  const originalNodeEnv = process.env.NODE_ENV
 
   beforeEach(() => {
+    mutableEnv.NODE_ENV = 'test'
     delete process.env.NEWSLETTER_MODEL_BACKEND
     delete process.env.OPENAI_API_KEY
     delete process.env.OPENAI_MODEL
@@ -110,6 +113,8 @@ describe('newsletter model client', () => {
     } else {
       process.env.NEWSLETTER_CODEX_MODEL = originalCodexModel
     }
+
+    mutableEnv.NODE_ENV = originalNodeEnv
   })
 
   it('defaults to codex_cli when no model backend env is set', () => {
@@ -124,6 +129,14 @@ describe('newsletter model client', () => {
     expect(client.backend).toBe('codex_cli')
     expect(client.model).toBe('gpt-5.4-mini')
     expect(OpenAIMock).not.toHaveBeenCalled()
+  })
+
+  it('defaults to the OpenAI API backend in production', () => {
+    mutableEnv.NODE_ENV = 'production'
+    process.env.OPENAI_API_KEY = 'test-key'
+
+    expect(resolveNewsletterModelBackend()).toBe('openai_api')
+    expect(createNewsletterModelClient().backend).toBe('openai_api')
   })
 
   it('requires OPENAI_API_KEY when the model backend is openai_api', () => {

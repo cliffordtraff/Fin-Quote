@@ -148,6 +148,10 @@ const TRADING_DAYS_PER_WEEK = 5
 const CALENDAR_DAYS_PER_TRADING_DAY = 7 / TRADING_DAYS_PER_WEEK
 const US_MARKET_MINUTES_PER_DAY = 390
 const NEWSLETTER_PRICE_RIGHT_MARGIN_BARS = 10
+const NEWSLETTER_PRICE_EXPORT_SCALE = 3
+const NEWSLETTER_PRICE_TITLE_SIZE = 28
+const NEWSLETTER_PRICE_AXIS_LABEL_SIZE = 9
+const NEWSLETTER_PRICE_GRID_OPACITY = 0.12
 
 function rangeToApproxMs(range: string | undefined): number {
   switch (range) {
@@ -345,7 +349,175 @@ function ensureDataRangeIncludesViewport(
   }
 }
 
-function buildPriceExportEditorBaseSpec(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function formatExportIntervalLabel(interval: string | undefined): string {
+  const token = String(interval || '').trim()
+  const lower = token.toLowerCase()
+  if (!lower) return ''
+  if (lower === 'd' || lower === '1d' || lower === 'day' || lower === '1day') {
+    return 'Daily'
+  }
+  if (lower === 'w' || lower === '1w' || lower === 'week' || lower === '1week') {
+    return 'Weekly'
+  }
+  if (lower === 'm' || lower === '1mo' || lower === 'month' || lower === '1month') {
+    return 'Monthly'
+  }
+  const match = lower.match(/^([1-9]\d*)(sec|min|hour|day|week|month)$/)
+  if (!match) return token
+  const amount = Number(match[1])
+  const unit = match[2]
+  if (amount === 1 && unit === 'hour') return 'Hourly'
+  if (amount === 1 && unit === 'day') return 'Daily'
+  if (amount === 1 && unit === 'week') return 'Weekly'
+  if (amount === 1 && unit === 'month') return 'Monthly'
+  const unitLabel =
+    unit === 'sec'
+      ? 'Second'
+      : unit === 'min'
+        ? 'Minute'
+        : unit.charAt(0).toUpperCase() + unit.slice(1)
+  return `${amount} ${unitLabel}${amount === 1 ? '' : 's'}`
+}
+
+function defaultPriceExportTitle(symbol: string, interval: string | undefined): string {
+  const intervalLabel = formatExportIntervalLabel(interval)
+  return intervalLabel ? `${symbol} - ${intervalLabel}` : symbol
+}
+
+function hasExportLowerPane(source: PriceChartExportSpec): boolean {
+  if (Array.isArray(source.lowerPanes) && source.lowerPanes.length > 0) {
+    return true
+  }
+  if (!Array.isArray(source.indicators)) return false
+  return source.indicators.some((indicator) => {
+    if (!isRecord(indicator)) return false
+    if (indicator.placement === 'lower') return true
+    return (
+      typeof indicator.paneId === 'string' &&
+      indicator.paneId &&
+      indicator.paneId !== 'price'
+    )
+  })
+}
+
+function completePriceExportSpec(
+  source: PriceChartExportSpec,
+  options: {
+    symbol: string
+    theme: 'light' | 'dark'
+    displayWidth: number
+    displayHeight: number
+  },
+): PriceChartExportSpec {
+  const existingExportOptions = isRecord(source.exportOptions)
+    ? source.exportOptions
+    : {}
+  const existingThemeOverrides = isRecord(source.themeOverrides)
+    ? source.themeOverrides
+    : {}
+  const existingRenderProfileOverrides = isRecord(source.renderProfileOverrides)
+    ? source.renderProfileOverrides
+    : {}
+  const chartTitle =
+    typeof existingExportOptions.chartTitle === 'string' &&
+    existingExportOptions.chartTitle.trim()
+      ? existingExportOptions.chartTitle.trim()
+      : typeof source.companyName === 'string' && source.companyName.trim()
+        ? source.companyName.trim()
+        : defaultPriceExportTitle(options.symbol, source.interval)
+  const exportOptions = {
+    displayWidth: options.displayWidth,
+    displayHeight: options.displayHeight,
+    exportScale: NEWSLETTER_PRICE_EXPORT_SCALE,
+    visibleRange: 'current',
+    pricePaneRatio: 0.76,
+    chartTitle,
+    includeDateRangeInTitle: false,
+    titleSize: NEWSLETTER_PRICE_TITLE_SIZE,
+    axisLabelSize: NEWSLETTER_PRICE_AXIS_LABEL_SIZE,
+    priceAxisDensity: 1.5,
+    gridDensity: 'subtle',
+    gridDirection: 'both',
+    gridOpacity: NEWSLETTER_PRICE_GRID_OPACITY,
+    gridHorizontalColor: '#1F2937',
+    gridVerticalColor: '#1F2937',
+    gridHorizontalOpacity: NEWSLETTER_PRICE_GRID_OPACITY,
+    gridVerticalOpacity: NEWSLETTER_PRICE_GRID_OPACITY,
+    colorPreset: 'none',
+    colorPresetTone: options.theme === 'dark' ? 'dark' : 'light',
+    background: options.theme === 'dark' ? 'dark' : 'white',
+    backgroundColor: options.theme === 'dark' ? '#000000' : '#FFFFFF',
+    showTitle: true,
+    showLegend: true,
+    showLowerPane: hasExportLowerPane(source),
+    showExtendedHours: true,
+    showCurrentPriceLabel: true,
+    showCurrentPriceLine: false,
+    showWatermark: true,
+    watermarkText: 'The Intraday',
+    ...existingExportOptions,
+  }
+  const displayWidth = Number(exportOptions.displayWidth)
+  const displayHeight = Number(exportOptions.displayHeight)
+  const exportScale = Number(exportOptions.exportScale)
+  const width =
+    Number.isFinite(displayWidth) && Number.isFinite(exportScale)
+      ? Math.round(displayWidth * exportScale)
+      : source.width
+  const height =
+    Number.isFinite(displayHeight) && Number.isFinite(exportScale)
+      ? Math.round(displayHeight * exportScale)
+      : source.height
+  return {
+    ...source,
+    theme: options.theme,
+    width,
+    height,
+    companyName: chartTitle,
+    renderProfile: source.renderProfile || 'newsletter',
+    lowerPanes: Array.isArray(source.lowerPanes) ? source.lowerPanes : [],
+    indicators: Array.isArray(source.indicators) ? source.indicators : [],
+    themeOverrides: {
+      bg: options.theme === 'dark' ? '#000000' : '#FFFFFF',
+      axisBg: options.theme === 'dark' ? '#000000' : '#FFFFFF',
+      axisBorder: 'rgba(31, 41, 55, 0.12)',
+      axisBorderWidth: 0.5,
+      priceAxisBorder: 'rgba(31, 41, 55, 0.12)',
+      priceAxisBorderWidth: 0.5,
+      grid: 'rgba(31, 41, 55, 1.000)',
+      gridHorizontal: 'rgba(31, 41, 55, 1.000)',
+      gridVertical: 'rgba(31, 41, 55, 1.000)',
+      fontSizeHeader: NEWSLETTER_PRICE_TITLE_SIZE,
+      fontSizeTick: NEWSLETTER_PRICE_AXIS_LABEL_SIZE,
+      fontSizeTimeAxis: NEWSLETTER_PRICE_AXIS_LABEL_SIZE,
+      fontSizeStudy: 13,
+      priceHeaderDisplayMode: 'company-only',
+      ...existingThemeOverrides,
+    },
+    gridVisible: source.gridVisible ?? true,
+    gridHorizontal: source.gridHorizontal ?? true,
+    gridVertical: source.gridVertical ?? true,
+    gridOpacity:
+      typeof source.gridOpacity === 'number'
+        ? source.gridOpacity
+        : NEWSLETTER_PRICE_GRID_OPACITY,
+    renderProfileOverrides: {
+      appendTickerToTitle: false,
+      hideIndicatorLegend: false,
+      hideVolume: false,
+      hideLastPriceBadge: false,
+      showLastPriceLine: false,
+      ...existingRenderProfileOverrides,
+    },
+    exportOptions,
+  }
+}
+
+export function buildPriceExportEditorBaseSpec(
   spec: PriceNewsletterChartSpec,
   options: { theme?: 'light' | 'dark' },
 ): PriceChartExportSpec {
@@ -354,12 +526,11 @@ function buildPriceExportEditorBaseSpec(
   if (!symbol) {
     throw new Error('Price newsletter chart spec is missing a symbol')
   }
+  const theme = options.theme ?? 'light'
   // If a prior session already saved a chartExportSpec on this block, prefer
   // that as the editor's starting point so user edits round-trip. Backfill
-  // viewportTimeRange / dataTimeRange when they're missing — older saved
-  // specs from before this helper started seeding them don't have them, and
-  // without them the editor falls back to the bars-API warmup window (which
-  // collapses the visible range to ~5 weeks regardless of spec.range).
+  // missing render defaults so older lightweight specs regenerate the same
+  // high-resolution image that the export editor previews.
   const persisted = spec.chartExportSpec
   if (persisted && typeof persisted === 'object') {
     const hasViewport =
@@ -368,7 +539,6 @@ function buildPriceExportEditorBaseSpec(
     const hasDataRange =
       persisted.dataTimeRange != null &&
       typeof persisted.dataTimeRange === 'object'
-    if (hasViewport && hasDataRange) return persisted
     const fallbackRange =
       typeof persisted.range === 'string' && persisted.range
         ? persisted.range
@@ -382,35 +552,48 @@ function buildPriceExportEditorBaseSpec(
     const viewportTimeRange = hasViewport
       ? persisted.viewportTimeRange
       : fallbackTimeRanges.viewportTimeRange
-    return {
-      ...persisted,
-      viewportTimeRange,
-      dataTimeRange: hasDataRange
-        ? persisted.dataTimeRange
-        : ensureDataRangeIncludesViewport(
-            fallbackTimeRanges.dataTimeRange,
-            viewportTimeRange,
-          ),
-    }
+    return completePriceExportSpec(
+      {
+        ...persisted,
+        viewportTimeRange,
+        dataTimeRange: hasDataRange
+          ? persisted.dataTimeRange
+          : ensureDataRangeIncludesViewport(
+              fallbackTimeRanges.dataTimeRange,
+              viewportTimeRange,
+            ),
+      },
+      {
+        symbol,
+        theme: persisted.theme === 'dark' ? 'dark' : theme,
+        displayWidth: dimensions.width,
+        displayHeight: dimensions.height,
+      },
+    )
   }
   // Match the legacy /tos newsletter renderer: price charts show the requested
   // range plus contextual lookback bars. Without this, clicking an unsaved
   // draft chart opens the new export editor at a tighter zoom than the static
   // newsletter image that the user just clicked.
   const timeRanges = buildDefaultPriceExportTimeRanges(spec.range, spec.interval)
-  return {
-    symbol,
-    interval: spec.interval,
-    range: spec.range,
-    chartType: spec.chartType,
-    theme: options.theme ?? 'light',
-    width: dimensions.width,
-    height: dimensions.height,
-    companyName: '',
-    renderProfile: 'newsletter',
-    viewportTimeRange: timeRanges.viewportTimeRange,
-    dataTimeRange: timeRanges.dataTimeRange,
-  }
+  return completePriceExportSpec(
+    {
+      symbol,
+      interval: spec.interval,
+      range: spec.range,
+      chartType: spec.chartType,
+      theme,
+      renderProfile: 'newsletter',
+      viewportTimeRange: timeRanges.viewportTimeRange,
+      dataTimeRange: timeRanges.dataTimeRange,
+    },
+    {
+      symbol,
+      theme,
+      displayWidth: dimensions.width,
+      displayHeight: dimensions.height,
+    },
+  )
 }
 
 export function resolveNewsletterPriceExportEditor(

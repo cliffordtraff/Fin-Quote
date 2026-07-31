@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface StockData {
   symbol: string
@@ -47,7 +48,7 @@ export async function getStocksData(): Promise<{
 
     return { stocks }
   } catch (err) {
-    console.error('Error fetching stocks data:', err)
+    console.error('Error fetching stocks data:', safeErrorMessage(err))
     return {
       stocks: [],
       error: err instanceof Error ? err.message : 'An unexpected error occurred',

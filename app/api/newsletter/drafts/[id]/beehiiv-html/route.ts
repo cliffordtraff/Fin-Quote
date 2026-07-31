@@ -1,94 +1,15 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-import { existsSync, readFileSync } from 'fs'
-import { basename, resolve } from 'path'
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   NewsletterDraftNotFoundError,
-  getNewsletterDraft,
-  normalizeNewsletterDraftDocument,
-  renderNewsletterDraftBeehiivHtml,
 } from '@/lib/newsletter/drafts'
 import {
   attachNewsletterDraftSessionCookie,
   resolveNewsletterDraftScope,
 } from '@/lib/newsletter/draft-session'
-import { getDefaultPublicChartingBaseUrlForHost } from '@/lib/newsletter/charting-platform-export'
-
-const BUCKET = 'newsletter-charts'
-
-function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for image publishing',
-    )
-  }
-  return createClient(url, key)
-}
-
-/**
- * Upload a local newsletter chart image to Supabase Storage.
- * Returns the public URL.
- */
-async function publishLocalImage(localPath: string): Promise<string> {
-  const supabase = createServiceClient()
-  const filename = basename(localPath)
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const storagePath = `${datePrefix}/${filename}`
-
-  const fileBuffer = readFileSync(localPath)
-
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, fileBuffer, {
-      contentType: 'image/png',
-      upsert: true,
-    })
-
-  if (error) {
-    throw new Error(`Failed to upload ${filename}: ${error.message}`)
-  }
-
-  const { data: urlData } = supabase.storage
-    .from(BUCKET)
-    .getPublicUrl(storagePath)
-
-  return urlData.publicUrl
-}
-
-/**
- * Given a relative image URL like /newsletter-charts/AAPL_chart.png,
- * resolve to local file path, upload to Supabase, and return public URL.
- */
-async function resolveImageToPublicUrl(imageUrl: string): Promise<string> {
-  // Already a public URL
-  if (/^https?:\/\//i.test(imageUrl)) {
-    return imageUrl
-  }
-
-  // Relative path like /newsletter-charts/<filename> — resolve to local file
-  // in the new .newsletter-output directory, with a fallback to the legacy
-  // public/newsletter-charts/ location for older drafts.
-  const filename = basename(imageUrl)
-  const newPath = resolve(process.cwd(), '.newsletter-output', filename)
-  const legacyPath = resolve(process.cwd(), 'public/newsletter-charts', filename)
-  const localPath = existsSync(newPath)
-    ? newPath
-    : existsSync(legacyPath)
-      ? legacyPath
-      : null
-
-  if (!localPath) {
-    console.warn(`Image not found locally: ${newPath}`)
-    return imageUrl // Return as-is, will be broken but at least won't crash
-  }
-
-  return publishLocalImage(localPath)
-}
+import { buildNewsletterDraftBeehiivExport } from '@/lib/newsletter/beehiiv-export'
 
 function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof NewsletterDraftNotFoundError) {
@@ -107,39 +28,12 @@ export async function GET(
   try {
     const { id } = await params
     const { scope, createdSessionId } = await resolveNewsletterDraftScope(request)
-    const draft = await getNewsletterDraft(scope, id)
-    const host = request.headers.get('host')
-    const publicChartBaseUrl = getDefaultPublicChartingBaseUrlForHost(host)
-    const normalizedDraft = normalizeNewsletterDraftDocument(
-      draft.draft,
-      publicChartBaseUrl,
+    const beehiivExport = await buildNewsletterDraftBeehiivExport(
+      scope,
+      id,
+      request.headers.get('host'),
     )
-
-    // Collect all image URLs from blocks
-    const imageUrls = normalizedDraft.blocks
-      .map((block) => block.chartImageUrl)
-      .filter((url): url is string => Boolean(url))
-
-    // Publish any local images to Supabase Storage
-    const urlMap: Record<string, string> = {}
-    for (const imageUrl of imageUrls) {
-      if (!/^https?:\/\//i.test(imageUrl)) {
-        urlMap[imageUrl] = await resolveImageToPublicUrl(imageUrl)
-      }
-    }
-
-    // Generate HTML
-    let beehiivHtml = renderNewsletterDraftBeehiivHtml(
-      normalizedDraft,
-      publicChartBaseUrl,
-    )
-
-    // Replace relative URLs with public URLs
-    for (const [localUrl, publicUrl] of Object.entries(urlMap)) {
-      beehiivHtml = beehiivHtml.replaceAll(`src="${localUrl}"`, `src="${publicUrl}"`)
-    }
-
-    const response = NextResponse.json({ html: beehiivHtml })
+    const response = NextResponse.json({ html: beehiivExport.html })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
     return toErrorResponse(error)

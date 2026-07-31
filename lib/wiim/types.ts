@@ -1,7 +1,7 @@
 import type { StockCandidate, StockNewsItem, EarningsCandidate, RecentPick } from '../newsletter/types'
 import type { StockWhyMovingResult } from '../stock-why-moving'
 
-export type WiimRunType = 'morning'
+export type WiimRunType = 'morning' | 'mid_morning'
 export type WiimRunStatus = 'running' | 'completed' | 'failed'
 export type WiimCandidateType = 'newsletter' | 'chart_of_day' | 'roundup' | 'watch_only'
 export type WiimStateLabel = 'new' | 'persistent' | 'fading'

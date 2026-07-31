@@ -1,6 +1,7 @@
 'use server'
 
 import { FMPProvider } from '@/lib/providers/fmp'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface ForexBondData {
   symbol: string
@@ -49,7 +50,7 @@ export async function getForexBondsData(): Promise<{ forexBonds: ForexBondData[]
 
     return { forexBonds: forexBondsData }
   } catch (error) {
-    console.error('Error fetching forex/bonds data:', error)
+    console.error('Error fetching forex/bonds data:', safeErrorMessage(error))
     return { error: 'Failed to load forex/bonds data' }
   }
 }
@@ -103,7 +104,7 @@ export async function getForexBondsWithYTD(): Promise<{ forexBonds: ForexBondDat
 
     return { forexBonds: validData }
   } catch (error) {
-    console.error('Error fetching forex/bonds data with YTD:', error)
+    console.error('Error fetching forex/bonds data with YTD:', safeErrorMessage(error))
     return { error: 'Failed to load forex/bonds data' }
   }
 }

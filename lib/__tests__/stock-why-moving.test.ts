@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildFinvizQuoteUrl,
   buildWhyMovingDisplayText,
   isFreshWhyMovingResult,
   parseFinvizWhyMovingHtml,
   WHY_MOVING_CACHE_TTL,
 } from '@/lib/stock-why-moving'
+
+describe('buildFinvizQuoteUrl', () => {
+  it('uses Finviz class-share aliases without changing the canonical symbol', () => {
+    expect(buildFinvizQuoteUrl('BRK.B')).toBe('https://finviz.com/quote.ashx?t=BRK-B&p=d')
+    expect(buildFinvizQuoteUrl('bf.b')).toBe('https://finviz.com/quote.ashx?t=BF-B&p=d')
+  })
+
+  it('leaves standard ticker symbols unchanged', () => {
+    expect(buildFinvizQuoteUrl('AAPL')).toBe('https://finviz.com/quote.ashx?t=AAPL&p=d')
+  })
+})
 
 describe('stock-why-moving parser', () => {
   it('parses the embedded Finviz why-moving payload', () => {

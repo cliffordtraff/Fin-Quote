@@ -1,5 +1,7 @@
 'use server'
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 export interface SectorData {
   sector: string
   changesPercentage: string
@@ -83,7 +85,7 @@ export async function getSectorPerformance() {
 
     return { sectors: [] }
   } catch (error) {
-    console.error('Error fetching sector performance:', error)
+    console.error('Error fetching sector performance:', safeErrorMessage(error))
     return { error: 'Failed to load sector performance data' }
   }
 }

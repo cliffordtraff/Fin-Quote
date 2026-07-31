@@ -1,5 +1,7 @@
 'use server'
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 export interface EarningsData {
   symbol: string
   name: string
@@ -49,8 +51,6 @@ export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
 
     const fromDate = monday.toISOString().split('T')[0]
     const toDate = friday.toISOString().split('T')[0]
-
-    console.log(`[Earnings Calendar] Fetching for week: ${fromDate} to ${toDate}`)
 
     const response = await fetch(
       `https://financialmodelingprep.com/api/v3/earning_calendar?from=${fromDate}&to=${toDate}&apikey=${apiKey}`,
@@ -130,7 +130,6 @@ export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
       : []
 
     const totalCount = sp500Earnings.length
-    console.log(`[Earnings Calendar] FMP returned ${data?.length || 0} total, ${totalCount} S&P 500 stocks reporting`)
 
     // Separate mega-cap and other S&P 500 earnings
     const megaCapEarnings = sp500Earnings.filter((item: any) => megaCapSymbols.has(item.symbol))
@@ -158,11 +157,9 @@ export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
       revenueEstimated: item.revenueEstimated,
     }))
 
-    console.log(`[Earnings Calendar] Showing ${megaCapEarnings.length} mega-cap + ${filtered.length - megaCapEarnings.length} other = ${filtered.length} total`)
-
     return { earnings: filtered, totalCount }
   } catch (error) {
-    console.error('Error fetching earnings calendar:', error)
+    console.error('Error fetching earnings calendar:', safeErrorMessage(error))
     return { earnings: [], totalCount: 0 }
   }
 }

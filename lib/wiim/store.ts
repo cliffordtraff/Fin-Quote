@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 import type { Database, Json } from '@/lib/database.types'
 
-import type { RankedWiimCandidate, WiimRunStatus } from './types'
+import type { RankedWiimCandidate, WiimRunStatus, WiimRunType } from './types'
 
 type WiimRunRow = Database['public']['Tables']['wiim_runs']['Row']
 
@@ -23,7 +23,7 @@ function createSupabaseWriteClient() {
 }
 
 export async function createWiimRun(input: {
-  runType: 'morning'
+  runType: WiimRunType
   metadata?: Record<string, unknown>
 }): Promise<WiimRunRow> {
   const supabase = createSupabaseWriteClient()
@@ -64,6 +64,7 @@ export async function storeWiimCandidates(runId: string, candidates: RankedWiimC
       state_label: candidate.stateLabel,
       signals_json: candidate.signals as unknown as Json,
       source_refs_json: candidate.sourceRefs as unknown as Json,
+      metadata_json: candidate.metadata as unknown as Json,
     })),
   )
 
@@ -100,7 +101,7 @@ export async function completeWiimRun(input: {
   }
 }
 
-export async function getLatestWiimRun(runType: 'morning' = 'morning'): Promise<WiimRunRow | null> {
+export async function getLatestWiimRun(runType: WiimRunType = 'morning'): Promise<WiimRunRow | null> {
   const supabase = createSupabaseWriteClient()
   const { data, error } = await supabase
     .from('wiim_runs')

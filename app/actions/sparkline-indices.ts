@@ -2,6 +2,7 @@
 
 import { getProvider } from '@/lib/providers'
 import type { ProviderCandle } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface OHLCData {
   date: string
@@ -164,7 +165,7 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
 
     return { indices: validIndices }
   } catch (error) {
-    console.error('Error fetching indices data:', error)
+    console.error('Error fetching indices data:', safeErrorMessage(error))
     return { error: 'Failed to load indices data' }
   }
 }

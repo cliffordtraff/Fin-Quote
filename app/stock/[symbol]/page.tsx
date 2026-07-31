@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
-import Navigation from '@/components/Navigation'
+import AppShell from '@/components/AppShell'
 import StockPriceHeader from '@/components/StockPriceHeader'
 import EmbedChart from '@/components/EmbedChart'
 import FinancialStatementsTabs from '@/components/FinancialStatementsTabs'
@@ -115,25 +115,19 @@ export default async function StockPage({ params }: PageProps) {
   // If we couldn't get basic overview data, show a message
   if (!overview || !keyStats) {
     return (
-      <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
-        <Navigation />
-        <div className="mx-auto max-w-[1500px] px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            {normalizedSymbol}
-          </h1>
-          <p className="text-amber-600 dark:text-amber-400">
-            Data for {normalizedSymbol} is currently being loaded. Please check back soon!
-          </p>
-        </div>
-      </div>
+      <AppShell mainClassName="mx-auto w-full max-w-[1500px] min-w-0 flex-1 px-4 py-16 text-center">
+        <h1 className="mb-4 text-2xl font-semibold text-gray-950 dark:text-white">
+          {normalizedSymbol}
+        </h1>
+        <p className="text-amber-600 dark:text-amber-400">
+          Data for {normalizedSymbol} is currently unavailable. Please try again shortly.
+        </p>
+      </AppShell>
     )
   }
 
   return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900">
-      {/* Navigation Header */}
-      <Navigation />
-
+    <AppShell showFooter mainClassName="min-w-0 flex-1">
       {/* Stock Header Section - Sticky with Client-Side Polling */}
       <StockPriceHeader
         symbol={normalizedSymbol}
@@ -438,16 +432,6 @@ export default async function StockPage({ params }: PageProps) {
         <DiscoverMoreCarousel stocks={discoverStocks} />
       )}
 
-      {/* Footer */}
-      <footer className="bg-cream-100 dark:bg-gray-900 border-t border-cream-300 dark:border-gray-700">
-        <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              &copy; {new Date().getFullYear()} The Intraday. All rights reserved.
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </AppShell>
   )
 }

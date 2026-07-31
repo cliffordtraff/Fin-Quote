@@ -1,6 +1,5 @@
 import Link from 'next/link'
-import Navigation from '@/components/Navigation'
-import DashboardFooter from '@/components/DashboardFooter'
+import AppShell from '@/components/AppShell'
 import { getPremarketBrief, type CatalystItem, type PremarketBriefRow, type PremarketMover } from '@/lib/premarket-brief'
 
 export const revalidate = 300
@@ -243,9 +242,10 @@ export default async function PremarketPage() {
   const semiStats = brief.semiRead.stats
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream-100 dark:bg-gray-900">
-      <Navigation />
-      <main className="mx-auto w-full max-w-[1500px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+    <AppShell
+      showFooter
+      mainClassName="mx-auto w-full max-w-[1500px] min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8"
+    >
         <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-sage-600 dark:text-sage-400">Market Brief</p>
@@ -339,8 +339,6 @@ export default async function PremarketPage() {
             </div>
           </section>
         ) : null}
-      </main>
-      <DashboardFooter />
-    </div>
+    </AppShell>
   )
 }

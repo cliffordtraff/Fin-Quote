@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface VIXData {
   symbol: string
@@ -54,7 +55,7 @@ export async function getVIXData() {
 
     return { vix: vixData }
   } catch (error) {
-    console.error('Error fetching VIX data:', error)
+    console.error('Error fetching VIX data:', safeErrorMessage(error))
     return { error: 'Failed to load VIX data' }
   }
 }

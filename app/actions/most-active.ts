@@ -1,5 +1,7 @@
 'use server'
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 export interface MostActiveStock {
   symbol: string
   name: string
@@ -49,7 +51,7 @@ export async function getMostActiveData(): Promise<{ mostActive?: MostActiveStoc
 
     return { mostActive: [] }
   } catch (error) {
-    console.error('Error fetching most active stocks:', error)
+    console.error('Error fetching most active stocks:', safeErrorMessage(error))
     return { error: 'Failed to load most active stocks' }
   }
 }

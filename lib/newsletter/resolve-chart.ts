@@ -3,10 +3,12 @@ import type {
   NewsletterPeriodType,
   NewsletterChartSpec,
   PriceEditorialChartTemplate,
+  PriceNewsletterChartSpec,
   ResolveChartOptions,
   ResolvedChart,
 } from './types'
 import { getEditorialTemplate } from './editorial-templates'
+import { buildPriceExportEditorBaseSpec } from './chart-editor'
 
 /**
  * Resolve a year-range strategy to concrete minYear / maxYear values.
@@ -169,7 +171,7 @@ function buildPriceChartSpec(
   const subtitle =
     options.subtitleOverride ?? fillPattern(template.subtitlePattern, vars)
 
-  return {
+  const baseSpec: PriceNewsletterChartSpec = {
     mode: 'price',
     symbol: ticker,
     range: template.range,
@@ -177,5 +179,13 @@ function buildPriceChartSpec(
     chartType: template.chartType,
     title,
     subtitle,
+  }
+
+  // Attach a chartExportSpec at birth so captureChart always routes through
+  // /api/chart-export/render. Without this, fresh blocks fall through to the
+  // legacy /tos/api/newsletter/render endpoint, which has known layout drift.
+  return {
+    ...baseSpec,
+    chartExportSpec: buildPriceExportEditorBaseSpec(baseSpec, { theme: 'light' }),
   }
 }

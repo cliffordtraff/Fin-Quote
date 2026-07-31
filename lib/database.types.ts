@@ -985,6 +985,727 @@ export interface Database {
         }
         Relationships: []
       }
+      newsletter_beehiiv_deliveries: {
+        Row: {
+          id: string
+          draft_id: string
+          owner_id: string
+          publication_id: string
+          beehiiv_post_id: string
+          title: string
+          preview_url: string | null
+          editor_url: string
+          content_hash: string
+          lifecycle_status: string
+          beehiiv_status: string | null
+          scheduled_at: string | null
+          published_at: string | null
+          web_url: string | null
+          stats_json: Json
+          last_reconciled_at: string | null
+          last_reconcile_error: string | null
+          synced_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          draft_id: string
+          owner_id: string
+          publication_id: string
+          beehiiv_post_id: string
+          title: string
+          preview_url?: string | null
+          editor_url: string
+          content_hash: string
+          lifecycle_status?: string
+          beehiiv_status?: string | null
+          scheduled_at?: string | null
+          published_at?: string | null
+          web_url?: string | null
+          stats_json?: Json
+          last_reconciled_at?: string | null
+          last_reconcile_error?: string | null
+          synced_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          draft_id?: string
+          owner_id?: string
+          publication_id?: string
+          beehiiv_post_id?: string
+          title?: string
+          preview_url?: string | null
+          editor_url?: string
+          content_hash?: string
+          lifecycle_status?: string
+          beehiiv_status?: string | null
+          scheduled_at?: string | null
+          published_at?: string | null
+          web_url?: string | null
+          stats_json?: Json
+          last_reconciled_at?: string | null
+          last_reconcile_error?: string | null
+          synced_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_beehiiv_deliveries_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "newsletter_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_draft_events: {
+        Row: {
+          id: string
+          draft_id: string
+          owner_id: string | null
+          session_id: string
+          event_type: string
+          from_status: string | null
+          to_status: string | null
+          beehiiv_url: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          draft_id: string
+          owner_id?: string | null
+          session_id: string
+          event_type: string
+          from_status?: string | null
+          to_status?: string | null
+          beehiiv_url?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          draft_id?: string
+          owner_id?: string | null
+          session_id?: string
+          event_type?: string
+          from_status?: string | null
+          to_status?: string | null
+          beehiiv_url?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_draft_events_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_integrations: {
+        Row: {
+          owner_id: string
+          provider: string
+          credentials_ciphertext: string
+          publication_id: string | null
+          publication_name: string | null
+          publication_url: string | null
+          connected_at: string
+          last_verified_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          owner_id: string
+          provider: string
+          credentials_ciphertext: string
+          publication_id?: string | null
+          publication_name?: string | null
+          publication_url?: string | null
+          connected_at?: string
+          last_verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          owner_id?: string
+          provider?: string
+          credentials_ciphertext?: string
+          publication_id?: string | null
+          publication_name?: string | null
+          publication_url?: string | null
+          connected_at?: string
+          last_verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_notifications: {
+        Row: {
+          id: string
+          scope_key: string
+          owner_id: string | null
+          session_id: string
+          market_date: string
+          notification_type: string
+          severity: string
+          title: string
+          message: string
+          action_url: string | null
+          metadata_json: Json
+          dedupe_key: string
+          read_at: string | null
+          delivered_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scope_key: string
+          owner_id?: string | null
+          session_id: string
+          market_date: string
+          notification_type: string
+          severity?: string
+          title: string
+          message: string
+          action_url?: string | null
+          metadata_json?: Json
+          dedupe_key: string
+          read_at?: string | null
+          delivered_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          scope_key?: string
+          owner_id?: string | null
+          session_id?: string
+          market_date?: string
+          notification_type?: string
+          severity?: string
+          title?: string
+          message?: string
+          action_url?: string | null
+          metadata_json?: Json
+          dedupe_key?: string
+          read_at?: string | null
+          delivered_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_drafts: {
+        Row: {
+          id: string
+          owner_id: string | null
+          session_id: string
+          ticker: string
+          status: string
+          source_type: string
+          source_review_key: string | null
+          beehiiv_url: string | null
+          published_at: string | null
+          subject_line: string
+          draft_json: Json
+          preview_html: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id?: string | null
+          session_id: string
+          ticker: string
+          status?: string
+          source_type?: string
+          source_review_key?: string | null
+          beehiiv_url?: string | null
+          published_at?: string | null
+          subject_line: string
+          draft_json: Json
+          preview_html: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          owner_id?: string | null
+          session_id?: string
+          ticker?: string
+          status?: string
+          source_type?: string
+          source_review_key?: string | null
+          beehiiv_url?: string | null
+          published_at?: string | null
+          subject_line?: string
+          draft_json?: Json
+          preview_html?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_daily_settings: {
+        Row: {
+          id: string
+          scope_key: string
+          owner_id: string | null
+          session_id: string
+          enabled: boolean
+          target_count: number
+          timezone: string
+          generation_hour: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scope_key: string
+          owner_id?: string | null
+          session_id: string
+          enabled?: boolean
+          target_count?: number
+          timezone?: string
+          generation_hour?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          scope_key?: string
+          owner_id?: string | null
+          session_id?: string
+          enabled?: boolean
+          target_count?: number
+          timezone?: string
+          generation_hour?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_daily_runs: {
+        Row: {
+          id: string
+          scope_key: string
+          owner_id: string | null
+          session_id: string
+          market_date: string
+          edition: string
+          status: string
+          target_count: number
+          source_wiim_run_id: string | null
+          source_generated_at: string | null
+          selected_count: number
+          generated_count: number
+          ready_count: number
+          attention_count: number
+          failed_count: number
+          error_message: string | null
+          metadata_json: Json
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scope_key: string
+          owner_id?: string | null
+          session_id: string
+          market_date: string
+          edition?: string
+          status?: string
+          target_count: number
+          source_wiim_run_id?: string | null
+          source_generated_at?: string | null
+          selected_count?: number
+          generated_count?: number
+          ready_count?: number
+          attention_count?: number
+          failed_count?: number
+          error_message?: string | null
+          metadata_json?: Json
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          scope_key?: string
+          owner_id?: string | null
+          session_id?: string
+          market_date?: string
+          edition?: string
+          status?: string
+          target_count?: number
+          source_wiim_run_id?: string | null
+          source_generated_at?: string | null
+          selected_count?: number
+          generated_count?: number
+          ready_count?: number
+          attention_count?: number
+          failed_count?: number
+          error_message?: string | null
+          metadata_json?: Json
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_daily_automation_runs: {
+        Row: {
+          id: string
+          market_date: string
+          status: string
+          stage: string
+          candidate_symbols: string[]
+          candidate_count: number
+          finviz_completed_count: number
+          finviz_found_count: number
+          finviz_error_count: number
+          summary_completed_count: number
+          summary_generated_count: number
+          summary_no_result_count: number
+          summary_error_count: number
+          wiim_run_id: string | null
+          newsletter_scope_count: number
+          newsletter_completed_scope_count: number
+          newsletter_selected_count: number
+          newsletter_generated_count: number
+          newsletter_ready_count: number
+          newsletter_attention_count: number
+          newsletter_failed_count: number
+          invocation_count: number
+          last_error: string | null
+          metadata_json: Json
+          lease_token: string | null
+          lease_expires_at: string | null
+          started_at: string | null
+          completed_at: string | null
+          last_heartbeat_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          market_date: string
+          status?: string
+          stage?: string
+          candidate_symbols?: string[]
+          candidate_count?: number
+          finviz_completed_count?: number
+          finviz_found_count?: number
+          finviz_error_count?: number
+          summary_completed_count?: number
+          summary_generated_count?: number
+          summary_no_result_count?: number
+          summary_error_count?: number
+          wiim_run_id?: string | null
+          newsletter_scope_count?: number
+          newsletter_completed_scope_count?: number
+          newsletter_selected_count?: number
+          newsletter_generated_count?: number
+          newsletter_ready_count?: number
+          newsletter_attention_count?: number
+          newsletter_failed_count?: number
+          invocation_count?: number
+          last_error?: string | null
+          metadata_json?: Json
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          last_heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          market_date?: string
+          status?: string
+          stage?: string
+          candidate_symbols?: string[]
+          candidate_count?: number
+          finviz_completed_count?: number
+          finviz_found_count?: number
+          finviz_error_count?: number
+          summary_completed_count?: number
+          summary_generated_count?: number
+          summary_no_result_count?: number
+          summary_error_count?: number
+          wiim_run_id?: string | null
+          newsletter_scope_count?: number
+          newsletter_completed_scope_count?: number
+          newsletter_selected_count?: number
+          newsletter_generated_count?: number
+          newsletter_ready_count?: number
+          newsletter_attention_count?: number
+          newsletter_failed_count?: number
+          invocation_count?: number
+          last_error?: string | null
+          metadata_json?: Json
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          last_heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'newsletter_daily_automation_runs_wiim_run_id_fkey'
+            columns: ['wiim_run_id']
+            isOneToOne: false
+            referencedRelation: 'wiim_runs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      newsletter_mid_morning_runs: {
+        Row: {
+          id: string
+          market_date: string
+          status: string
+          stage: string
+          candidate_symbols: string[]
+          candidate_count: number
+          finviz_completed_count: number
+          finviz_found_count: number
+          finviz_error_count: number
+          morning_wiim_run_id: string | null
+          mid_morning_wiim_run_id: string | null
+          summary_completed_count: number
+          summary_generated_count: number
+          summary_error_count: number
+          meaningful_change: boolean | null
+          invocation_count: number
+          last_error: string | null
+          metadata_json: Json
+          lease_token: string | null
+          lease_expires_at: string | null
+          started_at: string | null
+          completed_at: string | null
+          last_heartbeat_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          market_date: string
+          status?: string
+          stage?: string
+          candidate_symbols?: string[]
+          candidate_count?: number
+          finviz_completed_count?: number
+          finviz_found_count?: number
+          finviz_error_count?: number
+          morning_wiim_run_id?: string | null
+          mid_morning_wiim_run_id?: string | null
+          summary_completed_count?: number
+          summary_generated_count?: number
+          summary_error_count?: number
+          meaningful_change?: boolean | null
+          invocation_count?: number
+          last_error?: string | null
+          metadata_json?: Json
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          last_heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          market_date?: string
+          status?: string
+          stage?: string
+          candidate_symbols?: string[]
+          candidate_count?: number
+          finviz_completed_count?: number
+          finviz_found_count?: number
+          finviz_error_count?: number
+          morning_wiim_run_id?: string | null
+          mid_morning_wiim_run_id?: string | null
+          summary_completed_count?: number
+          summary_generated_count?: number
+          summary_error_count?: number
+          meaningful_change?: boolean | null
+          invocation_count?: number
+          last_error?: string | null
+          metadata_json?: Json
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          last_heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'newsletter_mid_morning_runs_morning_wiim_run_id_fkey'
+            columns: ['morning_wiim_run_id']
+            isOneToOne: false
+            referencedRelation: 'wiim_runs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'newsletter_mid_morning_runs_mid_morning_wiim_run_id_fkey'
+            columns: ['mid_morning_wiim_run_id']
+            isOneToOne: false
+            referencedRelation: 'wiim_runs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      newsletter_daily_run_items: {
+        Row: {
+          id: string
+          run_id: string
+          rank: number
+          ticker: string
+          status: string
+          quality_band: string
+          relevance_score: number
+          confidence_score: number
+          candidate_type: string
+          state_label: string | null
+          move_percent: number | null
+          reason_type: string | null
+          headline: string
+          summary_text: string
+          key_fact: string | null
+          source_refs_json: Json
+          candidate_json: Json
+          draft_id: string | null
+          draft_status: string | null
+          subject_line: string | null
+          chart_id: string | null
+          chart_image_url: string | null
+          error_message: string | null
+          retry_count: number
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          run_id: string
+          rank: number
+          ticker: string
+          status?: string
+          quality_band: string
+          relevance_score: number
+          confidence_score: number
+          candidate_type: string
+          state_label?: string | null
+          move_percent?: number | null
+          reason_type?: string | null
+          headline: string
+          summary_text: string
+          key_fact?: string | null
+          source_refs_json?: Json
+          candidate_json?: Json
+          draft_id?: string | null
+          draft_status?: string | null
+          subject_line?: string | null
+          chart_id?: string | null
+          chart_image_url?: string | null
+          error_message?: string | null
+          retry_count?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          run_id?: string
+          rank?: number
+          ticker?: string
+          status?: string
+          quality_band?: string
+          relevance_score?: number
+          confidence_score?: number
+          candidate_type?: string
+          state_label?: string | null
+          move_percent?: number | null
+          reason_type?: string | null
+          headline?: string
+          summary_text?: string
+          key_fact?: string | null
+          source_refs_json?: Json
+          candidate_json?: Json
+          draft_id?: string | null
+          draft_status?: string | null
+          subject_line?: string | null
+          chart_id?: string | null
+          chart_image_url?: string | null
+          error_message?: string | null
+          retry_count?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stock_why_moving_reviews: {
+        Row: {
+          id: string
+          review_key: string
+          symbol: string
+          market_date: string
+          session: string
+          direction: string
+          status: string
+          notes: string
+          reviewer_id: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          review_key: string
+          symbol: string
+          market_date: string
+          session: string
+          direction: string
+          status?: string
+          notes?: string
+          reviewer_id?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          review_key?: string
+          symbol?: string
+          market_date?: string
+          session?: string
+          direction?: string
+          status?: string
+          notes?: string
+          reviewer_id?: string | null
+          reviewed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       stock_why_moving_cache: {
         Row: {
           symbol: string
@@ -1158,6 +1879,7 @@ export interface Database {
           state_label: string | null
           signals_json: Json
           source_refs_json: Json
+          metadata_json: Json
           created_at: string
         }
         Insert: {
@@ -1173,6 +1895,7 @@ export interface Database {
           state_label?: string | null
           signals_json?: Json
           source_refs_json?: Json
+          metadata_json?: Json
           created_at?: string
         }
         Update: {
@@ -1188,6 +1911,7 @@ export interface Database {
           state_label?: string | null
           signals_json?: Json
           source_refs_json?: Json
+          metadata_json?: Json
           created_at?: string
         }
         Relationships: [
@@ -1275,9 +1999,82 @@ export interface Database {
         }
         Relationships: []
       }
+      stock_summaries: {
+        Row: {
+          id: number
+          symbol: string
+          summary_date: string
+          summary_text: string | null
+          model: string | null
+          config_version: string | null
+          winning_event: Json | null
+          runner_up_event: Json | null
+          no_summary_reason: string | null
+          activation_path: string | null
+          earnings_context: Json | null
+          generated_at: string
+          metadata: Json
+          run_id: string | null
+          feedback: string | null
+          feedback_at: string | null
+        }
+        Insert: {
+          id?: number
+          symbol: string
+          summary_date: string
+          summary_text?: string | null
+          model?: string | null
+          config_version?: string | null
+          winning_event?: Json | null
+          runner_up_event?: Json | null
+          no_summary_reason?: string | null
+          activation_path?: string | null
+          earnings_context?: Json | null
+          generated_at?: string
+          metadata?: Json
+          run_id?: string | null
+          feedback?: string | null
+          feedback_at?: string | null
+        }
+        Update: {
+          id?: number
+          symbol?: string
+          summary_date?: string
+          summary_text?: string | null
+          model?: string | null
+          config_version?: string | null
+          winning_event?: Json | null
+          runner_up_event?: Json | null
+          no_summary_reason?: string | null
+          activation_path?: string | null
+          earnings_context?: Json | null
+          generated_at?: string
+          metadata?: Json
+          run_id?: string | null
+          feedback?: string | null
+          feedback_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {}
     Functions: {
+      claim_newsletter_daily_automation: {
+        Args: {
+          p_market_date: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_daily_automation_runs']['Row'][]
+      }
+      claim_newsletter_mid_morning_automation: {
+        Args: {
+          p_market_date: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
       generate_conversation_title: {
         Args: { conversation_id: string }
         Returns: string
@@ -1289,6 +2086,14 @@ export interface Database {
       get_or_create_insider: {
         Args: { p_name: string; p_cik?: string | null }
         Returns: string
+      }
+      release_newsletter_daily_automation: {
+        Args: { p_market_date: string; p_lease_token: string }
+        Returns: undefined
+      }
+      release_newsletter_mid_morning_automation: {
+        Args: { p_market_date: string; p_lease_token: string }
+        Returns: undefined
       }
     }
     Enums: {}

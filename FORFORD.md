@@ -273,7 +273,94 @@ That sounds obvious, but teams forget it all the time. Good engineers verify out
 
 That shift in mindset is what turns "cron-ish scripts" into reliable production workflows.
 
-### 5. The Quarterly Data Rabbit Hole
+### 6. A Morning Brief Is a Product, Not a Data Dump
+
+The Morning Brief at `/dashboard/morning-brief` turns the same lesson into a
+user-facing surface. The page is deliberately read-only and brings four
+different clocks together:
+
+- live pre-market and prior-session price context
+- today's economic and earnings calendars
+- the ranked WIIM morning run
+- daily per-symbol summaries and the Finviz catalyst cache
+
+The important architectural choice is that the page does not generate any of
+this work during rendering. `lib/morning-brief.ts` is an assembly layer: it
+fans out to the existing market-data actions, reads the completed WIIM rows
+from Supabase, and joins the ranked tickers to both our summary and Finviz's
+payload. That keeps an expensive 503-symbol generation job out of a web
+request and makes provenance visible. The report can say "Our read" beside
+"Finviz catalyst" because they are separate sources, not two labels for the
+same text.
+
+The status strip is part of the data contract, not decoration. It reports how
+many symbols were actually stored, how many Finviz pages were refreshed, and
+whether today's ranked run exists. A process saying "503 attempted" is not
+enough: a provider or database can throttle writes after the fetch succeeds.
+The operator should trust verified rows and explicit errors.
+
+The first visual review found another boundary failure: the model called a
+June index rebalance the reason for a July pre-market move because the news
+provider had no fresh company story. Telling a model to be "timely" is not a
+guardrail when every supplied article is old. Version 2 of the daily summary
+contract filters news to the seven Eastern-calendar days ending on the report
+date before the prompt is built. When the primary provider has nothing from
+the last two days, the generator checks the independent FMP ticker-news feed
+before giving up. With no timely evidence from either source, the correct
+answer is `no_clear_catalyst`. The model states the event without inferring
+price direction, and the card separately flags when its regular-session quote
+points opposite the current WIIM move.
+
+One small ticker bug captured the same principle. The app's canonical symbols
+are `BRK.B` and `BF.B`, while Finviz expects `BRK-B` and `BF-B`. The scraper
+now translates only at the provider URL boundary and continues storing the
+canonical dotted symbol. Provider quirks should not leak into the product's
+identity model.
+
+The practical lesson: a useful morning report is an opinionated join over
+reliable pipelines. Prioritize what changes the opening setup, keep source
+boundaries visible, and make missing data look missing.
+
+### 6.1 A Mid-Morning Brief Needs a Real Baseline
+
+The Mid-Morning Brief at `/dashboard/mid-morning-brief` is a separate report,
+not a renamed live dashboard and not an overwrite of the pre-open run. WIIM
+now stores `morning` and `mid_morning` run types independently. The
+mid-morning runner deliberately compares its ranking with the latest completed
+morning run, then persists both the new top five and the resulting delta.
+
+That distinction matters because "what changed?" requires two trustworthy
+snapshots. The current page can pull live quotes, but it should not pretend it
+knows what the user saw earlier unless that earlier state was stored. The
+morning run gives us exact ranks and pre-open moves for its five stories. The
+mid-morning page can then label each one as confirmed, reversed, fading, or
+still developing and show which names entered or dropped from the ranking.
+
+`lib/mid-morning-brief.ts` adds the live-session assembly layer:
+
+- five major index quotes with both day change and change since the 9:30 open
+- breadth across the canonical 503-company S&P 500 set
+- current sector leadership, movers, rates, currencies, and global sessions
+- completed versus still-upcoming economic events
+- reported earnings leaders and remaining after-close reports
+- the persisted WIIM comparison joined to refreshed Finviz catalysts and
+  independently generated summaries
+
+The page remains read-only. Expensive work still happens before rendering:
+the candidate universe is refreshed, a `mid_morning` WIIM run is stored, and
+the five ranked summaries are regenerated against current news. Rendering only
+assembles those durable results with short-lived market quotes.
+
+One operational detail is easy to miss: targeted five-symbol summary runs are
+newer than the full 503-symbol morning run. The Morning Brief therefore chooses
+its coverage run by the largest `ticker_count`, then by recency, instead of
+blindly treating the newest targeted run as full-universe coverage.
+
+The lesson is that updates need lineage. Save the baseline, save the refresh,
+name the relationship between them, and keep live prices separate from the
+time-stamped ranking decision.
+
+### 7. The Quarterly Data Rabbit Hole
 
 Annual data is easy. Quarterly data is a nightmare.
 
@@ -532,6 +619,45 @@ The lesson is simple and worth remembering: when two apps collaborate, implicit 
 
 Good engineers make the boundary boring.
 
+### Manual blank drafts
+
+The newsletter editor now has two different creation paths, and they should stay
+mentally separate:
+
+- **Generate** asks AI to write the newsletter and pick charts.
+- **Start blank** skips AI and creates a manual draft with empty copy sections.
+
+The important implementation detail is that a blank draft cannot use a fake
+fundamentals chart just because the preview is still a placeholder. Each starter
+section needs a real price-chart spec from birth, including the embedded export
+editor spec. Otherwise the user can create a manual newsletter, click "Edit
+chart," and still be trapped in a half-connected chart workflow.
+
+The placeholder image is only a visual placeholder. The data contract behind it
+must already be real enough for the Chart Builder to open, add studies, change
+formatting, save, and regenerate the PNG.
+
+### Chart library
+
+Charts can now be saved from the live Charting Platform into a newsletter chart
+library. A library item stores both artifacts:
+
+- the rendered PNG that email previews and Beehiiv need
+- the editable price-chart export spec that the Chart Builder can reopen later
+
+That is intentional. A PNG-only library would make insertion easy but editing
+dead. A spec-only library would keep editing alive but force every preview to
+rerender. The library contract is therefore "image plus scene": insert the image
+into the newsletter, keep the scene beside it, and use the scene whenever the
+chart needs to be edited or regenerated.
+
+Storage follows the rest of the newsletter editor:
+
+- signed-in users save chart rows to `newsletter_chart_library` and PNGs to the
+  public `newsletter-charts` Supabase Storage bucket
+- anonymous/local sessions keep using `.newsletter-chart-library` and
+  `.newsletter-output` as the dev fallback
+
 ---
 
 ## What's Next
@@ -645,3 +771,70 @@ The engineering lesson is that cacheability is end-to-end. A cached page that
 calls one cookie reader or one `no-store` fetch is still a dynamic page. Verify
 the result with production response headers and Vercel route metrics, not just
 the `revalidate` line in source.
+
+---
+
+## Approval Is Now the Start of the Newsletter
+
+The Why This Stock Moved queue used to stop after editorial approval. The
+review was durable, but an editor still had to open the newsletter tool, start
+an issue, remember the catalyst copy, and choose the right chart.
+
+Approval now starts an idempotent automation:
+
+1. The approved review key is checked against existing newsletter issues.
+2. The latest saved charts for that ticker are attached automatically.
+3. If the chart library has no match, Fin Quote captures a default one-month
+   price chart through the charting platform and saves it to the library.
+4. The catalyst headline, summary, source, review notes, market move, and chart
+   IDs become structured draft provenance.
+5. Repeating the approval reopens the same issue instead of creating a
+   duplicate.
+
+The editor displays that provenance next to the publishing workflow. Recording
+the Beehiiv issue URL marks the issue published, stores the URL and timestamp,
+and appends status and publication events to `newsletter_draft_events`.
+Newsletter History then exposes the issue stage, origin, attached-chart count,
+published timestamp, and live Beehiiv link.
+
+The workflow is deliberately nearly automatic rather than brittle. A chart
+capture outage does not undo the editorial approval or lose the draft. The
+issue is created with a visible `needs_chart` state and can be repaired by
+approving it again after charting recovers.
+
+Run the real integration check with:
+
+```bash
+npm run verify:catalyst-newsletter
+```
+
+That verifier renders a chart through the live local charting platform, proves
+repeat approvals are idempotent, records a publication, checks the full history
+sequence, and removes its disposable artifacts.
+
+---
+
+## Daily Newsletter Production Is a Queue, Not a Loop
+
+Generating forty issues is different from generating one issue forty times.
+The daily production system stores a run and one durable row per selected
+story. Each row can be claimed, retried, repaired, and finalized independently,
+while a stable source key prevents duplicate drafts after a timeout or repeated
+button click.
+
+The selector reads the full persisted WIIM universe and rejects stories without
+current evidence. It also rejects stale summaries, generated text that points
+opposite the current stock move, and copy that ends mid-thought. That quality
+gate matters more than reaching a round target count.
+
+Charting has its own operational boundary. Anonymous local requests retain a
+small render allowance, while Fin Quote can authenticate with the shared
+`NEWSLETTER_RENDER_API_KEY` for a separate batch allowance. The client still
+honors `Retry-After`, retries transient failures, and leaves a visible attention
+state instead of silently accepting a placeholder.
+
+The morning board is intentionally an editorial work surface: chart-first
+cards, source links, failure filters, resumable generation, and bulk Ready
+transition. A completed counter is not proof, so
+`npm run newsletter:verify-daily` inspects every draft and PNG before the batch
+is considered done.

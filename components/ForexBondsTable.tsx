@@ -44,18 +44,18 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
 
   return (
     <div className="w-full">
-      <div className="overflow-hidden rounded-lg border border-cream-300 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         <div
-          className="grid gap-3 px-4 py-1.5 bg-cream-50 dark:bg-gray-800/50 text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap"
+          className="grid min-h-11 items-center gap-3 border-b border-gray-200 px-4 text-xs font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400 whitespace-nowrap"
           style={tableGridStyle}
         >
-          <div>Forex & Bonds</div>
+          <div className="text-sm font-semibold text-gray-950 dark:text-white">Forex & Rates</div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
           <div className="text-right">Change %</div>
         </div>
 
-        <div className="divide-y divide-cream-200 dark:divide-gray-700">
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {data.map((item) => {
             const colorClass = item.change >= 0
               ? 'text-green-600 dark:text-green-400'
@@ -64,7 +64,7 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
             return (
               <div
                 key={item.symbol}
-                className="grid gap-3 items-center px-4 py-2 hover:bg-cream-50 dark:hover:bg-gray-800/50 transition-colors whitespace-nowrap"
+                className="grid items-center gap-3 px-4 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/70 whitespace-nowrap"
                 style={tableGridStyle}
               >
                 <div className="min-w-0 truncate text-xs font-medium text-sage-600 dark:text-sage-400">

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react'
 import { Liveline } from 'liveline'
 import type { CandlePoint } from 'liveline'
@@ -10,7 +11,11 @@ import { useReplay } from '@/lib/hooks/use-replay'
 import type { ReplayConfig, ReplaySpeed } from '@/lib/hooks/use-replay'
 import MarketMoversTable from '@/components/MarketMoversTable'
 import type { MoverData } from '@/app/actions/market-movers'
-import type { MarketSession } from '@/lib/market-hours'
+import { getSessionLabel, type MarketSession } from '@/lib/market-hours'
+import {
+  buildPulseTodayCockpitSnapshot,
+} from '@/lib/pulse-today-utils'
+import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
 
 const SYMBOLS = ['GOOGL'] as const
 
@@ -2647,10 +2652,54 @@ interface PulseTodayDashboardProps {
 export default function PulseTodayDashboard({ gainersData, losersData }: PulseTodayDashboardProps) {
   const { theme: rawTheme } = useTheme()
   const theme = (rawTheme === 'dark' ? 'dark' : 'light') as ThemeMode
+  const cockpit = useMemo(
+    () => buildPulseTodayCockpitSnapshot(gainersData, losersData),
+    [gainersData, losersData],
+  )
 
   // Active symbol — updated when user clicks a ticker in the movers tables
-  const [activeSymbol, setActiveSymbol] = useState('GOOGL')
+  const [activeSymbol, setActiveSymbol] = useState(
+    () => cockpit.topGainer?.symbol ?? cockpit.topLoser?.symbol ?? 'GOOGL',
+  )
   const liveSymbols = useMemo(() => [activeSymbol], [activeSymbol])
+  const [whyMoving, setWhyMoving] = useState<StockWhyMovingResult | null>(null)
+  const [whyMovingLoading, setWhyMovingLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
+    async function loadWhyMoving() {
+      try {
+        setWhyMovingLoading(true)
+        setWhyMoving(null)
+        const response = await fetch(
+          `/api/stock-why-moving/${encodeURIComponent(activeSymbol)}`,
+          {
+            cache: 'no-store',
+            signal: controller.signal,
+          },
+        )
+        const payload = (await response.json()) as StockWhyMovingResult
+        if (!cancelled) setWhyMoving(payload)
+      } catch (error) {
+        if (
+          !cancelled &&
+          !(error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          setWhyMoving(null)
+        }
+      } finally {
+        if (!cancelled) setWhyMovingLoading(false)
+      }
+    }
+
+    void loadWhyMoving()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeSymbol])
 
   // Replay state
   const [replayConfig, setReplayConfig] = useState<ReplayConfig | null>(null)
@@ -2765,10 +2814,21 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
     window.addEventListener('mouseup', handleUp)
   }, [replay.status, replay.pause, replay.play, seekFromPointer])
 
+  const activeMover =
+    cockpit.gainers.find((mover) => mover.symbol === activeSymbol) ??
+    cockpit.losers.find((mover) => mover.symbol === activeSymbol) ??
+    null
+  const sessionLabel = getSessionLabel(cockpit.session)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Pulse Today</h1>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Pulse Today</h1>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            {sessionLabel} · {cockpit.reviewSymbols.length} catalyst candidates
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           {!isReplay ? (
             <>
@@ -2779,11 +2839,13 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
                 Replay
               </button>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600" />
-                </span>
-                Live
+                {cockpit.session !== 'closed' ? (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600" />
+                  </span>
+                ) : null}
+                {cockpit.session === 'closed' ? 'Closing snapshot' : 'Live'}
               </span>
             </>
           ) : (
@@ -2808,6 +2870,119 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
           )}
         </div>
       </div>
+
+      {!isReplay ? (
+        <>
+          <section className="mb-3 grid overflow-hidden rounded-lg border border-cream-300 bg-white dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="border-b border-cream-300 px-4 py-3 dark:border-gray-700 sm:border-r xl:border-b-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                Session
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                {sessionLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => cockpit.topGainer && setActiveSymbol(cockpit.topGainer.symbol)}
+              disabled={!cockpit.topGainer}
+              className="border-b border-cream-300 px-4 py-3 text-left transition hover:bg-cream-50 disabled:cursor-default dark:border-gray-700 dark:hover:bg-gray-700/40 sm:border-r xl:border-b-0"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                Leading gainer
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                {cockpit.topGainer
+                  ? `${cockpit.topGainer.symbol} +${cockpit.topGainer.changesPercentage.toFixed(2)}%`
+                  : 'No data'}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => cockpit.topLoser && setActiveSymbol(cockpit.topLoser.symbol)}
+              disabled={!cockpit.topLoser}
+              className="border-b border-cream-300 px-4 py-3 text-left transition hover:bg-cream-50 disabled:cursor-default dark:border-gray-700 dark:hover:bg-gray-700/40 sm:border-r sm:border-b-0"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                Leading decliner
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                {cockpit.topLoser
+                  ? `${cockpit.topLoser.symbol} ${cockpit.topLoser.changesPercentage.toFixed(2)}%`
+                  : 'No data'}
+              </p>
+            </button>
+            <Link
+              href="/admin/why-moved"
+              className="px-4 py-3 transition hover:bg-cream-50 dark:hover:bg-gray-700/40"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                Editorial
+              </p>
+              <p className="mt-1 text-sm font-semibold text-sage-700 dark:text-sage-300">
+                Review catalyst queue
+              </p>
+            </Link>
+          </section>
+
+          <section className="mb-4 rounded-lg border border-cream-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+              <div className="shrink-0 lg:w-48">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-base font-bold text-gray-950 dark:text-white">
+                    {activeSymbol}
+                  </span>
+                  {activeMover ? (
+                    <span
+                      className={`text-sm font-semibold ${
+                        activeMover.changesPercentage >= 0
+                          ? 'text-green-700 dark:text-green-400'
+                          : 'text-red-700 dark:text-red-400'
+                      }`}
+                    >
+                      {activeMover.changesPercentage >= 0 ? '+' : ''}
+                      {activeMover.changesPercentage.toFixed(2)}%
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                  {activeMover?.name ?? 'Active chart'}
+                </p>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
+                  Why it moved
+                </p>
+                <p className="mt-1 text-sm leading-6 text-gray-800 dark:text-gray-200">
+                  {whyMovingLoading
+                    ? 'Loading the latest catalyst...'
+                    : whyMoving?.status === 'found' && whyMoving.displayText
+                      ? whyMoving.displayText
+                      : 'No specific catalyst is available for this move yet.'}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Link
+                  href={`/stock/${encodeURIComponent(activeSymbol)}`}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-sage-400 hover:text-sage-800 dark:border-gray-600 dark:text-gray-200"
+                >
+                  Stock page
+                </Link>
+                {whyMoving?.sourceUrl ? (
+                  <a
+                    href={whyMoving.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-sage-400 hover:text-sage-800 dark:border-gray-600 dark:text-gray-200"
+                  >
+                    Source
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
 
       {/* Replay playback controls — sticky so they stay visible when scrolling to lower charts */}
       {isReplay && (
@@ -2952,9 +3127,8 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
       )}
 
       {!isReplay && (
-        <div className="flex gap-4">
-          {/* Charts column — fixed width to preserve chart size */}
-          <div className="max-w-3xl w-full space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row">
+          <div className="min-w-0 w-full space-y-4 xl:max-w-4xl">
             <PulseTodayCard
               symbol={activeSymbol}
               dayData={dayCandles[activeSymbol]}
@@ -2966,11 +3140,11 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
 
           {/* Gainers / Losers sidebar — side by side */}
           {gainersData && losersData && (
-            <div className="shrink-0 flex gap-3">
-              <div className="w-60">
+            <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:w-[500px]">
+              <div className="min-w-0">
                 <MarketMoversTable title="Gainers" data={gainersData} maxRows={8} onSymbolClick={setActiveSymbol} />
               </div>
-              <div className="w-60">
+              <div className="min-w-0">
                 <MarketMoversTable title="Losers" data={losersData} maxRows={8} onSymbolClick={setActiveSymbol} />
               </div>
             </div>

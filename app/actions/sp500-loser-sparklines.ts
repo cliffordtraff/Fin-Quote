@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import { safeErrorMessage } from '@/lib/safe-logging'
 import { getSP500Losers } from './sp500-movers'
 
 export interface SP500LoserSparklineData {
@@ -18,13 +19,11 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
     const losersResult = await getSP500Losers()
 
     if ('error' in losersResult || !losersResult.losers) {
-      console.log('SP500 Loser Sparklines: No losers data')
       return { sparklines: [] }
     }
 
     // Take top 4 S&P 500 losers
     const top4 = losersResult.losers.slice(0, 4)
-    console.log('SP500 Loser Sparklines: Top 4 symbols:', top4.map(l => l.symbol))
 
     if (top4.length === 0) {
       return { sparklines: [] }
@@ -50,8 +49,6 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
             close: d.close
           }))
 
-        console.log(`SP500 Loser Sparklines: ${loser.symbol} has ${todayData.length} data points`)
-
         sparklines.push({
           symbol: loser.symbol,
           changesPercentage: loser.changesPercentage,
@@ -60,10 +57,9 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
       }
     }
 
-    console.log('SP500 Loser Sparklines: Returning', sparklines.length, 'sparklines')
     return { sparklines }
   } catch (error) {
-    console.error('Error fetching S&P 500 loser sparklines:', error)
+    console.error('Error fetching S&P 500 loser sparklines:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 loser sparklines' }
   }
 }

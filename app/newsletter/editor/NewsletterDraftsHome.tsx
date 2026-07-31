@@ -1,8 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import type { NewsletterDraftSummary } from '@/lib/newsletter/types'
+import { useEffect, useMemo, useState } from 'react'
+import type {
+  NewsletterDraftStatus,
+  NewsletterDraftSummary,
+} from '@/lib/newsletter/types'
+import {
+  getNewsletterWorkflowStage,
+  NEWSLETTER_WORKFLOW_STAGES,
+} from '@/lib/newsletter/workflow'
 
 interface DraftListResponse {
   drafts: NewsletterDraftSummary[]
@@ -32,6 +39,9 @@ function formatDateTimeParts(value: string) {
 
 export default function NewsletterDraftsHome() {
   const [drafts, setDrafts] = useState<NewsletterDraftSummary[]>([])
+  const [statusFilter, setStatusFilter] = useState<
+    NewsletterDraftStatus | 'all'
+  >('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -40,6 +50,28 @@ export default function NewsletterDraftsHome() {
     id: string
     subjectLine: string
   } | null>(null)
+
+  const visibleDrafts = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? drafts
+        : drafts.filter((draft) => draft.status === statusFilter),
+    [drafts, statusFilter],
+  )
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<NewsletterDraftStatus | 'all', number> = {
+      all: drafts.length,
+      draft: 0,
+      review: 0,
+      ready: 0,
+      published: 0,
+    }
+    for (const draft of drafts) {
+      counts[draft.status] += 1
+    }
+    return counts
+  }, [drafts])
 
   useEffect(() => {
     let cancelled = false
@@ -140,18 +172,34 @@ export default function NewsletterDraftsHome() {
       <section className="rounded-2xl border border-gray-300 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Recent Drafts</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Newsletter History
+            </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Drafts are saved to this browser session by default and use your
-              account storage only when you are signed in.
+              Follow every issue from catalyst approval through its Beehiiv
+              publication record.
             </p>
           </div>
-          <Link
-            href="/newsletter/editor/new"
-            className="inline-flex items-center justify-center rounded-xl bg-sage-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sage-800"
-          >
-            New draft
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/newsletter/morning-review"
+              className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+            >
+              Morning queue
+            </Link>
+            <Link
+              href="/newsletter/charts"
+              className="inline-flex items-center justify-center rounded-xl border border-sage-700 px-4 py-2 text-sm font-semibold text-sage-800 transition hover:bg-sage-50"
+            >
+              Chart library
+            </Link>
+            <Link
+              href="/newsletter/editor/new"
+              className="inline-flex items-center justify-center rounded-xl bg-sage-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sage-800"
+            >
+              New draft
+            </Link>
+          </div>
         </div>
 
         {error ? (
@@ -166,17 +214,54 @@ export default function NewsletterDraftsHome() {
           </div>
         ) : null}
 
+        <div
+          className="mt-4 flex max-w-full overflow-x-auto border-b border-gray-200"
+          role="tablist"
+          aria-label="Filter drafts by publishing stage"
+        >
+          {[
+            { id: 'all' as const, label: 'All' },
+            ...NEWSLETTER_WORKFLOW_STAGES.map((stage) => ({
+              id: stage.id,
+              label: stage.shortLabel,
+            })),
+          ].map((filter) => {
+            const selected = statusFilter === filter.id
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setStatusFilter(filter.id)}
+                className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition ${
+                  selected
+                    ? 'border-sage-700 text-sage-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {filter.label} {statusCounts[filter.id]}
+              </button>
+            )
+          })}
+        </div>
+
         {loading ? (
           <div className="py-10 text-sm text-gray-500">Loading drafts…</div>
         ) : drafts.length === 0 ? (
           <div className="py-10 text-sm text-gray-500">
             No drafts yet. Create one to start editing.
           </div>
+        ) : visibleDrafts.length === 0 ? (
+          <div className="py-10 text-sm text-gray-500">
+            No drafts in this publishing stage.
+          </div>
         ) : (
           <div className="mt-4 grid gap-1.5">
-            {drafts.map((draft) => {
+            {visibleDrafts.map((draft) => {
               const generatedAt = formatDateTimeParts(draft.generatedAt)
               const updatedAt = formatDateTimeParts(draft.updatedAt)
+              const workflowStage = getNewsletterWorkflowStage(draft.status)
 
               return (
                 <div
@@ -202,6 +287,20 @@ export default function NewsletterDraftsHome() {
                               {draft.featuredTickers.join(', ')}
                             </span>
                           ) : null}
+                          <span className="inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">
+                            {workflowStage.label}
+                          </span>
+                          <span
+                            className={`inline-flex px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                              draft.sourceType === 'catalyst'
+                                ? 'bg-green-100 text-green-800'
+                                : draft.sourceType === 'daily_batch'
+                                  ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {draft.sourceType}
+                          </span>
                         </div>
                         <h3 className="mt-1.5 max-w-3xl text-[15px] font-semibold leading-5 text-gray-900 sm:text-base">
                           {draft.subjectLine}
@@ -210,22 +309,46 @@ export default function NewsletterDraftsHome() {
                     </Link>
 
                     <div className="flex shrink-0 flex-col gap-1.5 lg:w-[248px] lg:items-end">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPendingDelete({
-                            id: draft.id,
-                            subjectLine: draft.subjectLine,
-                          })
-                        }
-                        disabled={deletingDraftId === draft.id}
-                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-0.5 text-[11px] font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {deletingDraftId === draft.id ? 'Deleting…' : 'Delete'}
-                      </button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {draft.beehiivUrl ? (
+                          <a
+                            href={draft.beehiivUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center border border-sage-300 bg-white px-3 py-0.5 text-[11px] font-semibold text-sage-800 transition hover:border-sage-500 hover:bg-sage-50"
+                          >
+                            Published issue
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingDelete({
+                              id: draft.id,
+                              subjectLine: draft.subjectLine,
+                            })
+                          }
+                          disabled={deletingDraftId === draft.id}
+                          className="inline-flex items-center justify-center border border-red-200 bg-white px-3 py-0.5 text-[11px] font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingDraftId === draft.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
 
                       <div className="grid gap-0 text-[11px] leading-4 text-gray-600 lg:text-right">
-                        <span>{draft.blockCount} chart sections</span>
+                        <span>
+                          {draft.attachedChartCount}{' '}
+                          {draft.attachedChartCount === 1 ? 'chart' : 'charts'}
+                          {draft.sourceType === 'catalyst' ||
+                          draft.sourceType === 'daily_batch'
+                            ? ' attached'
+                            : ''}
+                        </span>
+                        {draft.publishedAt ? (
+                          <span>
+                            Published {formatDateTime(draft.publishedAt)}
+                          </span>
+                        ) : null}
                         <span>
                           Generated {generatedAt.main}
                           {generatedAt.meridiem ? (
@@ -296,7 +419,7 @@ export default function NewsletterDraftsHome() {
               <span className="font-semibold text-gray-900">
                 “{pendingDelete.subjectLine}”
               </span>
-              ? This removes it from your recent drafts list.
+              ? This removes it from Newsletter History.
             </p>
 
             <div className="mt-6 flex justify-end gap-3">

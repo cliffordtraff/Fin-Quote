@@ -1,5 +1,7 @@
 'use server'
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 export interface TrendingStock {
   symbol: string
   name: string
@@ -82,7 +84,7 @@ export async function getTrendingStocksData(): Promise<{ trending?: TrendingStoc
 
     return { trending }
   } catch (error) {
-    console.error('Error fetching trending stocks:', error)
+    console.error('Error fetching trending stocks:', safeErrorMessage(error))
     return { error: 'Failed to load trending stocks' }
   }
 }

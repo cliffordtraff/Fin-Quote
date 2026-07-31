@@ -4,12 +4,25 @@ import DashboardFooter from '@/components/DashboardFooter'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
+import { redirect } from 'next/navigation'
+import {
+  getNewsletterAutomationClock,
+  hasFinishedNewsletterMorningReport,
+} from '@/lib/newsletter/daily-automation'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function Home() {
   if (process.env.NEXT_PUBLIC_ENABLE_LANDING === 'true') {
     return <LandingPage />
+  }
+
+  const clock = getNewsletterAutomationClock()
+  if (
+    clock.isMorningReportWindow &&
+    (await hasFinishedNewsletterMorningReport(clock.marketDate))
+  ) {
+    redirect('/newsletter/morning-review')
   }
 
   const initialData = await fetchAllMarketData()

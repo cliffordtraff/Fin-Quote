@@ -144,7 +144,7 @@ export function resolveNewsletterModelBackend(
     return envBackend
   }
 
-  return 'codex_cli'
+  return process.env.NODE_ENV === 'production' ? 'openai_api' : 'codex_cli'
 }
 
 export function createNewsletterModelClient(

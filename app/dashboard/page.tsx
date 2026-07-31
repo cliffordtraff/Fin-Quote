@@ -1,27 +1,24 @@
-import Navigation from '@/components/Navigation'
-import DashboardFooter from '@/components/DashboardFooter'
+import AppShell from '@/components/AppShell'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
 import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
-// ISR: regenerate every 60 seconds
-export const revalidate = 60
+// Provider requests include credentialed URLs. Dynamic rendering prevents
+// static-build diagnostics from serializing those URLs.
+export const dynamic = 'force-dynamic'
 
 export default async function Dashboard() {
-  // Fetch data on the server
-  const initialData = await fetchAllMarketData()
-  const chartOfDaySpec = await loadDashboardChartOfTheDayEmbedSpec()
+  const [initialData, chartOfDaySpec] = await Promise.all([
+    fetchAllMarketData(),
+    loadDashboardChartOfTheDayEmbedSpec(),
+  ])
 
   return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
-      <Navigation />
-      <main className="flex-1 py-4">
-        <MarketDashboardSunday
-          initialData={initialData}
-          chartOfDaySpec={chartOfDaySpec}
-        />
-      </main>
-      <DashboardFooter />
-    </div>
+    <AppShell showFooter>
+      <MarketDashboardSunday
+        initialData={initialData}
+        chartOfDaySpec={chartOfDaySpec}
+      />
+    </AppShell>
   )
 }

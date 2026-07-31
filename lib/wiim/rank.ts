@@ -1,6 +1,12 @@
 import { isSP500, normalizeSP500Symbol } from '@/lib/sp500'
 
-import type { WiimCandidateInput, RankedWiimCandidate, WiimCandidateSignals, WiimRunSummary } from './types'
+import type {
+  RankedWiimCandidate,
+  WiimCandidateInput,
+  WiimCandidateSignals,
+  WiimRunSummary,
+  WiimRunType,
+} from './types'
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100
@@ -254,7 +260,7 @@ function contrarianScore(candidate: RankedWiimCandidate, topCandidate: string | 
 }
 
 export function summarizeWiimRun(input: {
-  runType: 'morning'
+  runType: WiimRunType
   generatedAt: string
   candidateCount: number
   topFive: RankedWiimCandidate[]

@@ -1,22 +1,19 @@
-import Navigation from '@/components/Navigation'
+import AppShell from '@/components/AppShell'
 import InsidersPageClient from '@/components/InsidersPageClient'
 import { getLatestInsiderTrades } from '@/app/actions/insider-trading'
 
-export const revalidate = 300 // ISR: revalidate every 5 minutes
+export const dynamic = 'force-dynamic'
 
 export default async function InsidersPage() {
   const result = await getLatestInsiderTrades(200)
   const initialTrades = 'trades' in result ? result.trades : []
 
   return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
-      <Navigation />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          Insider Trading
-        </h1>
-        <InsidersPageClient initialTrades={initialTrades} />
-      </main>
-    </div>
+    <AppShell mainClassName="mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <h1 className="mb-6 text-2xl font-semibold text-gray-950 dark:text-white">
+        Insider Trading
+      </h1>
+      <InsidersPageClient initialTrades={initialTrades} />
+    </AppShell>
   )
 }

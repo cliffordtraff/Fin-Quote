@@ -7,6 +7,7 @@ import {
   generateStockWhyMovingSummary,
   getWiimSummaryDate,
   storeGeneratedWhyMovingSummary,
+  WIIM_SUMMARY_CONFIG_VERSION,
 } from '../lib/generated-stock-why-moving'
 import { SP500_SYMBOLS, normalizeSP500Symbol, isSP500 } from '../lib/sp500'
 
@@ -135,7 +136,7 @@ async function getExistingGeneratedSymbols(input: {
       .from('stock_summaries')
       .select('symbol, no_summary_reason')
       .eq('summary_date', input.date)
-      .eq('config_version', 'fin-quote-daily-v1')
+      .eq('config_version', WIIM_SUMMARY_CONFIG_VERSION)
       .in('symbol', batch)
 
     if (error) {
@@ -191,7 +192,7 @@ async function createSummaryRun(input: {
     ticker_count: input.symbols.length,
     tickers: input.symbols,
     model: input.model,
-    config_version: 'fin-quote-daily-v1',
+    config_version: WIIM_SUMMARY_CONFIG_VERSION,
   })
 
   if (error) {

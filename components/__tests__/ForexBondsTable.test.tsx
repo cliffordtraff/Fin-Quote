@@ -38,7 +38,7 @@ describe('ForexBondsTable', () => {
 
     render(<ForexBondsTable data={data} />)
 
-    expect(screen.getByText('Forex & Bonds')).toBeInTheDocument()
+    expect(screen.getByText('Forex & Rates')).toBeInTheDocument()
     expect(screen.getByText('Last')).toBeInTheDocument()
     expect(screen.getByText('Change')).toBeInTheDocument()
     expect(screen.getByText('Change %')).toBeInTheDocument()

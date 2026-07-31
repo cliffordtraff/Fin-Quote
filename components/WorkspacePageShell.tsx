@@ -1,10 +1,5 @@
-import Navigation from '@/components/Navigation'
+import AppShell from '@/components/AppShell'
 
 export default function WorkspacePageShell() {
-  return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
-      <Navigation />
-      <main className="flex-1 bg-cream-100 dark:bg-gray-900" />
-    </div>
-  )
+  return <AppShell mainClassName="min-w-0 flex-1 bg-cream-100 dark:bg-gray-950" />
 }

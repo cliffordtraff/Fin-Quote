@@ -506,7 +506,102 @@ export interface GeneratedCopy {
 // Newsletter draft editor types
 // ---------------------------------------------------------------------------
 
-export type NewsletterDraftStatus = 'draft' | 'published'
+export type NewsletterDraftStatus = 'draft' | 'review' | 'ready' | 'published'
+export type NewsletterDraftSourceType =
+  | 'manual'
+  | 'generated'
+  | 'catalyst'
+  | 'daily_batch'
+export type NewsletterDraftAutomationStatus = 'complete' | 'needs_chart'
+export type NewsletterDraftEventType =
+  | 'created'
+  | 'status_changed'
+  | 'chart_attached'
+  | 'publication_recorded'
+  | 'publication_url_updated'
+  | 'beehiiv_draft_created'
+  | 'beehiiv_draft_synced'
+  | 'beehiiv_scheduled'
+  | 'beehiiv_published'
+  | 'beehiiv_archived'
+
+export interface NewsletterCatalystSource {
+  reviewId: string
+  reviewKey: string
+  symbol: string
+  marketDate: string
+  session: string
+  direction: 'gainer' | 'loser'
+  headline: string
+  summary: string
+  bulletPoints: string[]
+  source: string | null
+  sourceUrl: string
+  reviewNotes: string
+  reviewedAt: string | null
+}
+
+export interface NewsletterCatalystDraftSource {
+  type: 'catalyst'
+  catalyst: NewsletterCatalystSource
+  attachedChartIds: string[]
+  automatedAt: string
+  automationStatus: NewsletterDraftAutomationStatus
+  automationWarning?: string
+}
+
+export interface NewsletterDailyBatchSource {
+  runId: string
+  itemId: string
+  itemKey: string
+  sourceWiimRunId: string
+  marketDate: string
+  rank: number
+  ticker: string
+  headline: string
+  summary: string
+  keyFact: string | null
+  reasonType: string | null
+  movePercent: number | null
+  confidenceScore: number
+  relevanceScore: number
+  qualityBand: 'strong' | 'review'
+  sourceRefs: Array<{
+    kind: string
+    label: string
+    url?: string
+    publishedAt?: string
+  }>
+}
+
+export interface NewsletterDailyBatchDraftSource {
+  type: 'daily_batch'
+  dailyBatch: NewsletterDailyBatchSource
+  attachedChartIds: string[]
+  automatedAt: string
+  automationStatus: NewsletterDraftAutomationStatus
+  automationWarning?: string
+}
+
+export type NewsletterDraftSource =
+  | NewsletterCatalystDraftSource
+  | NewsletterDailyBatchDraftSource
+
+export interface NewsletterDraftPublication {
+  beehiivUrl: string | null
+  publishedAt: string | null
+}
+
+export interface NewsletterDraftEvent {
+  id: string
+  draftId: string
+  type: NewsletterDraftEventType
+  fromStatus: NewsletterDraftStatus | null
+  toStatus: NewsletterDraftStatus | null
+  beehiivUrl: string | null
+  metadata: Record<string, unknown>
+  createdAt: string
+}
 
 export interface NewsletterDraftBlock {
   id: string
@@ -547,6 +642,8 @@ export interface NewsletterDraftDocument {
   ticker: string
   format: NewsletterFormat
   featuredTickers: string[]
+  source?: NewsletterDraftSource
+  publication?: NewsletterDraftPublication
   manualDraft?: boolean
   generationPrompt?: string
   generatedAt: string
@@ -566,9 +663,15 @@ export interface NewsletterDraftRecord {
   ownerId: string | null
   ticker: string
   status: NewsletterDraftStatus
+  sourceType: NewsletterDraftSourceType
+  sourceReviewKey: string | null
+  beehiivUrl: string | null
+  publishedAt: string | null
+  attachedChartCount: number
   subjectLine: string
   previewHtml: string
   draft: NewsletterDraftDocument
+  history: NewsletterDraftEvent[]
   createdAt: string
   updatedAt: string
 }
@@ -579,6 +682,11 @@ export interface NewsletterDraftSummary {
   format: NewsletterFormat
   featuredTickers: string[]
   status: NewsletterDraftStatus
+  sourceType: NewsletterDraftSourceType
+  sourceReviewKey: string | null
+  beehiivUrl: string | null
+  publishedAt: string | null
+  attachedChartCount: number
   subjectLine: string
   generatedAt: string
   blockCount: number

@@ -11,6 +11,7 @@ import {
   rankWiimCandidates,
   storeWiimCandidates,
   summarizeWiimRun,
+  type WiimRunType,
 } from '../lib/wiim'
 
 function parseArgs(argv: string[]) {
@@ -35,23 +36,34 @@ function parseArgs(argv: string[]) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
-  const runType = (args.get('--run-type') || 'morning') as 'morning'
+  const runType = String(args.get('--run-type') || 'morning') as WiimRunType
   const asJson = Boolean(args.get('--json'))
   const dryRun = Boolean(args.get('--dry-run'))
   const compareLatest = Boolean(args.get('--compare-latest'))
   const quietIfTrivial = Boolean(args.get('--quiet-if-trivial'))
-  const label = String(args.get('--label') || 'WIIM Morning Brief')
+  const defaultLabel = runType === 'mid_morning' ? 'WIIM Mid-Morning Brief' : 'WIIM Morning Brief'
+  const label = String(args.get('--label') || defaultLabel)
+  const compareRunType = String(
+    args.get('--compare-run-type') || (runType === 'mid_morning' ? 'morning' : runType),
+  ) as WiimRunType
 
-  if (runType !== 'morning') {
-    throw new Error(`Unsupported run type: ${runType}. Phase 1 only supports morning.`)
+  if (!['morning', 'mid_morning'].includes(runType)) {
+    throw new Error(`Unsupported run type: ${runType}.`)
+  }
+  if (!['morning', 'mid_morning'].includes(compareRunType)) {
+    throw new Error(`Unsupported comparison run type: ${compareRunType}.`)
   }
 
   let runId: string | null = null
 
   try {
     const fetched = await fetchWiimCandidates()
-    const topFive = rankWiimCandidates(fetched.candidates, 5)
-    const latestRun = compareLatest ? await getLatestWiimRun(runType) : null
+    const rankedCandidates = rankWiimCandidates(
+      fetched.candidates,
+      fetched.candidates.length,
+    )
+    const topFive = rankedCandidates.slice(0, 5)
+    const latestRun = compareLatest ? await getLatestWiimRun(compareRunType) : null
     const previousTopFive = Array.isArray(latestRun?.top_five_json) ? latestRun.top_five_json : []
     const delta = compareLatest && previousTopFive.length > 0
       ? computeWiimDelta(previousTopFive, topFive)
@@ -65,6 +77,8 @@ async function main() {
       metadata: {
         marketCandidateCount: fetched.marketCandidateCount,
         delta,
+        comparisonRunId: latestRun?.id ?? null,
+        comparisonRunType: compareLatest ? compareRunType : null,
       },
     })
 
@@ -86,7 +100,7 @@ async function main() {
       })
       runId = run.id
 
-      await storeWiimCandidates(run.id, topFive)
+      await storeWiimCandidates(run.id, rankedCandidates)
       await completeWiimRun({
         runId: run.id,
         status: 'completed',
@@ -97,8 +111,11 @@ async function main() {
         metadata: {
           marketCandidateCount: fetched.marketCandidateCount,
           candidateCount: fetched.candidates.length,
+          persistedCandidateCount: rankedCandidates.length,
           generatedAt: fetched.generatedAt,
           compareLatest,
+          comparisonRunId: latestRun?.id ?? null,
+          comparisonRunType: compareLatest ? compareRunType : null,
           delta,
         },
       })

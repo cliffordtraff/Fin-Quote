@@ -1,9 +1,14 @@
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 
+import { fetchTickerNews } from '@/lib/newsletter/fetch-context'
 import { getProvider, type ProviderNews, type ProviderQuote } from '@/lib/providers'
 import { getSP500Constituent, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
 import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
+
+export const WIIM_SUMMARY_CONFIG_VERSION = 'fin-quote-daily-v2'
+export const WIIM_SUMMARY_NEWS_LOOKBACK_DAYS = 7
+export const WIIM_SUMMARY_MAX_CHARACTERS = 280
 
 export type GeneratedWhyMovingReasonType =
   | 'earnings'
@@ -82,7 +87,13 @@ function normalizeSummaryText(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const normalized = value.replace(/\s+/g, ' ').trim()
   if (!normalized) return null
-  return normalized.length > 220 ? `${normalized.slice(0, 217).trim()}...` : normalized
+  if (normalized.length <= WIIM_SUMMARY_MAX_CHARACTERS) return normalized
+
+  const candidate = normalized.slice(0, WIIM_SUMMARY_MAX_CHARACTERS - 3).trim()
+  const lastSpace = candidate.lastIndexOf(' ')
+  const truncated = (lastSpace > 0 ? candidate.slice(0, lastSpace) : candidate)
+    .replace(/[,:;]$/, '')
+  return `${truncated}...`
 }
 
 function extractJsonCandidate(text: string): string {
@@ -137,9 +148,47 @@ function mapReasonType(value: unknown): GeneratedWhyMovingReasonType {
     : 'unclear'
 }
 
+function easternCalendarDate(value: string): string | null {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(normalized)
+  const date = new Date(hasZone ? normalized : `${normalized}Z`)
+  if (Number.isNaN(date.getTime())) return null
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  return year && month && day ? `${year}-${month}-${day}` : null
+}
+
+export function filterTimelySummaryNews(
+  news: ProviderNews[],
+  summaryDate: string,
+  lookbackDays = WIIM_SUMMARY_NEWS_LOOKBACK_DAYS,
+): ProviderNews[] {
+  const summaryTime = Date.parse(`${summaryDate}T12:00:00Z`)
+  if (!Number.isFinite(summaryTime)) return []
+
+  return news.filter((item) => {
+    const articleDate = easternCalendarDate(item.publishedDate)
+    if (!articleDate) return false
+
+    const articleTime = Date.parse(`${articleDate}T12:00:00Z`)
+    const ageInDays = Math.round((summaryTime - articleTime) / 86_400_000)
+    return ageInDays >= 0 && ageInDays <= lookbackDays
+  })
+}
+
 function buildPrompt(input: {
   symbol: string
   name: string
+  summaryDate: string
   quote: ProviderQuote | null
   news: ProviderNews[]
 }) {
@@ -165,6 +214,10 @@ Return strict JSON:
 Rules:
 - Write one useful sentence, under 35 words.
 - Explain the likely current catalyst, not the company's business model.
+- The report date is ${input.summaryDate} in America/New_York.
+- The quote is the provider's latest regular-session quote and may not include extended-hours trading.
+- Do not say shares rose, fell, gained, slipped, or otherwise infer current direction from that quote. State the supported event and why it matters.
+- Use only news published within the supplied seven-day window. Never revive an older event from memory.
 - Prefer concrete timely catalysts: earnings, guidance, analyst action, deal, regulatory/legal, product launch, management change, capital return, or sector/macro read-through.
 - If there is no clear catalyst in the provided context, set summary to null and no_summary_reason to "no_clear_catalyst".
 - If the price move is small and the news is generic, set summary to null and no_summary_reason to "quiet_tape".
@@ -199,15 +252,34 @@ export async function generateStockWhyMovingSummary(input: {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const model = input.model || process.env.WIIM_SUMMARY_MODEL || process.env.OPENAI_MODEL || 'gpt-5-nano'
   const name = getSP500Constituent(symbol)?.name ?? symbol
+  const summaryDate = input.summaryDate ?? getWiimSummaryDate()
 
   const [quote, news] = await Promise.all([
     provider.getQuote(symbol).catch(() => null),
     provider.getNews(symbol, 8).catch(() => []),
   ])
+  let timelyNews = filterTimelySummaryNews(news, summaryDate)
+  const hasRecentPrimaryNews =
+    filterTimelySummaryNews(news, summaryDate, 2).length > 0
+
+  if (!hasRecentPrimaryNews) {
+    const fallbackNews = await fetchTickerNews(symbol, 8).catch(() => [])
+    const timelyFallbackNews = filterTimelySummaryNews(
+      fallbackNews.map((item) => ({
+        ...item,
+        image: null,
+        symbol,
+      })),
+      summaryDate,
+    )
+    if (timelyFallbackNews.length > 0) {
+      timelyNews = timelyFallbackNews
+    }
+  }
 
   const response = await openai.responses.create({
     model,
-    input: buildPrompt({ symbol, name, quote, news }),
+    input: buildPrompt({ symbol, name, summaryDate, quote, news: timelyNews }),
   })
 
   const parsed = parseJsonObject(response.output_text || '')
@@ -218,14 +290,14 @@ export async function generateStockWhyMovingSummary(input: {
 
   return {
     symbol,
-    summaryDate: input.summaryDate ?? getWiimSummaryDate(),
+    summaryDate,
     summaryText,
     keyFact: normalizeSummaryText(parsed.key_fact),
     reasonType: mapReasonType(parsed.reason_type),
     noSummaryReason,
     model,
     quote,
-    news,
+    news: timelyNews,
   }
 }
 
@@ -241,7 +313,7 @@ export async function storeGeneratedWhyMovingSummary(summary: GeneratedWhyMoving
     run_id: runId,
     summary_text: summary.summaryText,
     model: summary.model,
-    config_version: 'fin-quote-daily-v1',
+    config_version: WIIM_SUMMARY_CONFIG_VERSION,
     winning_event: summary.news[0]
       ? {
           title: summary.news[0].title,
@@ -322,5 +394,6 @@ export async function getGeneratedStockWhyMovingData(symbol: string): Promise<St
 }
 
 export const __testOnly = {
+  normalizeSummaryText,
   parseJsonObject,
 }

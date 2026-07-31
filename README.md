@@ -11,18 +11,22 @@ Fin Quote is the main The Intraday web app. It is a Next.js 15 application that 
 
 The repository also includes a separate `dexter/` package used for deeper financial-research agent workflows.
 
+The canonical product direction and delivery order live in
+[`docs/CURRENT_ROADMAP.md`](docs/CURRENT_ROADMAP.md).
+
 ## What This Repo Contains
 
 The current app is much broader than a basic “company financial data viewer”.
 
 Main product areas:
 
-- `Dashboard` and pulse pages for broad market monitoring
+- `Pulse Today` as the primary daily market cockpit, plus the broader Market Overview
 - `Stock` pages for company-specific price, financial, news, and insider data
 - `Workspace` routes that embed the separate charting platform inside a persistent iframe
 - `Chatbot` and AI endpoints for financial Q&A, summaries, and experimentation
-- `Newsletter` generation tooling that produces chart images and HTML output
-- `Admin` pages for reviewing model output, evaluations, and API cost usage
+- `Newsletter` morning production, mid-morning deltas, reusable charts,
+  Beehiiv delivery, publishing workflow, and HTML export
+- `Admin` pages for catalyst review, model output, evaluations, and API cost usage
 
 ## Stack
 
@@ -89,6 +93,12 @@ User-facing routes:
 - `/dashboard`
 - `/dashboard/pulse`
 - `/dashboard/pulse-today`
+- `/dashboard/morning-brief`
+- `/dashboard/mid-morning-brief`
+- `/newsletter/morning-review`
+- `/newsletter/operations`
+- `/newsletter/editor`
+- `/newsletter/charts`
 - `/dashboard/live`
 - `/stock/[symbol]`
 - `/workspace/chart`
@@ -101,6 +111,7 @@ User-facing routes:
 Admin routes:
 
 - `/admin`
+- `/admin/why-moved`
 - `/admin/chart-of-the-day`
 - `/admin/review`
 - `/admin/validation`
@@ -175,6 +186,12 @@ Optional but commonly needed:
 DATA_PROVIDER=fmp
 MASSIVE_API_KEY=...
 NEXT_PUBLIC_CHARTING_URL=http://localhost:3001
+NEWSLETTER_PUBLIC_CHARTING_URL=https://charts.theintraday.com
+NEWSLETTER_RENDER_API_KEY=shared-render-service-secret
+CRON_SECRET=scheduler-bearer-secret
+NEWSLETTER_ALERT_WEBHOOK_URL=https://optional-alert-destination.example
+BEEHIIV_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
+BEEHIIV_PUBLICATION_ID=pub_optional-when-account-has-multiple-publications
 NEXT_PUBLIC_COOKIE_DOMAIN=.theintraday.com
 ADMIN_EMAILS=admin@example.com,ops@example.com
 NEXT_PUBLIC_ENABLE_CHAT=false
@@ -187,6 +204,14 @@ NEXT_PUBLIC_ENABLE_MOVERS=true
 Notes:
 
 - `NEXT_PUBLIC_CHARTING_URL` is required for the embedded workspace experience.
+- `NEWSLETTER_RENDER_API_KEY` must match the Charting Platform service. It
+  authenticates server-rendered newsletter charts and enables the trusted
+  batch-render allowance.
+- `CRON_SECRET` protects the daily newsletter scheduler endpoint in production.
+- `NEWSLETTER_ALERT_WEBHOOK_URL` is optional. When set, durable in-app
+  completion, late, and failure notifications are also posted to that endpoint.
+- `BEEHIIV_TOKEN_ENCRYPTION_KEY` encrypts Beehiiv OAuth tokens before they are
+  stored. Generate a dedicated 32-byte key with `openssl rand -base64 32`.
 - `MASSIVE_API_KEY` is required for real-time streaming and for `DATA_PROVIDER=massive`.
 - `NEXT_PUBLIC_COOKIE_DOMAIN` is used for shared-auth cookie behavior across subdomains.
 - `ADMIN_EMAILS` is the server-side allowlist for `/admin` pages when you want true admin-only access.
@@ -224,6 +249,9 @@ Supabase migrations live in `supabase/migrations/`. The schema has grown beyond 
 - Company metrics and segment data
 - Insider trading tables
 - Several cache tables for AI and market workflows
+- Durable daily newsletter runs, settings, and run items
+- Durable newsletter notifications and mid-morning automation runs
+- Beehiiv draft, scheduled, published, and reconciliation state
 
 Start here:
 
@@ -246,6 +274,15 @@ Common scripts:
 - `npm run refresh:stocks` refresh stock registry
 - `npm run stocks:status` inspect stock-registry ingestion status
 - `npm run ingest:segments` ingest segment data
+- `npm run wiim:brief -- --run-type morning --compare-latest` persist the
+  ranked morning WIIM universe
+- `npm run newsletter:run-automation -- --until-complete` advance Finviz,
+  WIIM, original summaries, charts, and newsletter generation until the report
+  is ready
+- `npm run newsletter:run-mid-morning -- --until-complete` refresh live
+  candidates, persist a second WIIM run, generate fresh top-five summaries, and
+  calculate the delta from the morning report
+- `npm run newsletter:verify-daily` verify a complete daily newsletter batch
 
 There are many additional operational scripts under `scripts/` for:
 
@@ -255,6 +292,88 @@ There are many additional operational scripts under `scripts/` for:
 - migration helpers
 - newsletter generation
 - debugging and verification
+
+## Newsletter Operations
+
+The weekday morning scheduler treats the configured generation hour as a
+ready-by deadline. It begins up to three hours earlier, skips market holidays,
+and retries bounded stages until noon ET. The mid-morning delta starts at
+10:15 AM ET and has the same noon recovery boundary.
+
+The Morning Report recommends five editorial candidates and exposes the full
+delivery lifecycle on each issue:
+
+```text
+Generated -> Ready -> Beehiiv Draft -> Scheduled -> Published
+```
+
+Signed-in users can create, open, and synchronize a Beehiiv draft directly from
+each report card. Scheduling and publishing remain explicit actions in Beehiiv;
+the reconciliation job mirrors those states back into Fin Quote every 15
+minutes and records publication metadata automatically.
+
+The signed-in operator surface at `/newsletter/operations` combines morning and
+mid-morning stage progress, provider counts, issue retries, Beehiiv lifecycle
+state, notification history, and recent run durations. `Run now` advances one
+leased stage immediately. A failed run exposes `Retry stage`, which resumes the
+recorded failed stage without repeating completed collection work.
+
+Production reports:
+
+- `https://www.theintraday.com/newsletter/morning-review`
+- `https://www.theintraday.com/dashboard/mid-morning-brief`
+
+## Daily Newsletter Production
+
+Open `http://localhost:3000/newsletter/morning-review` to review the daily
+production queue.
+
+The workflow is:
+
+1. The morning WIIM job persists the full ranked candidate universe, not just
+   the five stories shown in the brief.
+2. The daily selector chooses 30, 40, or 50 current stories using source
+   freshness, catalyst strength, move size, novelty, and generated-summary
+   quality.
+3. Each issue is created idempotently with source provenance, editorial copy,
+   and a current one-month chart.
+4. The review board exposes failures separately, supports resumable chart
+   repair, and keeps clean issues selectable in one action.
+5. `Select clean` followed by `Mark ready` moves the verified set into the
+   existing Ready publishing stage.
+
+From an issue editor, `Send to Beehiiv` creates an editable Beehiiv draft on
+the first click and syncs the same draft on later clicks. The connection uses
+Beehiiv MCP OAuth; no Beehiiv API key is stored in the browser. Publishing and
+scheduling remain explicit review actions in Beehiiv. `HTML fallback` copies
+the same rendered issue and opens a blank Beehiiv draft when MCP is unavailable.
+
+Supabase Cron calls the protected Vercel worker every two minutes across a UTC
+window that covers 5:00-8:00 AM New York time through daylight-saving changes.
+Each invocation fits the Vercel Hobby 60-second function limit, atomically
+leases the day, and advances one bounded, resumable stage: candidate collection,
+Finviz refresh, WIIM ranking, original Fin Quote summaries, chart and email
+generation, then final quality checks. Clean drafts are marked Ready
+automatically. The Vault secret named `newsletter_daily_cron_secret` must match
+the Vercel `CRON_SECRET`.
+
+Configure exactly one production recipient with
+`NEWSLETTER_AUTOMATION_OWNER_ID` (preferred) or
+`NEWSLETTER_AUTOMATION_SESSION_ID`. During the weekday morning window, `/`
+opens the finished report as soon as the automation reaches a terminal state.
+
+Before treating a run as complete, execute:
+
+```bash
+npm run newsletter:verify-daily -- \
+  --run-id <newsletter_daily_runs.id> \
+  --expect 40 \
+  --require-ready
+```
+
+The verifier checks counters, statuses, uniqueness, current source evidence,
+directional consistency, complete copy, provenance, chart linkage, distinct
+PNG files, minimum dimensions, and nonblank image content.
 
 ## Testing
 

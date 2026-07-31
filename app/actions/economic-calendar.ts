@@ -1,5 +1,7 @@
 'use server'
 
+import { safeErrorMessage } from '@/lib/safe-logging'
+
 export interface EconomicEvent {
   date: string
   country: string
@@ -86,7 +88,7 @@ export async function getEconomicEvents() {
 
     return { events: [] }
   } catch (error) {
-    console.error('Error fetching economic calendar:', error)
+    console.error('Error fetching economic calendar:', safeErrorMessage(error))
     return { error: 'Failed to load economic calendar data' }
   }
 }

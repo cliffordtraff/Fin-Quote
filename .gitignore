@@ -47,7 +47,20 @@ Watchlist/
 # Generated newsletter outputs
 .newsletter-output/
 .newsletter-drafts/
+.newsletter-chart-library/
+.why-moved-reviews/
 # legacy location — kept ignored so any leftover files don't get committed
 public/newsletter-charts/
 
 # Trigger rebuild
+
+# Local verification artifacts
+/.artifacts/
+
+# Manim render caches and intermediate narration files
+/video_lessons/**/media/
+/video_lessons/**/__pycache__/
+/video_lessons/**/*_preview.mp4
+/video_lessons/**/audio/*_raw.mp3
+/video_lessons/**/audio/s[0-9]*.mp3
+/video_lessons/**/audio/concat.txt

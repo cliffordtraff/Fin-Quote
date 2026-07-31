@@ -6,10 +6,17 @@ import type {
   NewsletterDraftBlock,
   NewsletterDraftDocument,
   NewsletterDraftRecord,
+  NewsletterDraftStatus,
 } from '@/lib/newsletter/types'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { RichTextEditor } from '@/components/newsletter/RichTextEditor'
 import NewsletterChartEditorDrawer from '@/components/newsletter/NewsletterChartEditorDrawer'
+import NewsletterChartLibraryPicker from '@/components/newsletter/NewsletterChartLibraryPicker'
+import NewsletterBeehiivPanel, {
+  type NewsletterBeehiivPanelHandle,
+} from '@/components/newsletter/NewsletterBeehiivPanel'
+import NewsletterPublicationPanel from '@/components/newsletter/NewsletterPublicationPanel'
+import NewsletterWorkflowBar from '@/components/newsletter/NewsletterWorkflowBar'
 import NewsletterDraftCreate from '@/app/newsletter/editor/NewsletterDraftCreate'
 
 interface DraftResponse {
@@ -161,6 +168,7 @@ export default function NewsletterDraftEditor({
   const inspectorSectionRef = useRef<HTMLElement | null>(null)
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const expandedPreviewFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const beehiivPanelRef = useRef<NewsletterBeehiivPanelHandle | null>(null)
   const copyResetTimeoutRef = useRef<number | null>(null)
   const [record, setRecord] = useState<NewsletterDraftRecord | null>(null)
   const [draft, setDraft] = useState<NewsletterDraftDocument | null>(null)
@@ -175,9 +183,10 @@ export default function NewsletterDraftEditor({
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [copiedControlId, setCopiedControlId] = useState<string | null>(null)
   const [copyingBeehiiv, setCopyingBeehiiv] = useState(false)
-  const [copiedBeehiiv, setCopiedBeehiiv] = useState(false)
+  const [beehiivBusy, setBeehiivBusy] = useState(false)
   const [downloadingHtml, setDownloadingHtml] = useState(false)
   const [chartEditorOpen, setChartEditorOpen] = useState(false)
+  const [chartLibraryOpen, setChartLibraryOpen] = useState(false)
   const draftRef = useRef<NewsletterDraftDocument | null>(null)
   const [newDraftOpenFormat, setNewDraftOpenFormat] = useState<
     'single_stock' | 'market_roundup' | null
@@ -572,7 +581,10 @@ export default function NewsletterDraftEditor({
     setDropTarget(null)
   }
 
-  async function saveDraft() {
+  async function persistDraft(
+    status: NewsletterDraftStatus | undefined,
+    successMessage: string,
+  ) {
     if (!draft) return
 
     try {
@@ -586,7 +598,10 @@ export default function NewsletterDraftEditor({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ draft }),
+        body: JSON.stringify({
+          draft,
+          ...(status ? { status } : {}),
+        }),
       })
 
       const payload = (await response.json()) as DraftResponse
@@ -598,7 +613,7 @@ export default function NewsletterDraftEditor({
       setRecord(payload.draft)
       setDraft(payload.draft.draft)
       setDirty(false)
-      setNotice('Draft saved and preview refreshed.')
+      setNotice(successMessage)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save newsletter draft')
     } finally {
@@ -606,10 +621,27 @@ export default function NewsletterDraftEditor({
     }
   }
 
-  async function copyBeehiivHtml() {
+  async function saveDraft() {
+    await persistDraft(undefined, 'Draft saved and preview refreshed.')
+  }
+
+  async function updateWorkflowStatus(status: NewsletterDraftStatus) {
+    await persistDraft(
+      status,
+      `Publishing stage updated to ${status === 'ready' ? 'ready to publish' : status}.`,
+    )
+  }
+
+  async function copyBeehiivHtml(openBeehiiv = false) {
+    const beehiivWindow = openBeehiiv
+      ? window.open('https://beehiiv.new', 'finquote-beehiiv-fallback')
+      : null
+    if (beehiivWindow) {
+      beehiivWindow.opener = null
+    }
+
     try {
       setCopyingBeehiiv(true)
-      setCopiedBeehiiv(false)
       setError(null)
 
       const response = await fetch(`/api/newsletter/drafts/${draftId}/beehiiv-html`, {
@@ -627,13 +659,13 @@ export default function NewsletterDraftEditor({
       }
 
       await copyTextToClipboard(payload.html)
-      setCopiedBeehiiv(true)
-      setNotice('Beehiiv HTML copied to clipboard!')
-
-      setTimeout(() => {
-        setCopiedBeehiiv(false)
-      }, 3000)
+      setNotice(
+        openBeehiiv
+          ? 'HTML copied. Add an HTML Snippet block in Beehiiv and paste.'
+          : 'Beehiiv HTML copied to clipboard.',
+      )
     } catch (err) {
+      beehiivWindow?.close()
       setError(err instanceof Error ? err.message : 'Failed to copy Beehiiv HTML')
     } finally {
       setCopyingBeehiiv(false)
@@ -834,7 +866,7 @@ export default function NewsletterDraftEditor({
               disabled
               className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white opacity-40"
             >
-              Copy for Beehiiv
+              Send to Beehiiv
             </button>
             <button
               type="button"
@@ -1002,7 +1034,7 @@ export default function NewsletterDraftEditor({
           <button
             type="button"
             onClick={saveDraft}
-            disabled={saving || regeneratingNewsletter}
+            disabled={!dirty || saving || regeneratingNewsletter}
             className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving…' : 'Save'}
@@ -1028,16 +1060,22 @@ export default function NewsletterDraftEditor({
 
           <button
             type="button"
-            onClick={copyBeehiivHtml}
-            disabled={copyingBeehiiv || dirty}
-            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-              copiedBeehiiv
-                ? 'bg-sage-600 text-white'
-                : 'bg-amber-500 text-white hover:bg-amber-600'
-            }`}
-            title={dirty ? 'Save draft first to copy latest HTML' : 'Copy HTML for Beehiiv'}
+            onClick={() => setChartLibraryOpen(true)}
+            disabled={!selectedBlock || saving || regeneratingNewsletter || isNewDraft}
+            className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
           >
-            {copyingBeehiiv ? 'Copying…' : copiedBeehiiv ? 'Copied!' : 'Copy for Beehiiv'}
+            Choose chart
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void beehiivPanelRef.current?.deliver()}
+            disabled={beehiivBusy || copyingBeehiiv || dirty}
+            className="rounded-lg bg-gray-950 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title={dirty ? 'Save draft first to send the latest version' : 'Create or sync the Beehiiv draft'}
+          >
+            {beehiivBusy ? 'Syncing…' : 'Send to Beehiiv'}
           </button>
 
           <button
@@ -1065,6 +1103,44 @@ export default function NewsletterDraftEditor({
           </button>
         </div>
       </div>
+
+      <NewsletterWorkflowBar
+        draft={draft}
+        status={record.status}
+        busy={saving || regeneratingNewsletter}
+        onStatusChange={(status) => void updateWorkflowStatus(status)}
+      />
+
+      <NewsletterBeehiivPanel
+        ref={beehiivPanelRef}
+        record={record}
+        disabled={
+          saving ||
+          regeneratingNewsletter ||
+          dirty ||
+          copyingBeehiiv
+        }
+        onNotice={(message) => {
+          setError(null)
+          setNotice(message)
+        }}
+        onError={(message) => {
+          setNotice(null)
+          setError(message)
+        }}
+        onBusyChange={setBeehiivBusy}
+        onCopyFallback={() => copyBeehiivHtml(true)}
+      />
+
+      <NewsletterPublicationPanel
+        record={record}
+        disabled={saving || regeneratingNewsletter || dirty}
+        onRecordChange={(nextRecord) => {
+          setRecord(nextRecord)
+          setDraft(nextRecord.draft)
+          setDirty(false)
+        }}
+      />
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1397,6 +1473,16 @@ export default function NewsletterDraftEditor({
                 </div>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setChartLibraryOpen(true)}
+                disabled={saving || regeneratingNewsletter || isNewDraft}
+                className="w-full rounded-xl border border-sage-700 px-4 py-2.5 text-sm font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
+                title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
+              >
+                Choose saved chart
+              </button>
+
             </div>
           ) : null}
         </section>
@@ -1414,6 +1500,22 @@ export default function NewsletterDraftEditor({
             setDraft(updatedRecord.draft)
             setDirty(false)
             setNotice('Chart updated and preview refreshed.')
+          }}
+        />
+      ) : null}
+
+      {chartLibraryOpen && draft && selectedBlock ? (
+        <NewsletterChartLibraryPicker
+          key={selectedBlock.id}
+          draftId={draftId}
+          draft={draft}
+          block={selectedBlock}
+          onClose={() => setChartLibraryOpen(false)}
+          onInserted={(updatedRecord) => {
+            setRecord(updatedRecord)
+            setDraft(updatedRecord.draft)
+            setDirty(false)
+            setNotice('Saved chart inserted and preview refreshed.')
           }}
         />
       ) : null}
