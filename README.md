@@ -86,6 +86,37 @@ Relevant files:
 - `app/api/stream/[symbol]/route.ts`
 - `lib/ws/massive-broker.ts`
 
+### Dashboard Chart of the Day
+
+The Market Overview renders its featured fundamentals chart natively instead of
+embedding the entire external charting workspace. The server resolves the saved
+chart specification, loads only the selected annual or quarterly series, and
+hands a compact presentation model to a theme-aware SVG chart. The full charting
+workspace remains one click away for deeper editing.
+
+Relevant files:
+
+- `lib/dashboard/load-chart-of-the-day-presentation.ts`
+- `lib/dashboard/chart-of-the-day-presentation.ts`
+- `components/DashboardChartOfTheDay.tsx`
+
+### Market Overview personalization
+
+The Market Overview is organized as a progressive briefing: compact index
+charts, price action, market context, notable cross-asset moves, one catalyst
+timeline, and collapsed previews for deeper lower-page data. Browser-local,
+versioned preferences remember the watchlist order, mover session, and expanded
+sections without requiring sign-in. The watchlist supports adding, removing,
+dragging, keyboard reordering, and restrained unusual-move markers.
+
+Relevant files:
+
+- `components/MarketDashboardSunday.tsx`
+- `components/CatalystTimeline.tsx`
+- `components/StocksTable.tsx`
+- `components/useDashboardPreferences.ts`
+- `lib/dashboard/preferences.ts`
+
 ## Key Routes
 
 User-facing routes:
@@ -214,7 +245,9 @@ Notes:
   stored. Generate a dedicated 32-byte key with `openssl rand -base64 32`.
 - `MASSIVE_API_KEY` is required for real-time streaming and for `DATA_PROVIDER=massive`.
 - `NEXT_PUBLIC_COOKIE_DOMAIN` is used for shared-auth cookie behavior across subdomains.
-- `ADMIN_EMAILS` is the server-side allowlist for `/admin` pages when you want true admin-only access.
+- `ADMIN_EMAILS` is the required server-side allowlist for `/admin` pages and
+  protected newsletter generation. If it is missing or empty, admin access
+  fails closed for every account.
 - `.env.local.example` is intentionally small and not exhaustive.
 
 ### 4. Run the app
@@ -386,6 +419,8 @@ Current automated coverage is focused on a few high-value modules such as:
 - validators
 - TTM calculation
 - stock “why moving” parsing
+- Chart of the Day data shaping and native rendering
+- dashboard preference parsing, editable watchlists, and catalyst ordering
 
 Run:
 

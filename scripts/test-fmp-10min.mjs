@@ -2,7 +2,10 @@
  * Test script to verify if FMP API provides 10-minute intraday data
  */
 
-const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
+
+const apiKey = requireFmpApiKey()
+let successfulIntervals = 0
 
 console.log('Testing FMP API intraday endpoints for AAPL\n')
 console.log('='.repeat(60))
@@ -36,6 +39,7 @@ for (const interval of intervals) {
       console.log(`✅ SUCCESS: Received ${data.length} candles`)
 
       if (data.length > 0) {
+        successfulIntervals++
         console.log(`   First candle: ${data[0].date}`)
         console.log(`   Last candle:  ${data[data.length - 1].date}`)
 
@@ -55,6 +59,11 @@ for (const interval of intervals) {
   } catch (error) {
     console.log(`❌ Error: ${error.message}`)
   }
+}
+
+if (successfulIntervals === 0) {
+  console.error('\nNo intraday interval returned a valid response.')
+  process.exitCode = 1
 }
 
 console.log('\n' + '='.repeat(60))

@@ -2,7 +2,7 @@ import LandingPage from '@/components/landing'
 import Navigation from '@/components/Navigation'
 import DashboardFooter from '@/components/DashboardFooter'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
-import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
+import { loadDashboardChartOfTheDayPresentation } from '@/lib/dashboard/load-chart-of-the-day-presentation'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 import { redirect } from 'next/navigation'
 import {
@@ -25,8 +25,11 @@ export default async function Home() {
     redirect('/newsletter/morning-review')
   }
 
-  const initialData = await fetchAllMarketData()
-  const chartOfDaySpec = await loadDashboardChartOfTheDayEmbedSpec()
+  const initialRenderedAt = new Date().toISOString()
+  const [initialData, chartOfDayPresentation] = await Promise.all([
+    fetchAllMarketData(),
+    loadDashboardChartOfTheDayPresentation(),
+  ])
 
   return (
     <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex flex-col">
@@ -34,7 +37,8 @@ export default async function Home() {
       <main className="flex-1 py-4">
         <MarketDashboardSunday
           initialData={initialData}
-          chartOfDaySpec={chartOfDaySpec}
+          chartOfDayPresentation={chartOfDayPresentation}
+          initialRenderedAt={initialRenderedAt}
         />
       </main>
       <DashboardFooter />

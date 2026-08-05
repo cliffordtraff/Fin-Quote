@@ -17,6 +17,15 @@ import {
 } from '@/lib/regeneration'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory } from '@/types/conversation'
+import { requireCurrentUser } from '@/lib/auth/current-user'
+import {
+  isChatbotEnabled,
+  parseChatbotRequestPayload,
+} from '@/lib/chatbot/request-policy'
+import {
+  CHAT_ANSWER_MAX_OUTPUT_TOKENS,
+  CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+} from '@/lib/chatbot/constants'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -284,10 +293,31 @@ export async function askQuestion(
   let embeddingTokens: number | undefined
 
   try {
-    // Validate input
-    if (!userQuestion || userQuestion.trim().length === 0) {
-      return { answer: '', dataUsed: null, chartConfig: null, error: 'Question cannot be empty', queryLogId: null }
+    if (!isChatbotEnabled()) {
+      return {
+        answer: '',
+        dataUsed: null,
+        chartConfig: null,
+        error: 'Chatbot is not available.',
+        queryLogId: null,
+      }
     }
+
+    const currentUser = await requireCurrentUser()
+    const requestPayload = parseChatbotRequestPayload({
+      question: userQuestion,
+      conversationHistory,
+      sessionId,
+    })
+
+    // Use only the validated, size-bounded message fields in prompts. Rich UI
+    // fields such as chart configs and data tables are deliberately discarded.
+    userQuestion = requestPayload.question
+    conversationHistory = requestPayload.conversationHistory.map((message) => ({
+      ...message,
+      timestamp: message.timestamp || '',
+    }))
+    sessionId = requestPayload.sessionId
 
     // Extract previous tool results (last 2 assistant messages with data)
     const previousToolResults = conversationHistory
@@ -328,9 +358,10 @@ export async function askQuestion(
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Fast and cheap for routing
       input: selectionInput,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-      // GPT-5 models need more tokens for reasoning + output (reasoning tokens count against limit)
-      // Set to 20,000 to ensure model has enough room for complex reasoning
-      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
+      // GPT-5 reasoning tokens count against this bounded routing allowance.
+      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+        ? CHAT_ROUTING_MAX_OUTPUT_TOKENS
+        : 150,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
       text: { format: { type: 'json_object' } },
     })
@@ -684,9 +715,10 @@ export async function askQuestion(
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       input: answerInput,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-      // GPT-5 models need more tokens for reasoning + output
-      // Set to 20,000 to ensure model has enough room for complex reasoning and detailed answers
-      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+      // Keep the concise answer flow inside the shared per-request spend cap.
+      max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+        ? CHAT_ANSWER_MAX_OUTPUT_TOKENS
+        : 500,
       ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
     })
 
@@ -820,9 +852,10 @@ export async function askQuestion(
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           input: toResponseInputMessages(regenerationMessages),
           ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-          // GPT-5 models need more tokens for reasoning + output
-          // Set to 20,000 to ensure model has enough room for complex reasoning and corrections
-          max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+          // Regeneration uses the same bounded allowance as the first answer.
+          max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+            ? CHAT_ANSWER_MAX_OUTPUT_TOKENS
+            : 500,
           ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
         })
 
@@ -882,9 +915,6 @@ export async function askQuestion(
       })
     }
 
-    // Get current user if logged in
-    const { data: { user } } = await supabase.auth.getUser()
-
     // Log the query and get the log ID for feedback
     let queryLogId: string | null = null
     if (sessionId) {
@@ -907,7 +937,7 @@ export async function askQuestion(
 
       queryLogId = await logQuery({
         sessionId,
-        userId: user?.id || null,
+        userId: currentUser.id,
         userQuestion,
         toolSelected: toolSelection.tool,
         toolArgs: toolSelection.args,

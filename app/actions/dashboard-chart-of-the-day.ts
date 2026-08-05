@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { requireAdminUser } from '@/lib/auth/admin'
 import { getEditorialTemplate } from '@/lib/newsletter/editorial-templates'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   DASHBOARD_CHART_OF_THE_DAY_SETTINGS_ROW_ID,
@@ -60,15 +60,6 @@ interface UpdateDashboardChartOfTheDayResult {
   setting?: DashboardChartOfTheDaySetting
 }
 
-async function getUpdatedByUserId(): Promise<string | null> {
-  const supabaseAuth = await createServerClient()
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser()
-
-  return user?.id ?? null
-}
-
 async function upsertDashboardChartOfTheDayRow(payload: {
   ticker: string
   templateId: string
@@ -119,6 +110,7 @@ export async function updateDashboardChartOfTheDay(input: {
   periodType: 'annual' | 'quarterly'
 }): Promise<UpdateDashboardChartOfTheDayResult> {
   try {
+    const { user } = await requireAdminUser()
     const parsed = updateDashboardChartOfTheDaySchema.safeParse(input)
 
     if (!parsed.success) {
@@ -149,7 +141,7 @@ export async function updateDashboardChartOfTheDay(input: {
       templateId: selection.templateId,
       periodType: selection.periodType,
       chartSpec: null,
-      updatedBy: await getUpdatedByUserId(),
+      updatedBy: user.id,
     })
   } catch (error) {
     console.error('Failed to update dashboard chart of the day:', error)
@@ -164,6 +156,7 @@ export async function updateDashboardChartOfTheDayChartSpec(
   input: ChartExportSpec,
 ): Promise<UpdateDashboardChartOfTheDayResult> {
   try {
+    const { user } = await requireAdminUser()
     const parsed = updateDashboardChartOfTheDayChartSpecSchema.safeParse(input)
 
     if (!parsed.success) {
@@ -190,7 +183,7 @@ export async function updateDashboardChartOfTheDayChartSpec(
       templateId: fallbackSelection.templateId,
       periodType: chartSpec.periodType ?? fallbackSelection.periodType,
       chartSpec,
-      updatedBy: await getUpdatedByUserId(),
+      updatedBy: user.id,
     })
   } catch (error) {
     console.error('Failed to update dashboard chart of the day chart spec:', error)

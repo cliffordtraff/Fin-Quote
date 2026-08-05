@@ -56,6 +56,7 @@ const SETTINGS_TABLE = 'newsletter_daily_settings'
 const RUNS_TABLE = 'newsletter_daily_runs'
 const ITEMS_TABLE = 'newsletter_daily_run_items'
 const STALE_GENERATION_MINUTES = 15
+export const MAX_NEWSLETTER_DAILY_ITEM_RETRIES = 3
 
 type DailySettingsRow =
   Database['public']['Tables']['newsletter_daily_settings']['Row']
@@ -805,6 +806,17 @@ async function recoverStaleDailyItems(runId: string) {
   }
 }
 
+function canClaimDailyItem(
+  status: NewsletterDailyItemStatus,
+  retryCount: number,
+  retryFailed: boolean,
+): boolean {
+  const eligibleStatus =
+    status === 'queued' ||
+    (retryFailed && (status === 'failed' || status === 'needs_attention'))
+  return eligibleStatus && retryCount < MAX_NEWSLETTER_DAILY_ITEM_RETRIES
+}
+
 async function claimDailyItems(
   runId: string,
   options: DailyProcessOptions,
@@ -825,6 +837,7 @@ async function claimDailyItems(
     .select('*')
     .eq('run_id', runId)
     .in('status', eligible)
+    .lt('retry_count', MAX_NEWSLETTER_DAILY_ITEM_RETRIES)
     .order('retry_count', { ascending: true })
     .order('rank', { ascending: true })
     .limit(limit)
@@ -834,6 +847,15 @@ async function claimDailyItems(
 
   const claimed: NewsletterDailyRunItem[] = []
   for (const row of (data ?? []) as DailyItemRow[]) {
+    if (
+      !canClaimDailyItem(
+        row.status as NewsletterDailyItemStatus,
+        row.retry_count,
+        options.retryFailed === true,
+      )
+    ) {
+      continue
+    }
     const { data: claimedRow, error: claimError } = await supabase
       .from(ITEMS_TABLE)
       .update({
@@ -845,6 +867,7 @@ async function claimDailyItems(
       })
       .eq('id', row.id)
       .in('status', eligible)
+      .lt('retry_count', MAX_NEWSLETTER_DAILY_ITEM_RETRIES)
       .select('*')
       .maybeSingle()
     if (claimError) {
@@ -967,6 +990,18 @@ async function persistGeneratedItem(
   }
 }
 
+function mergeDailyItemAttentionMessage(
+  automationWarning: string | null | undefined,
+  readinessLabels: string[],
+): string {
+  const existing = automationWarning?.trim() ?? ''
+  const additions = readinessLabels
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .filter((label) => !existing.includes(label))
+  return [existing, ...additions].filter(Boolean).join(' ')
+}
+
 async function processDailyItem(
   scope: NewsletterDraftScope,
   run: NewsletterDailyRun,
@@ -1046,6 +1081,10 @@ async function processDailyItem(
         existing.id,
         document,
         existing.status,
+        {
+          publicChartBaseUrl:
+            options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
+        },
       )
       if (chart) {
         await appendNewsletterDraftEvent(scope, draft.id, {
@@ -1183,6 +1222,7 @@ export async function finalizeNewsletterDailyItems(
   scope: NewsletterDraftScope,
   runId: string,
   itemIds?: string[],
+  options: { publicChartBaseUrl?: string } = {},
 ): Promise<NewsletterDailyRun> {
   const run = await getNewsletterDailyRun(scope, runId)
   const selectedIds = itemIds?.length ? new Set(itemIds) : null
@@ -1201,14 +1241,17 @@ export async function finalizeNewsletterDailyItems(
       const draft = await getNewsletterDraft(scope, item.draftId!)
       const readiness = canSetNewsletterDraftStatus(draft.draft, 'ready')
       if (!readiness.ready) {
+        const automationWarning =
+          draft.draft.source?.automationWarning ?? item.errorMessage
         await supabase
           .from(ITEMS_TABLE)
           .update({
             status: 'needs_attention',
             draft_status: draft.status,
-            error_message: readiness.issues
-              .map((issue) => issue.label)
-              .join(' '),
+            error_message: mergeDailyItemAttentionMessage(
+              automationWarning,
+              readiness.issues.map((issue) => issue.label),
+            ),
           })
           .eq('id', item.id)
         return
@@ -1217,7 +1260,10 @@ export async function finalizeNewsletterDailyItems(
       const saved =
         draft.status === 'ready' || draft.status === 'published'
           ? draft
-          : await saveNewsletterDraft(scope, draft.id, draft.draft, 'ready')
+          : await saveNewsletterDraft(scope, draft.id, draft.draft, 'ready', {
+              publicChartBaseUrl:
+                options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
+            })
       await supabase
         .from(ITEMS_TABLE)
         .update({
@@ -1278,4 +1324,7 @@ export const __testOnly = {
   resolveExistingRunTarget,
   mapItemRow,
   mapRunRow,
+  canClaimDailyItem,
+  mergeDailyItemAttentionMessage,
+  MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
 }

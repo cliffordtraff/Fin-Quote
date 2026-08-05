@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
 import { WORKSPACE_FOOTER_HEIGHT_PX } from '@/lib/workspace-layout'
@@ -9,6 +9,21 @@ const mockUseSearchParams = vi.fn()
 const mockUseTheme = vi.fn()
 const pushMock = vi.fn()
 const postMessage = vi.fn()
+const iframeWindow = { postMessage } as unknown as Window
+
+function expectedWorkspaceSrc(
+  chartingUrl: string,
+  symbol: string,
+  view: 'price' | 'fundamentals' | 'overview',
+) {
+  const url = new URL(`${chartingUrl}/tos-full/${symbol}`)
+  url.searchParams.set('embed', 'true')
+  url.searchParams.set('view', view)
+  url.searchParams.set('theme', 'dark')
+  url.searchParams.set('surface', 'page')
+  url.searchParams.set('origin', window.location.origin)
+  return url.toString()
+}
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockUsePathname(),
@@ -52,7 +67,7 @@ describe('WorkspaceIframe', () => {
     Object.defineProperty(window.HTMLIFrameElement.prototype, 'contentWindow', {
       configurable: true,
       get() {
-        return { postMessage }
+        return iframeWindow
       },
     })
 
@@ -69,7 +84,7 @@ describe('WorkspaceIframe', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
         'src',
-        'https://charts.theintraday.com/tos/NVDA?embed=true&view=fundamentals&theme=dark'
+        expectedWorkspaceSrc('https://charts.theintraday.com', 'NVDA', 'fundamentals'),
       )
     })
     expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ bottom: `${WORKSPACE_FOOTER_HEIGHT_PX}px` })
@@ -91,7 +106,7 @@ describe('WorkspaceIframe', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
         'src',
-        'https://charts.theintraday.com/tos/TSLA?embed=true&view=price&theme=dark'
+        expectedWorkspaceSrc('https://charts.theintraday.com', 'TSLA', 'price'),
       )
     })
     expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ bottom: '0px' })
@@ -99,6 +114,7 @@ describe('WorkspaceIframe', () => {
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         origin: 'https://charts.theintraday.com',
+        source: iframeWindow,
         data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
       }))
     })
@@ -124,6 +140,7 @@ describe('WorkspaceIframe', () => {
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         origin: 'https://charts.theintraday.com',
+        source: iframeWindow,
         data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
       }))
     })
@@ -152,13 +169,14 @@ describe('WorkspaceIframe', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
         'src',
-        'https://charts.theintraday.com/tos/NVDA?embed=true&view=overview&theme=dark'
+        expectedWorkspaceSrc('https://charts.theintraday.com', 'NVDA', 'overview'),
       )
     })
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         origin: 'https://charts.theintraday.com',
+        source: iframeWindow,
         data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
       }))
     })
@@ -210,7 +228,7 @@ describe('WorkspaceIframe', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
         'src',
-        'https://charts.theintraday.com/tos/AAPL?embed=true&view=price&theme=dark'
+        expectedWorkspaceSrc('https://charts.theintraday.com', 'AAPL', 'price'),
       )
       expect(screen.getByTestId('workspace-iframe-shell')).toHaveStyle({ display: 'block' })
       expect(screen.getByTestId('workspace-iframe-search-backdrop')).toBeInTheDocument()
@@ -219,6 +237,7 @@ describe('WorkspaceIframe', () => {
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         origin: 'https://charts.theintraday.com',
+        source: iframeWindow,
         data: { v: 1, type: 'READY', payload: { version: '1.0.0' } },
       }))
     })
@@ -243,6 +262,7 @@ describe('WorkspaceIframe', () => {
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         origin: 'https://charts.theintraday.com',
+        source: iframeWindow,
         data: { v: 1, type: 'TICKER_SELECTED', payload: { symbol: 'TSLA' } },
       }))
     })
@@ -261,14 +281,30 @@ describe('WorkspaceIframe', () => {
 
     expect(screen.getByTitle('Workspace charting')).toHaveAttribute(
       'src',
-      'http://localhost:3001/tos/NVDA?embed=true&view=fundamentals&theme=dark'
+      expectedWorkspaceSrc('http://localhost:3001', 'NVDA', 'fundamentals'),
     )
 
     act(() => {
-      vi.advanceTimersByTime(12000)
+      vi.advanceTimersByTime(5000)
     })
 
     expect(screen.getByTestId('workspace-iframe-load-error')).toHaveTextContent('Workspace app is unavailable.')
     expect(screen.getByTestId('workspace-iframe-load-error')).toHaveTextContent('Nothing responded at http://localhost:3001.')
+
+    const standaloneLink = screen.getByRole('link', { name: 'Open chart separately' })
+    const standaloneUrl = new URL(standaloneLink.getAttribute('href') || '')
+    expect(standaloneUrl.pathname).toBe('/tos-full/NVDA')
+    expect(standaloneUrl.searchParams.has('embed')).toBe(false)
+    expect(standaloneUrl.searchParams.has('origin')).toBe(false)
+    expect(standaloneUrl.searchParams.has('surface')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(screen.queryByTestId('workspace-iframe-load-error')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    expect(screen.getByTestId('workspace-iframe-load-error')).toBeInTheDocument()
   })
 })

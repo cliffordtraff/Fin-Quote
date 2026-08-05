@@ -14,10 +14,11 @@
 import dotenv from 'dotenv'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
 
 dotenv.config({ path: '.env.local' })
 
-const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+const FMP_API_KEY = requireFmpApiKey()
 
 // Command line arguments: first is symbol, second is period type
 const args = process.argv.slice(2)
@@ -742,4 +743,7 @@ async function fetchFMPData() {
   return metrics
 }
 
-fetchFMPData().catch(console.error)
+fetchFMPData().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

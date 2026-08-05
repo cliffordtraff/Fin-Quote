@@ -1,4 +1,4 @@
-'use server'
+import 'server-only'
 
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
@@ -312,15 +312,13 @@ Now write the market summary, using web search to verify and explain the drivers
     // Cache the result in memory
     cachedSummary = { summary, timestamp: Date.now() }
 
-    // Also save to Supabase (fire and forget, don't block on it)
+    // Await persistence so serverless runtimes cannot terminate the write.
     if (supabaseAdmin) {
-      supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('market_summary_cache')
         .insert({ summary })
-        .then(({ error }) => {
-          if (error) console.log('Failed to save to Supabase cache:', error.message)
-          else console.log('Saved market summary to Supabase cache')
-        })
+      if (error) console.log('Failed to save to Supabase cache:', error.message)
+      else console.log('Saved market summary to Supabase cache')
     } else {
       console.log('Skipping market_summary_cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
     }

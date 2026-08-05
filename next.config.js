@@ -1,6 +1,46 @@
 /** @type {import('next').NextConfig} */
 const DEFAULT_PUBLIC_CHARTING_BASE_URL = 'https://charts.theintraday.com'
 
+function buildContentSecurityPolicy() {
+  const scriptSources = ["'self'", "'unsafe-inline'"]
+  if (process.env.NODE_ENV !== 'production') scriptSources.push("'unsafe-eval'")
+
+  return [
+    "default-src 'self' https: data: blob:",
+    `script-src ${scriptSources.join(' ')} https:`,
+    "style-src 'self' 'unsafe-inline' https:",
+    "img-src 'self' https: data: blob:",
+    "font-src 'self' https: data:",
+    "connect-src 'self' https: wss: ws:",
+    "frame-src 'self' https: http://localhost:3001",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+    process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests' : '',
+  ].filter(Boolean).join('; ')
+}
+
+const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: buildContentSecurityPolicy() },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+]
+
+if (process.env.NODE_ENV === 'production') {
+  SECURITY_HEADERS.push({
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  })
+}
+
 function resolveChartingProxyBaseUrl() {
   const configured =
     process.env.NEXT_PUBLIC_CHARTING_URL?.trim()
@@ -16,6 +56,15 @@ function resolveChartingProxyBaseUrl() {
 const nextConfig = {
   serverExternalPackages: ['ws'],
   devIndicators: false,
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: SECURITY_HEADERS,
+      },
+    ]
+  },
   async rewrites() {
     const chartingProxyBaseUrl = resolveChartingProxyBaseUrl()
 
@@ -23,6 +72,10 @@ const nextConfig = {
       {
         source: '/tos/:path*',
         destination: `${chartingProxyBaseUrl}/tos/:path*`,
+      },
+      {
+        source: '/tos-full/:path*',
+        destination: `${chartingProxyBaseUrl}/tos-full/:path*`,
       },
       // Newsletter export editor iframe — served standalone by the charting
       // platform so Fin Quote can host it inside a draft UI.

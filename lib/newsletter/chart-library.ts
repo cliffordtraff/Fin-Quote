@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs'
-import { basename, resolve } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { basename, join, resolve } from 'path'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { captureChart } from './capture'
 import {
@@ -236,7 +237,7 @@ export async function listNewsletterChartLibraryItems(
   return items
 }
 
-async function uploadNewsletterChartImage(options: {
+export async function uploadNewsletterChartImage(options: {
   ownerId: string
   chartId: string
   symbol: string
@@ -279,74 +280,88 @@ export async function saveNewsletterChartLibraryItem(
   const timestamp = new Date().toISOString()
   const id = crypto.randomUUID()
 
-  mkdirSync(resolve(NEWSLETTER_CHART_OUTPUT_DIR), { recursive: true })
   const filename = `${chartSpec.symbol}_library_${toRunStamp()}_${id.slice(0, 8)}.png`
-  const outputPath = resolve(NEWSLETTER_CHART_OUTPUT_DIR, filename)
+  // Vercel's application bundle is mounted read-only at /var/task. Signed-in
+  // charts are durable Supabase assets, so render them in the runtime's
+  // writable temp directory and remove the file after upload. Anonymous local
+  // sessions keep the existing repository-backed output behavior.
+  const temporaryDirectory = scope.ownerId
+    ? mkdtempSync(join(tmpdir(), 'fin-quote-newsletter-chart-'))
+    : null
+  const outputDirectory = temporaryDirectory ?? resolve(NEWSLETTER_CHART_OUTPUT_DIR)
+  mkdirSync(outputDirectory, { recursive: true })
+  const outputPath = resolve(outputDirectory, filename)
 
-  await captureChart(chartSpec, {
-    outputPath,
-    chartBaseUrl,
-    width: options.width,
-    height: options.height,
-  })
-
-  const chartImageUrl = `/newsletter-charts/${filename}`
-  const chartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
-    chartBaseUrl: publicChartBaseUrl,
-    theme: 'light',
-  }).interactiveUrl
-
-  if (scope.ownerId) {
-    const { imagePath, imageUrl } = await uploadNewsletterChartImage({
-      ownerId: scope.ownerId,
-      chartId: id,
-      symbol: chartSpec.symbol,
+  try {
+    await captureChart(chartSpec, {
       outputPath,
+      chartBaseUrl,
+      width: options.width,
+      height: options.height,
     })
-    const supabase = getServiceClient()
-    const payload = {
+
+    const chartImageUrl = `/newsletter-charts/${filename}`
+    const chartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
+      chartBaseUrl: publicChartBaseUrl,
+      theme: 'light',
+    }).interactiveUrl
+
+    if (scope.ownerId) {
+      const { imagePath, imageUrl } = await uploadNewsletterChartImage({
+        ownerId: scope.ownerId,
+        chartId: id,
+        symbol: chartSpec.symbol,
+        outputPath,
+      })
+      const supabase = getServiceClient()
+      const payload = {
+        id,
+        owner_id: scope.ownerId,
+        session_id: scope.sessionId,
+        title: chartSpec.title ?? `${chartSpec.symbol} chart`,
+        symbol: chartSpec.symbol,
+        chart_spec: chartSpec,
+        image_path: imagePath,
+        image_url: imageUrl,
+        thumbnail_path: imagePath,
+        thumbnail_url: imageUrl,
+        chart_export_url: chartExportUrl,
+      }
+
+      const { data, error } = await supabase
+        .from(NEWSLETTER_CHART_LIBRARY_TABLE)
+        .insert(payload)
+        .select('*')
+        .single()
+
+      if (error) {
+        throw new Error(`Failed to save newsletter chart library item: ${error.message}`)
+      }
+
+      return mapLibraryRow(data as NewsletterChartLibraryRow)
+    }
+
+    const item: NewsletterChartLibraryItem = {
       id,
-      owner_id: scope.ownerId,
-      session_id: scope.sessionId,
+      ownerId: scope.ownerId,
+      sessionId: scope.sessionId,
       title: chartSpec.title ?? `${chartSpec.symbol} chart`,
       symbol: chartSpec.symbol,
-      chart_spec: chartSpec,
-      image_path: imagePath,
-      image_url: imageUrl,
-      thumbnail_path: imagePath,
-      thumbnail_url: imageUrl,
-      chart_export_url: chartExportUrl,
+      chartSpec,
+      chartImageUrl,
+      thumbnailUrl: chartImageUrl,
+      chartExportUrl,
+      createdAt: timestamp,
+      updatedAt: timestamp,
     }
 
-    const { data, error } = await supabase
-      .from(NEWSLETTER_CHART_LIBRARY_TABLE)
-      .insert(payload)
-      .select('*')
-      .single()
-
-    if (error) {
-      throw new Error(`Failed to save newsletter chart library item: ${error.message}`)
+    writeLibraryItem(item)
+    return item
+  } finally {
+    if (temporaryDirectory) {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
     }
-
-    return mapLibraryRow(data as NewsletterChartLibraryRow)
   }
-
-  const item: NewsletterChartLibraryItem = {
-    id,
-    ownerId: scope.ownerId,
-    sessionId: scope.sessionId,
-    title: chartSpec.title ?? `${chartSpec.symbol} chart`,
-    symbol: chartSpec.symbol,
-    chartSpec,
-    chartImageUrl,
-    thumbnailUrl: chartImageUrl,
-    chartExportUrl,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  }
-
-  writeLibraryItem(item)
-  return item
 }
 
 export async function updateNewsletterChartLibraryItem(

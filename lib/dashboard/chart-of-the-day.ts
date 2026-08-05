@@ -533,7 +533,7 @@ export async function transformDashboardChartImageForDarkTheme(input: Buffer): P
       channels: info.channels,
     },
   })
-    .sharpen(0.25, 0.25, 0.6)
+    .sharpen({ sigma: 0.25, m1: 0.25, m2: 0.6 })
     .png()
     .toBuffer()
 }

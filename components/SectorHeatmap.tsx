@@ -8,9 +8,10 @@ interface SectorData {
 
 interface SectorHeatmapProps {
   sectors: SectorData[]
+  compact?: boolean
 }
 
-export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
+export default function SectorHeatmap({ sectors, compact = false }: SectorHeatmapProps) {
   const parsePercentage = (percentStr: string): number => {
     return parseFloat(percentStr.replace('%', ''))
   }
@@ -31,6 +32,21 @@ export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
   const sortedSectors = [...sectors].sort((a, b) => {
     return parsePercentage(b.changesPercentage) - parsePercentage(a.changesPercentage)
   })
+  const displayedSectors = compact
+    ? (() => {
+        const notable = sortedSectors.filter(
+          (sector) => Math.abs(parsePercentage(sector.changesPercentage)) >= 1,
+        )
+        return (notable.length > 0
+          ? notable
+          : [...sortedSectors].sort(
+              (left, right) =>
+                Math.abs(parsePercentage(right.changesPercentage))
+                - Math.abs(parsePercentage(left.changesPercentage)),
+            )
+        ).slice(0, 5)
+      })()
+    : sortedSectors
 
   const formatPercentage = (percentage: number) => {
     const sign = percentage >= 0 ? '+' : ''
@@ -42,14 +58,19 @@ export default function SectorHeatmap({ sectors }: SectorHeatmapProps) {
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         {/* Header */}
         <div className="grid min-h-11 grid-cols-3 items-center gap-3 border-b border-gray-200 px-4 text-xs font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400">
-          <div className="text-sm font-semibold text-gray-950 dark:text-white">Sectors</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-950 dark:text-white">
+            Sectors
+            {compact ? (
+              <span className="text-[10px] font-normal uppercase tracking-wide text-gray-400">Notable</span>
+            ) : null}
+          </div>
           <div className="text-right">Change %</div>
           <div className="text-right">YTD</div>
         </div>
 
         {/* Rows */}
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
-          {sortedSectors.map((sector) => {
+          {displayedSectors.map((sector) => {
             const percentage = parsePercentage(sector.changesPercentage)
             const isPositive = percentage >= 0
             const colorClass = isPositive ? 'text-green-500' : 'text-red-500'

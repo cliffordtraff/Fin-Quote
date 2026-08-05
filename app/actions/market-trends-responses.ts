@@ -1,4 +1,4 @@
-'use server'
+import 'server-only'
 
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
@@ -298,15 +298,13 @@ Example format:
     // Cache the result in memory
     cachedTrends = { bullets, timestamp: Date.now() }
 
-    // Also save to Supabase (fire and forget)
+    // Await persistence so serverless runtimes cannot terminate the write.
     if (supabaseAdmin) {
-      supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('market_trends_cache')
         .insert({ bullets })
-        .then(({ error }) => {
-          if (error) console.log('Failed to save market trends to Supabase cache:', error.message)
-          else console.log('Saved market trends to Supabase cache')
-        })
+      if (error) console.log('Failed to save market trends to Supabase cache:', error.message)
+      else console.log('Saved market trends to Supabase cache')
     } else {
       console.log('Skipping market_trends_cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
     }

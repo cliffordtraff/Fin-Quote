@@ -2,6 +2,11 @@
  * Market hours utilities for determining current trading session
  */
 
+import {
+  isUsMarketEarlyClose,
+  isUsMarketTradingDay,
+} from '@/lib/market-calendar'
+
 export type MarketSession = 'premarket' | 'cash' | 'afterhours' | 'closed'
 
 export interface MarketStatus {
@@ -72,8 +77,8 @@ function isWeekendDateString(dateStr: string): boolean {
 /**
  * Determine current market session based on Eastern Time
  */
-export function getMarketStatus(): MarketStatus {
-  const et = getEasternTime()
+export function getMarketStatus(referenceDate: Date = new Date()): MarketStatus {
+  const et = new Date(referenceDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
 
   const day = et.getDay() // 0 = Sunday, 6 = Saturday
   const hour = et.getHours()
@@ -88,12 +93,17 @@ export function getMarketStatus(): MarketStatus {
 
   // Weekend check
   const isWeekend = day === 0 || day === 6
-  if (isWeekend) {
+  const tradingDate = formatDateString(
+    et.getFullYear(),
+    et.getMonth() + 1,
+    et.getDate(),
+  )
+  if (!isUsMarketTradingDay(tradingDate)) {
     return {
       session: 'closed',
-      isWeekend: true,
+      isWeekend,
       isFetchingEnabled: false,
-      nextSessionStart: getNextMondayPremarket(et),
+      nextSessionStart: getNextTradingDayPremarket(et),
       currentTimeET
     }
   }
@@ -117,7 +127,9 @@ export function getMarketStatus(): MarketStatus {
       nextSessionStart: null,
       currentTimeET
     }
-  } else if (timeInMinutes < CASH_END) {
+  } else if (
+    timeInMinutes < (isUsMarketEarlyClose(tradingDate) ? 13 * 60 : CASH_END)
+  ) {
     // 9:30 AM - 4:00 PM - cash/regular session
     return {
       session: 'cash',
@@ -159,7 +171,7 @@ export function getTradingDate(referenceDate: Date = new Date()): string {
     tradingDate = shiftDateString(tradingDate, -1)
   }
 
-  while (isWeekendDateString(tradingDate)) {
+  while (!isUsMarketTradingDay(tradingDate)) {
     tradingDate = shiftDateString(tradingDate, -1)
   }
 
@@ -182,8 +194,11 @@ function getNextDayPremarket(now: Date): Date {
   const next = new Date(now)
   next.setDate(next.getDate() + 1)
 
-  // Skip to Monday if next day is weekend
-  while (next.getDay() === 0 || next.getDay() === 6) {
+  while (!isUsMarketTradingDay(formatDateString(
+    next.getFullYear(),
+    next.getMonth() + 1,
+    next.getDate(),
+  ))) {
     next.setDate(next.getDate() + 1)
   }
 
@@ -194,10 +209,16 @@ function getNextDayPremarket(now: Date): Date {
 /**
  * Get next Monday's premarket start (4am ET)
  */
-function getNextMondayPremarket(now: Date): Date {
+function getNextTradingDayPremarket(now: Date): Date {
   const next = new Date(now)
-  const daysUntilMonday = (8 - now.getDay()) % 7 || 7
-  next.setDate(next.getDate() + daysUntilMonday)
+  next.setDate(next.getDate() + 1)
+  while (!isUsMarketTradingDay(formatDateString(
+    next.getFullYear(),
+    next.getMonth() + 1,
+    next.getDate(),
+  ))) {
+    next.setDate(next.getDate() + 1)
+  }
   next.setHours(4, 0, 0, 0)
   return next
 }

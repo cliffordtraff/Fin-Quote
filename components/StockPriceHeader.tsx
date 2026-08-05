@@ -84,34 +84,38 @@ export default function StockPriceHeader({
 
   return (
     <section className="sticky top-0 z-30 h-16 bg-cream-100/90 dark:bg-gray-900/90 backdrop-blur-sm">
-      <div className="mx-auto max-w-[1600px] h-full px-6 sm:px-12 lg:px-20 flex items-center">
-        <div className="flex items-center justify-between w-full">
+      <div className="mx-auto flex h-full max-w-[1600px] items-center px-4 sm:px-12 lg:px-20">
+        <div className="flex w-full items-center justify-between gap-3">
           {/* Company Info */}
-          <div className="flex items-end gap-3">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-none">
+          <div className="flex min-w-0 items-end gap-3">
+            <h1 className="truncate text-lg font-bold leading-none text-gray-900 dark:text-white sm:text-xl">
               {title}
             </h1>
             {subtitleParts.length > 0 && (
-              <span className="text-sm text-gray-500 dark:text-gray-400 leading-none">
+              <span className="hidden whitespace-nowrap text-sm leading-none text-gray-500 dark:text-gray-400 sm:inline">
                 {subtitleParts.join(' · ')}
               </span>
             )}
           </div>
 
           {/* Price Display */}
-          <div className="flex items-center gap-4">
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <div className="whitespace-nowrap text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
               ${price.toFixed(2)}
             </div>
             <div
-              className={`text-sm font-semibold ${
+              className={`whitespace-nowrap text-xs font-semibold sm:text-sm ${
                 priceChange >= 0
                   ? 'text-green-600 dark:text-green-400'
                   : 'text-red-600 dark:text-red-400'
               }`}
             >
-              {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)} (
-              {priceChangePercent.toFixed(2)}%)
+              <span className="hidden sm:inline">
+                {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+              </span>
+              <span className="sm:hidden">
+                {priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%
+              </span>
             </div>
             <span
               className={`rounded px-2 py-0.5 text-xs font-medium ${

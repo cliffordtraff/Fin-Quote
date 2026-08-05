@@ -1,4 +1,4 @@
-'use server'
+import 'server-only'
 
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
@@ -163,15 +163,13 @@ Rules:
       // Cache the result in memory
       cachedSummaries = { economicSummary, earningsSummary, timestamp: Date.now() }
 
-      // Also save to Supabase (fire and forget)
+      // Await persistence so serverless runtimes cannot terminate the write.
       if (supabaseAdmin) {
-        supabaseAdmin
+        const { error } = await supabaseAdmin
           .from('calendar_summaries_cache')
           .insert({ economic_summary: economicSummary, earnings_summary: earningsSummary })
-          .then(({ error }) => {
-            if (error) console.log('[Calendar Summaries] Failed to save to Supabase cache:', error.message)
-            else console.log('[Calendar Summaries] Saved to Supabase cache')
-          })
+        if (error) console.log('[Calendar Summaries] Failed to save to Supabase cache:', error.message)
+        else console.log('[Calendar Summaries] Saved to Supabase cache')
       } else {
         console.log('[Calendar Summaries] Skipping cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
       }

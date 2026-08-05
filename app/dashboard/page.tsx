@@ -1,6 +1,6 @@
 import AppShell from '@/components/AppShell'
 import MarketDashboardSunday from '@/components/MarketDashboardSunday'
-import { loadDashboardChartOfTheDayEmbedSpec } from '@/lib/dashboard/chart-of-the-day'
+import { loadDashboardChartOfTheDayPresentation } from '@/lib/dashboard/load-chart-of-the-day-presentation'
 import { fetchAllMarketData } from '@/lib/fetch-market-data'
 
 // Provider requests include credentialed URLs. Dynamic rendering prevents
@@ -8,16 +8,18 @@ import { fetchAllMarketData } from '@/lib/fetch-market-data'
 export const dynamic = 'force-dynamic'
 
 export default async function Dashboard() {
-  const [initialData, chartOfDaySpec] = await Promise.all([
+  const initialRenderedAt = new Date().toISOString()
+  const [initialData, chartOfDayPresentation] = await Promise.all([
     fetchAllMarketData(),
-    loadDashboardChartOfTheDayEmbedSpec(),
+    loadDashboardChartOfTheDayPresentation(),
   ])
 
   return (
     <AppShell showFooter>
       <MarketDashboardSunday
         initialData={initialData}
-        chartOfDaySpec={chartOfDaySpec}
+        chartOfDayPresentation={chartOfDayPresentation}
+        initialRenderedAt={initialRenderedAt}
       />
     </AppShell>
   )

@@ -18145,7 +18145,7 @@ Result:
                 },
                 {
                   "lineNumber": 5468,
-                  "content": "        \"contents\": \"/**\\n * Script to fetch financial data from FMP API for any stock symbol\\n * Supports both annual and quarterly data\\n * Saves to data/{symbol}-financials.json for ingestion\\n *\\n * Usage:\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL           # Fetch annual data (default)\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL annual   # Fetch annual data for GOOGL\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL quarterly # Fetch quarterly data\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly\\n */\\n\\nconst FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'\\n\\n// Fiscal year end month by symbol (1-12)\\nconst FISCAL_YEAR_END_MONTH: Record&amp;lt;string, number&amp;gt; = {\\n  'AAPL': 9,   // September\\n  'GOOGL': 12, // December\\n  'MSFT': 6,   // June\\n  'AMZN': 12,  // December\\n  'META': 12,  // December\\n}\\n\\ntype PeriodType = 'annual' | 'quarterly'\\n\\ninterface FinancialRecord {\\n  symbol: string\\n  year: number\\n}\","
+                  "content": "        \"contents\": \"/**\\n * Script to fetch financial data from FMP API for any stock symbol\\n * Supports both annual and quarterly data\\n * Saves to data/{symbol}-financials.json for ingestion\\n *\\n * Usage:\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL           # Fetch annual data (default)\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL annual   # Fetch annual data for GOOGL\\n *   npx tsx scripts/fetch-aapl-data.ts AAPL quarterly # Fetch quarterly data\\n *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly\\n */\\n\\nconst FMP_API_KEY = '[REDACTED_FMP_API_KEY]'\\n\\n// Fiscal year end month by symbol (1-12)\\nconst FISCAL_YEAR_END_MONTH: Record&amp;lt;string, number&amp;gt; = {\\n  'AAPL': 9,   // September\\n  'GOOGL': 12, // December\\n  'MSFT': 6,   // June\\n  'AMZN': 12,  // December\\n  'META': 12,  // December\\n}\\n\\ntype PeriodType = 'annual' | 'quarterly'\\n\\ninterface FinancialRecord {\\n  symbol: string\\n  year: number\\n}\","
                 },
                 {
                   "lineNumber": 5476,
@@ -18153,7 +18153,7 @@ Result:
                 },
                 {
                   "lineNumber": 5519,
-                  "content": "            \"text\": \"const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'\","
+                  "content": "            \"text\": \"const FMP_API_KEY = '[REDACTED_FMP_API_KEY]'\","
                 },
                 {
                   "lineNumber": 6667,
@@ -18917,7 +18917,7 @@ Result:
                 },
                 {
                   "lineNumber": 22,
-                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'"
+                  "content": "const FMP_API_KEY = process.env.FMP_API_KEY || '[REDACTED_FMP_API_KEY]'"
                 },
                 {
                   "lineNumber": 61,

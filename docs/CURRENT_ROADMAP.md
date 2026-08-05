@@ -1,6 +1,6 @@
 # Fin Quote Current Roadmap
 
-Last audited: July 30, 2026
+Last audited: August 3, 2026
 
 This is the canonical product and engineering roadmap for Fin Quote. Older plan
 files remain useful as implementation history, but they do not override this
@@ -67,20 +67,28 @@ The active `Newsletter-Chart-Edits` work includes:
 - migrations for the chart library, newsletter workflow states, and catalyst reviews;
 - a shared responsive application shell for the primary product routes;
 - a rebuilt Market Overview with explicit loading, empty, and provider-failure states;
+- a native, theme-aligned Chart of the Day that avoids loading the full external
+  charting workspace on the dashboard;
+- a compact Market Tape, notable-first Cross-Asset view, and unified catalyst
+  timeline that reduce the overview's default visual weight;
+- a browser-persistent editable watchlist with reorder controls and unusual-move
+  markers, plus remembered mover-session and section disclosure preferences;
+- section-level freshness labels and compact previews for insider, global-session,
+  and S&P mover detail;
 - provider fallbacks for index and futures data;
 - route-level dashboard loading and error boundaries; and
 - safe server logging that avoids leaking provider URLs or credentials.
 
 ## Launch State
 
-`origin/main` is the only deployment baseline. At this audit it is at `2880043`.
-The active branch has been fast-forwarded to that baseline and retains the
-feature work in the working tree.
+`origin/main` is the only deployment baseline. At this audit it is at `2c521d0`.
+The local working tree contains the native Chart of the Day and Market Overview
+information-architecture improvements and has not yet been committed or deployed.
 
-The current working tree is deployed to `https://www.theintraday.com`. The
-Morning Report and Mid-Morning Brief were verified in production at desktop and
-mobile widths on July 30, 2026. TypeScript, all 359 Vitest tests, the production
-build, route rendering, and cron authorization checks are green.
+The Morning Report and Mid-Morning Brief were verified in production at desktop
+and mobile widths on July 30, 2026. The August 3 local dashboard changes pass
+TypeScript, all 387 Vitest tests, an isolated production build, and browser
+verification at desktop and 390-pixel mobile widths.
 
 The linked Supabase project contains the complete newsletter operating schema,
 including notifications, mid-morning runs, Beehiiv lifecycle fields, and the
@@ -111,7 +119,8 @@ ledger against the live schema before the next schema change.
 
 - Fix the charting application's mobile toolbar collisions and clipped controls.
 - Add accessible names to the embedded chart form fields.
-- Remove the missing Tesla media request used by the current Chart of the Day.
+- Remove the stale Tesla media request from any remaining interactive workspace
+  surface that still loads it.
 - Reverify `/workspace/*`, stock charts, and dashboard embeds at mobile and
   desktop widths.
 
@@ -121,7 +130,8 @@ ledger against the live schema before the next schema change.
 - Add bulk review actions for high-volume catalyst sessions.
 ### P4: Research Depth
 
-- Add watchlists to Pulse Today without creating another dashboard.
+- Decide whether the browser-local Market Overview watchlist should sync into
+  Pulse Today for signed-in users without creating a second watchlist model.
 - Add earnings/calendar context beside reviewed catalysts.
 - Consolidate experimental chart routes after their useful behavior is absorbed.
 

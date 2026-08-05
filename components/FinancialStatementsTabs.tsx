@@ -134,7 +134,7 @@ export default function FinancialStatementsTabs({
 
   // Format helpers
   const formatCurrency = (value: number | null): string => {
-    if (value === null || value === undefined || value === 0) return 'N/A'
+    if (value === null || value === undefined) return 'N/A'
     const absValue = Math.abs(value)
     if (absValue >= 1e12) return `$${(value / 1e12).toFixed(2)}T`
     if (absValue >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
@@ -149,7 +149,7 @@ export default function FinancialStatementsTabs({
   }
 
   const formatRatio = (value: number | null): string => {
-    if (value === null || value === undefined || value === 0) return 'N/A'
+    if (value === null || value === undefined) return 'N/A'
     return value.toFixed(2)
   }
 
@@ -159,7 +159,7 @@ export default function FinancialStatementsTabs({
   }
 
   const formatShares = (value: number | null): string => {
-    if (value === null || value === undefined || value === 0) return 'N/A'
+    if (value === null || value === undefined) return 'N/A'
     const absValue = Math.abs(value)
     if (absValue >= 1e9) return `${(value / 1e9).toFixed(2)}B`
     if (absValue >= 1e6) return `${(value / 1e6).toFixed(2)}M`
@@ -168,7 +168,7 @@ export default function FinancialStatementsTabs({
   }
 
   const formatNumber = (value: number | null): string => {
-    if (value === null || value === undefined || value === 0) return 'N/A'
+    if (value === null || value === undefined) return 'N/A'
     return value.toLocaleString()
   }
 

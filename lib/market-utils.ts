@@ -1,3 +1,8 @@
+import {
+  isUsMarketEarlyClose,
+  isUsMarketTradingDay,
+} from '@/lib/market-calendar'
+
 export type MarketSession = 'premarket' | 'regular' | 'afterhours' | 'closed'
 
 // NYSE Market Holidays for 2025
@@ -26,24 +31,32 @@ export const EARLY_CLOSE_DATES_2025 = [
  * Check if a given date is a NYSE market holiday
  */
 export function isMarketHoliday(date: Date): boolean {
-  const dateStr = date.toISOString().split('T')[0] // YYYY-MM-DD format
-  return MARKET_HOLIDAYS_2025.includes(dateStr)
+  const dateStr = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+  return !isUsMarketTradingDay(dateStr)
 }
 
 /**
  * Check if a given date is an early close day
  */
 export function isEarlyCloseDay(date: Date): boolean {
-  const dateStr = date.toISOString().split('T')[0]
-  return EARLY_CLOSE_DATES_2025.includes(dateStr)
+  const dateStr = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+  return isUsMarketEarlyClose(dateStr)
 }
 
 /**
  * Get the current time in Eastern Time
  * Returns { hour, minute, day } in ET
  */
-export function getEasternTime(): { hour: number; minute: number; day: number; date: Date } {
-  const now = new Date()
+export function getEasternTime(referenceDate: Date = new Date()): { hour: number; minute: number; day: number; date: Date } {
+  const now = referenceDate
 
   // Convert to Eastern Time using Intl.DateTimeFormat
   const etFormatter = new Intl.DateTimeFormat('en-US', {
@@ -75,8 +88,8 @@ export function getEasternTime(): { hour: number; minute: number; day: number; d
  * Get the current market session
  * Returns: 'premarket' | 'regular' | 'afterhours' | 'closed'
  */
-export function getCurrentMarketSession(): MarketSession {
-  const { hour, minute, day, date } = getEasternTime()
+export function getCurrentMarketSession(referenceDate: Date = new Date()): MarketSession {
+  const { hour, minute, day, date } = getEasternTime(referenceDate)
   const timeInMinutes = hour * 60 + minute
 
   // Check if it's a weekend

@@ -18,10 +18,7 @@ export function isAdminUserEmail(email: string | null | undefined): boolean {
   if (!normalizedEmail) return false
 
   const allowlist = getAdminEmailAllowlist()
-  if (allowlist.length === 0) {
-    // Backward-compatible fallback: existing admin routes were auth-only.
-    return true
-  }
-
-  return allowlist.includes(normalizedEmail)
+  // Admin access must fail closed. A missing allowlist is a deployment
+  // configuration error, not permission for every signed-in account.
+  return allowlist.length > 0 && allowlist.includes(normalizedEmail)
 }

@@ -39,6 +39,13 @@ function uniqueSymbols(symbols: string[]) {
   )
 }
 
+export function mergeWiimSummaryRunSymbols(
+  existingSymbols: string[],
+  requestedSymbols: string[],
+): string[] {
+  return uniqueSymbols([...existingSymbols, ...requestedSymbols])
+}
+
 async function runPool<T>(
   items: T[],
   concurrency: number,
@@ -136,6 +143,8 @@ export async function getDailySummaryCoverage(
 export async function generateDailySummaryBatch(input: {
   marketDate: string
   symbols: string[]
+  /** Full run universe when `symbols` contains only the current retry batch. */
+  runSymbols?: string[]
   runId: string
   limit?: number
   concurrency?: number
@@ -170,11 +179,27 @@ export async function generateDailySummaryBatch(input: {
     process.env.WIIM_SUMMARY_MODEL ??
     process.env.OPENAI_MODEL ??
     'gpt-5-nano'
+  const { data: existingRun, error: existingRunError } = await supabase
+    .from('wiim_summary_runs')
+    .select('run_date, tickers')
+    .eq('run_id', input.runId)
+    .maybeSingle()
+  if (existingRunError) {
+    throw new Error(
+      `Failed to inspect daily summary run: ${existingRunError.message}`,
+    )
+  }
+  const existingSymbols =
+    existingRun?.run_date === input.marketDate ? existingRun.tickers : []
+  const runSymbols = mergeWiimSummaryRunSymbols(
+    existingSymbols,
+    input.runSymbols ?? normalized,
+  )
   const { error: runError } = await supabase.from('wiim_summary_runs').upsert({
     run_id: input.runId,
     run_date: input.marketDate,
-    ticker_count: normalized.length,
-    tickers: normalized,
+    ticker_count: runSymbols.length,
+    tickers: runSymbols,
     model,
     config_version: WIIM_SUMMARY_CONFIG_VERSION,
   })

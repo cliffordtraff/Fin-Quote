@@ -423,7 +423,7 @@ export interface NewsletterOptions {
   chartBaseUrl?: string
   /** Public Charting Platform URL used in final newsletter click-through links */
   publicChartBaseUrl?: string
-  /** Directory for saved chart PNGs (default: './.newsletter-output') */
+  /** Directory for generated assets (local default: './.newsletter-output'; production default: an invocation-scoped OS temp directory) */
   outputDir?: string
   /** Maximum number of chart sections (default: 3) */
   maxCharts?: number

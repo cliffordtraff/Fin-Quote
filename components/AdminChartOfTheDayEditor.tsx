@@ -60,6 +60,10 @@ export default function AdminChartOfTheDayEditor({
   // Listen for FUND_STATE responses from the charting platform
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
+      const iframeWindow = iframeRef.current?.contentWindow
+      const expectedOrigin = new URL(iframeSrc, window.location.href).origin
+      if (event.source !== iframeWindow || event.origin !== expectedOrigin) return
+
       const data = event.data
       if (!data || typeof data !== 'object') return
       if (data.v !== PM_VERSION || data.type !== 'FUND_STATE') return
@@ -81,7 +85,7 @@ export default function AdminChartOfTheDayEditor({
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [iframeSrc])
 
   const requestFundState = useCallback((): Promise<{
     fundState: Record<string, unknown> | null
@@ -95,11 +99,12 @@ export default function AdminChartOfTheDayEditor({
       }
 
       fundStateResolveRef.current = resolve
+      const targetOrigin = new URL(iframeSrc, window.location.href).origin
 
       // Send GET_FUND_STATE to the charting platform
       iframeWindow.postMessage(
         { v: PM_VERSION, type: 'GET_FUND_STATE', payload: {} },
-        '*',
+        targetOrigin,
       )
 
       // Timeout after 3 seconds
@@ -110,7 +115,7 @@ export default function AdminChartOfTheDayEditor({
         }
       }, 3000)
     })
-  }, [])
+  }, [iframeSrc])
 
   const handleReloadSavedChart = () => {
     setNotice(null)

@@ -5,16 +5,29 @@ import type { ForexBondData } from '@/app/actions/forex-bonds'
 
 interface ForexBondsTableProps {
   data: ForexBondData[]
+  compact?: boolean
 }
 
 const tableGridStyle: CSSProperties = {
   gridTemplateColumns: 'minmax(0, 1.5fr) minmax(72px, 0.9fr) minmax(72px, 0.9fr) minmax(82px, 0.95fr)',
 }
 
-export default function ForexBondsTable({ data }: ForexBondsTableProps) {
+export default function ForexBondsTable({ data, compact = false }: ForexBondsTableProps) {
   if (data.length === 0) {
     return null
   }
+
+  const displayedData = compact
+    ? (() => {
+        const notable = data.filter((item) => Math.abs(item.changesPercentage) >= 0.2)
+        return (notable.length > 0
+          ? notable
+          : [...data].sort(
+              (left, right) => Math.abs(right.changesPercentage) - Math.abs(left.changesPercentage),
+            )
+        ).slice(0, 4)
+      })()
+    : data
 
   const formatPrice = (price: number, symbol: string) => {
     if (symbol.startsWith('^')) {
@@ -49,14 +62,19 @@ export default function ForexBondsTable({ data }: ForexBondsTableProps) {
           className="grid min-h-11 items-center gap-3 border-b border-gray-200 px-4 text-xs font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400 whitespace-nowrap"
           style={tableGridStyle}
         >
-          <div className="text-sm font-semibold text-gray-950 dark:text-white">Forex & Rates</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-950 dark:text-white">
+            Forex & Rates
+            {compact ? (
+              <span className="text-[10px] font-normal uppercase tracking-wide text-gray-400">Notable</span>
+            ) : null}
+          </div>
           <div className="text-right">Last</div>
           <div className="text-right">Change</div>
           <div className="text-right">Change %</div>
         </div>
 
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
-          {data.map((item) => {
+          {displayedData.map((item) => {
             const colorClass = item.change >= 0
               ? 'text-green-600 dark:text-green-400'
               : 'text-red-600 dark:text-red-400'

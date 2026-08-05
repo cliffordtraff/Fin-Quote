@@ -2,7 +2,10 @@
  * Test script to verify if FMP API provides futures market data
  */
 
-const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
+
+const apiKey = requireFmpApiKey()
+let failedFutures = 0
 
 console.log('Testing FMP API for futures market data\n')
 console.log('='.repeat(60))
@@ -21,6 +24,7 @@ const futures = [
 for (const future of futures) {
   console.log(`\n📊 Testing: ${future.name}`)
   console.log('-'.repeat(60))
+  let foundWorkingSymbol = false
 
   for (const symbol of future.symbols) {
     try {
@@ -35,6 +39,7 @@ for (const future of futures) {
         console.log(`     Name: ${quote.name}`)
         console.log(`     Price: $${quote.price}`)
         console.log(`     Change: ${quote.change} (${quote.changesPercentage}%)`)
+        foundWorkingSymbol = true
         break // Found working symbol, move to next future
       } else if (data && 'Error Message' in data) {
         console.log(`  ❌ ${symbol}: ${data['Error Message']}`)
@@ -45,6 +50,15 @@ for (const future of futures) {
       console.log(`  ❌ ${symbol}: Error - ${error.message}`)
     }
   }
+
+  if (!foundWorkingSymbol) {
+    failedFutures++
+  }
+}
+
+if (failedFutures > 0) {
+  console.error(`\n${failedFutures} futures contract group(s) returned no usable quote.`)
+  process.exitCode = 1
 }
 
 console.log('\n' + '='.repeat(60))

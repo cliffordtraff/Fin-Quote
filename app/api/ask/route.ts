@@ -10,7 +10,21 @@ import { validateAnswer } from '@/lib/validators'
 import { shouldRegenerateAnswer, determineRegenerationAction, buildRegenerationPrompt } from '@/lib/regeneration'
 import { logQuery } from '@/app/actions/ask-question'
 import { createFlowEmitter } from '@/lib/flow/events'
-import type { ConversationHistory } from '@/types/conversation'
+import {
+  AuthenticationRequiredError,
+  requireCurrentUser,
+} from '@/lib/auth/current-user'
+import {
+  ChatbotRequestTooLargeError,
+  ChatbotRequestValidationError,
+  isChatbotEnabled,
+  readChatbotRequest,
+} from '@/lib/chatbot/request-policy'
+import {
+  CHAT_ANSWER_MAX_OUTPUT_TOKENS,
+  CHAT_FOLLOW_UP_MAX_OUTPUT_TOKENS,
+  CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+} from '@/lib/chatbot/constants'
 
 type SimpleMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -59,11 +73,37 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
 
   try {
-    const { question, conversationHistory = [], sessionId = '' } = await req.json()
-
-    if (!question || question.trim().length === 0) {
-      return new Response('Question cannot be empty', { status: 400 })
+    if (!isChatbotEnabled()) {
+      return Response.json({ error: 'Chatbot is not available.' }, { status: 404 })
     }
+
+    let currentUser: Awaited<ReturnType<typeof requireCurrentUser>>
+    try {
+      currentUser = await requireCurrentUser()
+    } catch (error) {
+      if (error instanceof AuthenticationRequiredError) {
+        return Response.json(
+          { error: 'Sign in to use the chatbot.' },
+          { status: 401 },
+        )
+      }
+      throw error
+    }
+
+    let requestPayload: Awaited<ReturnType<typeof readChatbotRequest>>
+    try {
+      requestPayload = await readChatbotRequest(req)
+    } catch (error) {
+      if (error instanceof ChatbotRequestTooLargeError) {
+        return Response.json({ error: error.message }, { status: 413 })
+      }
+      if (error instanceof ChatbotRequestValidationError) {
+        return Response.json({ error: error.message }, { status: 400 })
+      }
+      throw error
+    }
+
+    const { question, conversationHistory, sessionId } = requestPayload
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -109,7 +149,9 @@ export async function POST(req: NextRequest) {
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             input: toResponseInputMessages(selectionMessages),
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 150,
+            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+              ? CHAT_ROUTING_MAX_OUTPUT_TOKENS
+              : 150,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             text: { format: { type: 'json_object' } },
           })
@@ -626,7 +668,9 @@ export async function POST(req: NextRequest) {
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             input: toResponseInputMessages(answerMessages),
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0 }),
-            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 20000 : 500,
+            max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+              ? CHAT_ANSWER_MAX_OUTPUT_TOKENS
+              : 500,
             ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
             stream: true,
           })
@@ -760,7 +804,9 @@ export async function POST(req: NextRequest) {
               model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
               input: toResponseInputMessages(followUpMessages),
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? {} : { temperature: 0.7 }),
-              max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,
+              max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5')
+                ? CHAT_FOLLOW_UP_MAX_OUTPUT_TOKENS
+                : 150,
               ...(process.env.OPENAI_MODEL?.includes('gpt-5') ? { reasoning: { effort: 'minimal' } } : {}),
               text: { format: { type: 'json_object' } },
             })
@@ -821,10 +867,9 @@ export async function POST(req: NextRequest) {
 
           // Log query to database for Recent Queries sidebar
           try {
-            const { data: { user } } = await supabase.auth.getUser()
             await logQuery({
               sessionId,
-              userId: user?.id || null,
+              userId: currentUser.id,
               userQuestion: question,
               toolSelected: toolSelection.tool,
               toolArgs: toolSelection.args,

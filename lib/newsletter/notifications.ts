@@ -88,15 +88,27 @@ export async function createNewsletterNotification(
     .single()
 
   if (error?.code === '23505') {
+    // A dedupe key identifies one operator-facing notification, not immutable
+    // copy. Recovery runs must refresh stale counts and severity while keeping
+    // the original read/delivery timestamps intact.
     const existing = await supabase
       .from(TABLE)
-      .select('*')
+      .update({
+        market_date: input.marketDate,
+        notification_type: input.type,
+        severity: input.severity,
+        title: input.title,
+        message: input.message,
+        action_url: input.actionUrl ?? null,
+        metadata_json: (input.metadata ?? {}) as Json,
+      })
       .eq('scope_key', scopeKey)
       .eq('dedupe_key', input.dedupeKey)
+      .select('*')
       .single()
     if (existing.error || !existing.data) {
       throw new Error(
-        `Failed to load existing notification: ${
+        `Failed to refresh existing notification: ${
           existing.error?.message ?? 'No row returned'
         }`,
       )

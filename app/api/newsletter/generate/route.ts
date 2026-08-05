@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AdminAccessError, requireAdminUser } from '@/lib/auth/admin'
 import { generateNewsletterWithBackend } from '@/lib/newsletter/generation'
 import {
   getDefaultChartingBaseUrlForHost,
@@ -7,6 +8,18 @@ import {
 import type { NewsletterOptions } from '@/lib/newsletter/types'
 
 const MAX_GENERATION_PROMPT_LENGTH = 500
+
+function adminErrorResponse(error: AdminAccessError): NextResponse {
+  const unauthenticated = error.message.toLowerCase().includes('signed in')
+  return NextResponse.json(
+    {
+      error: unauthenticated
+        ? 'Authentication required.'
+        : 'Admin access required.',
+    },
+    { status: unauthenticated ? 401 : 403 },
+  )
+}
 
 function normalizeFormat(value: unknown): NewsletterOptions['format'] {
   if (value === 'market_roundup' || value === 'single_stock' || value === 'auto') {
@@ -40,6 +53,9 @@ function normalizeGenerationPrompt(value: unknown): string | undefined {
 
 export async function POST(request: NextRequest) {
   try {
+    // Authenticate before parsing input or starting any provider, model, or
+    // browser work. This route can incur several external costs per request.
+    await requireAdminUser()
     const body = await request.json().catch(() => ({}))
     const ticker = body?.ticker
     const format = normalizeFormat(body?.format)
@@ -80,6 +96,8 @@ export async function POST(request: NextRequest) {
       baseUrl,
       chartBaseUrl,
       publicChartBaseUrl,
+      editorMode: true,
+      publish: true,
       format,
       roundupSize,
       generationPrompt,
@@ -94,11 +112,13 @@ export async function POST(request: NextRequest) {
       stockPickerResult: result.stockPickerResult,
       selections: result.selections,
       chartPaths: result.chartPaths,
+      publishedUrls: result.publishedUrls,
       htmlPath: result.htmlPath,
       previewPath: result.previewPath,
       timings: result.timings,
     })
   } catch (err) {
+    if (err instanceof AdminAccessError) return adminErrorResponse(err)
     console.error('Newsletter generation failed:', err)
     if (
       err instanceof Error &&

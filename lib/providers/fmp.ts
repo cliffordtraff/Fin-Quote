@@ -36,6 +36,53 @@ function toFmpRequestSymbol(symbol: string): string {
   return FMP_FUTURES_SYMBOLS[symbol] ?? symbol
 }
 
+const easternPartsFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+function easternOffsetMs(instant: Date): number {
+  const parts = Object.fromEntries(
+    easternPartsFormatter
+      .formatToParts(instant)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  )
+  const representedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  )
+  return representedAsUtc - instant.getTime()
+}
+
+export function parseFmpEasternTimestamp(value: string): number {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?$/,
+  )
+  if (!match) return Number.NaN
+
+  const wallClockUtc = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4] ?? 0),
+    Number(match[5] ?? 0),
+    Number(match[6] ?? 0),
+  )
+  const firstGuess = wallClockUtc - easternOffsetMs(new Date(wallClockUtc))
+  return wallClockUtc - easternOffsetMs(new Date(firstGuess))
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -76,8 +123,10 @@ function mapCandle(raw: Record<string, unknown>): ProviderCandle | null {
     return null
   }
 
-  // Convert date string to epoch ms
-  const timestampMs = new Date(date.includes(' ') ? date.replace(' ', 'T') + '-05:00' : date + 'T00:00:00-05:00').getTime()
+  // FMP timestamps are New York wall-clock values. Resolve the actual ET
+  // offset for that date so summer candles are not shifted by one hour.
+  const timestampMs = parseFmpEasternTimestamp(date)
+  if (!Number.isFinite(timestampMs)) return null
 
   return { date, timestampMs, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 }
 }
