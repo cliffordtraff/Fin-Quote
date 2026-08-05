@@ -1,52 +1,20 @@
 drop extension if exists "pg_net";
 
-drop policy "Allow public read access to company metrics" on "public"."company_metrics";
-
-revoke delete on table "public"."company_metrics" from "anon";
-
-revoke insert on table "public"."company_metrics" from "anon";
-
-revoke references on table "public"."company_metrics" from "anon";
-
-revoke select on table "public"."company_metrics" from "anon";
-
-revoke trigger on table "public"."company_metrics" from "anon";
-
-revoke truncate on table "public"."company_metrics" from "anon";
-
-revoke update on table "public"."company_metrics" from "anon";
-
-revoke delete on table "public"."company_metrics" from "authenticated";
-
-revoke insert on table "public"."company_metrics" from "authenticated";
-
-revoke references on table "public"."company_metrics" from "authenticated";
-
-revoke select on table "public"."company_metrics" from "authenticated";
-
-revoke trigger on table "public"."company_metrics" from "authenticated";
-
-revoke truncate on table "public"."company_metrics" from "authenticated";
-
-revoke update on table "public"."company_metrics" from "authenticated";
-
-revoke delete on table "public"."company_metrics" from "service_role";
-
-revoke insert on table "public"."company_metrics" from "service_role";
-
-revoke references on table "public"."company_metrics" from "service_role";
-
-revoke select on table "public"."company_metrics" from "service_role";
-
-revoke trigger on table "public"."company_metrics" from "service_role";
-
-revoke truncate on table "public"."company_metrics" from "service_role";
-
-revoke update on table "public"."company_metrics" from "service_role";
-
-alter table "public"."company_metrics" drop constraint "unique_company_metric_per_period";
-
-alter table "public"."company_metrics" drop constraint "company_metrics_pkey";
+do $$
+begin
+  -- This imported remote snapshot originally assumed the legacy table was
+  -- present. Fresh preview databases only have the compatibility marker that
+  -- precedes this migration, so guard the destructive cleanup there. Existing
+  -- databases still execute the same cleanup before the next migration
+  -- recreates the table.
+  if to_regclass('public.company_metrics') is not null then
+    execute 'drop policy if exists "Allow public read access to company metrics" on public.company_metrics';
+    execute 'revoke all privileges on table public.company_metrics from anon, authenticated, service_role';
+    execute 'alter table public.company_metrics drop constraint if exists unique_company_metric_per_period';
+    execute 'alter table public.company_metrics drop constraint if exists company_metrics_pkey';
+  end if;
+end
+$$;
 
 drop index if exists "public"."company_metrics_pkey";
 
@@ -60,7 +28,7 @@ drop index if exists "public"."idx_company_metrics_symbol_year";
 
 drop index if exists "public"."unique_company_metric_per_period";
 
-drop table "public"."company_metrics";
+drop table if exists "public"."company_metrics";
 
 
   create table "public"."company" (
@@ -1261,6 +1229,5 @@ CREATE TRIGGER update_watchlist_tabs_updated_at BEFORE UPDATE ON public.watchlis
   to public
 using ((bucket_id = 'filings'::text))
 with check ((bucket_id = 'filings'::text));
-
 
 

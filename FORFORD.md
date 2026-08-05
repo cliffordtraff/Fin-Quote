@@ -1213,6 +1213,14 @@ severity, title, message, and metadata while preserving delivery and read
 timestamps. Idempotency means "one evolving event," not "the first write wins
 even after reality changes."
 
+Fresh database previews caught a different kind of time-travel bug. An imported
+remote-schema migration tried to remove a legacy table that production once
+had, but a clean database quite reasonably did not. The migration now guards
+that cleanup with `to_regclass` and conditionally executes it; databases with
+the legacy table follow the old path, while new previews continue to the
+recreation migration. A migration history is executable software, not a scrapbook:
+every supported starting point must be able to walk through it safely.
+
 ### How We Know This Pass Holds Together
 
 The verification strategy matched the risk instead of relying on one happy

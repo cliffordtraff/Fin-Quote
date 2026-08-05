@@ -4,7 +4,7 @@ This directory is the schema history for the app's Supabase project.
 
 Current state:
 
-- 58 SQL migrations
+- 59 SQL migrations
 - Span: October 2024 to July 2026
 - Covers core financial tables, filings search, chatbot evaluation/review infrastructure, S&P 500 expansion, insider data, cache tables, and charting-workspace persistence
 
