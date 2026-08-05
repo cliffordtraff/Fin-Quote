@@ -62,10 +62,7 @@ export const revalidate = 60
 
 // Helper function to format values
 function formatMetric(value: number | null | undefined, decimals: number = 2): string {
-  if (value === null || value === undefined) {
-    return 'N/A'
-  }
-  if (value === 0) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return 'N/A'
   }
   return value.toFixed(decimals)
@@ -74,16 +71,43 @@ function formatMetric(value: number | null | undefined, decimals: number = 2): s
 // Helper for percentage values
 function formatPercentage(
   value: number | null | undefined,
-  decimals: number = 2,
-  allowZero: boolean = false
+  decimals: number = 2
 ): string {
-  if (value === null || value === undefined) {
-    return 'N/A'
-  }
-  if (!allowZero && value === 0) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return 'N/A'
   }
   return `${value.toFixed(decimals)}%`
+}
+
+function formatScaledMetric(
+  value: number | null | undefined,
+  divisor: number,
+  suffix: string,
+  prefix: string = ''
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 'N/A'
+  }
+
+  return `${prefix}${(value / divisor).toFixed(2)}${suffix}`
+}
+
+function formatLargeMetric(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 'N/A'
+  }
+
+  return Math.abs(value) >= 1e12
+    ? formatScaledMetric(value, 1e12, 'T')
+    : formatScaledMetric(value, 1e9, 'B')
+}
+
+function formatInteger(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 'N/A'
+  }
+
+  return value.toLocaleString()
 }
 
 export default async function StockPage({ params }: PageProps) {
@@ -101,7 +125,7 @@ export default async function StockPage({ params }: PageProps) {
     getStockOverview(normalizedSymbol).catch(() => null),
     getStockKeyStats(normalizedSymbol).catch(() => null),
     getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
-    getStockNews(normalizedSymbol, 30).catch(() => []),
+    getStockNews(normalizedSymbol, 20).catch(() => []),
     getCachedProfile(normalizedSymbol).catch(() => null),
     getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
     getDiscoverStocks(normalizedSymbol, 12).catch(() => ({ stocks: [] })),
@@ -113,7 +137,7 @@ export default async function StockPage({ params }: PageProps) {
   const discoverStocks = 'stocks' in discoverResult ? discoverResult.stocks : []
 
   // If we couldn't get basic overview data, show a message
-  if (!overview || !keyStats) {
+  if (!overview) {
     return (
       <AppShell mainClassName="mx-auto w-full max-w-[1500px] min-w-0 flex-1 px-4 py-16 text-center">
         <h1 className="mb-4 text-2xl font-semibold text-gray-950 dark:text-white">
@@ -160,6 +184,7 @@ export default async function StockPage({ params }: PageProps) {
       <section className="bg-cream-100 dark:bg-gray-900">
         <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
           <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-4">
+            {keyStats ? (
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
               {/* Column 1: Company Info */}
               <div className="space-y-0.5">
@@ -172,35 +197,31 @@ export default async function StockPage({ params }: PageProps) {
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Market Cap</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {keyStats.marketCap >= 1e12
-                      ? `${(keyStats.marketCap / 1e12).toFixed(2)}T`
-                      : `${(keyStats.marketCap / 1e9).toFixed(2)}B`}
+                    {formatLargeMetric(keyStats.marketCap)}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Enterprise Value</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {keyStats.enterpriseValue >= 1e12
-                      ? `${(keyStats.enterpriseValue / 1e12).toFixed(2)}T`
-                      : `${(keyStats.enterpriseValue / 1e9).toFixed(2)}B`}
+                    {formatLargeMetric(keyStats.enterpriseValue)}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Income</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    ${(keyStats.income / 1e9).toFixed(2)}B
+                    {formatScaledMetric(keyStats.income, 1e9, 'B', '$')}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Sales</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    ${(keyStats.sales / 1e9).toFixed(2)}B
+                    {formatScaledMetric(keyStats.sales, 1e9, 'B', '$')}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Employees</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {keyStats.employees?.toLocaleString() || 'N/A'}
+                    {formatInteger(keyStats.employees)}
                   </span>
                 </div>
               </div>
@@ -262,19 +283,19 @@ export default async function StockPage({ params }: PageProps) {
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Gross Margin</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {formatPercentage(keyStats.grossMargin, 2, true)}
+                    {formatPercentage(keyStats.grossMargin)}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Oper. Margin</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {formatPercentage(keyStats.operatingMargin, 2, true)}
+                    {formatPercentage(keyStats.operatingMargin)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Profit Margin</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {formatPercentage(keyStats.netMargin, 2, true)}
+                    {formatPercentage(keyStats.netMargin)}
                   </span>
                 </div>
               </div>
@@ -284,15 +305,13 @@ export default async function StockPage({ params }: PageProps) {
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Volume</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {keyStats.volume ? `${(keyStats.volume / 1e6).toFixed(2)}M` : 'N/A'}
+                    {formatScaledMetric(keyStats.volume, 1e6, 'M')}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400">Shs Outstand</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {keyStats.sharesOutstanding
-                      ? `${(keyStats.sharesOutstanding / 1e9).toFixed(2)}B`
-                      : 'N/A'}
+                    {formatScaledMetric(keyStats.sharesOutstanding, 1e9, 'B')}
                   </span>
                 </div>
                 <div className="flex justify-between border-b border-gray-200 dark:border-gray-700">
@@ -368,6 +387,32 @@ export default async function StockPage({ params }: PageProps) {
               </div>
 
             </div>
+            ) : (
+              <p role="status" className="py-3 text-sm text-amber-700 dark:text-amber-300">
+                Key statistics are temporarily unavailable. Price, chart, filings, and news remain available below.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Financial Statements Section — core research before secondary feeds */}
+      <section className="border-b border-cream-300 dark:border-gray-700 bg-cream-100 dark:bg-gray-900">
+        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
+            {financials.incomeStatement.length > 0 ||
+            financials.balanceSheet.length > 0 ||
+            financials.cashFlow.length > 0 ? (
+              <FinancialStatementsTabs
+                incomeStatement={financials.incomeStatement}
+                balanceSheet={financials.balanceSheet}
+                cashFlow={financials.cashFlow}
+              />
+            ) : (
+              <div className="text-amber-600 dark:text-amber-400 text-center py-8">
+                Financial statements for {normalizedSymbol} are not yet available.
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -405,27 +450,6 @@ export default async function StockPage({ params }: PageProps) {
           </div>
         </section>
       )}
-
-      {/* Financial Statements Section */}
-      <section className="border-b border-cream-300 dark:border-gray-700 bg-cream-100 dark:bg-gray-900">
-        <div className="mx-auto max-w-[1500px] px-4 py-2 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-white dark:bg-gray-800 border border-cream-300 dark:border-gray-700 p-6">
-            {financials.incomeStatement.length > 0 ||
-            financials.balanceSheet.length > 0 ||
-            financials.cashFlow.length > 0 ? (
-              <FinancialStatementsTabs
-                incomeStatement={financials.incomeStatement}
-                balanceSheet={financials.balanceSheet}
-                cashFlow={financials.cashFlow}
-              />
-            ) : (
-              <div className="text-amber-600 dark:text-amber-400 text-center py-8">
-                Financial statements for {normalizedSymbol} are not yet available.
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* Discover More Carousel */}
       {discoverStocks.length > 0 && (

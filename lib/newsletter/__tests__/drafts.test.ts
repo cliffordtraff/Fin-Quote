@@ -145,6 +145,19 @@ describe('newsletter drafts', () => {
     expect(draft.blocks[0]?.chartNeedsRegeneration).toBe(false)
   })
 
+  it('persists the durable published chart URL instead of a serverless file path', () => {
+    const publicUrl =
+      'https://example.supabase.co/storage/v1/object/public/newsletter-charts/2026-08-05/AAPL_revenue_vs_net_income.png'
+    const draft = buildNewsletterDraftFromResult({
+      ...sampleResult,
+      publishedUrls: {
+        'AAPL_revenue_vs_net_income.png': publicUrl,
+      },
+    })
+
+    expect(draft.blocks[0]?.chartImageUrl).toBe(publicUrl)
+  })
+
   it('normalizes draft preview data and renders preview HTML with root-relative assets', () => {
     const seeded = buildNewsletterDraftFromResult(
       sampleResult,

@@ -59,8 +59,8 @@ function easterSunday(year: number): Date {
 }
 
 function holidaysForYear(year: number): MarketHoliday[] {
+  const newYearsDay = utcDate(year, 0, 1)
   const holidays: Array<[Date, string]> = [
-    [observedDate(utcDate(year, 0, 1)), "New Year's Day"],
     [nthWeekday(year, 0, 1, 3), 'Martin Luther King Jr. Day'],
     [nthWeekday(year, 1, 1, 3), "Washington's Birthday"],
     [addDays(easterSunday(year), -2), 'Good Friday'],
@@ -72,7 +72,33 @@ function holidaysForYear(year: number): MarketHoliday[] {
     [observedDate(utcDate(year, 11, 25)), 'Christmas Day'],
   ]
 
+  // NYSE does not close on the preceding Friday when January 1 falls on a
+  // Saturday. This avoids incorrectly treating December 31, 2027 as the
+  // observed 2028 holiday (the exchange's published table explicitly marks
+  // that year as having no New Year's observance).
+  if (newYearsDay.getUTCDay() !== 6) {
+    holidays.unshift([observedDate(newYearsDay), "New Year's Day"])
+  }
+
   return holidays.map(([date, name]) => ({ date: isoDate(date), name }))
+}
+
+function earlyCloseDatesForYear(year: number): string[] {
+  // NYSE only shortens the July session when July 3 itself is an open weekday.
+  // It does not roll that early close back again when July 3 is a weekend or
+  // the observed Independence Day holiday (for example, July 2, 2026 is a
+  // normal session). Thanksgiving Friday and Christmas Eve follow the same
+  // principle: include the named date only when it is an actual trading day.
+  const independenceEve = utcDate(year, 6, 3)
+  const thanksgiving = nthWeekday(year, 10, 4, 4)
+  const dayAfterThanksgiving = addDays(thanksgiving, 1)
+  const christmasEve = utcDate(year, 11, 24)
+
+  return [independenceEve, dayAfterThanksgiving, christmasEve]
+    .map(isoDate)
+    .filter((date, index, values) => {
+      return isUsMarketTradingDay(date) && values.indexOf(date) === index
+    })
 }
 
 export function getUsMarketHolidayName(date: string): string | null {
@@ -94,8 +120,15 @@ export function isUsMarketTradingDay(date: string): boolean {
   return getUsMarketHolidayName(date) == null
 }
 
+export function isUsMarketEarlyClose(date: string): boolean {
+  const year = Number(date.slice(0, 4))
+  if (!Number.isInteger(year) || !isUsMarketTradingDay(date)) return false
+  return earlyCloseDatesForYear(year).includes(date)
+}
+
 export const __testOnly = {
   easterSunday,
   holidaysForYear,
+  earlyCloseDatesForYear,
   observedDate,
 }

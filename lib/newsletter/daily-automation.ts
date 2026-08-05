@@ -19,6 +19,7 @@ import {
   finalizeNewsletterDailyItems,
   getNewsletterDailyRun,
   listEnabledNewsletterDailyScopes,
+  MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
   processNewsletterDailyRun,
 } from './daily-runs'
 import { createNewsletterNotification } from './notifications'
@@ -29,7 +30,6 @@ const FINVIZ_BATCH_SIZE = 30
 const SUMMARY_BATCH_SIZE = 4
 const NEWSLETTER_BATCH_SIZE = 3
 const MAX_SOURCE_ATTEMPTS = 2
-const MAX_NEWSLETTER_ATTEMPTS = 3
 const MAX_STAGE_ERRORS = 3
 const DEFAULT_READY_BY_HOUR = 8
 const RECOVERY_END_HOUR = 12
@@ -549,6 +549,7 @@ async function generateSummaryBatch(run: NewsletterDailyAutomationRun) {
   const result = await generateDailySummaryBatch({
     marketDate: run.marketDate,
     symbols: retryable,
+    runSymbols: run.candidateSymbols,
     runId: `newsletter_automation_${run.id}`,
     limit: SUMMARY_BATCH_SIZE,
     concurrency: 4,
@@ -623,7 +624,7 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
         (item.status === 'queued' ||
           item.status === 'failed' ||
           item.status === 'needs_attention') &&
-        item.retryCount < MAX_NEWSLETTER_ATTEMPTS,
+        item.retryCount < MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
     )
     if (retryable.length > 0) {
       await processNewsletterDailyRun(scope, dailyRun.id, {
@@ -669,7 +670,7 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
         item.status === 'queued' ||
         item.status === 'generating' ||
         ((item.status === 'failed' || item.status === 'needs_attention') &&
-          item.retryCount < MAX_NEWSLETTER_ATTEMPTS),
+          item.retryCount < MAX_NEWSLETTER_DAILY_ITEM_RETRIES),
     ),
   )
   const completedScopeCount = refreshed.filter(
@@ -733,7 +734,7 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
     dailyRun.items.some(
       (item) =>
         (item.status === 'failed' || item.status === 'needs_attention') &&
-        item.retryCount < MAX_NEWSLETTER_ATTEMPTS,
+        item.retryCount < MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
     ),
   )
   if (retryable) {

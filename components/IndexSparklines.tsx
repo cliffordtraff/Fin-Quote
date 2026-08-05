@@ -1,303 +1,180 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import Link from 'next/link'
+import { useEffect, useRef } from 'react'
 import { useTheme } from '@/components/ThemeProvider'
-import type { SparklineIndexData } from '@/app/actions/sparkline-indices'
+import type { OHLCData, SparklineIndexData } from '@/app/actions/sparkline-indices'
 
 interface IndexSparklinesProps {
   indices: SparklineIndexData[]
 }
 
-interface SparklineCardProps {
-  index: SparklineIndexData
+function drawCandles(
+  ctx: CanvasRenderingContext2D,
+  candles: OHLCData[],
+  startIndex: number,
+  totalCandles: number,
+  width: number,
+  height: number,
+  minPrice: number,
+  priceRange: number,
+  dimmed: boolean,
+  dark: boolean,
+) {
+  const step = width / Math.max(totalCandles, 1)
+  const bodyWidth = Math.max(1.5, Math.min(4, step * 0.62))
+
+  candles.forEach((candle, index) => {
+    const x = (startIndex + index + 0.5) * step
+    const scaleY = (value: number) => ((minPrice + priceRange - value) / priceRange) * height
+    const openY = scaleY(candle.open)
+    const closeY = scaleY(candle.close)
+    const color = candle.close >= candle.open
+      ? dimmed
+        ? dark ? '#166534' : '#65a30d'
+        : dark ? '#4ade80' : '#16a34a'
+      : dimmed
+        ? dark ? '#991b1b' : '#f87171'
+        : dark ? '#f87171' : '#dc2626'
+
+    ctx.strokeStyle = color
+    ctx.fillStyle = color
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x, scaleY(candle.high))
+    ctx.lineTo(x, scaleY(candle.low))
+    ctx.stroke()
+    ctx.fillRect(
+      x - bodyWidth / 2,
+      Math.min(openY, closeY),
+      bodyWidth,
+      Math.max(1, Math.abs(closeY - openY)),
+    )
+  })
 }
 
-function SparklineCard({ index }: SparklineCardProps) {
+function SparklineCard({ index, last }: { index: SparklineIndexData; last: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const positive = index.priceChangePercent >= 0
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const render = () => {
+      const context = canvas.getContext('2d')
+      if (!context) return
+      const rect = canvas.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = Math.round(rect.width * dpr)
+      canvas.height = Math.round(rect.height * dpr)
+      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+      context.clearRect(0, 0, rect.width, rect.height)
 
-    // Setup canvas for retina
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.getBoundingClientRect()
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
-    ctx.scale(dpr, dpr)
+      const yesterday = index.yesterdayOHLC ?? []
+      const today = index.todayOHLC ?? []
+      const all = [...yesterday, ...today]
+      if (all.length === 0) return
+      const values = all.flatMap((candle) => [candle.high, candle.low])
+      if (index.previousClose) values.push(index.previousClose)
+      const min = Math.min(...values)
+      const max = Math.max(...values)
+      const padding = Math.max((max - min) * 0.06, 0.01)
+      const minPrice = min - padding
+      const priceRange = max - min + padding * 2
 
-    // Clear canvas
-    ctx.clearRect(0, 0, rect.width, rect.height)
+      context.strokeStyle = isDark ? 'rgba(148,163,184,.18)' : 'rgba(100,116,139,.15)'
+      context.lineWidth = 1
+      context.beginPath()
+      context.moveTo(0, rect.height / 2)
+      context.lineTo(rect.width, rect.height / 2)
+      context.stroke()
 
-    const yesterdayOHLC = index.yesterdayOHLC || []
-    const todayOHLC = index.todayOHLC || []
-    const previousClose = index.previousClose
-
-    // Include all OHLC highs/lows in min/max calculation
-    const yesterdayHighs = yesterdayOHLC.map(c => c.high)
-    const yesterdayLows = yesterdayOHLC.map(c => c.low)
-    const todayHighs = todayOHLC.map(c => c.high)
-    const todayLows = todayOHLC.map(c => c.low)
-    const allPrices = [
-      ...yesterdayHighs,
-      ...yesterdayLows,
-      ...todayHighs,
-      ...todayLows,
-      ...(previousClose ? [previousClose] : [])
-    ]
-
-    if (allPrices.length === 0) return
-
-    const minPrice = Math.min(...allPrices)
-    const maxPrice = Math.max(...allPrices)
-    const priceRange = maxPrice - minPrice || 1
-
-    // Chart dimensions with padding (extra bottom padding for labels)
-    const padding = 4
-    const bottomPadding = 38 // Extra space for x-axis labels (bracket + hours + percentage)
-    const chartWidth = rect.width - padding * 2
-    const chartHeight = rect.height - padding - bottomPadding
-
-
-    // Draw candlesticks for both days
-    const totalCandles = yesterdayOHLC.length + todayOHLC.length
-    if (totalCandles === 0) return
-
-    // Draw dashed gridlines
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'
-    ctx.strokeStyle = gridColor
-    ctx.lineWidth = 1
-    ctx.setLineDash([3, 3])
-
-    // Horizontal gridlines (4 lines)
-    const horizontalLines = 4
-    for (let i = 1; i < horizontalLines; i++) {
-      const y = padding + (i / horizontalLines) * chartHeight
-      ctx.beginPath()
-      ctx.moveTo(padding, y)
-      ctx.lineTo(padding + chartWidth, y)
-      ctx.stroke()
-    }
-
-    // Vertical gridlines (6 evenly spaced - 3 for yesterday, 3 for today)
-    const verticalLines = 6
-    for (let i = 1; i < verticalLines; i++) {
-      const x = padding + (i / verticalLines) * chartWidth
-      ctx.beginPath()
-      ctx.moveTo(x, padding)
-      ctx.lineTo(x, padding + chartHeight)
-      ctx.stroke()
-    }
-
-    // Reset line dash for candlesticks
-    ctx.setLineDash([])
-
-    // Helper function to draw candlesticks
-    const drawCandlesticks = (
-      ohlcData: typeof yesterdayOHLC,
-      startIndex: number,
-      totalCandles: number,
-      dimmed: boolean = false
-    ) => {
-      const candleWidth = chartWidth / totalCandles
-      const bodyWidth = Math.max(candleWidth * 0.7, 2)
-
-      ohlcData.forEach((candle, i) => {
-        const x = padding + ((startIndex + i + 0.5) / totalCandles) * chartWidth
-        const isGreen = candle.close >= candle.open
-
-        const openY = padding + ((maxPrice - candle.open) / priceRange) * chartHeight
-        const closeY = padding + ((maxPrice - candle.close) / priceRange) * chartHeight
-        const highY = padding + ((maxPrice - candle.high) / priceRange) * chartHeight
-        const lowY = padding + ((maxPrice - candle.low) / priceRange) * chartHeight
-
-        let color: string
-        if (dimmed) {
-          // Dimmed colors for yesterday
-          color = isGreen
-            ? (isDark ? '#166534' : '#22c55e')  // darker green
-            : (isDark ? '#991b1b' : '#ef4444')  // darker red
-        } else {
-          // Bright colors for today
-          color = isGreen
-            ? (isDark ? '#22c55e' : '#16a34a')
-            : (isDark ? '#ef4444' : '#dc2626')
-        }
-
-        // Draw wick
-        ctx.beginPath()
-        ctx.strokeStyle = color
-        ctx.lineWidth = 1
-        ctx.moveTo(x, highY)
-        ctx.lineTo(x, lowY)
-        ctx.stroke()
-
-        // Draw body
-        ctx.fillStyle = color
-        const bodyTop = Math.min(openY, closeY)
-        const bodyHeight = Math.max(Math.abs(closeY - openY), 1)
-        ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight)
-      })
-    }
-
-    // Draw yesterday's candlesticks (dimmed)
-    if (yesterdayOHLC.length > 0) {
-      drawCandlesticks(yesterdayOHLC, 0, totalCandles, true)
-    }
-
-    // Draw today's candlesticks (bright)
-    if (todayOHLC.length > 0) {
-      drawCandlesticks(todayOHLC, yesterdayOHLC.length, totalCandles, false)
-    }
-
-    // Draw bracket-style x-axis labels with hourly times below
-    if (yesterdayOHLC.length > 0 && todayOHLC.length > 0) {
-      ctx.font = '10px sans-serif'
-      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
-      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-      ctx.lineWidth = 1
-
-      const bracketTop = chartHeight + padding + 2
-      const bracketHeight = 6
-      const bracketBottom = bracketTop + bracketHeight
-      const timeY = bracketBottom + 10
-      const percentY = timeY + 14
-
-      // Calculate the dividing point between yesterday and today
-      const todayStartX = padding + (yesterdayOHLC.length / totalCandles) * chartWidth
-      const gapWidth = 4 // Small gap between the two brackets
-
-      // Yesterday bracket (left side)
-      const yesterdayLeft = padding
-      const yesterdayRight = todayStartX - gapWidth / 2
-      const yesterdayCenterX = (yesterdayLeft + yesterdayRight) / 2
-
-      ctx.beginPath()
-      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-      ctx.moveTo(yesterdayLeft, bracketTop)
-      ctx.lineTo(yesterdayLeft, bracketBottom)
-      ctx.lineTo(yesterdayRight, bracketBottom)
-      ctx.lineTo(yesterdayRight, bracketTop)
-      ctx.stroke()
-
-      // Today bracket (right side)
-      const todayLeft = todayStartX + gapWidth / 2
-      const todayRight = padding + chartWidth
-      const todayCenterX = (todayLeft + todayRight) / 2
-
-      ctx.beginPath()
-      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-      ctx.moveTo(todayLeft, bracketTop)
-      ctx.lineTo(todayLeft, bracketBottom)
-      ctx.lineTo(todayRight, bracketBottom)
-      ctx.lineTo(todayRight, bracketTop)
-      ctx.stroke()
-
-      // Draw hourly time labels for yesterday (below bracket)
-      const hoursToShowYesterday = ['10', '12', '14'] // Show 10am, 12pm, 2pm for yesterday
-
-      for (const targetHour of hoursToShowYesterday) {
-        const matchIdx = yesterdayOHLC.findIndex(candle => {
-          const timePart = candle.date.split(' ')[1]
-          if (!timePart) return false
-          const hour = timePart.split(':')[0]
-          const minute = timePart.split(':')[1]
-          return hour === targetHour && minute === '00'
-        })
-
-        if (matchIdx !== -1) {
-          const x = padding + ((matchIdx + 0.5) / totalCandles) * chartWidth
-          ctx.textAlign = 'center'
-          ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
-          const hourNum = parseInt(targetHour)
-          const displayHour = hourNum > 12 ? hourNum - 12 : hourNum
-          ctx.fillText(`${displayHour}${hourNum >= 12 ? 'p' : 'a'}`, x, timeY)
-        }
-      }
-
-      // Draw hourly time labels for today (below bracket)
-      const hoursToShowToday = ['10', '12', '14'] // Show 10am, 12pm, 2pm for today
-
-      for (const targetHour of hoursToShowToday) {
-        const matchIdx = todayOHLC.findIndex(candle => {
-          const timePart = candle.date.split(' ')[1]
-          if (!timePart) return false
-          const hour = timePart.split(':')[0]
-          const minute = timePart.split(':')[1]
-          return hour === targetHour && minute === '00'
-        })
-
-        if (matchIdx !== -1) {
-          const x = padding + ((yesterdayOHLC.length + matchIdx + 0.5) / totalCandles) * chartWidth
-          ctx.textAlign = 'center'
-          ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'
-          const hourNum = parseInt(targetHour)
-          const displayHour = hourNum > 12 ? hourNum - 12 : hourNum
-          ctx.fillText(`${displayHour}${hourNum >= 12 ? 'p' : 'a'}`, x, timeY)
-        }
-      }
-
-      // Yesterday percentage (below time labels)
-      const yesterdayPct = index.yesterdayChangePercent
-      if (yesterdayPct !== null) {
-        const yesterdayIsPositive = yesterdayPct >= 0
-        ctx.textAlign = 'center'
-        ctx.fillStyle = yesterdayIsPositive
-          ? (isDark ? '#22c55e' : '#16a34a')
-          : (isDark ? '#ef4444' : '#dc2626')
-        ctx.fillText(
-          `${yesterdayIsPositive ? '+' : ''}${yesterdayPct.toFixed(2)}%`,
-          yesterdayCenterX,
-          percentY
-        )
-      }
-
-      // Today percentage (below time labels)
-      const todayPct = index.priceChangePercent
-      const todayIsPositive = todayPct >= 0
-      ctx.textAlign = 'center'
-      ctx.fillStyle = todayIsPositive
-        ? (isDark ? '#22c55e' : '#16a34a')
-        : (isDark ? '#ef4444' : '#dc2626')
-      ctx.fillText(
-        `${todayIsPositive ? '+' : ''}${todayPct.toFixed(2)}%`,
-        todayCenterX,
-        percentY
+      const total = all.length
+      drawCandles(
+        context,
+        yesterday,
+        0,
+        total,
+        rect.width,
+        rect.height,
+        minPrice,
+        priceRange,
+        true,
+        isDark,
       )
+      drawCandles(
+        context,
+        today,
+        yesterday.length,
+        total,
+        rect.width,
+        rect.height,
+        minPrice,
+        priceRange,
+        false,
+        isDark,
+      )
+
+      if (yesterday.length > 0 && today.length > 0) {
+        const dividerX = (yesterday.length / total) * rect.width
+        context.setLineDash([3, 3])
+        context.strokeStyle = isDark ? 'rgba(148,163,184,.35)' : 'rgba(100,116,139,.3)'
+        context.beginPath()
+        context.moveTo(dividerX, 0)
+        context.lineTo(dividerX, rect.height)
+        context.stroke()
+        context.setLineDash([])
+      }
     }
-  }, [index.yesterdayOHLC, index.todayOHLC, index.previousClose, index.yesterdayChangePercent, index.priceChangePercent, isDark])
+
+    render()
+    const observer = new ResizeObserver(render)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [index.previousClose, index.todayOHLC, index.yesterdayOHLC, isDark])
 
   return (
-    <div className="flex flex-col items-center pt-2 pb-1 px-3 flex-1 rounded-lg border border-cream-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-      <div className="flex items-baseline justify-center mb-2">
-        <span className="text-sm font-semibold tracking-wide text-gray-500 dark:text-gray-400 whitespace-nowrap">
-          {index.name}
+    <Link
+      href={`/workspace/chart?symbol=${encodeURIComponent(index.symbol)}`}
+      aria-label={`Open ${index.name} chart`}
+      className={`min-w-0 border-b border-r border-gray-200 px-3 py-3 no-underline transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800/60 md:border-b-0 ${last ? 'md:border-r-0' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-gray-700 dark:text-gray-200">
+            {index.name}
+          </p>
+          <p className="mt-0.5 truncate text-xs tabular-nums text-gray-500 dark:text-gray-400">
+            {index.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          </p>
+        </div>
+        <span className={`shrink-0 text-xs font-semibold tabular-nums ${
+          positive
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-red-600 dark:text-red-400'
+        }`}>
+          {positive ? '+' : ''}{index.priceChangePercent.toFixed(2)}%
         </span>
       </div>
-      <canvas
-        ref={canvasRef}
-        className="w-full"
-        style={{ height: '140px' }}
-      />
-    </div>
+      <canvas ref={canvasRef} aria-hidden="true" className="mt-2 h-[68px] w-full" />
+    </Link>
   )
 }
 
 export default function IndexSparklines({ indices }: IndexSparklinesProps) {
   return (
-    <div className="pt-2 pb-2">
-      <div className="w-full overflow-x-auto">
-        <div className="flex gap-4 min-w-[900px]">
-          {indices.map((index) => (
-            <SparklineCard key={index.symbol} index={index} />
-          ))}
-        </div>
-      </div>
+    <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 md:grid-cols-5">
+      {indices.map((index, itemIndex) => (
+        <SparklineCard
+          key={index.symbol}
+          index={index}
+          last={itemIndex === indices.length - 1}
+        />
+      ))}
     </div>
   )
 }

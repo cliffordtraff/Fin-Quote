@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isAdminAllowlistConfigured, isAdminUserEmail } from '@/lib/auth/admin-config'
+import { isAdminUserEmail } from '@/lib/auth/admin-config'
 import { isBlockedCrawlerUserAgent, isStaticOrMetadataPath } from '@/lib/request-policy'
 
 // Routes that require authentication
@@ -9,9 +9,6 @@ const PROTECTED_ROUTES = ['/profile', '/admin']
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  const isPublicChartOfDayAdminRoute =
-    pathname === '/admin/chart-of-the-day' ||
-    pathname.startsWith('/admin/chart-of-the-day/')
 
   // Always let crawlers read the policy that applies to them.
   if (pathname === '/robots.txt') {
@@ -91,7 +88,7 @@ export async function middleware(req: NextRequest) {
   // Public pages do not need an authenticated Supabase round trip. Session
   // validation still happens before access to protected routes.
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
-  if (!isProtectedRoute || isPublicChartOfDayAdminRoute) {
+  if (!isProtectedRoute) {
     return NextResponse.next()
   }
 
@@ -146,11 +143,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (
-    pathname.startsWith('/admin') &&
-    isAdminAllowlistConfigured() &&
-    !isAdminUserEmail(user.email)
-  ) {
+  if (pathname.startsWith('/admin') && !isAdminUserEmail(user.email)) {
     const url = req.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

@@ -4,7 +4,7 @@ This directory is the schema history for the app's Supabase project.
 
 Current state:
 
-- 58 SQL migrations
+- 59 SQL migrations
 - Span: October 2024 to July 2026
 - Covers core financial tables, filings search, chatbot evaluation/review infrastructure, S&P 500 expansion, insider data, cache tables, and charting-workspace persistence
 
@@ -82,6 +82,7 @@ Primary related references:
 | 2026-07-30 | `20260730100000_schedule_newsletter_daily_automation.sql` | Add the protected Supabase cron invocation for weekday morning production |
 | 2026-07-30 | `20260730120000_create_beehiiv_mcp_delivery.sql` | Persist encrypted Beehiiv MCP connections and idempotent draft deliveries |
 | 2026-07-30 | `20260730143000_complete_newsletter_operations.sql` | Add notifications, Beehiiv lifecycle reconciliation, mid-morning automation, and all three operating cron schedules |
+| 2026-08-03 | `20260803170000_schedule_dashboard_market_context.sql` | Retry missing dashboard commentary components at 10:15, 10:22, and 10:29 ET behind the protected scheduler boundary |
 
 ## Major Schema Areas
 

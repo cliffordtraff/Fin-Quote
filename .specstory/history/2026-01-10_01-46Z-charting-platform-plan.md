@@ -900,12 +900,12 @@ Output mode: content
 | `./scripts/test-new-price-ranges.mjs` | `console.log(`   URL: $\{url.replace(FMP_API_KEY, 'REDACTED')\}`)` | L63 |
 | `./scripts/test-llm-judge.ts` | `const openai = new OpenAI(\{ apiKey: process.env.OPENAI_API_KEY \})` | L13 |
 | `./scripts/test-indices.mjs` | `* Test FMP API for major market indices` | L2 |
-| `./scripts/test-indices.mjs` | `const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'` | L5 |
+| `./scripts/test-indices.mjs` | `const apiKey = '[REDACTED_FMP_API_KEY]'` | L5 |
 | `./scripts/test-indices.mjs` | `console.log('Testing FMP API for major market indices\n')` | L7 |
 | `./scripts/test-indices.mjs` | `const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/$\{symbol\}?apikey=$\{apiKey\}`` | L26 |
 | `./scripts/test-indices.mjs` | `const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/5min/$\{symbol\}?apikey=$\{apiKey\}`` | L56 |
 | `./scripts/test-futures.mjs` | `* Test script to verify if FMP API provides futures market data` | L2 |
-| `./scripts/test-futures.mjs` | `const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'` | L5 |
+| `./scripts/test-futures.mjs` | `const apiKey = '[REDACTED_FMP_API_KEY]'` | L5 |
 | `./scripts/test-futures.mjs` | `console.log('Testing FMP API for futures market data\n')` | L7 |
 | `./scripts/test-futures.mjs` | `const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/$\{symbol\}?apikey=$\{apiKey\}`` | L28 |
 | `./scripts/test-fmp-intraday.mjs` | `// Test FMP API intraday endpoints` | L1 |

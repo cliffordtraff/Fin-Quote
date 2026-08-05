@@ -71,6 +71,27 @@ ledger does not match the local migration directory.
   configured bearer secret.
 - TypeScript, 359 Vitest tests, and the local and remote production builds pass.
 
+## Pending Local Dashboard Improvements
+
+The August 3 working tree replaces the Market Overview's Chart of the Day iframe
+with a native, theme-aware SVG presentation. It also compacts the market tape,
+unifies catalysts, makes cross-asset data notable-first, adds an editable local
+watchlist, remembers dashboard disclosure choices, and collapses secondary
+lower-page detail. These changes are locally verified but are not yet part of
+the production baseline above.
+
+- TypeScript and all 387 Vitest tests pass.
+- An isolated Next.js production build passes. Isolation was necessary because
+  another local dev process was using the repository's `.next` directory.
+- `/dashboard` was verified at 1280-pixel desktop width and 390-pixel mobile
+  width, with no error overlay, runtime errors, or horizontal overflow.
+- Browser reload checks confirm the mover session and section expansion choices
+  persist through the versioned local preference store.
+- The native chart produces no requests to the external chart workspace, and
+  the full workspace remains available through the “Open chart” link.
+- A local browser reload reached the load event in 736 ms; provider and network
+  conditions will still affect total dashboard response time.
+
 ## Remaining Release Hygiene
 
 1. Review and commit the integrated worktree.
@@ -85,7 +106,8 @@ The external charting application at `charts.theintraday.com` owns these issues:
 
 - toolbar controls collide or clip around a 500-pixel viewport;
 - eight embedded form controls do not have accessible names;
-- the Tesla Chart of the Day surface requests a missing media file; and
+- an interactive Tesla workspace surface still requests a missing media file
+  (the native dashboard chart no longer loads that surface); and
 - the stock chart's mobile lookback control clips.
 
 These defects do not create document-level overflow in Fin Quote, but they are

@@ -1,5 +1,8 @@
 name: Daily Data Update
 
+permissions:
+  contents: read
+
 # When to run this workflow
 on:
   schedule:
@@ -10,41 +13,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-financial-data:
+  update-insider-data:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      # 1. Get the code from your repo
       - name: Checkout code
         uses: actions/checkout@v6
 
-      # 2. Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: npm
 
-      # 3. Install dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 4. Run the data fetch script
-      - name: Fetch AAPL financial data
-        run: npx tsx scripts/fetch-aapl-data.ts
-        env:
-          # These come from GitHub Secrets (we'll add them next)
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
-
-      # 5. Run the SEC filings fetch (optional, can comment out if not needed)
-      - name: Fetch SEC filings
-        run: npx tsx scripts/fetch-sec-filings.ts
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-
-      # 6. Ingest insider trades from FMP
       - name: Ingest insider trades
         run: npx tsx scripts/ingest-fmp-insiders.ts --limit 3000
         env:

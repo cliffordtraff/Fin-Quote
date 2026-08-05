@@ -39,6 +39,7 @@ type WorkspaceSyncOptions = {
 const DEFAULT_SYMBOL = 'AAPL'
 const PM_VERSION = 1
 const READY_TIMEOUT_MS = 12000
+const LOCAL_READY_TIMEOUT_MS = 5000
 const WORKSPACE_SYNC_RETRY_DELAYS_MS = [120, 360] as const
 
 function getWorkspaceMode(pathname: string | null): WorkspaceMode | null {
@@ -103,9 +104,29 @@ function buildWorkspaceLoadError(chartingUrl: string, reason: 'timeout' | 'load'
   }
 }
 
-function buildIframeSrc(chartingUrl: string, symbol: string, mode: WorkspaceMode, theme: ThemeMode): string {
+function buildIframeSrc(
+  chartingUrl: string,
+  symbol: string,
+  mode: WorkspaceMode,
+  theme: ThemeMode,
+  parentOrigin: string,
+): string {
   const base = chartingUrl.replace(/\/+$/, '')
-  return `${base}/tos/${encodeURIComponent(symbol)}?embed=true&view=${mode}&theme=${theme}`
+  const url = new URL(`${base}/tos-full/${encodeURIComponent(symbol)}`)
+  url.searchParams.set('embed', 'true')
+  url.searchParams.set('view', mode)
+  url.searchParams.set('theme', theme)
+  url.searchParams.set('surface', 'page')
+  if (parentOrigin) url.searchParams.set('origin', parentOrigin)
+  return url.toString()
+}
+
+function buildStandaloneWorkspaceSrc(iframeSrc: string): string {
+  const url = new URL(iframeSrc)
+  url.searchParams.delete('embed')
+  url.searchParams.delete('origin')
+  url.searchParams.delete('surface')
+  return url.toString()
 }
 
 function buildSymbolDestination(
@@ -183,6 +204,7 @@ export default function WorkspaceIframe() {
   const wasVisibleRef = useRef(false)
   const forceResyncRef = useRef(false)
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
+  const [iframeKey, setIframeKey] = useState(0)
   const [isReady, setIsReady] = useState(false)
   const [loadError, setLoadError] = useState<WorkspaceLoadError | null>(null)
   const [navOffset, setNavOffset] = useState(0)
@@ -196,16 +218,33 @@ export default function WorkspaceIframe() {
   }, [pathname, searchParams])
   const chartingUrl = process.env.NEXT_PUBLIC_CHARTING_URL?.trim() || ''
   const chartingOrigin = useMemo(() => getOrigin(chartingUrl), [chartingUrl])
+  const parentOrigin = typeof window === 'undefined' ? '' : window.location.origin
   const desiredSrc = useMemo(() => {
     if (!chartingUrl || !workspaceMode) return null
-    return buildIframeSrc(chartingUrl, routeSymbol, workspaceMode, requestedTheme)
-  }, [chartingUrl, requestedTheme, routeSymbol, workspaceMode])
+    return buildIframeSrc(
+      chartingUrl,
+      routeSymbol,
+      workspaceMode,
+      requestedTheme,
+      parentOrigin,
+    )
+  }, [chartingUrl, parentOrigin, requestedTheme, routeSymbol, workspaceMode])
   const launcherSrc = useMemo(() => {
     if (!chartingUrl) return null
-    return buildIframeSrc(chartingUrl, routeSymbol, 'price', requestedTheme)
-  }, [chartingUrl, requestedTheme, routeSymbol])
+    return buildIframeSrc(
+      chartingUrl,
+      routeSymbol,
+      'price',
+      requestedTheme,
+      parentOrigin,
+    )
+  }, [chartingUrl, parentOrigin, requestedTheme, routeSymbol])
   const isSearchOnlySurface = searchOverlayActive && !isWorkspaceRoute
   const iframeVisible = isWorkspaceRoute || searchOverlayActive
+  const standaloneSrc = useMemo(
+    () => iframeSrc ? buildStandaloneWorkspaceSrc(iframeSrc) : null,
+    [iframeSrc],
+  )
   const activeMode: WorkspaceMode | null = workspaceMode ?? (searchOverlayActive ? 'price' : null)
   const desiredSurfaceMode: EmbedSurfaceMode = isSearchOnlySurface ? 'search-only' : 'default'
   const searchOnlyModalHeight = `min(80vh, calc(100vh - ${navOffset + 32}px))`
@@ -247,7 +286,7 @@ export default function WorkspaceIframe() {
 
   useEffect(() => {
     lastSurfaceModeRef.current = null
-  }, [iframeSrc])
+  }, [iframeKey, iframeSrc])
 
   useEffect(() => {
     if (isReady) {
@@ -259,12 +298,15 @@ export default function WorkspaceIframe() {
       return
     }
 
+    const timeoutMs = isLocalDevChartingUrl(chartingUrl)
+      ? LOCAL_READY_TIMEOUT_MS
+      : READY_TIMEOUT_MS
     const timeoutId = window.setTimeout(() => {
       setLoadError(buildWorkspaceLoadError(chartingUrl, 'timeout'))
-    }, READY_TIMEOUT_MS)
+    }, timeoutMs)
 
     return () => window.clearTimeout(timeoutId)
-  }, [chartingUrl, iframeSrc, isReady])
+  }, [chartingUrl, iframeKey, iframeSrc, isReady])
 
   useEffect(() => {
     if (!chartingUrl) return
@@ -318,6 +360,7 @@ export default function WorkspaceIframe() {
 
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== chartingOrigin) return
+      if (event.source !== iframeRef.current?.contentWindow) return
       if (!event.data || typeof event.data !== 'object') return
 
       const message = event.data as Record<string, unknown>
@@ -472,6 +515,30 @@ export default function WorkspaceIframe() {
       <div className="max-w-lg rounded-2xl border border-red-200 bg-white/95 p-5 text-sm shadow-lg dark:border-red-900/50 dark:bg-gray-800/95">
         <p className="font-semibold text-gray-900 dark:text-gray-100">{loadError.title}</p>
         <p className="mt-2 text-gray-600 dark:text-gray-300">{loadError.detail}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              lastSyncedRef.current = createUnsyncedWorkspaceState()
+              setLoadError(null)
+              setIsReady(false)
+              setIframeKey((current) => current + 1)
+            }}
+            className="rounded-lg bg-sage-600 px-3 py-2 font-medium text-white hover:bg-sage-700"
+          >
+            Retry
+          </button>
+          {standaloneSrc ? (
+            <a
+              href={standaloneSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-gray-200 px-3 py-2 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Open chart separately
+            </a>
+          ) : null}
+        </div>
       </div>
     </div>
   ) : null
@@ -529,6 +596,7 @@ export default function WorkspaceIframe() {
                   }}
                 >
                   <iframe
+                    key={iframeKey}
                     ref={iframeRef}
                     title="Workspace charting"
                     src={iframeSrc}
@@ -550,6 +618,7 @@ export default function WorkspaceIframe() {
               {errorOverlay}
               {iframeSrc ? (
                 <iframe
+                  key={iframeKey}
                   ref={iframeRef}
                   title="Workspace charting"
                   src={iframeSrc}

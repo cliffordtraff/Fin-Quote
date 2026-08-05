@@ -51,21 +51,6 @@ export async function getStockOverview(symbol: string): Promise<StockOverview> {
     };
   } catch (error) {
     console.error('Error fetching stock overview:', error);
-
-    // Return fallback data on error
-    return {
-      company: {
-        name: symbol,
-        symbol: symbol,
-        sector: 'N/A',
-        industry: 'N/A',
-      },
-      currentPrice: 0,
-      priceChange: 0,
-      priceChangePercent: 0,
-      marketStatus: getCurrentMarketSession() === 'regular' ? 'open' :
-                   getCurrentMarketSession() === 'premarket' ? 'premarket' :
-                   getCurrentMarketSession() === 'afterhours' ? 'afterhours' : 'closed',
-    };
+    throw error;
   }
 }

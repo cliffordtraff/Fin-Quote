@@ -41,6 +41,7 @@ import {
   parseTemplateSelections,
 } from './prompts'
 import { ensureStockMentionInCopy } from './copy-normalization'
+import { resolveNewsletterOutputDirectory } from './output-directory'
 import { resolveEditorialChart } from './resolve-chart'
 import { pickFundamentalsYearRange } from './template-scoring'
 import {
@@ -62,7 +63,6 @@ import type {
 } from './types'
 
 const DEFAULT_CHART_BASE_URL = getDefaultChartingBaseUrl()
-const DEFAULT_OUTPUT_DIR = './.newsletter-output'
 const DEFAULT_MAX_CHARTS = 3
 const DEFAULT_ROUNDUP_SIZE = 4
 
@@ -692,7 +692,6 @@ export async function generateNewsletter(
   options?: NewsletterOptions,
 ): Promise<NewsletterResult> {
   const chartBaseUrl = options?.chartBaseUrl ?? DEFAULT_CHART_BASE_URL
-  const outputDir = options?.outputDir ?? DEFAULT_OUTPUT_DIR
   const maxCharts = options?.maxCharts ?? DEFAULT_MAX_CHARTS
   const publish = options?.publish ?? false
   const editorMode = options?.editorMode === true
@@ -720,7 +719,7 @@ export async function generateNewsletter(
   const now = new Date()
   const runStamp = now.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
 
-  const absOutputDir = resolve(outputDir)
+  const absOutputDir = resolveNewsletterOutputDirectory(options?.outputDir)
   mkdirSync(absOutputDir, { recursive: true })
 
   const modelClient = createNewsletterModelClient(options?.modelBackend)

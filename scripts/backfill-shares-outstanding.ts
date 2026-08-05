@@ -8,8 +8,7 @@
 import { createClient } from '@supabase/supabase-js'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-
-const FMP_API_KEY = process.env.FMP_API_KEY || '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
 
 interface IncomeStatementItem {
   date: string
@@ -27,7 +26,9 @@ async function loadEnv() {
       if (match) {
         const key = match[1].trim()
         const value = match[2].trim()
-        process.env[key] = value
+        if (process.env[key] === undefined) {
+          process.env[key] = value
+        }
       }
     })
   } catch (error) {
@@ -35,11 +36,11 @@ async function loadEnv() {
   }
 }
 
-async function fetchSharesOutstanding(symbol: string): Promise<Map<string, number>> {
+async function fetchSharesOutstanding(symbol: string, apiKey: string): Promise<Map<string, number>> {
   const sharesMap = new Map<string, number>()
 
   // Fetch annual data
-  const annualUrl = `https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=25&apikey=${FMP_API_KEY}`
+  const annualUrl = `https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=25&apikey=${apiKey}`
   const annualRes = await fetch(annualUrl)
   const annualData: IncomeStatementItem[] = await annualRes.json()
 
@@ -53,7 +54,7 @@ async function fetchSharesOutstanding(symbol: string): Promise<Map<string, numbe
   }
 
   // Fetch quarterly data
-  const quarterlyUrl = `https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=50&period=quarter&apikey=${FMP_API_KEY}`
+  const quarterlyUrl = `https://financialmodelingprep.com/api/v3/income-statement/${symbol}?limit=50&period=quarter&apikey=${apiKey}`
   const quarterlyRes = await fetch(quarterlyUrl)
   const quarterlyData: IncomeStatementItem[] = await quarterlyRes.json()
 
@@ -71,12 +72,12 @@ async function fetchSharesOutstanding(symbol: string): Promise<Map<string, numbe
 async function main() {
   await loadEnv()
 
+  const fmpApiKey = requireFmpApiKey()
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('Missing Supabase credentials')
-    return
+    throw new Error('Missing Supabase credentials')
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -87,8 +88,7 @@ async function main() {
     .select('symbol')
 
   if (symbolsError) {
-    console.error('Error fetching symbols:', symbolsError.message)
-    return
+    throw new Error(`Error fetching symbols: ${symbolsError.message}`)
   }
 
   const symbols = [...new Set(symbolsData?.map(s => s.symbol) || [])]
@@ -101,7 +101,7 @@ async function main() {
 
     try {
       // Fetch shares outstanding from FMP
-      const sharesMap = await fetchSharesOutstanding(symbol)
+      const sharesMap = await fetchSharesOutstanding(symbol, fmpApiKey)
       console.log(`  Fetched ${sharesMap.size} records from FMP`)
 
       // Get existing records for this symbol
@@ -151,4 +151,7 @@ async function main() {
   console.log(`\n✓ Done! Total records updated: ${totalUpdated}`)
 }
 
-main().catch(console.error)
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

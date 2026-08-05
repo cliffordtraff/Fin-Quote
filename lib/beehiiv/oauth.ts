@@ -17,10 +17,32 @@ export const BEEHIIV_OAUTH_COOKIE = 'finquote_beehiiv_oauth'
 export const BEEHIIV_OAUTH_COOKIE_MAX_AGE_SECONDS = OAUTH_MAX_AGE_MS / 1000
 
 export function sanitizeBeehiivReturnTo(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return '/newsletter/morning-review'
+  const fallback = '/newsletter/morning-review'
+  if (!value || !value.startsWith('/')) return fallback
+
+  let decoded = value
+  try {
+    // Decode twice to catch nested encodings such as `%255c` before a browser
+    // or proxy gets an opportunity to reinterpret them.
+    decoded = decodeURIComponent(decoded)
+    decoded = decodeURIComponent(decoded)
+  } catch {
+    return fallback
   }
-  return value
+
+  if (
+    decoded.startsWith('//') ||
+    decoded.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(decoded)
+  ) {
+    return fallback
+  }
+
+  const sentinelOrigin = 'https://return.theintraday.invalid'
+  const resolved = new URL(value, sentinelOrigin)
+  if (resolved.origin !== sentinelOrigin) return fallback
+
+  return `${resolved.pathname}${resolved.search}${resolved.hash}`
 }
 
 export async function startBeehiivOAuth(input: {

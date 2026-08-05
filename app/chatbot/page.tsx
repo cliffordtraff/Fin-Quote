@@ -21,6 +21,10 @@ import Navigation from '@/components/Navigation'
 import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
+import {
+  MAX_CHAT_HISTORY_MESSAGES,
+  MAX_CHAT_QUESTION_LENGTH,
+} from '@/lib/chatbot/constants'
 
 const stripMarkdown = (text: string): string => {
   return text
@@ -268,6 +272,7 @@ function AskPageContent() {
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
+  const [authResolved, setAuthResolved] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showFinancialsModal, setShowFinancialsModal] = useState(false)
@@ -311,6 +316,7 @@ function AskPageContent() {
     // Get current user on mount
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
+      setAuthResolved(true)
     })
 
     // Listen for auth state changes
@@ -318,6 +324,7 @@ function AskPageContent() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setAuthResolved(true)
     })
 
     return () => subscription.unsubscribe()
@@ -502,6 +509,12 @@ function AskPageContent() {
       return
     }
 
+    if (!user) {
+      setError('Sign in to ask a question.')
+      setShowAuthModal(true)
+      return
+    }
+
     setLoading(true)
     setError('')
     setAnswer('')
@@ -532,13 +545,23 @@ function AskPageContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question,
-          conversationHistory,
+          conversationHistory: conversationHistory
+            .slice(-MAX_CHAT_HISTORY_MESSAGES)
+            .map(({ role, content, timestamp }) => ({ role, content, timestamp })),
           sessionId,
         }),
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorBody = await response.json().catch(() => null)
+        if (response.status === 401) {
+          setShowAuthModal(true)
+        }
+        throw new Error(
+          typeof errorBody?.error === 'string'
+            ? errorBody.error
+            : `Request failed with status ${response.status}`,
+        )
       }
 
       const reader = response.body?.getReader()
@@ -773,6 +796,12 @@ function AskPageContent() {
       return
     }
 
+    if (!user) {
+      setError('Sign in to ask a question.')
+      setShowAuthModal(true)
+      return
+    }
+
     setLoading(true)
     setError('')
     setAnswer('')
@@ -836,7 +865,13 @@ function AskPageContent() {
       setLoadingMessage('Generating answer with GPT-5-nano...')
 
       // Send question with conversation history and session ID
-      const result = await askQuestion(question, conversationHistory, sessionId)
+      const result = await askQuestion(
+        question,
+        conversationHistory
+          .slice(-MAX_CHAT_HISTORY_MESSAGES)
+          .map(({ role, content, timestamp }) => ({ role, content, timestamp })),
+        sessionId,
+      )
 
       if (result.error) {
         setError(result.error)
@@ -1508,19 +1543,20 @@ function AskPageContent() {
                     }
                   }
                 }}
-                placeholder="Ask Anything"
+                placeholder={user ? 'Ask anything' : 'Sign in to ask a question'}
                 rows={1}
+                maxLength={MAX_CHAT_QUESTION_LENGTH}
                 className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
                 style={{ height: 'auto' }}
-                disabled={loading}
+                disabled={loading || !authResolved}
               />
 
               {/* Send button */}
               <button
                 type="submit"
-                disabled={loading || !question.trim()}
+                disabled={loading || !authResolved || !question.trim()}
                 className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                title={loading ? "Stop" : "Send message"}
+                title={loading ? 'Stop' : user ? 'Send message' : 'Sign in to ask'}
               >
                 {loading ? (
                   <div className="w-4 h-4 bg-white rounded-sm"></div>
@@ -1531,6 +1567,19 @@ function AskPageContent() {
                 )}
               </button>
             </div>
+
+            {authResolved && !user && (
+              <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(true)}
+                  className="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                >
+                  Sign in
+                </button>{' '}
+                to use the research assistant.
+              </p>
+            )}
 
           </form>
         </div>

@@ -2,7 +2,10 @@
  * Test FMP API for major market indices
  */
 
-const apiKey = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
+
+const apiKey = requireFmpApiKey()
+let failedIndices = 0
 
 console.log('Testing FMP API for major market indices\n')
 console.log('='.repeat(60))
@@ -19,6 +22,7 @@ const indices = [
 for (const index of indices) {
   console.log(`\n📊 Testing: ${index.name}`)
   console.log('-'.repeat(60))
+  let foundWorkingSymbol = false
 
   for (const symbol of index.symbols) {
     try {
@@ -33,6 +37,7 @@ for (const index of indices) {
         console.log(`     Price: $${quote.price}`)
         console.log(`     Change: ${quote.change} (${quote.changesPercentage}%)`)
         console.log(`     Volume: ${quote.volume}`)
+        foundWorkingSymbol = true
         break // Found working symbol, move to next index
       } else if (data && 'Error Message' in data) {
         console.log(`  ❌ ${symbol}: ${data['Error Message']}`)
@@ -43,6 +48,10 @@ for (const index of indices) {
       console.log(`  ❌ ${symbol}: Error - ${error.message}`)
     }
   }
+
+  if (!foundWorkingSymbol) {
+    failedIndices++
+  }
 }
 
 // Test intraday data for S&P 500
@@ -51,6 +60,7 @@ console.log('Testing intraday data for S&P 500:')
 console.log('='.repeat(60))
 
 const spxSymbols = ['^GSPC', 'SPX', '^SPX']
+let foundIntradaySymbol = false
 for (const symbol of spxSymbols) {
   try {
     const intradayUrl = `https://financialmodelingprep.com/api/v3/historical-chart/5min/${symbol}?apikey=${apiKey}`
@@ -62,6 +72,7 @@ for (const symbol of spxSymbols) {
       console.log(`   Total candles: ${data.length}`)
       console.log(`   First: ${data[0].date} - $${data[0].close}`)
       console.log(`   Last: ${data[data.length - 1].date} - $${data[data.length - 1].close}`)
+      foundIntradaySymbol = true
       break
     } else {
       console.log(`\n❌ ${symbol}: No intraday data`)
@@ -69,6 +80,16 @@ for (const symbol of spxSymbols) {
   } catch (error) {
     console.log(`\n❌ ${symbol}: Error - ${error.message}`)
   }
+}
+
+if (failedIndices > 0 || !foundIntradaySymbol) {
+  if (failedIndices > 0) {
+    console.error(`\n${failedIndices} index group(s) returned no usable quote.`)
+  }
+  if (!foundIntradaySymbol) {
+    console.error('\nNo S&P 500 symbol returned usable intraday data.')
+  }
+  process.exitCode = 1
 }
 
 console.log('\n' + '='.repeat(60))

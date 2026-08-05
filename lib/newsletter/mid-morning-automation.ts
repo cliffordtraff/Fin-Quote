@@ -491,6 +491,7 @@ async function generateSummaryBatch(run: NewsletterMidMorningRun) {
   const result = await generateDailySummaryBatch({
     marketDate: run.marketDate,
     symbols: retryable,
+    runSymbols: symbols,
     runId: summaryRunId,
     limit: 5,
     concurrency: 4,

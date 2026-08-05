@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs'
-import { basename, resolve } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { basename, join, resolve } from 'path'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import {
   assembleNewsletterHtmlForBeehiiv,
@@ -11,6 +12,7 @@ import { buildNewsletterBlock } from './build-block'
 import {
   captureChart,
 } from './capture'
+import { uploadNewsletterChartImage } from './chart-library'
 import { buildPriceExportEditorBaseSpec } from './chart-editor'
 import {
   getDefaultChartingBaseUrl,
@@ -801,7 +803,13 @@ export function buildNewsletterDraftFromResult(
   const blocks: NewsletterDraftBlock[] = result.blocks.map((block, index) => {
     const spec = normalizeChartSpec(result.chartSpecs[index], ticker)
     const chartPath = result.chartPaths[index] ?? ''
-    const chartImageUrl = toPublicNewsletterAssetUrl(chartPath)
+    const chartFilename = basename(chartPath)
+    // Generated files are ephemeral on Vercel. When orchestration publishes
+    // them to Supabase Storage, persist that durable URL in the draft instead
+    // of a /newsletter-charts path backed by the function filesystem.
+    const chartImageUrl =
+      result.publishedUrls?.[chartFilename] ??
+      toPublicNewsletterAssetUrl(chartPath)
     const chartExportUrl = resolveChartingPlatformNewsletterChart(spec, {
       chartBaseUrl: publicChartBaseUrl,
       theme: 'light',
@@ -1336,7 +1344,12 @@ export async function createNewsletterDraft(
 ): Promise<NewsletterDraftRecord> {
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
-  const result = await generateNewsletterWithBackend(ticker, options)
+  const result = await generateNewsletterWithBackend(ticker, {
+    ...options,
+    // Signed-in drafts live in Supabase, so their charts must live there too.
+    // Anonymous/local drafts keep the filesystem workflow used in development.
+    publish: options?.publish ?? Boolean(scope.ownerId),
+  })
   const draft = buildNewsletterDraftFromResult(result, publicChartBaseUrl)
   return createNewsletterDraftFromDocument(scope, draft, {
     publicChartBaseUrl,
@@ -1367,9 +1380,16 @@ export async function saveNewsletterDraft(
   id: string,
   draft: NewsletterDraftDocument,
   status: NewsletterDraftStatus = 'draft',
+  options: { publicChartBaseUrl?: string } = {},
 ): Promise<NewsletterDraftRecord> {
   const existing = await getNewsletterDraft(scope, id)
-  const saved = await persistNewsletterDraftRow(scope, id, draft, status)
+  const saved = await persistNewsletterDraftRow(
+    scope,
+    id,
+    draft,
+    status,
+    options.publicChartBaseUrl,
+  )
 
   if (existing.status !== saved.status) {
     await appendNewsletterDraftEvent(scope, id, {
@@ -1435,6 +1455,7 @@ export async function regenerateNewsletterDraft(
     isMarketRoundup ? undefined : existing.ticker,
     {
       ...options,
+      publish: options?.publish ?? Boolean(scope.ownerId),
       format: existing.draft.format,
       generationPrompt: options?.generationPrompt ?? existing.draft.generationPrompt,
       featuredTickers: isMarketRoundup
@@ -1449,7 +1470,9 @@ export async function regenerateNewsletterDraft(
     publication: existing.draft.publication,
   }
 
-  return saveNewsletterDraft(scope, id, draft, 'draft')
+  return saveNewsletterDraft(scope, id, draft, 'draft', {
+    publicChartBaseUrl,
+  })
 }
 
 export async function regenerateNewsletterDraftChart(
@@ -1477,22 +1500,44 @@ export async function regenerateNewsletterDraftChart(
     throw new Error(`Draft does not contain block ${blockId}`)
   }
 
-  mkdirSync(resolve(NEWSLETTER_CHART_OUTPUT_DIR), { recursive: true })
   const filename = `${normalizedDraft.ticker}_${block.templateId}_${toRunStamp()}_draft.png`
-  const outputPath = resolve(NEWSLETTER_CHART_OUTPUT_DIR, filename)
-  await captureChart(block.chartSpec, {
-    outputPath,
-    chartBaseUrl,
-    width,
-    height,
-  })
+  const temporaryDirectory = scope.ownerId
+    ? mkdtempSync(join(tmpdir(), 'fin-quote-newsletter-draft-chart-'))
+    : null
+  const outputDirectory = temporaryDirectory ?? resolve(NEWSLETTER_CHART_OUTPUT_DIR)
+  mkdirSync(outputDirectory, { recursive: true })
+  const outputPath = resolve(outputDirectory, filename)
+  let chartImageUrl = `/newsletter-charts/${filename}`
+
+  try {
+    await captureChart(block.chartSpec, {
+      outputPath,
+      chartBaseUrl,
+      width,
+      height,
+    })
+
+    if (scope.ownerId) {
+      const uploaded = await uploadNewsletterChartImage({
+        ownerId: scope.ownerId,
+        chartId: `draft-${id}-${block.id}`,
+        symbol: normalizedDraft.ticker,
+        outputPath,
+      })
+      chartImageUrl = uploaded.imageUrl
+    }
+  } finally {
+    if (temporaryDirectory) {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
+  }
 
   const updatedBlocks = normalizedDraft.blocks.map((entry) =>
     entry.id === blockId
       ? normalizeDraftBlock(
           {
             ...entry,
-            chartImageUrl: `/newsletter-charts/${filename}`,
+            chartImageUrl,
             chartNeedsRegeneration: false,
           },
           normalizedDraft.ticker,
@@ -1511,6 +1556,7 @@ export async function regenerateNewsletterDraftChart(
     existing.status === 'ready' || existing.status === 'published'
       ? 'review'
       : existing.status,
+    { publicChartBaseUrl },
   )
   await appendNewsletterDraftEvent(scope, id, {
     type: 'chart_attached',

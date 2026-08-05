@@ -80,7 +80,7 @@ Output mode: content
 | `./app/api/ask/route.ts` | `...(process.env.OPENAI_MODEL?.includes('gpt-5') ? \{} : \{ temperature: 0.7 \}),` | L780 |
 | `./app/api/ask/route.ts` | `max_output_tokens: process.env.OPENAI_MODEL?.includes('gpt-5') ? 500 : 150,` | L781 |
 | `./app/api/ask/route.ts` | `...(process.env.OPENAI_MODEL?.includes('gpt-5') ? \{ reasoning: \{ effort: 'minimal' \} \} : \{}),` | L782 |
-| `./scripts/fetch-fmp-metrics.ts` | `const FMP_API_KEY = process.env.FMP_API_KEY \|\| '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'` | L13 |
+| `./scripts/fetch-fmp-metrics.ts` | `const FMP_API_KEY = process.env.FMP_API_KEY \|\| '[REDACTED_FMP_API_KEY]'` | L13 |
 | `./scripts/remove-duplicate-metrics.mjs` | `const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL` | L11 |
 | `./scripts/remove-duplicate-metrics.mjs` | `const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role to bypass RLS` | L12 |
 | `./scripts/find-all-duplicate-metrics.mjs` | `const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL` | L11 |

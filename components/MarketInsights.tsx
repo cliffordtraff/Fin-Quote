@@ -1,80 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import type { MarketTrendsBullet } from '@/app/actions/market-trends-responses'
-import { TRENDS_LOADING_STEPS, TRENDS_LOADING_MESSAGES, type TrendsLoadingStep } from '@/lib/loading-steps'
-
-function TrendsLoadingSteps({ loading }: { loading: boolean }) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0)
-  const [completedSteps, setCompletedSteps] = useState<number[]>([])
-
-  useEffect(() => {
-    if (!loading) {
-      setCurrentStepIndex(0)
-      setCompletedSteps([])
-      return
-    }
-
-    // Progress through steps with realistic timing
-    const timings = [600, 1200, 1500, 2500, 2000] // ms for each step
-    let totalTime = 0
-
-    const timeouts: NodeJS.Timeout[] = []
-
-    timings.forEach((time, index) => {
-      if (index < TRENDS_LOADING_STEPS.length - 1) {
-        totalTime += time
-        const timeout = setTimeout(() => {
-          setCompletedSteps(prev => [...prev, index])
-          setCurrentStepIndex(index + 1)
-        }, totalTime)
-        timeouts.push(timeout)
-      }
-    })
-
-    return () => {
-      timeouts.forEach(t => clearTimeout(t))
-    }
-  }, [loading])
-
-  if (!loading) return null
-
-  return (
-    <div className="space-y-1.5 py-2">
-      {TRENDS_LOADING_STEPS.map((step, index) => {
-        const isCompleted = completedSteps.includes(index)
-        const isCurrent = index === currentStepIndex
-        const isPending = index > currentStepIndex
-
-        return (
-          <div key={step} className="flex items-center gap-2 text-xs">
-            {isCompleted ? (
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            ) : isCurrent ? (
-              <span className="w-3 h-3 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <span className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600" />
-            )}
-            <span className={`${
-              isCompleted ? 'text-green-600 dark:text-green-400' :
-              isCurrent ? 'text-sage-600 dark:text-sage-400 font-medium' :
-              'text-gray-400 dark:text-gray-500'
-            }`}>
-              {TRENDS_LOADING_MESSAGES[step]}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 interface MarketInsightsProps {
   responsesApiBullets?: MarketTrendsBullet[]
   responsesLoading?: boolean
   responsesError?: string
   onRefreshResponses?: () => void
-  responsesGeneratedAt?: string
+  marketTakeaway?: string
   marketSummary?: string
   marketSummaryLoading?: boolean
   onRefreshSummary?: () => void
@@ -173,7 +106,7 @@ export default function MarketInsights({
   responsesLoading = false,
   responsesError,
   onRefreshResponses,
-  responsesGeneratedAt,
+  marketTakeaway,
   marketSummary,
   marketSummaryLoading,
   onRefreshSummary,
@@ -181,10 +114,23 @@ export default function MarketInsights({
 }: MarketInsightsProps) {
   const HIDDEN_BULLET_TITLES = ['Worst Sector', 'Volatility Signal', 'Sector Rotation', 'Severe Stock Loss']
 
-  const renderBulletList = (bullets: MarketTrendsBullet[], loading: boolean, error?: string, generatedAt?: string) => {
-    bullets = bullets.filter(b => !HIDDEN_BULLET_TITLES.includes(b.title))
+  const renderBulletList = (bullets: MarketTrendsBullet[], loading: boolean, error?: string) => {
+    bullets = bullets
+      .filter((bullet) => !HIDDEN_BULLET_TITLES.includes(bullet.title))
+      .slice(0, 3)
+
     if (loading) {
-      return <TrendsLoadingSteps loading={loading} />
+      return (
+        <div aria-label="Loading key drivers" className="space-y-3 py-1">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              className="h-4 animate-pulse rounded bg-gray-100 dark:bg-gray-800"
+              style={{ width: `${92 - index * 12}%` }}
+            />
+          ))}
+        </div>
+      )
     }
 
     if (error) {
@@ -197,95 +143,100 @@ export default function MarketInsights({
 
     if (!bullets.length) {
       return (
-        <div className="text-gray-400 italic text-sm py-4">
-          No insights available. Click refresh to generate.
+        <div className="py-2 text-sm text-gray-500 dark:text-gray-400">
+          No key drivers are available yet.
         </div>
       )
     }
 
     return (
-      <div className="space-y-1.5">
-        {bullets.map((bullet, index) => (
+      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+        {bullets.map((bullet) => (
           <div
-            key={index}
-            className="flex items-start gap-2"
+            key={`${bullet.title}-${bullet.description}`}
+            className="grid gap-1 py-2.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
           >
-            <span
-              aria-hidden="true"
-              className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sage-500"
-            />
-            <div className="min-w-0">
-              <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                {bullet.title}:
-              </span>{' '}
-              <span className="text-gray-600 dark:text-gray-400 text-sm">
-                {bullet.description}
-              </span>
-            </div>
+            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+              {bullet.title}
+            </span>
+            <span className="text-sm leading-5 text-gray-600 dark:text-gray-400">
+              {bullet.description}
+            </span>
           </div>
         ))}
-        {generatedAt && (
-          <div className="text-[9px] text-gray-400 pt-2">
-            Generated: {new Date(generatedAt).toLocaleTimeString()}
-          </div>
-        )}
       </div>
     )
   }
 
+  const refreshing = responsesLoading || marketSummaryLoading
+  const refreshAll = () => {
+    onRefreshResponses?.()
+    onRefreshSummary?.()
+  }
+
   return (
     <div className="w-full overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
-      {/* Header */}
-      <div className="flex min-h-11 items-center border-b border-gray-200 px-3 dark:border-gray-700">
-        <div className="flex w-full items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-gray-950 dark:text-white">Market Trends</h2>
-          <button
-            type="button"
-            onClick={onRefreshResponses}
-            disabled={responsesLoading}
-            className="min-h-8 rounded border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {responsesLoading ? 'Refreshing' : 'Refresh'}
-          </button>
+      <div className="px-4 py-4 sm:px-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+              What matters now
+            </p>
+            {marketSummaryLoading && !marketTakeaway ? (
+              <div className="mt-2 h-5 w-full max-w-3xl animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            ) : (
+              <h2 className="mt-1.5 max-w-4xl text-base font-medium leading-6 text-gray-950 dark:text-white">
+                {marketTakeaway || 'Market conditions are updating.'}
+              </h2>
+            )}
+          </div>
+          {(onRefreshResponses || onRefreshSummary) ? (
+            <button
+              type="button"
+              onClick={refreshAll}
+              disabled={refreshing}
+              className="shrink-0 text-xs font-medium text-gray-500 transition-colors hover:text-sage-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-sage-300"
+            >
+              {refreshing ? 'Refreshing' : 'Refresh'}
+            </button>
+          ) : null}
         </div>
-      </div>
 
-      {/* What's Happening Today */}
-      {(marketSummary || marketSummaryLoading) && (
-        <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
-          <div className="flex justify-between items-center mb-1.5">
-            <div />
-            <div className="flex items-center gap-2">
-              {summaryLastUpdated && (
-                <span className="text-[9px] text-gray-400 dark:text-gray-500">
-                  {summaryLastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-                </span>
-              )}
-              {onRefreshSummary && (
-                <button
-                  type="button"
-                  onClick={onRefreshSummary}
-                  disabled={marketSummaryLoading}
-                  className="min-h-7 rounded border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
-                >
-                  {marketSummaryLoading ? 'Refreshing' : 'Refresh summary'}
-                </button>
-              )}
+        <div className="mt-4 border-t border-gray-100 pt-3 dark:border-gray-800">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+            Key drivers
+          </p>
+          {renderBulletList(responsesApiBullets, responsesLoading, responsesError)}
+        </div>
+
+        {(marketSummary || marketSummaryLoading) ? (
+          <details className="group mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+            <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between text-xs font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100">
+              <span>Read full context</span>
+              <span
+                aria-hidden="true"
+                className="transition-transform group-open:rotate-180"
+              >
+                ↓
+              </span>
+            </summary>
+            <div className="max-w-5xl pb-1 pt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+              {marketSummaryLoading ? (
+                <div className="space-y-2" aria-label="Loading full market context">
+                  <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                  <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+              ) : marketSummary ? (
+                <div className="whitespace-pre-wrap">{renderFormattedSummary(marketSummary)}</div>
+              ) : null}
+              {summaryLastUpdated ? (
+                <p className="mt-3 text-[10px] text-gray-400 dark:text-gray-500">
+                  Updated after the latest manual refresh.
+                </p>
+              ) : null}
             </div>
-          </div>
-          <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-            {marketSummaryLoading ? (
-              <div className="py-1 text-xs text-gray-400 dark:text-gray-500">Loading...</div>
-            ) : marketSummary ? (
-              <div className="whitespace-pre-wrap">{renderFormattedSummary(marketSummary)}</div>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {/* Bullet Points */}
-      <div className="overflow-y-auto p-4 text-sm text-gray-700 dark:text-gray-300">
-        {renderBulletList(responsesApiBullets, responsesLoading, responsesError, responsesGeneratedAt)}
+          </details>
+        ) : null}
       </div>
     </div>
   )

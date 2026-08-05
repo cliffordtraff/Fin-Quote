@@ -5,16 +5,16 @@ import { createPublicClient } from '@/lib/supabase/public';
 
 interface FinancialYear {
   year: number;
-  revenue: number;
-  costOfRevenue: number;
-  grossProfit: number;
-  grossMargin: number;
-  operatingExpenses: number;
-  operatingIncome: number;
-  operatingMargin: number;
-  netIncome: number;
-  netMargin: number;
-  eps: number;
+  revenue: number | null;
+  costOfRevenue: number | null;
+  grossProfit: number | null;
+  grossMargin: number | null;
+  operatingExpenses: number | null;
+  operatingIncome: number | null;
+  operatingMargin: number | null;
+  netIncome: number | null;
+  netMargin: number | null;
+  eps: number | null;
   // Additional metrics
   ebitda: number | null;
   stockBasedCompensation: number | null;
@@ -205,11 +205,13 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
 
     // Transform data into separate statement arrays
     const incomeStatement: FinancialYear[] = financialsData.map((row) => {
-      const revenue = row.revenue || 0;
-      const grossProfit = row.gross_profit || 0;
-      const costOfRevenue = revenue - grossProfit;
-      const operatingIncome = row.operating_income || 0;
-      const netIncome = row.net_income || 0;
+      const revenue = row.revenue ?? null;
+      const grossProfit = row.gross_profit ?? null;
+      const costOfRevenue = revenue !== null && grossProfit !== null
+        ? revenue - grossProfit
+        : null;
+      const operatingIncome = row.operating_income ?? null;
+      const netIncome = row.net_income ?? null;
       const yearMetrics = metricsMap[row.year] || {};
 
       return {
@@ -217,13 +219,21 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
         revenue,
         costOfRevenue,
         grossProfit,
-        grossMargin: revenue > 0 ? (grossProfit / revenue) * 100 : 0,
-        operatingExpenses: grossProfit - operatingIncome, // Derived
+        grossMargin: revenue !== null && revenue !== 0 && grossProfit !== null
+          ? (grossProfit / revenue) * 100
+          : null,
+        operatingExpenses: grossProfit !== null && operatingIncome !== null
+          ? grossProfit - operatingIncome
+          : null, // Derived
         operatingIncome,
-        operatingMargin: revenue > 0 ? (operatingIncome / revenue) * 100 : 0,
+        operatingMargin: revenue !== null && revenue !== 0 && operatingIncome !== null
+          ? (operatingIncome / revenue) * 100
+          : null,
         netIncome,
-        netMargin: revenue > 0 ? (netIncome / revenue) * 100 : 0,
-        eps: row.eps || 0,
+        netMargin: revenue !== null && revenue !== 0 && netIncome !== null
+          ? (netIncome / revenue) * 100
+          : null,
+        eps: row.eps ?? null,
         // Additional metrics from financial_metrics table
         ebitda: yearMetrics['ebitda'] ?? null,
         stockBasedCompensation: yearMetrics['stockBasedCompensation'] ?? null,
@@ -235,9 +245,9 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
     });
 
     const balanceSheet: BalanceSheetYear[] = financialsData.map((row) => {
-      const totalAssets = row.total_assets || null;
-      const totalLiabilities = row.total_liabilities || null;
-      const shareholdersEquity = row.shareholders_equity || null;
+      const totalAssets = row.total_assets ?? null;
+      const totalLiabilities = row.total_liabilities ?? null;
+      const shareholdersEquity = row.shareholders_equity ?? null;
       const yearMetrics = metricsMap[row.year] || {};
 
       return {
@@ -288,8 +298,8 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
     });
 
     const cashFlow: CashFlowYear[] = financialsData.map((row) => {
-      const operatingCashFlow = row.operating_cash_flow || null;
-      const netIncome = row.net_income || null;
+      const operatingCashFlow = row.operating_cash_flow ?? null;
+      const netIncome = row.net_income ?? null;
       const yearMetrics = metricsMap[row.year] || {};
 
       return {

@@ -10,7 +10,9 @@
  *   npx tsx scripts/fetch-aapl-data.ts GOOGL both     # Fetch both annual and quarterly
  */
 
-const FMP_API_KEY = '9gzCQWZosEJN8I2jjsYP4FBy444nU7Mc'
+import { requireFmpApiKey } from './lib/require-fmp-api-key.mjs'
+
+const FMP_API_KEY = requireFmpApiKey()
 
 // Fiscal year end month by symbol (1-12)
 const FISCAL_YEAR_END_MONTH: Record<string, number> = {
@@ -247,4 +249,7 @@ async function main() {
   console.log(JSON.stringify(financials[0], null, 2))
 }
 
-main().catch(console.error)
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})

@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { z } from 'zod'
+import { requireAdminUser } from '@/lib/auth/admin'
+import {
+  evaluationApiErrorResponse,
+  parseEvaluationRequest,
+} from '@/app/api/evaluations/_shared'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-type FeedbackAnalysisRequest = {
-  question: string
-  question_id: number
-  expected_tool: string
-  expected_args: Record<string, any>
-  actual_tool: string | null
-  actual_args: Record<string, any> | null
-  initial_analysis: string
-  user_disagreement: string
-}
+const feedbackAnalysisRequestSchema = z.object({
+  question: z.string().trim().min(1).max(4_000),
+  question_id: z.number().int().nonnegative().max(1_000_000_000),
+  expected_tool: z.string().trim().min(1).max(128),
+  expected_args: z.record(z.string(), z.unknown()),
+  actual_tool: z.string().trim().min(1).max(128).nullable(),
+  actual_args: z.record(z.string(), z.unknown()).nullable(),
+  initial_analysis: z.string().trim().min(1).max(12_000),
+  user_disagreement: z.string().trim().min(1).max(4_000),
+}).strict()
+
+type FeedbackAnalysisRequest = z.infer<typeof feedbackAnalysisRequestSchema>
 
 export async function POST(request: NextRequest) {
   try {
-    const body: FeedbackAnalysisRequest = await request.json()
+    await requireAdminUser()
+    const body = await parseEvaluationRequest(
+      request,
+      feedbackAnalysisRequestSchema,
+    )
 
     const prompt = buildFeedbackAnalysisPrompt(body)
 
@@ -51,10 +63,9 @@ Be humble, curious, and collaborative. Remember: the human has domain expertise 
       question_id: body.question_id,
     })
   } catch (error) {
-    console.error('Feedback analysis error:', error)
-    return NextResponse.json(
-      { error: 'Failed to analyze feedback' },
-      { status: 500 }
+    return evaluationApiErrorResponse(
+      error,
+      'Failed to analyze feedback.',
     )
   }
 }

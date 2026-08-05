@@ -1,40 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { z } from 'zod'
+import { requireAdminUser } from '@/lib/auth/admin'
+import {
+  evaluationApiErrorResponse,
+  parseEvaluationRequest,
+} from '@/app/api/evaluations/_shared'
+
+export const maxDuration = 60
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-type AnalysisRequest = {
-  question: string
-  question_id: number
-  expected_tool: string
-  expected_args: Record<string, any>
-  actual_tool: string | null
-  actual_args: Record<string, any> | null
-  tool_match: boolean
-}
+const MAX_BATCH_QUESTIONS = 20
+const ANALYSIS_CONCURRENCY = 5
 
-type BatchAnalysisRequest = {
-  questions: AnalysisRequest[]
+const analysisRequestSchema = z.object({
+  question: z.string().trim().min(1).max(4_000),
+  question_id: z.number().int().nonnegative().max(1_000_000_000),
+  expected_tool: z.string().trim().min(1).max(128),
+  expected_args: z.record(z.string(), z.unknown()),
+  actual_tool: z.string().trim().min(1).max(128).nullable(),
+  actual_args: z.record(z.string(), z.unknown()).nullable(),
+  tool_match: z.boolean(),
+}).strict()
+
+const batchAnalysisRequestSchema = z.object({
+  questions: z.array(analysisRequestSchema).min(1).max(MAX_BATCH_QUESTIONS),
+}).strict()
+
+const analysisPayloadSchema = z.union([
+  batchAnalysisRequestSchema,
+  analysisRequestSchema,
+])
+
+type AnalysisRequest = z.infer<typeof analysisRequestSchema>
+type BatchAnalysisRequest = z.infer<typeof batchAnalysisRequestSchema>
+type AnalysisPayload = z.infer<typeof analysisPayloadSchema>
+
+function isBatchAnalysisRequest(
+  body: AnalysisPayload,
+): body is BatchAnalysisRequest {
+  return 'questions' in body
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    await requireAdminUser()
+    const body = await parseEvaluationRequest(request, analysisPayloadSchema)
 
     // Check if this is a batch request
-    if ('questions' in body && Array.isArray(body.questions)) {
-      return handleBatchAnalysis(body as BatchAnalysisRequest)
+    if (isBatchAnalysisRequest(body)) {
+      return handleBatchAnalysis(body)
     }
 
     // Single question analysis (legacy support)
-    return handleSingleAnalysis(body as AnalysisRequest)
+    return handleSingleAnalysis(body)
   } catch (error) {
-    console.error('Analysis error:', error)
-    return NextResponse.json(
-      { error: 'Failed to analyze question' },
-      { status: 500 }
+    return evaluationApiErrorResponse(
+      error,
+      'Failed to analyze question.',
     )
   }
 }
@@ -44,16 +70,28 @@ async function handleBatchAnalysis(body: BatchAnalysisRequest) {
 
   console.log(`🔍 Analyzing ${questions.length} questions in batch...`)
 
-  // Analyze all questions in parallel
-  const analysisPromises = questions.map(async (question) => {
-    const prompt = buildAnalysisPrompt(question)
+  const results = []
+  for (let index = 0; index < questions.length; index += ANALYSIS_CONCURRENCY) {
+    const batch = questions.slice(index, index + ANALYSIS_CONCURRENCY)
+    results.push(...await Promise.all(batch.map(analyzeQuestion)))
+  }
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert evaluation assistant helping to analyze failed test cases for a financial Q&A system.
+  console.log(`✅ Batch analysis complete for ${results.length} questions`)
+
+  return NextResponse.json({
+    analyses: results,
+  })
+}
+
+async function analyzeQuestion(question: AnalysisRequest) {
+  const prompt = buildAnalysisPrompt(question)
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert evaluation assistant helping to analyze failed test cases for a financial Q&A system.
 
 Your job is to:
 1. Determine if the golden test (expected output) is correct, or if the AI's actual output is better
@@ -61,28 +99,19 @@ Your job is to:
 3. Recommend a specific action (fix prompt, update golden test, or accept both)
 
 Be concise but thorough. Think from the perspective of what a real user would want.`,
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.3,
-    })
-
-    return {
-      question_id: question.question_id,
-      analysis: completion.choices[0].message.content,
-    }
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    temperature: 0.3,
   })
 
-  const results = await Promise.all(analysisPromises)
-
-  console.log(`✅ Batch analysis complete for ${results.length} questions`)
-
-  return NextResponse.json({
-    analyses: results,
-  })
+  return {
+    question_id: question.question_id,
+    analysis: completion.choices[0].message.content,
+  }
 }
 
 async function handleSingleAnalysis(body: AnalysisRequest) {
