@@ -78,21 +78,22 @@ The August 6 production release added the next reliability layer:
 
 The package passed the full Vitest suite, TypeScript, ESLint with no errors, a
 production Next.js build, the production dependency audit, a clean local
-Supabase replay, database lint, and an empty local schema diff. The subsequent
-reliability release brought the production ledger through all 89 migrations
-ending at `20260806142000`; its second push dry run was empty, the app was
-promoted, protected cron calls were exercised through the Vault-signed path,
-and all five schedules were active. The new authorization migration described
-below is migration 90 and is not included in that production claim.
+Supabase replay, database lint, and an empty local schema diff. The reliability
+release first brought the production ledger through 89 migrations ending at
+`20260806142000`; the authorization release below subsequently brought it
+through migration 90, `20260806143000`. Both follow-up push dry runs were empty.
+The application was promoted and its matching authorization boundary was then
+independently verified, protected cron calls were exercised through the
+Vault-signed path, and all five schedules were active.
 
 No `NEWSLETTER_ALERT_WEBHOOK_URL` is configured in production. In-app
 notifications remain useful without it; the outbox intentionally performs no
 network delivery until a real receiver and dedicated signing secret are set.
 
-## August 6 P0 Authorization And Trust Hardening
+## August 6 P0 Authorization And Trust Hardening — Released
 
-The next release candidate closes a set of historical trust gaps that mattered
-more than adding another feature:
+The production release closes a set of historical trust gaps that mattered more
+than adding another feature:
 
 - the Supabase Data API now has an explicit role matrix: public market data is
   read-only, signed-in user data is owner-scoped, operational and evaluation
@@ -121,11 +122,29 @@ more than adding another feature:
 
 The contract is backed by pgTAP role, policy, function, ownership, and effective
 Storage-DML checks, plus focused tests for admin authorization order,
-service-role-only scripts, and the retired placeholder surface. This section
-describes the release candidate in the repository; it does **not** claim that
-the authorization migration or application changes have been promoted to
-production yet. Promotion, a second migration dry run, and live denial/read
-checks remain the release gate.
+service-role-only scripts, and the retired placeholder surface. The release
+passed 696 Vitest checks and 120 database assertions, TypeScript, ESLint with no
+errors, a production build, a clean local migration replay, database lint, and
+an empty schema diff.
+
+Production promotion is also verified rather than inferred. Vercel deployment
+`dpl_7Xp2amJdaRFr2p6166J7oaYNdd5j` serves merge commit `cc36eab`; the canonical
+Market Internals route presents the honest unavailable state, the retired
+`/test-schema` route returns `404`, and the dashboard no longer links to that
+experiment. The linked Supabase ledger contains migration 90 and a second dry
+run reports no pending work. Live anonymous-client probes proved that the
+intentional public company read still returns `200`, while query history, raw
+filing chunks, query-log insertion, and the privileged cash-update RPC are
+rejected with PostgreSQL permission errors. A valid PNG upload to the
+`newsletter-charts` bucket is rejected by Storage with `AccessDenied`.
+
+The post-release newsletter health check remained green: daily and mid-morning
+generation last succeeded, Beehiiv reconciliation was current and successful,
+and the only warning was the intentionally disabled optional webhook receiver.
+No runtime errors were present in the promoted deployment's release-window
+error log. These checks prove the intended live boundary; they do not prove
+that the historically broader boundary was ever exploited, and no such claim
+is being made.
 
 ## Next Priorities
 
