@@ -2075,9 +2075,11 @@ why boundary tests deserve disproportionate respect.
 Provider capability is explicit too. Massive supports second-level candles;
 the FMP implementation does not. The old generic call could fall through to a
 daily endpoint and return an empty-looking replay. The route now fails with a
-clear capability error unless the configured provider can fulfill the
-contract. A feature being unavailable is honest. A feature quietly asking the
-wrong endpoint is not.
+clear capability error when its Massive credential is absent. When that key is
+available, replay uses Massive directly without forcing the dashboard and
+other market-data surfaces away from their configured FMP provider. A feature
+being unavailable is honest. A feature quietly asking the wrong endpoint is
+not.
 
 Caching and retry follow the data's clock:
 

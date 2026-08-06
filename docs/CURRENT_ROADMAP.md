@@ -161,8 +161,9 @@ shared problem and the weakest individual surface:
   a mobile-safe live-detail chart, two purposeful replay views, responsive
   canvases, stable accessible controls, and reduced-motion behavior;
 - replay now uses the actual historical previous close, defaults to the latest
-  completed session and selected mover, rejects providers without second-level
-  capability, avoids permanently caching empty history, supports correlation-
+  completed session and selected mover, uses an available Massive key for
+  second-level candles without changing the app-wide data provider, avoids
+  permanently caching empty history, supports correlation-
   aware retry (with incomplete responses left uncached), batches
   playback through 100x, and suspends live resources
   while replay owns the screen;

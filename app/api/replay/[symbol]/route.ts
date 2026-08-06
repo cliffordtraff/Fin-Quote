@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { getProvider } from '@/lib/providers'
+import { MassiveProvider } from '@/lib/providers/massive'
 import type { CandleTimespan } from '@/lib/providers/types'
 import { getTradingDate } from '@/lib/market-hours'
 import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
@@ -161,12 +161,14 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid from/to range' }, { status: 400 })
   }
 
-  // FMP has no second-candle endpoint. Its generic provider method otherwise
-  // falls through to daily candles, which looks like a valid but empty replay.
-  if ((process.env.DATA_PROVIDER ?? 'fmp') !== 'massive') {
+  // Replay is capability-specific: it uses Massive whenever that credential
+  // exists without forcing every other market-data surface off FMP. FMP has
+  // no second-candle endpoint; its generic fallback looks valid but returns
+  // the wrong granularity.
+  if (!process.env.MASSIVE_API_KEY) {
     return NextResponse.json(
       {
-        error: 'Second-level replay requires DATA_PROVIDER=massive.',
+        error: 'Second-level replay requires MASSIVE_API_KEY.',
         code: 'UNSUPPORTED_REPLAY_PROVIDER',
       },
       { status: 501 },
@@ -185,7 +187,7 @@ export async function GET(
     return NextResponse.json(cached.payload)
   }
 
-  const provider = getProvider()
+  const provider = new MassiveProvider()
   const multiplier = timeframe === '1s' ? 1 : 10
   const timespan: CandleTimespan = 'second'
 

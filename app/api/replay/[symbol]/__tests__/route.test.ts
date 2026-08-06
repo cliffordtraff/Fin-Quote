@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  getProvider: vi.fn(),
+  MassiveProvider: vi.fn(),
   getTradingDate: vi.fn(),
   getIntraday: vi.fn(),
   getHistoricalDaily: vi.fn(),
   getQuote: vi.fn(),
 }))
 
-vi.mock('@/lib/providers', () => ({
-  getProvider: mocks.getProvider,
+vi.mock('@/lib/providers/massive', () => ({
+  MassiveProvider: mocks.MassiveProvider,
 }))
 
 vi.mock('@/lib/market-hours', () => ({
@@ -45,15 +45,17 @@ function replayRequest(
 describe('replay route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv('DATA_PROVIDER', 'massive')
+    vi.stubEnv('MASSIVE_API_KEY', 'test-massive-key')
     mocks.getTradingDate.mockReturnValue('2026-08-06')
     mocks.getIntraday.mockResolvedValue([])
     mocks.getHistoricalDaily.mockResolvedValue([])
     mocks.getQuote.mockResolvedValue(null)
-    mocks.getProvider.mockReturnValue({
-      getIntraday: mocks.getIntraday,
-      getHistoricalDaily: mocks.getHistoricalDaily,
-      getQuote: mocks.getQuote,
+    mocks.MassiveProvider.mockImplementation(function MassiveProviderMock() {
+      return {
+        getIntraday: mocks.getIntraday,
+        getHistoricalDaily: mocks.getHistoricalDaily,
+        getQuote: mocks.getQuote,
+      }
     })
   })
 
@@ -178,7 +180,7 @@ describe('replay route', () => {
     expect(await response.json()).toEqual({
       error: 'Replay bounds must use the same trading date',
     })
-    expect(mocks.getProvider).not.toHaveBeenCalled()
+    expect(mocks.MassiveProvider).not.toHaveBeenCalled()
   })
 
   it('rejects an explicit replay date that disagrees with full bounds', async () => {
@@ -192,7 +194,7 @@ describe('replay route', () => {
     expect(await response.json()).toEqual({
       error: 'Replay date does not match from/to bounds',
     })
-    expect(mocks.getProvider).not.toHaveBeenCalled()
+    expect(mocks.MassiveProvider).not.toHaveBeenCalled()
   })
 
   it('rejects an impossible date embedded in a full replay bound', async () => {
@@ -203,7 +205,7 @@ describe('replay route', () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: 'Invalid from/to date' })
-    expect(mocks.getProvider).not.toHaveBeenCalled()
+    expect(mocks.MassiveProvider).not.toHaveBeenCalled()
   })
 
   it('returns null instead of borrowing a current quote when prior history is unavailable', async () => {
@@ -331,8 +333,8 @@ describe('replay route', () => {
     })
   })
 
-  it('rejects a provider that cannot supply second-level candles', async () => {
-    vi.stubEnv('DATA_PROVIDER', 'fmp')
+  it('rejects replay when its second-level provider credential is unavailable', async () => {
+    vi.stubEnv('MASSIVE_API_KEY', '')
 
     const response = await replayRequest('NVDA', {
       date: '2026-07-10',
@@ -342,10 +344,10 @@ describe('replay route', () => {
 
     expect(response.status).toBe(501)
     expect(await response.json()).toEqual({
-      error: 'Second-level replay requires DATA_PROVIDER=massive.',
+      error: 'Second-level replay requires MASSIVE_API_KEY.',
       code: 'UNSUPPORTED_REPLAY_PROVIDER',
     })
-    expect(mocks.getProvider).not.toHaveBeenCalled()
+    expect(mocks.MassiveProvider).not.toHaveBeenCalled()
   })
 
   it('rejects malformed symbols and impossible dates before touching the provider', async () => {
@@ -360,6 +362,6 @@ describe('replay route', () => {
     expect(await invalidSymbol.json()).toEqual({ error: 'Invalid symbol' })
     expect(invalidDate.status).toBe(400)
     expect(await invalidDate.json()).toEqual({ error: 'Invalid date' })
-    expect(mocks.getProvider).not.toHaveBeenCalled()
+    expect(mocks.MassiveProvider).not.toHaveBeenCalled()
   })
 })
