@@ -15,14 +15,15 @@ ledger was verified against the 85-migration baseline, the second push dry run
 was empty, the isolated Vercel build was promoted, protected cron calls passed,
 and all five schedules were resumed.
 
-There is now a **separate newsletter reliability follow-up** in the working
-branch. It adds source/entity validation, database-fenced automation leases,
-durable terminal-notification receipts, immutable chart assets, stricter
-delivery validation, cron heartbeats and an off-site watchdog, and independent
-Beehiiv statistics health. Its focused failure-injection coverage has passed,
-but this document does **not** claim that the four new migrations or matching
-application code are deployed to production. Migrations `20260806135000`
-through `20260806142000` must be applied before that code is promoted.
+The **newsletter reliability follow-up is now live**. Migrations
+`20260806135000` through `20260806142000` were applied with the four newsletter
+schedules paused and no active leases. The second linked dry run was empty,
+the linked schema lint was clean, and application commit `83407ea` was promoted
+as Vercel production deployment `dpl_CqFLdAqR2nr38zwdfj3Aca8QLJZL` before the
+schedules were resumed. The release adds source/entity validation,
+database-fenced automation leases, durable terminal-notification receipts,
+immutable chart assets, stricter delivery validation, cron heartbeats, an
+off-site watchdog workflow, and independent Beehiiv statistics health.
 
 ## Readiness At A Glance
 
@@ -37,18 +38,18 @@ through `20260806142000` must be applied before that code is promoted.
 | Google Postmaster | Verified | `theintraday.com` is enrolled for reputation monitoring |
 | Chart custom domain | Verified | `https://charts.theintraday.com/health` returns `200` |
 | Chart mobile/a11y repair | Deployed | Charting Platform PR #2 is merged and deployed |
-| Fin dependency posture | Verified locally | Next.js 15.5.22, React 19.2.1, zero production audit vulnerabilities |
+| Fin dependency posture | Verified release | Next.js 15.5.22, React 19.2.1, zero full or production audit vulnerabilities |
 | Original Fin launch-hardening package | Deployed | Full validation, promotion, protected-route smoke, and reconciliation checks passed |
-| Supabase baseline convergence | Complete | The previously released 85 versions aligned; the second push dry run was empty |
-| Newsletter reliability follow-up | Awaiting production promotion | Branch implementation and focused regressions exist; four new migrations and matching code still require the release sequence below |
-| Source/entity integrity | Awaiting production promotion | The MTCH/“Triple Match 3D” collision is rejected by fail-closed validation in generation, ranking, and daily selection |
-| Automation lease fencing | Awaiting production migration | Writes require the current token and an unexpired database lease; expiry/takeover regressions pass |
-| Terminal notification receipts | Awaiting production migration | Terminal runs remain retryable until their deduplicated notifications are durably recorded |
-| Immutable images and delivery gates | Awaiting production promotion | Content-addressed PNGs plus subject, preheader, link, image, alt-text, and HTML-size validation are implemented |
-| Cron heartbeat health | Awaiting production promotion | Durable run rows and `/api/health/newsletter` are implemented but need live cron evidence |
-| Off-site watchdog | Code ready; alert path unverified | GitHub Actions polls the health endpoint every ten minutes; repository/on-call notification delivery must be confirmed after deployment |
-| Beehiiv statistics health | Awaiting production migration | Statistics freshness/errors are separated from lifecycle health and preserve the last known metrics |
-| Optional webhook delivery | Not configured at last verification | Missing or invalid `NEWSLETTER_ALERT_WEBHOOK_URL` is a warning; durable in-app notifications remain healthy |
+| Supabase baseline convergence | Complete | All local and remote versions through `20260806142000` align; the second push dry run was empty |
+| Newsletter reliability follow-up | Deployed and smoke-tested | Four migrations, production application deployment, protected cron probes, and live health checks passed |
+| Source/entity integrity | Verified in production | MTCH was rebuilt from Match Group's SEC filing; the active draft contains no Huya or “Triple Match 3D” text |
+| Automation lease fencing | Deployed | Writes require the current token and an unexpired database lease; pgTAP expiry/takeover regressions pass 56/56 |
+| Terminal notification receipts | Verified in production | Daily and mid-morning terminal notifications each have a durable applied receipt with no last error |
+| Immutable images and delivery gates | Deployed | Content-addressed PNGs plus subject, preheader, link, image, alt-text, and HTML-size validation are active |
+| Cron heartbeat health | Healthy in production | `/api/health/newsletter` returned `200`; all four cron routes recorded fresh `succeeded` rows |
+| Off-site watchdog | Workflow ready; hosted execution externally blocked | GitHub Actions was in a declared major outage, so queued jobs never received a runner; Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` is live |
+| Beehiiv statistics health | Verified in production | Latest published canary stats reconciled without lifecycle or statistics errors |
+| Optional webhook delivery | Intentionally not configured | Missing `NEWSLETTER_ALERT_WEBHOOK_URL` is a warning; durable in-app notifications and core health remain healthy |
 
 ## Verified Product Routes
 
@@ -58,8 +59,8 @@ through `20260806142000` must be applied before that code is promoted.
 | Pulse Today | `/dashboard/pulse-today` | Existing production surface | Primary market cockpit |
 | Morning Brief | `/dashboard/morning-brief` | Existing production surface | Persisted pre-open baseline |
 | Morning Report | `/newsletter/morning-review` | Production path exercised | Unattended 40/40 batch and canary source |
-| Newsletter Operations | `/newsletter/operations` | Baseline deployed; follow-up pending | Existing stats and reconciliation are live; independent stats-health fields and new terminal receipts require the follow-up release |
-| Newsletter Cron Health | `/api/health/newsletter` | Awaiting production promotion | Returns no-store `200` for healthy and `503` for missing, failed, stale, or unavailable cron observability |
+| Newsletter Operations | `/newsletter/operations` | Production `200` | Lifecycle, statistics health, terminal receipts, and outbox state are live |
+| Newsletter Cron Health | `/api/health/newsletter` | Production healthy | Returned `200` with fresh successful daily, mid-morning, Beehiiv, and webhook-outbox heartbeats |
 | Mid-Morning Brief | `/dashboard/mid-morning-brief` | Existing production surface | Opening-session delta |
 | Stock detail | `/stock/AAPL` | Existing production surface | Embedded chart path available |
 | Chart workspace | `/workspace/chart` | Owning app repair deployed | Public chart health and workspace routing verified |
@@ -114,10 +115,10 @@ was then applied with newsletter and dashboard jobs paused. The live tables,
 policies, grants, RPCs, cron schedules, and migration ledger were verified; a
 second push dry run reports the remote database is up to date.
 
-Those statements describe the original 85-migration baseline. They must not be
-used as evidence that the four-migration reliability follow-up is already live.
+The four-migration reliability follow-up now extends that baseline, and the
+remote ledger is aligned through `20260806142000`.
 
-## Reliability Follow-up Awaiting Production Promotion
+## Reliability Follow-up Deployed
 
 The working branch adds the following defenses:
 
@@ -138,9 +139,10 @@ The working branch adds the following defenses:
 - separate Beehiiv statistics freshness/errors so an analytics outage cannot
   hide a successful lifecycle reconciliation or make stale metrics look fresh.
 
-The four schema migrations are intentionally ordered before the application
-deployment. The code calls their new table, columns, and RPCs; promoting it
-first would turn a reliability release into an avoidable outage.
+The four schema migrations were applied in that order before the matching
+application deployment. The schedules stayed paused until the ledger, schema,
+application routes, repaired MTCH batch, and terminal notification receipts
+were verified.
 
 ## Notification And Webhook Contract
 
@@ -156,7 +158,7 @@ cannot be made unread. The delivery worker leases a small due batch, signs the
 exact raw payload, and records success or retry state independently from the
 morning pipeline.
 
-At the last production verification, no external webhook URL was configured.
+At the latest production verification, no external webhook URL was configured.
 That is optional coverage, not a newsletter-generation blocker: in-app
 notifications remain the durable source, and the outbox safely avoids network
 calls until both a real URL and a dedicated signing secret exist. The follow-up
@@ -176,14 +178,15 @@ through `succeeded` or `failed`. The public health route summarizes only fixed
 job names, normalized states, and timestamps; it returns `503` when required
 runs are missing, stale, failed, or observability itself is unavailable.
 
-The off-site GitHub Actions watchdog calls that endpoint every ten minutes and
+The off-site GitHub Actions watchdog is configured to call that endpoint every ten minutes and
 fails on an unreachable deployment, non-200 response, or unhealthy body. That
 solves the “the monitor died with the app” blind spot. It does not, by itself,
-prove a person will be paged. After production promotion, verify that GitHub
-workflow-failure notifications reach the chosen on-call destination. Vercel
-deployment/function alerts are a complementary optional layer and likewise
-need their production receiver and policy verified; no Vercel alert should be
-described as live merely because the health endpoint exists.
+prove a person will be paged. GitHub Actions had a declared major outage during
+this release: the workflow jobs were cancelled while still queued and produced
+no repository failure output. Rerun the watchdog after GitHub restores Actions,
+then verify workflow-failure notifications reach the chosen on-call
+destination. The matching Vercel newsletter 5xx rule is live and its checked-in
+artifact matches alert `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c`.
 
 ## Security And Dependency Evidence
 
@@ -192,9 +195,13 @@ baseline no longer described the repository. The reviewed versions are
 Next.js 15.5.22 and React 19.2.1, and `npm audit --omit=dev` reports zero
 production vulnerabilities. The original release's final branch test,
 type-check, build, secret scan, Supabase Preview, Vercel Preview, and production
-smoke gates all passed. The follow-up package has focused failure-injection
-coverage, but still requires its own production migration, deployment, and
-smoke evidence.
+smoke gates all passed. The follow-up release passed 129 Vitest files with 682
+tests, TypeScript, ESLint with zero errors, the Next.js production build, full
+and production dependency audits with zero vulnerabilities, local database
+replay, 56/56 pgTAP assertions, linked schema lint, Supabase Preview, Vercel
+Preview, production deployment, and live smoke checks. Hosted GitHub jobs did
+not execute because the platform never assigned a runner during its outage;
+they were cancelled from the queue without test output.
 
 ## Previously Completed Baseline Release Sequence
 
@@ -214,60 +221,53 @@ smoke evidence.
 9. After choosing an alert receiver, configure the URL and signing secret and
    send the admin webhook canary.
 
-Step 9 remains optional and was not completed at the last verification. Steps
-1–8 describe the earlier baseline release, not the pending reliability
-follow-up.
+Step 9 remains optional and was not completed at the latest verification.
+Steps 1–8 describe the earlier baseline release.
 
-## Required Reliability Follow-up Release Sequence
+## Completed Reliability Follow-up Release Sequence
 
-1. Capture a fresh production backup, migration-ledger snapshot, and current
-   cron/job state. Pause the newsletter schedules and confirm no relevant worker
-   is active.
-2. Run a linked Supabase dry run and require that the only pending versions are
+1. Captured the migration-ledger and exact cron/job state, paused the four
+   newsletter schedules, waited beyond the worker timeout, and proved all five
+   lease pools were empty.
+2. Ran a linked Supabase dry run and confirmed the only pending versions were
    `20260806135000`, `20260806140000`, `20260806141000`, and
    `20260806142000` in that order.
-3. Apply the four migrations before application code. Verify the cron-run table,
+3. Applied the four migrations before application code and verified the cron-run table,
    service-role grants, fenced claim/renew/update RPCs, terminal notification
    receipt columns/RPCs, and Beehiiv statistics-health columns.
-4. Require an empty second migration dry run. Keep schedules paused while the
-   matching application deployment is built and promoted.
-5. Smoke the public newsletter health route and every protected cron route.
-   Confirm a real invocation creates a heartbeat that progresses to the correct
-   terminal state, and that missing/stale/failure fixtures produce `503` without
-   exposing internal errors.
-6. Confirm the off-site GitHub watchdog passes against production, then test a
-   controlled unhealthy response or equivalent fixture and verify that the
-   selected repository/on-call notification path actually alerts a human.
-   Verify any configured Vercel alert separately.
-7. Exercise the daily and mid-morning automation takeover path, including a
-   stale write rejection and terminal-notification retry, before resuming their
-   schedules.
-8. Publish a controlled Beehiiv canary. Confirm its subject/preheader limits,
+4. Required an empty second migration dry run and kept schedules paused while
+   deployments `dpl_HbLeT95hjVUFNcv9dSauPTtF4gEn` and final
+   `dpl_CqFLdAqR2nr38zwdfj3Aca8QLJZL` were built and promoted.
+5. Smoked the public health and newsletter operations routes, then exercised
+   all protected cron routes. Each recorded a successful terminal heartbeat;
+   health returned `200` after the schedules resumed.
+6. Verified the live Vercel 5xx rule. The GitHub watchdog remains to be rerun
+   because a declared Actions outage cancelled its jobs before runner
+   assignment; this was an external queue cancellation, not a failed check.
+7. Exercised stale-token/takeover paths in 56 pgTAP assertions and repaired the
+   terminal 39-of-40 parent/child projection to 40-of-40 with a refreshed
+   notification receipt.
+8. Published and reconciled a controlled Beehiiv canary. Its subject/preheader limits,
    HTTPS links, non-clipped HTML, safe immutable chart URL, lifecycle state,
    statistics freshness, and no duplicate events or posts on reconciliation.
-9. Resume schedules one at a time, observe their first durable heartbeats, and
-   document the production deployment, migration ledger, watchdog run, and
-   canary evidence here.
-10. If an external webhook receiver is chosen, configure its HTTPS URL and
-    dedicated signing secret and run the admin canary. If it remains absent,
-    record the expected warning and confirm core health stays green.
+9. Resumed all four exact schedules, observed successful heartbeats for daily,
+   mid-morning, Beehiiv reconciliation, and webhook outbox, and confirmed zero
+   active leases.
+10. Left the optional external webhook receiver unconfigured, recorded its
+    expected warning, and confirmed core health remains green.
 
 ## Remaining Risks
 
 - Inbox placement is still warming even though authentication and provider
   delivery passed.
-- The reliability follow-up is not yet production-deployed; branch tests are
-  not substitutes for live migration, cron, watchdog, asset, and Beehiiv
-  evidence.
-- A GitHub watchdog failure reaches a human only if repository/on-call
-  notifications are configured and tested. Vercel alert coverage is likewise
-  optional until a receiver and policy are verified.
+- The GitHub watchdog still needs a hosted rerun and human-notification proof
+  after the declared GitHub Actions outage ends. The live Vercel 5xx rule
+  provides an independent application-error path in the meantime.
 - External webhook alerts cannot leave the durable outbox until a real
   destination is configured, but that does not block in-app notifications or
   core cron health.
-- Beehiiv statistics may be stale while lifecycle reconciliation is healthy;
-  operators must read the independent freshness and error fields after the
-  follow-up is deployed.
+- Beehiiv statistics may become stale while lifecycle reconciliation remains
+  healthy; operators must read the independent freshness and error fields.
 
 ## Operating Sequence After Follow-up Promotion
 

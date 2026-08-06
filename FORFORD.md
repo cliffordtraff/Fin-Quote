@@ -1367,11 +1367,11 @@ and separates historical ledger repair from schema changes that are genuinely
 missing in production. A clean local Supabase instance has replayed the whole
 history successfully. That proves the map is internally navigable.
 
-It does **not** mean production has been changed. At the time this chapter was
-written, production application was still a release gate. The safe order is:
-backup, repair the historical ledger, inspect a dry run, apply only the
-expected migrations, verify the live objects, and demand an empty second dry
-run. Database migrations go before app code that calls their new functions.
+At that checkpoint it did **not** mean production had changed; the application
+was still a release gate. The release later followed the safe order: capture
+the ledger and worker state, inspect a dry run, apply only the expected
+migrations, verify the live objects, demand an empty second dry run, and only
+then deploy application code that calls the new functions.
 
 **The lesson:** migration history is not paperwork. It is executable recovery
 infrastructure. A database you cannot recreate is a database you only partly
@@ -1685,6 +1685,22 @@ For Match Group, that meant falling through the contaminated Huya association
 to Match Group's own August 4 filing. “Use official evidence last” is a much
 safer recovery rule than “use whatever text is left.”
 
+The live repair exposed one more subtle seam. The replacement headline named
+Match Group correctly, but the model shortened one sentence to “Match
+reported.” That sentence was factually plausible yet failed the identity gate,
+as it should: “match” is also an ordinary word. Generated summaries now have to
+name the full recognized company or its ticker, and retry coverage treats an
+identity-rejected summary as unfinished work. The daily repair path also
+validates and refreshes both the headline **and** the summary. Checking only
+the headline had allowed a corrected source to carry an older ambiguous
+sentence into a fresh draft.
+
+This is a memorable version of a general rule: when a record is a bundle of
+claims, validating one field does not bless its siblings. A passport photo
+matching the traveler does not prove the address printed below it. Validate
+every field that can independently steer a decision, and make the repair path
+refresh every field that can independently be stale.
+
 ### Failure Injection Is Rehearsal For The Bad Day
 
 Happy-path tests prove that the feature can work once. This pass concentrated
@@ -1720,21 +1736,36 @@ public health check also gives each cron one scheduled period at the start of
 its UTC window and explicitly looks for older abandoned heartbeats, so it does
 not trade false reassurance for noisy first-tick alarms.
 
-### Release State: Proven In The Branch, Not Yet Promoted
+### Release State: Promoted, Reconciled, And Watched
 
-The earlier August 6 launch-hardening baseline and its 85-migration ledger were
-deployed and verified in production. This follow-up reliability package is a
-new release boundary. Its implementation and focused failure-injection tests
-have been validated in the branch, but migrations
-`20260806135000` through `20260806142000` and the matching application code
-have **not yet been claimed as production-deployed** in this record.
+The reliability follow-up is now live. The four newsletter schedules were
+paused and allowed to drain; every relevant lease pool was empty. The linked
+dry run contained exactly migrations `20260806135000` through
+`20260806142000`, those migrations were applied in order, the linked schema
+lint was clean, and the second dry run was empty. Application commit `83407ea`
+then became Vercel production deployment
+`dpl_CqFLdAqR2nr38zwdfj3Aca8QLJZL` before the schedules resumed.
 
-That distinction is part of the hardening. The four migrations must land before
-the application begins calling their tables and RPCs; then the deployment,
-protected cron routes, public health endpoint, off-site watchdog, immutable
-image publication, and Beehiiv reconciliation need production smoke evidence.
-Optional webhook and alert receivers should be tested if configured, but their
-absence does not invalidate the durable in-app path.
+The proof was deliberately product-shaped, not just deployment-shaped. The
+quarantined Match Group issue was regenerated from the company's SEC filing;
+its active draft contains no Huya or “Triple Match 3D” text. The child run and
+parent automation both reconcile to 40 selected, 40 generated, 40 ready, zero
+attention, and zero failed. The terminal notification receipt has one
+successful attempt and no error. Daily, mid-morning, Beehiiv reconciliation,
+and webhook outbox all recorded fresh successful heartbeats, the public health
+route returned `200`, and all four schedules were active with no live leases.
+The latest Beehiiv canary remained published with one sent, one delivered, one
+open, zero bounces, zero spam reports, and a fresh error-free statistics fetch.
+
+The release gate also passed 129 Vitest files and 682 tests, TypeScript, ESLint
+with zero errors, a production build, full and production dependency audits
+with zero vulnerabilities, 56/56 database assertions, Supabase Preview, and
+Vercel Preview. GitHub Actions itself was in a declared major outage: hosted
+jobs were cancelled while still waiting for runners and produced no test
+output. The off-site watchdog must be rerun after Actions recovers. A live
+Vercel 5xx rule supplies an independent error signal in the meantime. The
+optional external webhook remains intentionally unconfigured; its warning does
+not weaken durable in-app notifications or core health.
 
 **The lesson:** perfection is not a dashboard full of green boxes. It is a
 system that refuses the wrong evidence, fences yesterday's worker, remembers
