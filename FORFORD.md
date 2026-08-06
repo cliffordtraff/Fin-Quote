@@ -1760,13 +1760,18 @@ open, zero bounces, zero spam reports, and a fresh error-free statistics fetch.
 The release gate also passed 129 Vitest files and 682 tests, TypeScript, ESLint
 with zero errors, a production build, full and production dependency audits
 with zero vulnerabilities, 56/56 database assertions, Supabase Preview, and
-Vercel Preview. [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74)
-reported a critical Actions incident with the component in major outage: hosted
-jobs were cancelled while still waiting for runners and produced no test
-output. The off-site watchdog must be rerun after Actions recovers. A live
-Vercel 5xx rule supplies an independent error signal in the meantime. The
-optional external webhook remains intentionally unconfigured; its warning does
-not weaken durable in-app notifications or core health.
+Vercel Preview, and a pinned Gitleaks 8.30.1 scan of the exact merged tree.
+[GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74) reported a
+critical Actions incident with the component in major outage: the larger hosted
+CI jobs were cancelled while still waiting for runners and produced no test
+output. A later hosted watchdog run,
+[31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699),
+did receive a runner and passed the live production-health assertion. A
+scheduled tick and the intentional-failure notification path still need proof
+after Actions recovers. A live Vercel 5xx rule supplies an independent error
+signal in the meantime. The optional external webhook remains intentionally
+unconfigured; its warning does not weaken durable in-app notifications or core
+health.
 
 **The lesson:** perfection is not a dashboard full of green boxes. It is a
 system that refuses the wrong evidence, fences yesterday's worker, remembers

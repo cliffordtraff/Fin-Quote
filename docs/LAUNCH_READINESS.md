@@ -47,7 +47,7 @@ off-site watchdog workflow, and independent Beehiiv statistics health.
 | Terminal notification receipts | Verified in production | Daily and mid-morning terminal notifications each have a durable applied receipt with no last error |
 | Immutable images and delivery gates | Deployed | Content-addressed PNGs plus subject, preheader, link, image, alt-text, and HTML-size validation are active |
 | Cron heartbeat health | Healthy in production | `/api/health/newsletter` returned `200`; all four cron routes recorded fresh `succeeded` rows |
-| Off-site watchdog | Workflow ready; hosted execution externally blocked | [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74) reported a critical Actions incident with the component in major outage, so queued jobs never received a runner; Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` is live |
+| Off-site watchdog | Hosted healthy path verified; scheduled tick pending recovery | Manual run [31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699) passed against merged `main`; no scheduled run is visible during the critical Actions incident, and Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` is live |
 | Beehiiv statistics health | Verified in production | Latest published canary stats reconciled without lifecycle or statistics errors |
 | Optional webhook delivery | Intentionally not configured | Missing `NEWSLETTER_ALERT_WEBHOOK_URL` is a warning; durable in-app notifications and core health remain healthy |
 
@@ -183,11 +183,14 @@ fails on an unreachable deployment, non-200 response, or unhealthy body. That
 solves the “the monitor died with the app” blind spot. It does not, by itself,
 prove a person will be paged. [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74)
 reported a critical Actions incident with the component in major outage during
-this release: the workflow jobs were cancelled while still queued and produced
-no repository failure output. Rerun the watchdog after GitHub restores Actions,
-then verify workflow-failure notifications reach the chosen on-call
-destination. The matching Vercel newsletter 5xx rule is live and its checked-in
-artifact matches alert `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c`.
+this release. The first jobs were cancelled while still queued, but a later
+manual run on merged `main`, [31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699),
+received a hosted runner and passed the production health assertion. No
+scheduled watchdog run is visible yet, so confirm a scheduled tick after
+Actions recovers and separately verify that an intentionally failing check
+reaches the chosen on-call destination. The matching Vercel newsletter 5xx
+rule is live and its checked-in artifact matches alert
+`ar_019fd7b2-6c0f-73ff-966a-119be7286e6c`.
 
 ## Security And Dependency Evidence
 
@@ -196,13 +199,15 @@ baseline no longer described the repository. The reviewed versions are
 Next.js 15.5.22 and React 19.2.1, and `npm audit --omit=dev` reports zero
 production vulnerabilities. The original release's final branch test,
 type-check, build, secret scan, Supabase Preview, Vercel Preview, and production
-smoke gates all passed. The follow-up release passed 129 Vitest files with 682
-tests, TypeScript, ESLint with zero errors, the Next.js production build, full
-and production dependency audits with zero vulnerabilities, local database
-replay, 56/56 pgTAP assertions, linked schema lint, Supabase Preview, Vercel
-Preview, production deployment, and live smoke checks. Hosted GitHub jobs did
-not execute because the platform never assigned a runner during its outage;
-they were cancelled from the queue without test output.
+smoke gates all passed. The follow-up release's exact merged tree passed pinned
+Gitleaks 8.30.1 with no leaks, 129 Vitest files with 682 tests, TypeScript,
+ESLint with zero errors, the Next.js production build, full and production
+dependency audits with zero vulnerabilities, local database replay, 56/56
+pgTAP assertions, linked schema lint, Supabase Preview, Vercel Preview,
+production deployment, and live smoke checks. The full hosted CI jobs did not
+execute because the platform never assigned their runners during its outage;
+they were cancelled from the queue without test output. The separate hosted
+production-watchdog run succeeded.
 
 ## Previously Completed Baseline Release Sequence
 
@@ -242,9 +247,11 @@ Steps 1–8 describe the earlier baseline release.
 5. Smoked the public health and newsletter operations routes, then exercised
    all protected cron routes. Each recorded a successful terminal heartbeat;
    health returned `200` after the schedules resumed.
-6. Verified the live Vercel 5xx rule. The GitHub watchdog remains to be rerun
-   because a declared Actions outage cancelled its jobs before runner
-   assignment; this was an external queue cancellation, not a failed check.
+6. Verified the live Vercel 5xx rule and successful hosted GitHub watchdog run
+   [31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699).
+   GitHub's critical Actions incident still prevented a scheduled tick from
+   appearing and cancelled the larger CI jobs before runner assignment; those
+   were external queue cancellations, not failed checks.
 7. Exercised stale-token/takeover paths in 56 pgTAP assertions and repaired the
    terminal 39-of-40 parent/child projection to 40-of-40 with a refreshed
    notification receipt.
@@ -261,8 +268,9 @@ Steps 1–8 describe the earlier baseline release.
 
 - Inbox placement is still warming even though authentication and provider
   delivery passed.
-- The GitHub watchdog still needs a hosted rerun and human-notification proof
-  after the GitHub Actions incident ends. The live Vercel 5xx rule
+- The watchdog's hosted healthy path passed, but a scheduled tick has not yet
+  appeared during the GitHub Actions incident and human notification from an
+  intentionally failing run remains unproved. The live Vercel 5xx rule
   provides an independent application-error path in the meantime.
 - External webhook alerts cannot leave the durable outbox until a real
   destination is configured, but that does not block in-app notifications or
