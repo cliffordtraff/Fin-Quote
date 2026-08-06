@@ -1,6 +1,7 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { requireAdminUser } from '@/lib/auth/admin'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export type ErrorCategory =
   | 'wrong_tool'
@@ -39,13 +40,8 @@ export async function markQueryIncorrect(params: {
   reviewerNotes?: string
 }): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = await createServerClient()
-
-    // Get current user (reviewer)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Must be logged in to review queries' }
-    }
+    const { user } = await requireAdminUser()
+    const supabase = createServiceRoleClient()
 
     // Update the query log with review information
     const { error } = await (supabase as any)
@@ -81,13 +77,8 @@ export async function markQueryCorrect(params: {
   reviewerNotes?: string
 }): Promise<{ success: boolean; error: string | null }> {
   try {
-    const supabase = await createServerClient()
-
-    // Get current user (reviewer)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return { success: false, error: 'Must be logged in to review queries' }
-    }
+    const { user } = await requireAdminUser()
+    const supabase = createServiceRoleClient()
 
     // Update the query log with review information
     const { error } = await (supabase as any)
@@ -129,7 +120,8 @@ export async function getQueriesForReview(params: {
   total: number
 }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
     const limit = params.limit ?? 50
     const offset = params.offset ?? 0
 
@@ -178,7 +170,8 @@ export async function getErrorCategoryStats(): Promise<{
   error: string | null
 }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
 
     const { data, error } = await (supabase as any)
       .from('query_logs')

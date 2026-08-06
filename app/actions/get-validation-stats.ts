@@ -1,6 +1,7 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { requireAdminUser } from '@/lib/auth/admin'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 // ============================================================================
 // Types
@@ -83,7 +84,8 @@ export async function getValidationStats(params?: {
   days?: number
 }): Promise<{ data: ValidationStats | null; error: string | null }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
     const days = params?.days ?? 7
 
     // Calculate date range
@@ -233,11 +235,12 @@ export async function getValidationFailures(params?: {
   severity?: 'critical' | 'high' | 'medium' | 'low' | 'all'
 }): Promise<{ data: ValidationFailure[] | null; error: string | null }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
     const limit = params?.limit ?? 50
 
     // Fetch recent validation failures
-    let query = supabase
+    const query = supabase
       .from('query_logs')
       .select('*')
       .eq('validation_passed', false)
@@ -296,7 +299,8 @@ export async function getQueriesForValidationReview(params?: {
   limit?: number
 }): Promise<{ data: ValidationFailure[] | null; error: string | null }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
     const limit = params?.limit ?? 50
 
     let query = supabase

@@ -4,7 +4,7 @@ This directory is the schema history for the app's Supabase project.
 
 Current state:
 
-- 84 SQL migrations as of 2026-08-06
+- 90 SQL migrations as of 2026-08-06
 - Span: October 2024 to August 2026
 - Covers core financial tables, filings search, chatbot evaluation/review infrastructure, S&P 500 expansion, insider data, cache tables, and charting-workspace persistence
 
@@ -19,6 +19,7 @@ Primary related references:
 - `data/MIGRATIONS.md`
 - `lib/database.types.ts`
 - `supabase/config.toml`
+- `supabase/tests/authorization_boundaries.sql`
 - `docs/migration-ledger-convergence.md`
 
 ## Migration History
@@ -109,6 +110,12 @@ Primary related references:
 | 2026-08-06 | `20260806131000_newsletter_webhook_outbox.sql` | Add leased, HMAC-signed newsletter alert delivery with durable exponential retries |
 | 2026-08-06 | `20260806132000_adopt_untracked_live_tables.sql` | Reproduce six live tables that predated the migration ledger |
 | 2026-08-06 | `20260806133000_converge_review_schema_and_cache_security.sql` | Converge catalyst review schema, cache RLS, and retired WIIM objects |
+| 2026-08-06 | `20260806134000_complete_schema_convergence.sql` | Finish live/replay schema convergence and remove stale browser writes from server-owned reference data |
+| 2026-08-06 | `20260806135000_newsletter_cron_observability.sql` | Add durable execution heartbeats for critical newsletter schedules |
+| 2026-08-06 | `20260806140000_fence_newsletter_automation_leases.sql` | Fence automation writes to the current, unexpired lease owner |
+| 2026-08-06 | `20260806141000_retry_terminal_newsletter_notifications.sql` | Track and safely retry terminal operator notifications across crash boundaries |
+| 2026-08-06 | `20260806142000_track_beehiiv_stats_health.sql` | Track Beehiiv statistics freshness separately from lifecycle reconciliation |
+| 2026-08-06 | `20260806143000_lock_down_data_api_authorization.sql` | Replace broad browser grants with an explicit read, owner, service, function, and Storage authorization matrix |
 
 ## Major Schema Areas
 
@@ -145,6 +152,48 @@ Primary related references:
   mid-morning production runs, durable notifications, and Beehiiv lifecycle
   reconciliation
 - WIIM morning brief runs and generated summary batches
+
+## Authorization Model
+
+Database access has two independent locks:
+
+1. PostgreSQL grants decide whether a role may attempt an operation on a table,
+   sequence, or function.
+2. Row Level Security policies decide which rows that permitted operation may
+   reach.
+
+Both must be correct. RLS cannot rescue an accidental table grant when a broad
+permissive policy also matches, and a perfect owner policy is useless if its
+role never received the required table privilege. Policies are permissive by
+default: matching policies are combined with `OR`, not `AND`. Every policy
+therefore names its intended role with `TO authenticated` or `TO service_role`;
+omitting `TO` means PostgreSQL applies it to `PUBLIC`.
+
+The current contract is:
+
+- `anon` receives `SELECT` only on the deliberate public market/reference
+  surface;
+- `authenticated` receives the same public reads plus narrowly scoped DML on
+  owner tables, with RLS binding rows to `auth.uid()`;
+- query-log creation and telemetry fields are server-owned; authenticated
+  callers can read/delete their own rows and update only feedback columns;
+- `service_role` owns ingestion, caches, operational records, review data, and
+  privileged RPC execution; and
+- future public-schema objects start private to browser roles through altered
+  default privileges.
+
+Supabase Storage is a special case. The platform-managed
+`supabase_storage_admin` role owns the underlying `storage.objects` ACLs, so an
+application migration should not pretend it can revoke those reserved grants.
+Browser upload, overwrite, and delete authority is enforced by the Storage RLS
+policy set. The pgTAP contract verifies RLS is enabled, confirms no matching
+browser write policy exists for `filings` or `newsletter-charts`, and attempts
+real DML as browser roles to prove those operations are denied.
+
+`supabase/tests/authorization_boundaries.sql` is the executable source of truth
+for this matrix. Update it whenever a migration deliberately expands a browser
+role; a policy name that merely *sounds* private is not evidence of an
+authorization boundary.
 
 ## Ledger Drift
 

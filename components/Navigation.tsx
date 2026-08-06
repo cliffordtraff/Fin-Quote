@@ -56,7 +56,6 @@ export default function Navigation() {
     { href: workspaceHref('/workspace/chart'), label: 'Chart', match: '/workspace/chart' },
     { href: workspaceHref('/workspace/fundamentals'), label: 'Fundamentals', match: '/workspace/fundamentals' },
     { href: workspaceHref('/workspace/overview'), label: 'Overview', match: '/workspace/overview' },
-    { href: '/concept', label: 'Market Internals' },
     { href: currentSymbol ? `/stock/${currentSymbol}` : '/stock/AAPL', label: 'Financials', match: '/stock' },
     ...(process.env.NEXT_PUBLIC_SHOW_STOCK_V1 === 'true'
       ? [{ href: currentSymbol ? `/stock-v1/${currentSymbol}` : '/stock-v1/AAPL', label: 'Financials (v1)', match: '/stock-v1' }]

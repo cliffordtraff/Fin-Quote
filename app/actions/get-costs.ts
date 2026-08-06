@@ -1,6 +1,7 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { requireAdminUser } from '@/lib/auth/admin'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 type QueryLogRow = {
   id: string
@@ -74,7 +75,8 @@ export async function getCostStats(params?: {
   endDate?: string
 }): Promise<{ data: CostStats | null; error: string | null }> {
   try {
-    const supabase = await createServerClient()
+    await requireAdminUser()
+    const supabase = createServiceRoleClient()
 
     // Build date filter
     let query = supabase

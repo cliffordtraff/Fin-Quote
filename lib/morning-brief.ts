@@ -224,9 +224,12 @@ function unavailableWiimReport(summaryDate: string, error: string): MorningBrief
 
 async function loadWiimReport(summaryDate: string): Promise<MorningBriefWiimReport> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
-    return unavailableWiimReport(summaryDate, 'Supabase is not configured.')
+    return unavailableWiimReport(
+      summaryDate,
+      'Supabase service-role access is not configured.',
+    )
   }
 
   const supabase = createClient(url, key, {

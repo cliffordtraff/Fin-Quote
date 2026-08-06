@@ -8,7 +8,7 @@ import { getRecentFilings } from './filings'
 import { FilingPassage } from './search-filings'
 import { buildToolSelectionPrompt, buildFinalAnswerPrompt } from '@/lib/tools'
 import { shouldGenerateChart, generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
-import { validateAnswer, CompleteValidationResults } from '@/lib/validators'
+import { validateAnswer } from '@/lib/validators'
 import {
   shouldRegenerateAnswer,
   determineRegenerationAction,
@@ -26,6 +26,7 @@ import {
   CHAT_ANSWER_MAX_OUTPUT_TOKENS,
   CHAT_ROUTING_MAX_OUTPUT_TOKENS,
 } from '@/lib/chatbot/constants'
+import { logQuery } from '@/lib/query-logs'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -121,111 +122,6 @@ export type AskQuestionResponse = {
   chartConfig: ChartConfig | null
   error: string | null
   queryLogId: string | null
-}
-
-/**
- * Log a query to the database for accuracy tracking and improvement
- * Returns the ID of the inserted log entry
- */
-export async function logQuery(data: {
-  sessionId: string
-  userId?: string | null
-  userQuestion: string
-  toolSelected: string
-  toolArgs: any
-  toolSelectionLatencyMs?: number
-  dataReturned?: any
-  dataRowCount?: number
-  toolExecutionLatencyMs?: number
-  toolError?: string
-  answerGenerated: string
-  answerLatencyMs?: number
-  validationResults?: CompleteValidationResults
-  // Token usage tracking
-  toolSelectionPromptTokens?: number
-  toolSelectionCompletionTokens?: number
-  toolSelectionTotalTokens?: number
-  answerPromptTokens?: number
-  answerCompletionTokens?: number
-  answerTotalTokens?: number
-  regenerationPromptTokens?: number
-  regenerationCompletionTokens?: number
-  regenerationTotalTokens?: number
-  embeddingTokens?: number
-}): Promise<string | null> {
-  try {
-    const supabase = await createServerClient()
-
-    // Calculate total cost (gpt-5-nano: $0.05/1M input, $0.40/1M output, embeddings: $0.02/1M)
-    const inputPrice = 0.05 / 1_000_000 // gpt-5-nano input price
-    const outputPrice = 0.40 / 1_000_000 // gpt-5-nano output price
-
-    let totalCost = 0
-    if (data.toolSelectionPromptTokens && data.toolSelectionCompletionTokens) {
-      totalCost += (data.toolSelectionPromptTokens * inputPrice) + (data.toolSelectionCompletionTokens * outputPrice)
-    }
-    if (data.answerPromptTokens && data.answerCompletionTokens) {
-      totalCost += (data.answerPromptTokens * inputPrice) + (data.answerCompletionTokens * outputPrice)
-    }
-    if (data.regenerationPromptTokens && data.regenerationCompletionTokens) {
-      totalCost += (data.regenerationPromptTokens * inputPrice) + (data.regenerationCompletionTokens * outputPrice)
-    }
-    if (data.embeddingTokens) {
-      totalCost += data.embeddingTokens * 0.02 / 1_000_000
-    }
-
-    // Type assertion needed because query_logs table not in generated types yet
-    const { data: insertedData, error } = await (supabase as any)
-      .from('query_logs')
-      .insert({
-        user_id: data.userId || null,
-        session_id: data.sessionId,
-        user_question: data.userQuestion,
-        tool_selected: data.toolSelected,
-        tool_args: data.toolArgs,
-        tool_selection_latency_ms: data.toolSelectionLatencyMs,
-        data_returned: data.dataReturned,
-        data_row_count: data.dataRowCount,
-        tool_execution_latency_ms: data.toolExecutionLatencyMs,
-        tool_error: data.toolError,
-        answer_generated: data.answerGenerated,
-        answer_latency_ms: data.answerLatencyMs,
-        validation_results: data.validationResults ? {
-          number_validation: data.validationResults.number_validation,
-          year_validation: data.validationResults.year_validation,
-          filing_validation: data.validationResults.filing_validation,
-          overall_severity: data.validationResults.overall_severity,
-          action_taken: 'shown', // For Phase 1, we always show the answer
-          latency_ms: data.validationResults.latency_ms,
-        } : null,
-        validation_passed: data.validationResults?.overall_passed || null,
-        validation_run_at: data.validationResults ? new Date().toISOString() : null,
-        // Token usage
-        tool_selection_prompt_tokens: data.toolSelectionPromptTokens,
-        tool_selection_completion_tokens: data.toolSelectionCompletionTokens,
-        tool_selection_total_tokens: data.toolSelectionTotalTokens,
-        answer_prompt_tokens: data.answerPromptTokens,
-        answer_completion_tokens: data.answerCompletionTokens,
-        answer_total_tokens: data.answerTotalTokens,
-        regeneration_prompt_tokens: data.regenerationPromptTokens,
-        regeneration_completion_tokens: data.regenerationCompletionTokens,
-        regeneration_total_tokens: data.regenerationTotalTokens,
-        embedding_tokens: data.embeddingTokens,
-        total_cost_usd: totalCost > 0 ? totalCost : null,
-      })
-      .select('id')
-      .single()
-
-    if (error) {
-      console.error('Failed to log query:', error)
-      return null
-    }
-
-    return insertedData?.id || null
-  } catch (err) {
-    console.error('Failed to log query (unexpected error):', err)
-    return null
-  }
 }
 
 /**
