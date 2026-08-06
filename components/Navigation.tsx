@@ -321,7 +321,10 @@ export default function Navigation() {
 
       <div className="relative w-full bg-gray-50 dark:bg-gray-950">
         <div className="mx-auto flex h-12 w-full max-w-[1600px] min-w-0 items-center px-3 lg:h-11 lg:px-8">
-          <div className="hidden min-w-0 flex-1 items-center gap-1 lg:flex">
+          <div
+            data-testid="desktop-navigation"
+            className="hidden min-w-0 flex-1 items-center gap-1 lg:flex"
+          >
             <Link
               href={pulseItem.href}
               aria-current={isItemActive(pathname, pulseItem) ? 'page' : undefined}
