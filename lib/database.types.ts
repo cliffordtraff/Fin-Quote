@@ -1004,6 +1004,8 @@ export interface Database {
           published_at: string | null
           web_url: string | null
           stats_json: Json
+          stats_last_fetched_at: string | null
+          stats_last_error: string | null
           last_reconciled_at: string | null
           last_reconcile_error: string | null
           reconcile_lease_token: string | null
@@ -1030,6 +1032,8 @@ export interface Database {
           published_at?: string | null
           web_url?: string | null
           stats_json?: Json
+          stats_last_fetched_at?: string | null
+          stats_last_error?: string | null
           last_reconciled_at?: string | null
           last_reconcile_error?: string | null
           reconcile_lease_token?: string | null
@@ -1055,6 +1059,8 @@ export interface Database {
           published_at?: string | null
           web_url?: string | null
           stats_json?: Json
+          stats_last_fetched_at?: string | null
+          stats_last_error?: string | null
           last_reconciled_at?: string | null
           last_reconcile_error?: string | null
           reconcile_lease_token?: string | null
@@ -1146,6 +1152,39 @@ export interface Database {
             referencedColumns: ["id"]
           },
         ]
+      }
+      newsletter_cron_runs: {
+        Row: {
+          id: string
+          job_name: string
+          status: string
+          started_at: string
+          completed_at: string | null
+          duration_ms: number | null
+          error_code: string | null
+          created_at: string
+        }
+        Insert: {
+          id: string
+          job_name: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          job_name?: string
+          status?: string
+          started_at?: string
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_code?: string | null
+          created_at?: string
+        }
+        Relationships: []
       }
       newsletter_draft_events: {
         Row: {
@@ -1538,6 +1577,9 @@ export interface Database {
           newsletter_failed_count: number
           invocation_count: number
           last_error: string | null
+          notification_applied_at: string | null
+          notification_attempt_count: number
+          notification_last_error: string | null
           metadata_json: Json
           lease_token: string | null
           lease_expires_at: string | null
@@ -1571,6 +1613,9 @@ export interface Database {
           newsletter_failed_count?: number
           invocation_count?: number
           last_error?: string | null
+          notification_applied_at?: string | null
+          notification_attempt_count?: number
+          notification_last_error?: string | null
           metadata_json?: Json
           lease_token?: string | null
           lease_expires_at?: string | null
@@ -1604,6 +1649,9 @@ export interface Database {
           newsletter_failed_count?: number
           invocation_count?: number
           last_error?: string | null
+          notification_applied_at?: string | null
+          notification_attempt_count?: number
+          notification_last_error?: string | null
           metadata_json?: Json
           lease_token?: string | null
           lease_expires_at?: string | null
@@ -1642,6 +1690,9 @@ export interface Database {
           meaningful_change: boolean | null
           invocation_count: number
           last_error: string | null
+          notification_applied_at: string | null
+          notification_attempt_count: number
+          notification_last_error: string | null
           metadata_json: Json
           lease_token: string | null
           lease_expires_at: string | null
@@ -1669,6 +1720,9 @@ export interface Database {
           meaningful_change?: boolean | null
           invocation_count?: number
           last_error?: string | null
+          notification_applied_at?: string | null
+          notification_attempt_count?: number
+          notification_last_error?: string | null
           metadata_json?: Json
           lease_token?: string | null
           lease_expires_at?: string | null
@@ -1696,6 +1750,9 @@ export interface Database {
           meaningful_change?: boolean | null
           invocation_count?: number
           last_error?: string | null
+          notification_applied_at?: string | null
+          notification_attempt_count?: number
+          notification_last_error?: string | null
           metadata_json?: Json
           lease_token?: string | null
           lease_expires_at?: string | null
@@ -2223,6 +2280,70 @@ export interface Database {
           p_market_date: string
           p_lease_token: string
           p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
+      renew_newsletter_daily_automation: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_daily_automation_runs']['Row'][]
+      }
+      update_newsletter_daily_automation_claim: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
+          p_patch: Json
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_daily_automation_runs']['Row'][]
+      }
+      renew_newsletter_mid_morning_automation: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
+      update_newsletter_mid_morning_automation_claim: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
+          p_patch: Json
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
+      record_newsletter_daily_notification_attempt: {
+        Args: {
+          p_run_id: string
+          p_succeeded: boolean
+          p_error?: string | null
+        }
+        Returns: Database['public']['Tables']['newsletter_daily_automation_runs']['Row'][]
+      }
+      record_newsletter_mid_morning_notification_attempt: {
+        Args: {
+          p_run_id: string
+          p_succeeded: boolean
+          p_error?: string | null
+        }
+        Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
+      reset_newsletter_daily_retry_notification: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
+        }
+        Returns: Database['public']['Tables']['newsletter_daily_automation_runs']['Row'][]
+      }
+      reset_newsletter_mid_morning_retry_notification: {
+        Args: {
+          p_run_id: string
+          p_lease_token: string
         }
         Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
       }

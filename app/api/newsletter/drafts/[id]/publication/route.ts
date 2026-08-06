@@ -10,6 +10,10 @@ import {
   NewsletterPublicationReadinessError,
   recordNewsletterPublication,
 } from '@/lib/newsletter/publication'
+import {
+  NewsletterDraftConflictError,
+  NewsletterPublishedDraftImmutableError,
+} from '@/lib/newsletter/drafts'
 
 export async function PATCH(
   request: NextRequest,
@@ -34,6 +38,12 @@ export async function PATCH(
         },
         { status: 422 },
       )
+    }
+    if (error instanceof NewsletterDraftConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
+    if (error instanceof NewsletterPublishedDraftImmutableError) {
+      return NextResponse.json({ error: error.message }, { status: 409 })
     }
 
     const message =

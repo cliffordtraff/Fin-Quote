@@ -18,6 +18,8 @@ import {
   getNewsletterDraft,
 } from './drafts'
 import { recordNewsletterPublication } from './publication'
+import { createNewsletterNotification } from './notifications'
+import { evaluateBeehiivDeliverability } from './deliverability-monitor'
 
 export function classifyBeehiivLifecycle(
   status: string | null,
@@ -61,11 +63,18 @@ export function classifyBeehiivLifecycle(
       publishedAt: null,
     }
   }
+  if (normalized === 'confirmed' && !validPublishDate) {
+    return {
+      lifecycleStatus: 'unknown',
+      scheduledAt: null,
+      publishedAt: null,
+    }
+  }
   if (
     normalized === 'published' ||
     normalized === 'sent' ||
     normalized === 'active' ||
-    normalized === 'confirmed'
+    (normalized === 'confirmed' && validPublishDate)
   ) {
     return {
       lifecycleStatus: 'published',
@@ -92,6 +101,58 @@ async function loadDraftContext(delivery: BeehiivDeliveryRecord) {
     throw new Error(`Failed to load newsletter draft context: ${error.message}`)
   }
   return data
+}
+
+async function monitorBeehiivDeliverability(input: {
+  delivery: BeehiivDeliveryRecord
+  sessionId: string
+  statsError: string | null
+  now: Date
+}) {
+  if (input.delivery.lifecycleStatus !== 'published') return
+  const scope = {
+    ownerId: input.delivery.ownerId,
+    sessionId: input.sessionId,
+  }
+  const marketDate = (input.delivery.publishedAt ?? input.now.toISOString())
+    .slice(0, 10)
+
+  if (input.statsError) {
+    await createNewsletterNotification(scope, {
+      marketDate,
+      type: 'beehiiv_lifecycle',
+      severity: 'warning',
+      title: 'Beehiiv analytics are stale',
+      message: `Lifecycle reconciliation succeeded, but delivery statistics could not be refreshed: ${input.statsError}`,
+      actionUrl: '/newsletter/operations',
+      metadata: {
+        deliveryId: input.delivery.id,
+        postId: input.delivery.postId,
+        statsError: input.statsError,
+      },
+      dedupeKey: `beehiiv-stats-error:${input.delivery.postId}:${marketDate}`,
+    })
+    return
+  }
+
+  await Promise.all(
+    evaluateBeehiivDeliverability(input.delivery.stats).map((breach) =>
+      createNewsletterNotification(scope, {
+        marketDate,
+        type: 'beehiiv_lifecycle',
+        severity: breach.severity,
+        title: `Beehiiv ${breach.metric} rate needs attention`,
+        message: `${breach.count} of ${breach.sent} recipients (${(breach.rate * 100).toFixed(2)}%) crossed the ${(breach.limit * 100).toFixed(2)}% guardrail.`,
+        actionUrl: '/newsletter/operations',
+        metadata: {
+          deliveryId: input.delivery.id,
+          postId: input.delivery.postId,
+          ...breach,
+        },
+        dedupeKey: `beehiiv-deliverability:${input.delivery.postId}:${breach.metric}`,
+      }),
+    ),
+  )
 }
 
 function lifecycleEvent(
@@ -130,7 +191,17 @@ export async function reconcileBeehiivDelivery(
       publishedAt: lifecycle.publishedAt,
       webUrl: state.webUrl,
       stats: state.stats ?? delivery.stats,
+      error: state.statsError ?? null,
     })
+    const context = await loadDraftContext(delivery)
+    if (context) {
+      await monitorBeehiivDeliverability({
+        delivery: updated,
+        sessionId: context.session_id,
+        statsError: state.statsError ?? null,
+        now,
+      })
+    }
 
     if (delivery.lifecycleAppliedStatus !== updated.lifecycleStatus) {
       await renewBeehiivReconciliationLease({
@@ -138,7 +209,6 @@ export async function reconcileBeehiivDelivery(
         draftId: delivery.draftId,
         leaseToken: input.leaseToken,
       })
-      const context = await loadDraftContext(delivery)
       const event = lifecycleEvent(updated.lifecycleStatus)
       if (context) {
         const scope = {

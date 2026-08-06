@@ -25,6 +25,7 @@ interface NewsletterChartEditorDrawerProps {
   draftId: string
   draft: NewsletterDraftDocument
   block: NewsletterDraftBlock
+  expectedUpdatedAt: string
   onClose: () => void
   onSaved: (record: NewsletterDraftRecord) => void
 }
@@ -69,6 +70,7 @@ export default function NewsletterChartEditorDrawer({
   draftId,
   draft,
   block,
+  expectedUpdatedAt,
   onClose,
   onSaved,
 }: NewsletterChartEditorDrawerProps) {
@@ -310,7 +312,11 @@ export default function NewsletterChartEditorDrawer({
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ blockId: block.id, draft: nextDraft }),
+          body: JSON.stringify({
+            blockId: block.id,
+            draft: nextDraft,
+            expectedUpdatedAt,
+          }),
         },
       )
 

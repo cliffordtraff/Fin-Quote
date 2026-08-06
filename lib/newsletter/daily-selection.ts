@@ -1,4 +1,8 @@
 import { getSP500Constituent } from '@/lib/sp500'
+import {
+  getNewsletterCompanyAliases,
+  isNewsletterSourceEntityMatch,
+} from './source-integrity'
 import type {
   NewsletterDailyCandidate,
   NewsletterDailyQualityBand,
@@ -51,6 +55,7 @@ function stringValue(value: unknown): string | null {
 }
 
 function numberValue(value: unknown): number | null {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
@@ -89,7 +94,26 @@ function readSignals(value: unknown): CandidateSignals {
 
 function toCalendarDay(value: string | null | undefined): number | null {
   if (!value) return null
-  const dateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  let calendarDate = value
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
+  ) {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return null
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(parsed)
+    const year = parts.find((part) => part.type === 'year')?.value
+    const month = parts.find((part) => part.type === 'month')?.value
+    const day = parts.find((part) => part.type === 'day')?.value
+    if (!year || !month || !day) return null
+    calendarDate = `${year}-${month}-${day}`
+  }
+  const dateMatch = calendarDate.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (!dateMatch) return null
   return Date.UTC(
     Number(dateMatch[1]),
@@ -111,18 +135,25 @@ export function isDailySourceFresh(
 }
 
 function summaryEventDate(row: DailyGeneratedSummaryRow): string | null {
-  if (isRecord(row.winning_event)) {
-    const publishedAt =
-      stringValue(row.winning_event.publishedDate) ??
-      stringValue(row.winning_event.published_at)
-    if (publishedAt) return publishedAt
-  }
+  if (!isRecord(row.winning_event)) return null
+  const directPublishedAt =
+    stringValue(row.winning_event.publishedDate) ??
+    stringValue(row.winning_event.published_at)
+  if (directPublishedAt) return directPublishedAt
 
   if (!isRecord(row.metadata) || !Array.isArray(row.metadata.candidate_pool)) {
     return null
   }
+  const winningUrl = stringValue(row.winning_event.url)
+  const winningTitle = stringValue(row.winning_event.title)?.toLowerCase()
   for (const candidate of row.metadata.candidate_pool) {
     if (!isRecord(candidate)) continue
+    const candidateUrl = stringValue(candidate.url)
+    const candidateTitle = stringValue(candidate.title)?.toLowerCase()
+    const isSameEvent =
+      (winningUrl != null && candidateUrl === winningUrl) ||
+      (winningTitle != null && candidateTitle === winningTitle)
+    if (!isSameEvent) continue
     const publishedAt =
       stringValue(candidate.publishedDate) ??
       stringValue(candidate.published_at)
@@ -152,35 +183,61 @@ function summaryQuality(row: DailyGeneratedSummaryRow, marketDate: string): numb
   )
 }
 
-function bestSummaryBySymbol(
+function rankedSummariesBySymbol(
   summaries: DailyGeneratedSummaryRow[],
   marketDate: string,
-): Map<string, DailyGeneratedSummaryRow> {
-  const best = new Map<string, DailyGeneratedSummaryRow>()
+): Map<string, DailyGeneratedSummaryRow[]> {
+  const ranked = new Map<string, DailyGeneratedSummaryRow[]>()
   for (const row of summaries) {
-    if (!row.summary_text?.trim()) continue
-    const current = best.get(row.symbol)
-    if (
-      !current ||
-      summaryQuality(row, marketDate) > summaryQuality(current, marketDate) ||
-      (
-        summaryQuality(row, marketDate) === summaryQuality(current, marketDate) &&
-        row.generated_at > current.generated_at
-      )
-    ) {
-      best.set(row.symbol, row)
-    }
+    if (!Number.isFinite(summaryQuality(row, marketDate))) continue
+    const symbol = row.symbol.trim().toUpperCase()
+    ranked.set(symbol, [...(ranked.get(symbol) ?? []), row])
   }
-  for (const [symbol, row] of best) {
-    if (!Number.isFinite(summaryQuality(row, marketDate))) best.delete(symbol)
+  for (const rows of ranked.values()) {
+    rows.sort((a, b) => {
+      const qualityDifference =
+        summaryQuality(b, marketDate) - summaryQuality(a, marketDate)
+      return qualityDifference || b.generated_at.localeCompare(a.generated_at)
+    })
   }
-  return best
+  return ranked
 }
 
-function isConcreteHeadline(headline: string, ticker: string): boolean {
+function isConcreteHeadline(
+  headline: string,
+  ticker: string,
+  companyName: string,
+): boolean {
   const normalized = headline.trim().toLowerCase()
   if (normalized.length < 24) return false
-  return !normalized.startsWith(`${ticker.toLowerCase()} is moving`)
+  return (
+    !normalized.startsWith(`${ticker.toLowerCase()} is moving`) &&
+    isNewsletterSourceEntityMatch({ ticker, companyName, text: headline })
+  )
+}
+
+function winningEventSource(
+  row: DailyGeneratedSummaryRow | undefined,
+  ticker: string,
+  companyName: string,
+  marketDate: string,
+): NewsletterDailySourceRef | null {
+  if (!isRecord(row?.winning_event)) return null
+  const label = stringValue(row.winning_event.title)
+  if (
+    !label ||
+    !isNewsletterSourceEntityMatch({ ticker, companyName, text: label })
+  ) {
+    return null
+  }
+  const publishedAt = summaryEventDate(row)
+  if (!isDailySourceFresh(publishedAt, marketDate, 2)) return null
+  return {
+    kind: 'news',
+    label,
+    url: stringValue(row.winning_event.url) ?? undefined,
+    publishedAt: publishedAt ?? undefined,
+  }
 }
 
 function deriveReasonType(
@@ -266,46 +323,47 @@ function cleanSentence(value: string): string {
 function summaryMoveDirection(
   value: string,
   ticker: string,
+  companyName: string,
 ): 'positive' | 'negative' | null {
-  const escapedTicker = ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const subject = `(?:shares?|stock|${escapedTicker})`
-  const positive = new RegExp(
-    `\\b${subject}\\b.{0,28}\\b(?:up|rose|rises|rallied|rallies|jumped|jumps|surged|surges|soared|soars|gained|gains|climbed|climbs|advanced|advances)\\b`,
-    'i',
-  )
-  const negative = new RegExp(
-    `\\b${subject}\\b.{0,28}\\b(?:down|fell|falls|dropped|drops|plunged|plunges|slid|slides|sank|sinks|tumbled|tumbles|declined|declines)\\b`,
+  const subjects = [
+    'shares?',
+    'stock',
+    ticker,
+    ...getNewsletterCompanyAliases({ ticker, companyName }),
+  ]
+    .map((subject) =>
+      subject === 'shares?' || subject === 'stock'
+        ? subject
+        : subject
+            .split(/\s+/)
+            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('\\s+'),
+    )
+    .sort((a, b) => b.length - a.length)
+  const priceVerb = new RegExp(
+    `\\b(?:${subjects.join('|')})\\b(?:['’]s)?(?:\\s+shares?)?(?:\\s+(?:were|was|are|is|have|has))?\\s+(up|rose|rises|rallied|rallies|jumped|jumps|surged|surges|soared|soars|gained|gains|climbed|climbs|advanced|advances|down|fell|falls|dropped|drops|plunged|plunges|slid|slides|sank|sinks|tumbled|tumbles|declined|declines)\\b`,
     'i',
   )
   const opening = value.slice(0, 180)
-  if (positive.test(opening)) return 'positive'
-  if (negative.test(opening)) return 'negative'
-  return null
+  const verb = opening.match(priceVerb)?.[1]?.toLowerCase()
+  if (!verb) return null
+  return /^(?:up|rose|rises|rallied|rallies|jumped|jumps|surged|surges|soared|soars|gained|gains|climbed|climbs|advanced|advances)$/.test(
+    verb,
+  )
+    ? 'positive'
+    : 'negative'
 }
 
 export function isDailySummaryDirectionCompatible(
   value: string,
   ticker: string,
   movePercent: number | null,
+  companyName = ticker,
 ): boolean {
   if (movePercent == null || Math.abs(movePercent) < 0.5) return true
-  const direction = summaryMoveDirection(value, ticker)
+  const direction = summaryMoveDirection(value, ticker, companyName)
   if (!direction) return true
   return movePercent > 0 ? direction === 'positive' : direction === 'negative'
-}
-
-function stripMoveLead(value: string, ticker: string): string {
-  return cleanSentence(
-    value
-      .replace(
-        new RegExp(
-          `^${ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is moving [+-]?\\d+(?:\\.\\d+)?%\\.\\s*`,
-          'i',
-        ),
-        '',
-      )
-      .replace(/^Finviz points to\s+/i, ''),
-  )
 }
 
 export function selectDailyNewsletterCandidates(input: {
@@ -315,43 +373,82 @@ export function selectDailyNewsletterCandidates(input: {
   targetCount: number
 }): NewsletterDailyCandidate[] {
   const targetCount = Math.max(30, Math.min(50, Math.floor(input.targetCount)))
-  const summaries = bestSummaryBySymbol(input.summaryRows, input.marketDate)
+  const summaries = rankedSummariesBySymbol(input.summaryRows, input.marketDate)
 
   const candidates = input.candidateRows.flatMap((row) => {
     const ticker = row.ticker?.trim().toUpperCase()
     if (!ticker) return []
+    const constituent = getSP500Constituent(ticker)
+    if (!constituent) return []
 
     const signals = readSignals(row.signals_json)
-    const sourceRefs = normalizeSourceRefs(row.source_refs_json)
-    const candidateSummary = summaries.get(ticker)
-    const summary =
-      candidateSummary?.summary_text &&
-      isDailySummaryDirectionCompatible(
-        candidateSummary.summary_text,
-        ticker,
-        signals.movePercent,
-      )
-        ? candidateSummary
-        : undefined
+    const rawSourceRefs = normalizeSourceRefs(row.source_refs_json)
     const metadata = isRecord(row.metadata_json) ? row.metadata_json : {}
-    const summaryMetadata = isRecord(summary?.metadata) ? summary.metadata : {}
-    const quote = isRecord(summaryMetadata.quote) ? summaryMetadata.quote : {}
-    const companyName =
-      stringValue(metadata.name) ??
-      stringValue(quote.name) ??
-      getSP500Constituent(ticker)?.name ??
-      ticker
-    const headlineFromRow = row.headline?.trim() || ''
-    const concreteHeadline = isConcreteHeadline(headlineFromRow, ticker)
-    const summaryText = cleanSentence(
-      summary?.summary_text?.trim() ||
-        stripMoveLead(row.why_it_matters, ticker) ||
-        headlineFromRow,
+    const rankedTickerSummaries = summaries.get(ticker) ?? []
+    const summaryQuoteMove = rankedTickerSummaries
+      .map((summaryRow) =>
+        isRecord(summaryRow.metadata) && isRecord(summaryRow.metadata.quote)
+          ? numberValue(summaryRow.metadata.quote.changesPercentage)
+          : null,
+      )
+      .find((move): move is number => move != null)
+    const movePercent =
+      numberValue(metadata.changesPercentage) ??
+      summaryQuoteMove ??
+      signals.movePercent
+    const companyName = constituent.name
+    const selectedSummary = rankedTickerSummaries
+      .map((summaryRow) => ({
+        summary: summaryRow,
+        source: winningEventSource(
+          summaryRow,
+          ticker,
+          companyName,
+          input.marketDate,
+        ),
+      }))
+      .find(
+        ({ summary, source }) =>
+          source &&
+          summary.summary_text &&
+          isDailySummaryDirectionCompatible(
+            summary.summary_text,
+            ticker,
+            movePercent,
+            companyName,
+          ),
+      )
+    const candidateSummary = selectedSummary?.summary
+    const selectedSource = selectedSummary?.source ?? null
+    const summary = candidateSummary
+    const candidateSummaryMetadata = isRecord(candidateSummary?.metadata)
+      ? candidateSummary.metadata
+      : {}
+    const quote = isRecord(candidateSummaryMetadata.quote)
+      ? candidateSummaryMetadata.quote
+      : {}
+    const sourceRefs = [
+      ...(selectedSource ? [selectedSource] : []),
+      ...rawSourceRefs.filter(
+        (source) =>
+          (source.kind !== 'news' && source.kind !== 'finviz') ||
+          isNewsletterSourceEntityMatch({
+            ticker,
+            companyName,
+            text: source.label,
+          }),
+      ),
+    ].filter(
+      (source, index, values) =>
+        values.findIndex(
+          (candidate) =>
+            candidate.kind === source.kind &&
+            candidate.label === source.label &&
+            candidate.url === source.url,
+        ) === index,
     )
-    const headline = concreteHeadline
-      ? headlineFromRow
-      : summaryText.slice(0, 180)
-    const freshEvidence = sourceRefs.some((source) => {
+    const headlineFromRow = row.headline?.trim() || ''
+    const freshEntitySourceRefs = sourceRefs.filter((source) => {
       if (source.kind === 'earnings') {
         return isDailySourceFresh(source.publishedAt, input.marketDate, 1)
       }
@@ -360,6 +457,26 @@ export function selectDailyNewsletterCandidates(input: {
       }
       return false
     })
+    const preferredHeadline =
+      [
+        selectedSource?.label,
+        headlineFromRow,
+        ...freshEntitySourceRefs.map((source) => source.label),
+      ].find(
+        (headline): headline is string =>
+          Boolean(headline) &&
+          isConcreteHeadline(headline!, ticker, companyName),
+      ) ?? ''
+    const concreteHeadline = isConcreteHeadline(
+      preferredHeadline,
+      ticker,
+      companyName,
+    )
+    const summaryText = cleanSentence(
+      summary?.summary_text?.trim() || preferredHeadline,
+    )
+    const headline = preferredHeadline
+    const freshEvidence = freshEntitySourceRefs.length > 0
     const relevanceScore = candidateScore({
       confidenceScore: Number(row.confidence_score) || 0,
       candidateType: row.candidate_type,
@@ -373,7 +490,7 @@ export function selectDailyNewsletterCandidates(input: {
     const band = qualityBand({
       relevanceScore,
       concreteHeadline,
-      hasFreshEvidence: freshEvidence || Boolean(summary),
+      hasFreshEvidence: freshEvidence,
       wasRecentlyPicked: signals.wasRecentlyPicked,
       stateLabel: row.state_label,
     })
@@ -381,8 +498,8 @@ export function selectDailyNewsletterCandidates(input: {
     if (
       row.candidate_type === 'watch_only' ||
       signals.wasRecentlyPicked ||
-      (!freshEvidence && !summary) ||
-      (!concreteHeadline && !summary)
+      !freshEvidence ||
+      !concreteHeadline
     ) {
       return []
     }
@@ -404,10 +521,7 @@ export function selectDailyNewsletterCandidates(input: {
       candidateType: row.candidate_type,
       stateLabel: row.state_label,
       qualityBand: band,
-      movePercent:
-        numberValue(metadata.changesPercentage) ??
-        numberValue(quote.changesPercentage) ??
-        signals.movePercent,
+      movePercent,
       price: numberValue(metadata.price) ?? numberValue(quote.price),
       change: numberValue(metadata.change) ?? numberValue(quote.change),
       sourceRefs,

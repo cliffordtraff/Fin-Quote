@@ -39,6 +39,11 @@ import {
 } from './drafts'
 import { buildNewsletterDraftBeehiivExport } from './beehiiv-export'
 import { canSetNewsletterDraftStatus } from './workflow'
+import {
+  assertNewsletterHtmlSize,
+  normalizeNewsletterPreviewText,
+  normalizeNewsletterSubject,
+} from './delivery-quality'
 
 export type BeehiivDeliveryConflictCode =
   | 'ambiguous_create'
@@ -92,8 +97,7 @@ export function buildBeehiivPreviewText(value: string): string {
     .text()
     .replace(/\s+/g, ' ')
     .trim()
-  if (text.length <= 180) return text
-  return `${text.slice(0, 177).trimEnd()}...`
+  return normalizeNewsletterPreviewText(text)
 }
 
 async function resolvePublication(
@@ -123,12 +127,15 @@ async function resolvePublication(
 
 const ASSET_PREFLIGHT_TIMEOUT_MS = 10_000
 const ASSET_PREFLIGHT_MAX_REDIRECTS = 3
-const ASSET_PREFLIGHT_MAX_BYTES = 10 * 1024 * 1024
+const ASSET_PREFLIGHT_MAX_BYTES = 5 * 1024 * 1024
 const ASSET_PREFLIGHT_MAX_PROBE_BYTES = 64 * 1024
 const ASSET_PREFLIGHT_MAX_URLS = 20
+const ASSET_PREFLIGHT_MAX_DIMENSION = 10_000
+const ASSET_PREFLIGHT_MAX_PIXELS = 40_000_000
 const FIRST_PARTY_ASSET_HOSTS = [
   'charts.theintraday.com',
   'charting-platform-six.vercel.app',
+  'financialmodelingprep.com',
   'www.theintraday.com',
   'theintraday.com',
 ] as const
@@ -326,24 +333,157 @@ function responseAssetSize(response: Response): number | null {
   const contentLength = response.headers.get('content-length')
   const contentRange = response.headers.get('content-range')
   const rangeTotal = contentRange?.match(/\/(\d+)\s*$/)?.[1]
-  const candidate = rangeTotal ?? contentLength
+  // A 206 Content-Length describes only the returned slice. Without a total
+  // Content-Range, the full object size is unknowable and must fail closed.
+  const candidate = response.status === 206 ? rangeTotal : contentLength
   if (!candidate || !/^\d+$/.test(candidate)) return null
   const parsed = Number(candidate)
   return Number.isSafeInteger(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
-async function consumeBoundedAssetProbe(response: Response): Promise<void> {
+async function readBoundedAssetProbe(response: Response): Promise<Uint8Array> {
   const reader = response.body?.getReader()
-  if (!reader) return
+  if (!reader) return new Uint8Array()
   let received = 0
+  const chunks: Uint8Array[] = []
   try {
     while (received < ASSET_PREFLIGHT_MAX_PROBE_BYTES) {
       const chunk = await reader.read()
-      if (chunk.done) return
-      received += chunk.value.byteLength
+      if (chunk.done) break
+      const remaining = ASSET_PREFLIGHT_MAX_PROBE_BYTES - received
+      const value = chunk.value.subarray(0, remaining)
+      chunks.push(value)
+      received += value.byteLength
     }
   } finally {
     await reader.cancel().catch(() => undefined)
+  }
+  const probe = new Uint8Array(received)
+  let offset = 0
+  for (const chunk of chunks) {
+    probe.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return probe
+}
+
+function imageDimensionsFromProbe(
+  bytes: Uint8Array,
+): { format: string; width: number; height: number } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (
+    bytes.length >= 24 &&
+    [137, 80, 78, 71, 13, 10, 26, 10].every(
+      (value, index) => bytes[index] === value,
+    )
+  ) {
+    return {
+      format: 'PNG',
+      width: view.getUint32(16),
+      height: view.getUint32(20),
+    }
+  }
+  if (
+    bytes.length >= 10 &&
+    String.fromCharCode(...bytes.subarray(0, 6)).match(/^GIF8[79]a$/)
+  ) {
+    return {
+      format: 'GIF',
+      width: view.getUint16(6, true),
+      height: view.getUint16(8, true),
+    }
+  }
+  if (
+    bytes.length >= 30 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8
+  ) {
+    let offset = 2
+    while (offset + 8 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1
+        continue
+      }
+      const marker = bytes[offset + 1]
+      offset += 2
+      if (marker === 0xd8 || marker === 0xd9 || marker === 0x01) continue
+      if (offset + 2 > bytes.length) break
+      const segmentLength = view.getUint16(offset)
+      if (segmentLength < 2 || offset + segmentLength > bytes.length) break
+      const isStartOfFrame =
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        ![0xc4, 0xc8, 0xcc].includes(marker)
+      if (isStartOfFrame && segmentLength >= 7) {
+        return {
+          format: 'JPEG',
+          height: view.getUint16(offset + 3),
+          width: view.getUint16(offset + 5),
+        }
+      }
+      offset += segmentLength
+    }
+  }
+  if (
+    bytes.length >= 30 &&
+    String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP'
+  ) {
+    const chunkType = String.fromCharCode(...bytes.subarray(12, 16))
+    if (chunkType === 'VP8X') {
+      return {
+        format: 'WebP',
+        width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+        height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16),
+      }
+    }
+    if (
+      chunkType === 'VP8 ' &&
+      bytes[23] === 0x9d &&
+      bytes[24] === 0x01 &&
+      bytes[25] === 0x2a
+    ) {
+      return {
+        format: 'WebP',
+        width: view.getUint16(26, true) & 0x3fff,
+        height: view.getUint16(28, true) & 0x3fff,
+      }
+    }
+    if (chunkType === 'VP8L' && bytes[20] === 0x2f) {
+      return {
+        format: 'WebP',
+        width: 1 + bytes[21] + ((bytes[22] & 0x3f) << 8),
+        height:
+          1 +
+          (bytes[22] >> 6) +
+          (bytes[23] << 2) +
+          ((bytes[24] & 0x0f) << 10),
+      }
+    }
+  }
+  return null
+}
+
+function assertValidImageProbe(bytes: Uint8Array, url: URL): void {
+  const dimensions = imageDimensionsFromProbe(bytes)
+  if (!dimensions) {
+    throw new BeehiivDeliveryConflictError(
+      'asset_preflight_failed',
+      `Newsletter image bytes are not a supported PNG, JPEG, GIF, or WebP file: ${url.toString()}`,
+    )
+  }
+  const { width, height } = dimensions
+  if (
+    width < 1 ||
+    height < 1 ||
+    width > ASSET_PREFLIGHT_MAX_DIMENSION ||
+    height > ASSET_PREFLIGHT_MAX_DIMENSION ||
+    width * height > ASSET_PREFLIGHT_MAX_PIXELS
+  ) {
+    throw new BeehiivDeliveryConflictError(
+      'asset_preflight_failed',
+      `Newsletter ${dimensions.format} image has unsafe dimensions ${width}x${height}: ${url.toString()}`,
+    )
   }
 }
 
@@ -366,7 +506,9 @@ async function preflightOneBeehiivAsset(
     try {
       response = await options.fetchImpl(currentUrl, {
         method: 'GET',
-        headers: { Range: 'bytes=0-1023' },
+        headers: {
+          Range: `bytes=0-${ASSET_PREFLIGHT_MAX_PROBE_BYTES - 1}`,
+        },
         redirect: 'manual',
         signal,
       })
@@ -420,11 +562,14 @@ async function preflightOneBeehiivAsset(
     if (
       !response.ok ||
       !contentType.startsWith('image/') ||
+      assetSize === null ||
       (assetSize !== null && assetSize > options.maxAssetBytes)
     ) {
       await response.body?.cancel().catch(() => undefined)
       const sizeDetail =
-        assetSize !== null && assetSize > options.maxAssetBytes
+        assetSize === null
+          ? '; full asset size was not reported'
+          : assetSize > options.maxAssetBytes
           ? `; asset exceeds ${options.maxAssetBytes} bytes`
           : ''
       throw new BeehiivDeliveryConflictError(
@@ -434,7 +579,8 @@ async function preflightOneBeehiivAsset(
         } ${contentType || 'without an image content type'}${sizeDetail}.`,
       )
     }
-    await consumeBoundedAssetProbe(response)
+    const probe = await readBoundedAssetProbe(response)
+    assertValidImageProbe(probe, reportedFinalUrl)
     return
   }
 }
@@ -611,17 +757,21 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
     }
     throw error
   }
+  const normalizedDraftSubject = normalizeNewsletterSubject(
+    beehiivExport.draft.subjectLine,
+  )
   const title =
-    beehiivExport.draft.subjectLine.trim() ||
-    beehiivExport.draft.header?.title?.trim() ||
-    `${beehiivExport.draft.ticker} newsletter`
-  const subjectLine = beehiivExport.draft.subjectLine.trim() || title
+    normalizedDraftSubject ||
+    normalizeNewsletterSubject(beehiivExport.draft.header?.title ?? '') ||
+    normalizeNewsletterSubject(`${beehiivExport.draft.ticker} newsletter`)
+  const subjectLine = normalizedDraftSubject || title
   const previewText = buildBeehiivPreviewText(
     beehiivExport.draft.introText,
   )
   const unmarkedHtmlContent = wrapNewsletterHtmlForBeehiivMcp(
     beehiivExport.html,
   )
+  assertNewsletterHtmlSize(unmarkedHtmlContent)
   const contentFingerprint = createBeehiivDeliveryContentHash({
     title,
     subjectLine,
@@ -635,6 +785,7 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
   const htmlContent = wrapNewsletterHtmlForBeehiivMcp(
     `<!-- ${operationKey} -->${beehiivExport.html}`,
   )
+  assertNewsletterHtmlSize(htmlContent)
   const contentHash = createBeehiivDeliveryContentHash({
     title,
     subjectLine,

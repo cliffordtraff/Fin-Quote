@@ -1,22 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isDailySummaryDirectionCompatible,
   isDailySourceFresh,
   selectDailyNewsletterCandidates,
   type DailyGeneratedSummaryRow,
   type DailyWiimCandidateRow,
 } from '../daily-selection'
+import { getSP500Constituent, SP500_SYMBOLS } from '@/lib/sp500'
+
+const testSymbols = [...SP500_SYMBOLS].slice(0, 60)
 
 function candidate(
   rank: number,
   overrides: Partial<DailyWiimCandidateRow> = {},
 ): DailyWiimCandidateRow {
-  const ticker = overrides.ticker ?? `T${rank}`
+  const ticker = overrides.ticker ?? testSymbols[(rank - 1) % testSymbols.length]
+  const companyName = getSP500Constituent(ticker)?.name ?? ticker
   return {
     id: `candidate-${rank}`,
     wiim_run_id: 'wiim-run',
     rank,
     ticker,
-    headline: `${ticker} beats estimates and raises full-year guidance`,
+    headline: `${companyName} beats estimates and raises full-year guidance`,
     why_it_matters: `${ticker} is moving +5%. Finviz points to a guidance raise.`,
     confidence_score: 60,
     candidate_type: 'newsletter',
@@ -34,17 +39,17 @@ function candidate(
     source_refs_json: [
       {
         kind: 'earnings',
-        label: `${ticker} earnings`,
+        label: `${companyName} reports quarterly earnings`,
         publishedAt: '2026-07-29',
       },
       {
         kind: 'finviz',
-        label: `${ticker} raises guidance`,
+        label: `${companyName} raises full-year guidance`,
         publishedAt: '2026-07-29T07:00:00Z',
       },
     ],
     metadata_json: {
-      name: `${ticker} Company`,
+      name: companyName,
       price: 100 + rank,
       change: 5,
       changesPercentage: 5,
@@ -54,15 +59,16 @@ function candidate(
 }
 
 function summary(symbol: string): DailyGeneratedSummaryRow {
+  const companyName = getSP500Constituent(symbol)?.name ?? symbol
   return {
     symbol,
-    summary_text: `${symbol} delivered an earnings beat and raised guidance.`,
+    summary_text: `${companyName} delivered an earnings beat and raised guidance.`,
     no_summary_reason: null,
     generated_at: '2026-07-29T11:00:00Z',
     model: 'gpt-5-nano',
     run_id: 'fin_quote_daily_2026-07-29',
     winning_event: {
-      title: `${symbol} results`,
+      title: `${companyName} reports quarterly results`,
       publishedDate: '2026-07-29T10:00:00Z',
     },
     metadata: {
@@ -79,12 +85,21 @@ describe('daily newsletter selection', () => {
     expect(isDailySourceFresh('2026-07-22', '2026-07-29', 7)).toBe(true)
     expect(isDailySourceFresh('2026-07-21', '2026-07-29', 7)).toBe(false)
     expect(isDailySourceFresh('2026-07-30', '2026-07-29', 7)).toBe(false)
+    expect(
+      isDailySourceFresh('2026-07-30T02:30:00Z', '2026-07-29', 0),
+    ).toBe(true)
+    expect(
+      isDailySourceFresh('2026-07-29T02:30:00Z', '2026-07-29', 0),
+    ).toBe(false)
+    expect(
+      isDailySourceFresh('2026-07-29T02:30:00Z', '2026-07-29', 1),
+    ).toBe(true)
   })
 
   it('selects a requested 30-50 candidate batch and prioritizes strong evidence', () => {
     const rows = Array.from({ length: 45 }, (_, index) => candidate(index + 1))
     rows[0] = candidate(1, {
-      ticker: 'OLD',
+      ticker: testSymbols[0],
       signals_json: {
         movePercent: 8,
         moveAbsPercent: 8,
@@ -104,7 +119,7 @@ describe('daily newsletter selection', () => {
     })
 
     expect(selected).toHaveLength(40)
-    expect(selected.some((item) => item.ticker === 'OLD')).toBe(false)
+    expect(selected.some((item) => item.ticker === testSymbols[0])).toBe(false)
     expect(selected.every((item) => item.qualityBand === 'strong')).toBe(true)
     expect(selected.map((item) => item.rank)).toEqual(
       Array.from({ length: 40 }, (_, index) => index + 1),
@@ -113,9 +128,9 @@ describe('daily newsletter selection', () => {
 
   it('rejects stale summaries and candidates without current evidence', () => {
     const row = candidate(1, {
-      ticker: 'STALE',
-      headline: 'STALE is moving +5%',
-      source_refs_json: [{ kind: 'market_data', label: 'STALE +5%' }],
+      ticker: 'AAPL',
+      headline: 'Apple is moving +5%',
+      source_refs_json: [{ kind: 'market_data', label: 'Apple +5%' }],
       signals_json: {
         movePercent: 5,
         moveAbsPercent: 5,
@@ -127,7 +142,7 @@ describe('daily newsletter selection', () => {
       },
     })
     const staleSummary = {
-      ...summary('STALE'),
+      ...summary('AAPL'),
       winning_event: { publishedDate: '2026-06-01' },
     }
 
@@ -171,7 +186,7 @@ describe('daily newsletter selection', () => {
 
     expect(selected).toHaveLength(1)
     expect(selected[0]?.summaryText).toBe(
-      'stronger public-sector demand.',
+      'Tyler Technologies beats estimates and raises full-year guidance',
     )
     expect(selected[0]?.summaryText).not.toContain('..')
   })
@@ -194,6 +209,278 @@ describe('daily newsletter selection', () => {
       targetCount: 30,
     })
 
-    expect(selected[0]?.summaryText).toBe('earnings after the close.')
+    expect(selected[0]?.summaryText).toBe(
+      'Carvana Co. beats estimates and raises full-year guidance',
+    )
+  })
+
+  it('replaces the MTCH / Triple Match 3D collision with validated summary evidence', () => {
+    const row = candidate(1, {
+      ticker: 'MTCH',
+      headline: 'Huya launches Triple Match 3D mobile game worldwide',
+      source_refs_json: [
+        {
+          kind: 'news',
+          label: 'Huya launches Triple Match 3D mobile game worldwide',
+          url: 'https://example.com/huya',
+          publishedAt: '2026-07-29T09:00:00Z',
+        },
+      ],
+      metadata_json: {
+        name: 'Match Group, Inc.',
+        price: 34,
+        change: -2,
+        changesPercentage: -5.5,
+      },
+    })
+    const mtchSummary = {
+      ...summary('MTCH'),
+      summary_text:
+        'Match Group cut its outlook after weaker Tinder performance.',
+      winning_event: {
+        title: 'Match Group cuts outlook after second-quarter results',
+        url: 'https://example.com/mtch-results',
+        publishedDate: '2026-07-29T10:00:00Z',
+      },
+    }
+
+    const selected = selectDailyNewsletterCandidates({
+      candidateRows: [row],
+      summaryRows: [mtchSummary],
+      marketDate: '2026-07-29',
+      targetCount: 30,
+    })
+
+    expect(selected[0]?.headline).toBe(
+      'Match Group cuts outlook after second-quarter results',
+    )
+    expect(selected[0]?.sourceRefs[0]?.url).toBe(
+      'https://example.com/mtch-results',
+    )
+    expect(selected[0]?.sourceRefs.map((source) => source.url)).not.toContain(
+      'https://example.com/huya',
+    )
+  })
+
+  it('rejects a generated summary whose selected event belongs to another entity', () => {
+    const row = candidate(1, {
+      ticker: 'MTCH',
+      headline: 'Huya launches Triple Match 3D mobile game worldwide',
+      source_refs_json: [
+        {
+          kind: 'news',
+          label: 'Huya launches Triple Match 3D mobile game worldwide',
+          url: 'https://example.com/huya',
+          publishedAt: '2026-07-29T09:00:00Z',
+        },
+      ],
+      metadata_json: {
+        name: 'Match Group, Inc.',
+        price: 34,
+        change: -2,
+        changesPercentage: -5.5,
+      },
+    })
+    const mismatchedSummary = {
+      ...summary('MTCH'),
+      summary_text: 'Match Group fell after a mobile-game launch.',
+      winning_event: {
+        title: 'Huya launches Triple Match 3D mobile game worldwide',
+        url: 'https://example.com/huya',
+        publishedDate: '2026-07-29T10:00:00Z',
+      },
+    }
+
+    expect(
+      selectDailyNewsletterCandidates({
+        candidateRows: [row],
+        summaryRows: [mismatchedSummary],
+        marketDate: '2026-07-29',
+        targetCount: 30,
+      }),
+    ).toEqual([])
+  })
+
+  it('falls back from a newer mismatched summary to valid ticker evidence', () => {
+    const row = candidate(1, {
+      ticker: 'MTCH',
+      headline: 'Match Group announces second-quarter results',
+      source_refs_json: [],
+      metadata_json: {
+        name: 'Match Group, Inc.',
+        price: 34,
+        change: -2,
+        changesPercentage: -5.5,
+      },
+    })
+    const contaminated = {
+      ...summary('MTCH'),
+      generated_at: '2026-08-06T14:00:00Z',
+      run_id: 'fin_quote_daily_2026-08-06',
+      summary_text: 'Huya launched a new mobile game.',
+      winning_event: {
+        title: 'Huya launches Triple Match 3D mobile game worldwide',
+        url: 'https://example.com/huya',
+        publishedDate: '2026-08-06T13:00:00Z',
+      },
+    }
+    const valid = {
+      ...summary('MTCH'),
+      generated_at: '2026-08-05T14:00:00Z',
+      run_id: 'fin_quote_daily_2026-08-05',
+      summary_text:
+        'Match Group reported second-quarter results and updated its outlook.',
+      winning_event: {
+        title: 'Match Group announces second-quarter results',
+        url: 'https://example.com/mtch-results',
+        publishedDate: '2026-08-04T20:11:00Z',
+      },
+    }
+
+    const selected = selectDailyNewsletterCandidates({
+      candidateRows: [row],
+      summaryRows: [contaminated, valid],
+      marketDate: '2026-08-06',
+      targetCount: 30,
+    })
+
+    expect(selected[0]?.headline).toBe(
+      'Match Group announces second-quarter results',
+    )
+    expect(selected[0]?.summaryText).toContain('Match Group reported')
+    expect(selected[0]?.sourceRefs.map((source) => source.url)).toEqual([
+      'https://example.com/mtch-results',
+    ])
+  })
+
+  it('does not borrow a fresh date from an unrelated candidate-pool event', () => {
+    const row = candidate(1, {
+      ticker: 'AAPL',
+      headline: 'Apple reports quarterly results and updates guidance',
+      source_refs_json: [
+        {
+          kind: 'news',
+          label: 'Apple reports quarterly results and updates guidance',
+          url: 'https://example.com/apple-current',
+          publishedAt: '2026-08-06T12:00:00Z',
+        },
+      ],
+    })
+    const laundered = {
+      ...summary('AAPL'),
+      summary_text: 'Apple completed an old stock split.',
+      winning_event: {
+        title: 'Apple completes four-for-one stock split',
+        url: 'https://example.com/apple-old',
+      },
+      metadata: {
+        source: 'fin_quote_generated_daily',
+        candidate_pool: [
+          {
+            title: 'Microsoft announces new cloud region',
+            url: 'https://example.com/msft-current',
+            publishedDate: '2026-08-06T12:00:00Z',
+          },
+          {
+            title: 'Apple completes four-for-one stock split',
+            url: 'https://example.com/apple-old',
+            publishedDate: '2020-08-31T12:00:00Z',
+          },
+        ],
+      },
+    }
+
+    const selected = selectDailyNewsletterCandidates({
+      candidateRows: [row],
+      summaryRows: [laundered],
+      marketDate: '2026-08-06',
+      targetCount: 30,
+    })
+
+    expect(selected[0]?.summaryText).toBe(
+      'Apple reports quarterly results and updates guidance',
+    )
+    expect(selected[0]?.summaryText).not.toContain('stock split')
+  })
+
+  it('never reuses unvalidated why-it-matters prose as fallback copy', () => {
+    const row = candidate(1, {
+      ticker: 'MTCH',
+      headline: 'Match Group announces second-quarter results',
+      why_it_matters:
+        'MTCH is moving -5%. Huya launched Triple Match 3D worldwide.',
+      source_refs_json: [
+        {
+          kind: 'news',
+          label: 'Match Group announces second-quarter results',
+          url: 'https://example.com/mtch-results',
+          publishedAt: '2026-08-04T20:13:06Z',
+        },
+      ],
+    })
+
+    const selected = selectDailyNewsletterCandidates({
+      candidateRows: [row],
+      summaryRows: [],
+      marketDate: '2026-08-06',
+      targetCount: 30,
+    })
+
+    expect(selected[0]?.summaryText).toBe(
+      'Match Group announces second-quarter results',
+    )
+    expect(selected[0]?.summaryText).not.toMatch(/Huya|Triple Match/i)
+  })
+
+  it('uses the emitted move for direction validation and the first price verb', () => {
+    const row = candidate(1, {
+      ticker: 'AAPL',
+      metadata_json: {
+        name: 'Wrong persisted identity',
+        changesPercentage: -5,
+      },
+      signals_json: {
+        movePercent: null,
+        moveAbsPercent: 5,
+        hasNews: true,
+        newsCount: 1,
+        hasEarnings: true,
+        hasFinvizCatalyst: false,
+        wasRecentlyPicked: false,
+      },
+    })
+    const rising = {
+      ...summary('AAPL'),
+      summary_text: 'Apple shares rose after reporting quarterly results.',
+    }
+
+    const selected = selectDailyNewsletterCandidates({
+      candidateRows: [row],
+      summaryRows: [rising],
+      marketDate: '2026-07-29',
+      targetCount: 30,
+    })
+
+    expect(selected[0]?.movePercent).toBe(-5)
+    expect(selected[0]?.summaryText).not.toContain('shares rose')
+    expect(
+      isDailySummaryDirectionCompatible(
+        'Shares fell but EPS rose year over year.',
+        'AAPL',
+        -5,
+        'Apple Inc.',
+      ),
+    ).toBe(true)
+  })
+
+  it('rejects a non-S&P identity even when its prose looks valid', () => {
+    expect(
+      selectDailyNewsletterCandidates({
+        candidateRows: [candidate(1, { ticker: 'ACME' })],
+        summaryRows: [],
+        marketDate: '2026-07-29',
+        targetCount: 30,
+      }),
+    ).toEqual([])
   })
 })

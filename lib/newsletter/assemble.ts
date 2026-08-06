@@ -392,13 +392,8 @@ ${blockHtml}
                 <p style="margin:0 0 12px 0;font-size:11px;color:${BRAND.textMuted};">
                   <a href="https://theintraday.com" style="color:${BRAND.sage500};text-decoration:underline;">theintraday.com</a>
                 </p>
-                <p style="margin:0 0 8px 0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;border-top:1px solid ${BRAND.cream300};padding-top:12px;">
-                  You received this email because you subscribed to The Intraday newsletter.
-                  <a href="https://theintraday.com/unsubscribe?email={{email}}" style="color:${BRAND.sage500};text-decoration:underline;">Unsubscribe</a> &middot;
-                  <a href="https://theintraday.com/preferences?email={{email}}" style="color:${BRAND.sage500};text-decoration:underline;">Manage preferences</a>
-                </p>
-                <p style="margin:0;font-size:10px;color:${BRAND.textMuted};line-height:1.4;">
-                  The Intraday &middot; 123 Market St, Suite 100, San Francisco, CA 94105
+                <p data-preview-only="true" style="margin:0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;border-top:1px solid ${BRAND.cream300};padding-top:12px;">
+                  Preview only — not sendable HTML. Sync the reviewed draft to Beehiiv so the verified sender address, subscription preferences, and one-click unsubscribe controls are added automatically.
                 </p>
               </td></tr>
             </table>

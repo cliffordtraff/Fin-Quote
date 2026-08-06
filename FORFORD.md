@@ -1443,3 +1443,300 @@ The most reusable lesson from this pass is simple: **make invalid states
 representable but unmistakable, and make expensive states reachable only
 through a small authenticated door.** That is how a promising application
 starts behaving like a product customers can trust.
+
+---
+
+## August 6, 2026: The Newsletter Learned To Distrust Green Lights
+
+The first hardening pass taught the newsletter how to complete a long journey:
+research a company, write an issue, publish it through Beehiiv, and reconcile
+the result. The next pass asked a more uncomfortable question: **what if every
+individual step looks green while the overall story is wrong?**
+
+That question was not theoretical. An MTCH draft paired Match Group's financial
+story with a headline about Huya's game *Triple Match 3D*. The word “Match” was
+present, the article was recent, and the old checks could describe the headline
+as concrete. All of those facts were true, but it was still the wrong company.
+The pipeline had treated lexical overlap as identity.
+
+This is a useful distinction for AI products. The model did not invent the
+unrelated headline from nowhere; the system handed it a plausible-looking but
+misidentified source. Better prose prompting would not repair that evidence
+boundary. The fix had to live where sources enter the system.
+
+### “Match” Is A Word; Match Group Is An Entity
+
+Source integrity now fails closed unless the source itself mentions the ticker,
+the complete or core canonical company name, or a deliberately reviewed brand
+alias. Free-floating single-token overlap never establishes identity. Generic
+and ambiguous words do not count by themselves. That rule is enforced
+when Why It Is Moving evidence is generated, ranked, and selected for the daily
+newsletter, so a bad association cannot simply reappear at the next handoff.
+
+The MTCH regression is especially valuable because it looks reasonable at a
+glance. Tests that use nonsense input prove very little about ambiguity; real
+mistakes usually wear a convincing costume. “Triple Match 3D” now remains a
+valid story about its actual subject and an invalid source for Match Group.
+
+Think of this as checking a passport, not recognizing someone because their
+shirt has the right first name. A good evidence pipeline validates who a story
+is about before it asks what the story means.
+
+### A Lease Is A Key Card, Not A Sticky Note
+
+The daily and mid-morning automations already used leases to prevent two workers
+from owning the same run. The remaining hole was subtle: a worker could pause
+long enough for its lease to expire, another worker could take over, and the
+original worker could wake up and write stale progress.
+
+The database now fences every automation update with both the lease token and
+the database's view of the lease expiry. A valid token with an expired lease is
+not valid ownership. Claims use a short, bounded lease, active work renews it,
+and every accepted progress patch renews the heartbeat atomically. Terminal
+states remain terminal when a later invocation inspects the same market date.
+
+A hotel key-card is the right analogy. Copying yesterday's card number does not
+let a former guest back into a room after checkout; the lock also checks whether
+the credential is still current. Lease fencing gives database rows that same
+property. Forced-expiry tests now exercise takeover, reject the stale worker's
+write, and prove that only the current owner can renew or advance the run.
+
+The broader lesson is that a mutex answers “who started first?” while a fenced
+lease answers “who is allowed to write **now**?” Distributed systems need the
+second answer.
+
+### Finished Work Still Needs A Delivery Receipt
+
+There is another crash boundary after the automation reaches `completed`,
+`partial`, or `failed`. The run may commit its terminal status and the process
+may die one instruction before it records the operator notification. If those
+two facts are treated as one operation, the dashboard says the work is over
+while the person responsible for it never hears the result.
+
+Daily and mid-morning runs now track notification attempts, the last delivery
+error, and the moment all deduplicated terminal notifications became durable.
+A terminal run without that timestamp remains eligible for notification retry.
+Success sets the receipt once; failure records the problem without pretending
+the notification happened. Existing notification dedupe keys and the
+transactional webhook outbox make those retries safe rather than noisy.
+
+It is the difference between finishing a report and obtaining a signed receipt
+from the mailroom. “The PDF exists” and “the recipient's message is durably
+queued” are separate truths. Reliable software records both.
+
+### An Email Image Must Be A Fossil, Not A Whiteboard
+
+Email is unusually hostile to mutable assets. A newsletter may be opened days
+after publication, forwarded months later, or cached by an image proxy. If the
+URL points to a filename that can be overwritten, yesterday's email can silently
+show today's chart.
+
+Published chart images are now content-addressed. The system validates the PNG
+signature and dimensions, hashes the actual bytes with SHA-256, and stores the
+image beneath a path derived from that digest with a one-year immutable cache
+policy. Uploading the same bytes naturally reuses the same address; different
+bytes necessarily get a different one. A storage conflict means the identical
+artifact is already present, not that it should be overwritten.
+
+A normal filename is a label on a whiteboard: someone can erase what sits
+behind it. A content digest is closer to a fossil's fingerprint. The address is
+evidence of the exact bytes the reader should receive.
+
+Beehiiv delivery adds a second defensive layer. Before an image URL is allowed
+into an issue, it must use HTTPS, come from an approved host, resolve only to
+public addresses, survive bounded redirects under the same rules, return a
+supported image body, stay within the byte limit, and have credible PNG or JPEG
+headers and dimensions. That protects readers from broken images and prevents
+the delivery service from becoming an accidental internal-network fetcher.
+
+### The Last Gate Is The Inbox Gate
+
+An issue can be editorially sound and still be a poor email. The final delivery
+contract therefore checks the artifacts readers and mailbox clients actually
+receive:
+
+- the subject is clean, complete, and no longer than 60 characters;
+- the preheader is normalized from the issue's intro copy and no longer than
+  120 characters;
+- chart and call-to-action links are credential-free HTTPS URLs;
+- images include useful alt text;
+- required copy and chart blocks are present; and
+- the rendered HTML remains below the 90 KB safety ceiling, leaving room below
+  common client clipping limits.
+
+Subject and preheader text are normalized again at the Beehiiv boundary. This
+is deliberate belt-and-suspenders engineering: the editor catches mistakes
+early, while the provider adapter protects the irreversible external call even
+if a future caller bypasses the editor. Validation belongs closest to both the
+authoring experience and the side effect.
+
+### A Heartbeat Needs Someone Outside The Body
+
+Successful cron responses used to be visible only in request logs and the
+automation tables they happened to update. The four critical cron routes now
+write append-only heartbeat rows from invocation start through success or
+failure. A health endpoint interprets missing, failed, or stale runs and returns
+an unhealthy HTTP status without leaking internal errors.
+
+That endpoint is then polled every ten minutes by a GitHub Actions watchdog.
+This separation is important. An application cannot be its own only smoke
+alarm: if the deployment disappears, an in-process monitor disappears with it.
+The off-site watchdog fails when production is unreachable, returns a non-200,
+or reports unhealthy state. Repository notifications or Vercel/on-call alerts
+can then turn that failed check into a human page once their production
+notification settings are connected.
+
+The external notification webhook is intentionally optional. In-app
+notifications remain the durable source of truth, and a missing or invalid
+`NEWSLETTER_ALERT_WEBHOOK_URL` appears as a health warning rather than making
+the core newsletter cron unhealthy. The webhook adds another road to an
+operator; it is not allowed to become the engine's ignition key.
+
+### Lifecycle Health And Statistics Health Are Different Vital Signs
+
+Beehiiv may successfully confirm that a post is published while its optional
+statistics endpoint fails. Previously that partial result could make old
+numbers look freshly reconciled. Delivery rows now track when statistics were
+last fetched and the last statistics error independently from lifecycle
+reconciliation.
+
+When analytics fail, the system preserves the last known statistics, records
+their staleness, and still applies the authoritative lifecycle update. When
+statistics recover, the fresh timestamp advances and the isolated error clears.
+Deliverability alerts also wait for a meaningful sample before judging bounce,
+complaint, or unsubscribe rates; a single canary should not masquerade as a
+trend.
+
+This is the medical-chart lesson: a patient's pulse and blood test are both
+important, but a delayed lab result does not mean the pulse was never measured.
+Keep independent signals independent, then tell the operator exactly which one
+is stale.
+
+### Every Attempt Needs Its Own Claim Check
+
+A run-level lease prevents two workers from owning the orchestration row, but
+the forty newsletter items inside that run need the same protection. Each item
+claim now records a unique start time, and every success, failure, or interrupted
+restore is conditional on both `status = generating` and that exact start time.
+Successive attempts also receive distinct draft operation keys. A worker that
+wakes after its item was reclaimed can no longer overwrite the winner's draft
+or spend the winner's retry budget.
+
+The HTTP request has an absolute deadline too. Preflight time is subtracted
+before a stage begins, chart capture leaves a durable-write reserve, Supabase
+reads carry the stage abort signal, and retry-attempt checkpoints are written
+before expensive dispatch. A timeout is therefore a recorded, reclaimable
+attempt—not an invisible second worker still running behind a 504.
+
+This is the coat-check lesson: a room key controls the building, while the
+numbered ticket controls one coat. Reliable batch systems need both levels of
+ownership.
+
+### Published Means Immutable To Automation
+
+Draft saves now use optimistic concurrency. An update must still match the
+draft's `updated_at` value and workflow status that the caller actually read.
+The editor sends that version back to the server, and automated repair passes
+the version attached to its claimed draft. A concurrent Beehiiv lifecycle
+update therefore wins cleanly instead of being erased by stale pre-publication
+JSON.
+
+Automation also treats `published` as a one-way safety boundary. If a draft
+becomes published while a finalizer or catalyst repair is working, the stale
+worker returns the durable published record; it cannot remove the public URL,
+downgrade the status, or rewrite published content. Human-facing APIs report a
+409 conflict so an editor can reload rather than unknowingly overwrite someone
+else's work.
+
+Think of a published issue as ink on a newspaper press, not text in a shared
+scratchpad. Corrections should create an intentional new operation, never
+emerge accidentally from yesterday's browser tab.
+
+### Parent And Child State Must Reconcile
+
+The morning automation is a parent projection over one or more daily child
+runs. A child issue can be repaired after the parent already reported 39 of 40
+ready. Terminal parents now compare their counters and derived quality status
+with the durable child projection before a cron decides to skip. If the child
+state changed, the worker takes a fenced lease, clears the obsolete notification
+receipt, updates or reopens the parent, and refreshes the deduplicated operator
+notification with the new counts.
+
+Finalization also inspects every database write result. Supabase returns many
+write failures as resolved `{ error }` values rather than rejected promises;
+ignoring that convention can make a generated item look as though it advanced
+when its row never changed. Readiness, ready-state, and fallback writes now fail
+loudly, which keeps the parent retryable and the watchdog honest.
+
+This is bookkeeping with double-entry discipline: fixing the line item is not
+enough until the ledger total and the receipt agree.
+
+### Official Evidence Is The Last Safe Fallback
+
+Provider news and the normal cache remain the fast path, but a company can have
+no usable recent article—or only an entity-mismatched one. The evidence loader
+now merges and ranks provider, fallback, and official SEC candidates instead of
+letting one weak source replace the others. A recent company filing can serve
+as the final verified catalyst when ordinary news fails. Freshness belongs to
+the winning event's own URL, title, and date; a different recent article cannot
+launder an old or unrelated claim.
+
+For Match Group, that meant falling through the contaminated Huya association
+to Match Group's own August 4 filing. “Use official evidence last” is a much
+safer recovery rule than “use whatever text is left.”
+
+### Failure Injection Is Rehearsal For The Bad Day
+
+Happy-path tests prove that the feature can work once. This pass concentrated
+on proving that the system does not lie when a component fails. The regression
+suite deliberately injects:
+
+- lease expiry, takeover, renewal, and a stale worker's attempted write;
+- a hanging generation stage that must hit its deadline;
+- a database failure between terminal run state and durable notification;
+- successful lifecycle reconciliation beside a failed statistics request;
+- malformed, oversized, privately resolved, or redirecting image sources;
+- the real MTCH false-entity collision;
+- unauthorized, failed, missing, and stale cron heartbeats;
+- an older orphaned `running` heartbeat hidden behind a newer success;
+- a repaired 39-of-40 child run whose parent and notification must become
+  40-of-40;
+- a stale editor or finalizer racing a Beehiiv publication update;
+- resolved database write errors during item finalization; and
+- an absent optional webhook that must warn without poisoning core health.
+
+These are not exotic edge cases. They are the seams between databases,
+providers, workers, and deployments—the places where each subsystem can be
+locally honest while the product tells the wrong story. Good engineers test
+the ambiguity after a side effect, the crash between two commits, the worker
+that resumes after losing ownership, and the monitor that lives outside the
+thing it monitors.
+
+The database failure drills now run in pull-request CI as pgTAP tests against an
+isolated local Supabase database. Application tests alone cannot prove function
+privileges or lease predicates. CI replays the migrations, verifies stale-token
+rejection and service-role-only RPC access, then rolls the fixtures back. The
+public health check also gives each cron one scheduled period at the start of
+its UTC window and explicitly looks for older abandoned heartbeats, so it does
+not trade false reassurance for noisy first-tick alarms.
+
+### Release State: Proven In The Branch, Not Yet Promoted
+
+The earlier August 6 launch-hardening baseline and its 85-migration ledger were
+deployed and verified in production. This follow-up reliability package is a
+new release boundary. Its implementation and focused failure-injection tests
+have been validated in the branch, but migrations
+`20260806135000` through `20260806142000` and the matching application code
+have **not yet been claimed as production-deployed** in this record.
+
+That distinction is part of the hardening. The four migrations must land before
+the application begins calling their tables and RPCs; then the deployment,
+protected cron routes, public health endpoint, off-site watchdog, immutable
+image publication, and Beehiiv reconciliation need production smoke evidence.
+Optional webhook and alert receivers should be tested if configured, but their
+absence does not invalidate the durable in-app path.
+
+**The lesson:** perfection is not a dashboard full of green boxes. It is a
+system that refuses the wrong evidence, fences yesterday's worker, remembers
+which receipt is still missing, preserves the exact artifact it published, and
+admits plainly which release gates have not happened yet.

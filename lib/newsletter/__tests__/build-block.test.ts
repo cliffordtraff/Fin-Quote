@@ -34,8 +34,53 @@ describe('buildNewsletterBlock', () => {
     })
 
     expect(priceBlock.html).toContain(`width="620"`)
+    expect(priceBlock.html).toContain(`height="440"`)
     expect(fundamentalsBlock.html).toContain(`width="620"`)
     expect(priceBlock.html).toContain(`padding:8px 20px;text-align:center;`)
     expect(fundamentalsBlock.html).toContain(`padding:8px 20px;text-align:center;`)
+  })
+
+  it('rejects unsafe outbound link schemes', () => {
+    expect(() =>
+      buildNewsletterBlock('chart_plus_commentary', {
+        heading: 'Headline',
+        body: 'Commentary',
+        chartImageUrl: 'https://example.com/chart.png',
+        chartAlt: 'Example price chart',
+        ctaText: 'Read more',
+        ctaUrl: 'javascript:alert(1)',
+      }),
+    ).toThrow('CTA link must be a public HTTPS URL')
+  })
+
+  it('parses malformed body markup through a strict tag-and-attribute allowlist', () => {
+    const block = buildNewsletterBlock('chart_plus_commentary', {
+      heading: 'Safe body',
+      body: '<p onclick="steal()"><strong>Known fact<script>alert(1)</script></strong><a href="javascript:alert(1)">source</a><em>context',
+      chartImageUrl: 'https://example.com/chart.png',
+      chartAlt: 'Safe example price chart',
+    })
+
+    expect(block.html).toContain('<strong>Known fact</strong>')
+    expect(block.html).toContain('source')
+    expect(block.html).toContain('<em>context</em>')
+    expect(block.html).not.toContain('onclick')
+    expect(block.html).not.toContain('<script')
+    expect(block.html).not.toContain('alert(1)')
+    expect(block.html).not.toContain('<a')
+  })
+
+  it('removes nested Outlook conditional comments from allowed body tags', () => {
+    const block = buildNewsletterBlock('chart_plus_commentary', {
+      heading: 'Safe body',
+      body: '<p>Visible text<!--[if mso]><v:rect href="javascript:alert(1)"><![endif]--></p>',
+      chartImageUrl: 'https://example.com/chart.png',
+      chartAlt: 'Safe example price chart',
+    })
+
+    expect(block.html).toContain('Visible text')
+    expect(block.html).not.toContain('<!--[if')
+    expect(block.html).not.toContain('<v:rect')
+    expect(block.html).not.toContain('javascript:')
   })
 })

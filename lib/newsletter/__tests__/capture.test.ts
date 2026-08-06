@@ -135,6 +135,40 @@ describe('newsletter capture', () => {
     )
   })
 
+  it('aborts a hanging renderer within the total execution budget', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(init.signal?.reason ?? new Error('aborted')),
+          { once: true },
+        )
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const startedAt = Date.now()
+    await expect(() =>
+      captureChart(
+        { stocks: ['AAPL'], metrics: ['revenue'] },
+        {
+          outputPath: '/tmp/hanging.png',
+          chartBaseUrl: 'https://charts.theintraday.com',
+          timeout: 10,
+          maxAttempts: 4,
+          retryDelayMs: 0,
+          totalTimeoutMs: 30,
+        },
+      ),
+    ).rejects.toThrow('execution budget')
+
+    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(writeFileSync).not.toHaveBeenCalledWith(
+      '/tmp/hanging.png',
+      expect.anything(),
+    )
+  })
+
   it('posts price-tab specs to the render API without forcing fundamentals mode', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(new Uint8Array([4, 5, 6]), {

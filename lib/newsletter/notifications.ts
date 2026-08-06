@@ -46,11 +46,13 @@ export async function createNewsletterNotification(
     actionUrl?: string | null
     metadata?: Record<string, unknown>
     dedupeKey: string
+    signal?: AbortSignal
   },
 ): Promise<{ notification: NewsletterNotification; created: boolean }> {
+  input.signal?.throwIfAborted()
   const supabase = createServiceRoleClient()
   const scopeKey = getNewsletterDailyScopeKey(scope)
-  const { data, error } = await supabase
+  let insertQuery = supabase
     .from(TABLE)
     .insert({
       scope_key: scopeKey,
@@ -66,13 +68,14 @@ export async function createNewsletterNotification(
       dedupe_key: input.dedupeKey,
     })
     .select('*')
-    .single()
+  if (input.signal) insertQuery = insertQuery.abortSignal(input.signal)
+  const { data, error } = await insertQuery.single()
 
   if (error?.code === '23505') {
     // A dedupe key identifies one operator-facing notification, not immutable
     // copy. Recovery runs must refresh stale counts and severity while keeping
     // the original read/delivery timestamps intact.
-    const existing = await supabase
+    let updateQuery = supabase
       .from(TABLE)
       .update({
         market_date: input.marketDate,
@@ -86,7 +89,8 @@ export async function createNewsletterNotification(
       .eq('scope_key', scopeKey)
       .eq('dedupe_key', input.dedupeKey)
       .select('*')
-      .single()
+    if (input.signal) updateQuery = updateQuery.abortSignal(input.signal)
+    const existing = await updateQuery.single()
     if (existing.error || !existing.data) {
       throw new Error(
         `Failed to refresh existing notification: ${

@@ -3,7 +3,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  NewsletterDraftConflictError,
   NewsletterDraftNotFoundError,
+  NewsletterPublishedDraftImmutableError,
   regenerateNewsletterDraftChart,
 } from '@/lib/newsletter/drafts'
 import {
@@ -16,9 +18,22 @@ import {
 } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterDraftDocument } from '@/lib/newsletter/types'
 
+function requireExpectedUpdatedAt(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('expectedUpdatedAt is required')
+  }
+  return value
+}
+
 function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof NewsletterDraftNotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 })
+  }
+  if (error instanceof NewsletterDraftConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 })
+  }
+  if (error instanceof NewsletterPublishedDraftImmutableError) {
+    return NextResponse.json({ error: error.message }, { status: 409 })
   }
 
   const message =
@@ -49,6 +64,8 @@ export async function POST(
       return NextResponse.json({ error: 'blockId is required' }, { status: 400 })
     }
 
+    const expectedUpdatedAt = requireExpectedUpdatedAt(body?.expectedUpdatedAt)
+
     const updatedDraft = await regenerateNewsletterDraftChart(
       scope,
       id,
@@ -57,12 +74,16 @@ export async function POST(
       {
         chartBaseUrl: getDefaultChartingBaseUrlForHost(host),
         publicChartBaseUrl: getDefaultPublicChartingBaseUrlForHost(host),
+        expectedUpdatedAt,
       },
     )
 
     const response = NextResponse.json({ draft: updatedDraft })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
+    if (error instanceof Error && error.message === 'expectedUpdatedAt is required') {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return toErrorResponse(error)
   }
 }

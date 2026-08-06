@@ -12,27 +12,37 @@ import type {
   NewsletterDraftDocument,
   NewsletterDraftRecord,
 } from './types'
+import {
+  describeImmutableNewsletterImage,
+  isImmutableAssetAlreadyStored,
+} from './immutable-assets'
 
 const BUCKET = 'newsletter-charts'
 
 async function publishLocalImage(localPath: string): Promise<string> {
   const supabase = createServiceRoleClient()
-  const filename = basename(localPath)
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const storagePath = `${datePrefix}/${filename}`
   const fileBuffer = readFileSync(localPath)
+  const asset = describeImmutableNewsletterImage(fileBuffer)
 
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, fileBuffer, {
-      contentType: 'image/png',
-      upsert: true,
+    .upload(asset.storagePath, fileBuffer, {
+      contentType: asset.contentType,
+      cacheControl: asset.cacheControl,
+      upsert: false,
+      metadata: {
+        sha256: asset.digest,
+        width: asset.width,
+        height: asset.height,
+      },
     })
-  if (error) {
-    throw new Error(`Failed to upload ${filename}: ${error.message}`)
+  if (error && !isImmutableAssetAlreadyStored(error)) {
+    throw new Error(`Failed to upload ${basename(localPath)}: ${error.message}`)
   }
 
-  return supabase.storage.from(BUCKET).getPublicUrl(storagePath).data.publicUrl
+  return supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(asset.storagePath).data.publicUrl
 }
 
 async function resolveImageToPublicUrl(imageUrl: string): Promise<string> {
@@ -73,9 +83,14 @@ export async function buildNewsletterDraftBeehiivExport(
     record.draft,
     publicChartBaseUrl,
   )
-  const imageUrls = draft.blocks
+  const blockImageUrls = draft.blocks
     .map((block) => block.chartImageUrl)
     .filter((url): url is string => Boolean(url))
+  const headerImageUrls = [
+    draft.header?.logoUrl,
+    ...(draft.header?.logoUrls ?? []),
+  ].filter((url): url is string => Boolean(url?.trim()))
+  const imageUrls = [...new Set([...blockImageUrls, ...headerImageUrls])]
   const urlMap: Record<string, string> = {}
 
   for (const imageUrl of imageUrls) {

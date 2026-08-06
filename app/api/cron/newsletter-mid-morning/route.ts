@@ -6,8 +6,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getNewsletterAutomationClock } from '@/lib/newsletter/daily-automation'
 import { logNewsletterCron } from '@/lib/newsletter/cron-logging'
 import {
+  markNewsletterCronResponseFailed,
+  withNewsletterCronHeartbeat,
+} from '@/lib/newsletter/cron-observability'
+import { getNewsletterAutomationStageBudget } from '@/lib/newsletter/automation-lease'
+import {
   advanceNewsletterMidMorningAutomation,
+  ensureNewsletterMidMorningTerminalNotification,
   getMidMorningAutomationWindow,
+  getPendingNewsletterMidMorningTerminalNotification,
   getNewsletterMidMorningRun,
 } from '@/lib/newsletter/mid-morning-automation'
 
@@ -29,12 +36,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  return withNewsletterCronHeartbeat('mid_morning', () =>
+    runAuthorizedNewsletterMidMorning(request, startedAt),
+  )
+}
+
+async function runAuthorizedNewsletterMidMorning(
+  request: NextRequest,
+  startedAt: number,
+) {
   try {
+    const requestDeadlineAt = startedAt + maxDuration * 1_000
     const clock = getNewsletterAutomationClock()
     const window = getMidMorningAutomationWindow(clock)
     const force =
       process.env.NODE_ENV !== 'production' &&
       request.nextUrl.searchParams.get('force') === '1'
+    const priorTerminal =
+      await getPendingNewsletterMidMorningTerminalNotification(clock.marketDate)
+    let priorNotificationPending = false
+    if (priorTerminal) {
+      try {
+        await ensureNewsletterMidMorningTerminalNotification(priorTerminal)
+      } catch {
+        priorNotificationPending = true
+      }
+    }
 
     if (!clock.isTradingDay && !force) {
       const reason = clock.holidayName
@@ -47,31 +74,35 @@ export async function GET(request: NextRequest) {
         reason,
         durationMs: Date.now() - startedAt,
       })
-      return NextResponse.json({ skipped: true, reason, clock, window })
-    }
-    if (!window.shouldRun && !force) {
-      const reason = window.hasEnded
-        ? 'Mid-morning recovery window ended at noon ET'
-        : 'Mid-morning automation begins at 10:15 AM ET'
-      logNewsletterCron({
-        job: 'mid-morning',
-        event: 'run-skipped',
-        marketDate: clock.marketDate,
+      const response = NextResponse.json({
+        skipped: true,
         reason,
-        durationMs: Date.now() - startedAt,
+        clock,
+        window,
+        priorNotificationPending,
+        priorNotificationMarketDate: priorTerminal?.marketDate ?? null,
       })
-      return NextResponse.json({ skipped: true, reason, clock, window })
+      return priorNotificationPending
+        ? markNewsletterCronResponseFailed(response)
+        : response
     }
 
-    // A completed/partial/failed row is immutable during ordinary cron polls.
-    // This read prevents the lease function from touching terminal rows every
-    // time Supabase invokes the route.
+    // Terminal notification delivery remains recoverable after the generation
+    // window closes. Read terminal state before applying the noon cutoff.
     const existing = await getNewsletterMidMorningRun(clock.marketDate)
     if (
       existing?.status === 'completed' ||
       existing?.status === 'partial' ||
       existing?.status === 'failed'
     ) {
+      let terminalRun = existing
+      let notificationPending = false
+      try {
+        terminalRun =
+          await ensureNewsletterMidMorningTerminalNotification(existing)
+      } catch {
+        notificationPending = true
+      }
       const reason =
         existing.status === 'failed'
           ? 'Mid-morning automation is in a terminal failed state'
@@ -87,18 +118,74 @@ export async function GET(request: NextRequest) {
         invocationCount: existing.invocationCount,
         durationMs: Date.now() - startedAt,
       })
-      return NextResponse.json({
+      const response = NextResponse.json({
         skipped: true,
         reason,
         terminal: true,
         clock,
         window,
-        run: existing,
+        run: terminalRun,
+        notificationPending,
+        priorNotificationPending,
+        priorNotificationMarketDate: priorTerminal?.marketDate ?? null,
       })
+      return existing.status === 'failed' ||
+        notificationPending ||
+        priorNotificationPending
+        ? markNewsletterCronResponseFailed(response)
+        : response
     }
 
+    if (!window.shouldRun && !force) {
+      const reason = window.hasEnded
+        ? 'Mid-morning recovery window ended at noon ET'
+        : 'Mid-morning automation begins at 10:15 AM ET'
+      logNewsletterCron({
+        job: 'mid-morning',
+        event: 'run-skipped',
+        marketDate: clock.marketDate,
+        reason,
+        durationMs: Date.now() - startedAt,
+      })
+      const response = NextResponse.json({
+        skipped: true,
+        reason,
+        clock,
+        window,
+        priorNotificationPending,
+        priorNotificationMarketDate: priorTerminal?.marketDate ?? null,
+      })
+      return priorNotificationPending
+        ? markNewsletterCronResponseFailed(response)
+        : response
+    }
+
+    const stageBudgetMs = getNewsletterAutomationStageBudget(requestDeadlineAt)
+    if (stageBudgetMs == null) {
+      const reason =
+        'Insufficient request budget remains to safely start an automation stage'
+      logNewsletterCron({
+        job: 'mid-morning',
+        event: 'run-skipped',
+        marketDate: clock.marketDate,
+        reason,
+        durationMs: Date.now() - startedAt,
+      })
+      return markNewsletterCronResponseFailed(
+        NextResponse.json({
+          skipped: true,
+          action: 'request-budget-exhausted',
+          reason,
+          clock,
+          window,
+          priorNotificationPending,
+          priorNotificationMarketDate: priorTerminal?.marketDate ?? null,
+        }),
+      )
+    }
     const result = await advanceNewsletterMidMorningAutomation({
       marketDate: clock.marketDate,
+      stageBudgetMs,
     })
     logNewsletterCron({
       job: 'mid-morning',
@@ -116,7 +203,20 @@ export async function GET(request: NextRequest) {
       meaningfulChange: result.run.meaningfulChange,
       durationMs: Date.now() - startedAt,
     })
-    return NextResponse.json({ skipped: false, clock, window, ...result })
+    const response = NextResponse.json({
+      skipped: false,
+      clock,
+      window,
+      ...result,
+      priorNotificationPending,
+      priorNotificationMarketDate: priorTerminal?.marketDate ?? null,
+    })
+    return result.run.status === 'failed' ||
+      result.action === 'notification-pending' ||
+      result.action === 'invocation-budget-exhausted' ||
+      priorNotificationPending
+      ? markNewsletterCronResponseFailed(response)
+      : response
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logNewsletterCron({

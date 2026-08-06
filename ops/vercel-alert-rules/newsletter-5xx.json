@@ -1,0 +1,11 @@
+{
+  "name": "Newsletter production 5xx anomalies",
+  "projectId": "projectId eq 'prj_wMZzwlVER1EwHnau2JOf3AwrRDGS'",
+  "autosubscribeOwnersInKnock": true,
+  "alertTypes": [
+    {
+      "type": "error_anomaly",
+      "filter": "statusGroup eq '5xx' and contains(route, '/api/cron/newsletter')"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import {
 import type { NewsletterChartLibraryItem } from '@/lib/newsletter/chart-library'
 import { saveNewsletterDraft } from '@/lib/newsletter/drafts'
 import { recordNewsletterPublication } from '@/lib/newsletter/publication'
+import { NEWSLETTER_SUBJECT_MAX_LENGTH } from '@/lib/newsletter/delivery-quality'
 
 const testSessionIds: string[] = []
 
@@ -132,6 +133,20 @@ describe('catalyst-to-newsletter workflow', () => {
       ctaText: 'Read catalyst source',
     })
     expect(draft.blocks[0]?.body).toContain('Management raised full-year guidance')
+  })
+
+  it('normalizes catalyst subjects before creating the draft', () => {
+    const input = createInput()
+    input.whyMoving.headline =
+      'Garmin rallies...\r\nafter record demand and a materially higher full-year outlook… with more catalysts ahead'
+
+    const draft = buildApprovedCatalystNewsletterDraft(input, [createChart()])
+
+    expect(draft.subjectLine.length).toBeLessThanOrEqual(
+      NEWSLETTER_SUBJECT_MAX_LENGTH,
+    )
+    expect(draft.subjectLine).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
+    expect(draft.subjectLine).not.toMatch(/\.{3}|…/)
   })
 
   it('creates exactly one draft for repeated approvals and records automation history', async () => {

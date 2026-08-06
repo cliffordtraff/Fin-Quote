@@ -37,4 +37,17 @@ describe('Beehiiv lifecycle mapping', () => {
       classifyBeehiivLifecycle('archived', null, NOW).lifecycleStatus,
     ).toBe('archived')
   })
+
+  it('does not invent a publish timestamp for an ambiguous confirmed state', () => {
+    expect(classifyBeehiivLifecycle('confirmed', null, NOW)).toEqual({
+      lifecycleStatus: 'unknown',
+      scheduledAt: null,
+      publishedAt: null,
+    })
+    expect(classifyBeehiivLifecycle('confirmed', 'not-a-date', NOW)).toEqual({
+      lifecycleStatus: 'unknown',
+      scheduledAt: null,
+      publishedAt: null,
+    })
+  })
 })

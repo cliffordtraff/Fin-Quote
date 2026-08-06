@@ -85,6 +85,16 @@ const PUBLICATION = {
   url: 'https://example.beehiiv.com',
 }
 
+function pngProbe(width = 620, height = 440): ArrayBuffer {
+  const buffer = new ArrayBuffer(24)
+  const bytes = new Uint8Array(buffer)
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
+  const view = new DataView(buffer)
+  view.setUint32(16, width)
+  view.setUint32(20, height)
+  return buffer
+}
+
 function exportFixture() {
   return {
     html: '<table><tr><td>Ready</td></tr></table>',
@@ -100,6 +110,7 @@ function exportFixture() {
           heading: 'The chart',
           body: '<p>Price is moving.</p>',
           chartImageUrl: 'https://assets.example/chart.png',
+          chartAlt: 'Apple daily price chart',
           chartNeedsRegeneration: false,
         },
       ],
@@ -175,9 +186,12 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockImplementation(
       async () =>
-        new Response('x', {
+        new Response(pngProbe(), {
           status: 206,
-          headers: { 'Content-Type': 'image/png' },
+          headers: {
+            'Content-Type': 'image/png',
+            'Content-Range': 'bytes 0-23/24',
+          },
         }),
     ),
   )
@@ -239,6 +253,12 @@ describe('Beehiiv MCP newsletter delivery', () => {
     ).toBe('Premarket: Stocks rise before the open.')
   })
 
+  it('caps inbox preview text at 120 characters without trailing dots', () => {
+    const preview = buildBeehiivPreviewText('Signal '.repeat(40))
+    expect(preview.length).toBeLessThanOrEqual(120)
+    expect(preview).not.toMatch(/(?:\.{3}|…)$/)
+  })
+
   it('changes the idempotency hash when editable content changes', () => {
     const base = {
       title: 'Morning setup',
@@ -274,6 +294,24 @@ describe('Beehiiv MCP newsletter delivery', () => {
       mocks.recordBeehiivSyncRemoteResult.mock.invocationCallOrder[0],
     ).toBeLessThan(mocks.saveBeehiivDelivery.mock.invocationCallOrder[0])
     expect(mocks.completeBeehiivSyncOperation).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes subject and preview copy at the Beehiiv boundary', async () => {
+    const fixture = exportFixture()
+    fixture.draft.subjectLine =
+      'Apple advances... on durable services growth…'
+    fixture.draft.introText = `<p>Market\r\nupdate\u0000 ${'with durable demand '.repeat(12)}</p>`
+    mocks.buildNewsletterDraftBeehiivExport.mockResolvedValueOnce(fixture)
+
+    await deliver()
+
+    const payload = mocks.createBeehiivPostDraft.mock.calls[0]?.[1]
+    expect(payload.subjectLine.length).toBeLessThanOrEqual(60)
+    expect(payload.subjectLine).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
+    expect(payload.subjectLine).not.toMatch(/\.{3}|…/)
+    expect(payload.title).toBe(payload.subjectLine)
+    expect(payload.previewText.length).toBeLessThanOrEqual(120)
+    expect(payload.previewText).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
   })
 
   it('lets only one concurrent first-create cross the remote boundary', async () => {
@@ -542,9 +580,12 @@ describe('Beehiiv MCP newsletter delivery', () => {
 
   it('accepts an explicitly approved test asset host after public DNS validation', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      new Response('x', {
+      new Response(pngProbe(), {
         status: 200,
-        headers: { 'Content-Type': 'image/png' },
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Length': '24',
+        },
       }),
     )
     const resolveHostname = vi.fn().mockResolvedValue(['93.184.216.34'])
@@ -590,6 +631,67 @@ describe('Beehiiv MCP newsletter delivery', () => {
         ['https://assets.example/chart.png'],
         {
           fetchImpl: oversizedFetch as typeof fetch,
+          resolveHostname: vi.fn().mockResolvedValue(['93.184.216.34']),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'asset_preflight_failed' })
+  })
+
+  it('rejects forged image content types and unsafe dimensions', async () => {
+    const publicDns = vi.fn().mockResolvedValue(['93.184.216.34'])
+    await expect(
+      preflightBeehiivImageAssets(
+        ['https://assets.example/chart.png'],
+        {
+          fetchImpl: vi.fn().mockResolvedValue(
+            new Response('this is not image data', {
+              status: 200,
+              headers: {
+                'Content-Type': 'image/png',
+                'Content-Length': '22',
+              },
+            }),
+          ) as typeof fetch,
+          resolveHostname: publicDns,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'asset_preflight_failed' })
+
+    await expect(
+      preflightBeehiivImageAssets(
+        ['https://assets.example/chart.png'],
+        {
+          fetchImpl: vi.fn().mockResolvedValue(
+            new Response(pngProbe(10_001, 1), {
+              status: 200,
+              headers: {
+                'Content-Type': 'image/png',
+                'Content-Length': '24',
+              },
+            }),
+          ) as typeof fetch,
+          resolveHostname: publicDns,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'asset_preflight_failed' })
+  })
+
+  it('fails closed when a partial or chunked response hides total image size', async () => {
+    const unknownSizeFetch = vi.fn().mockResolvedValue(
+      new Response(pngProbe(), {
+        status: 206,
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Length': '24',
+        },
+      }),
+    )
+
+    await expect(
+      preflightBeehiivImageAssets(
+        ['https://assets.example/chart.png'],
+        {
+          fetchImpl: unknownSizeFetch as typeof fetch,
           resolveHostname: vi.fn().mockResolvedValue(['93.184.216.34']),
         },
       ),

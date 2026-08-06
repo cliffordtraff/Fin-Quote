@@ -6,9 +6,13 @@ import {
   buildStockPickerMessages,
   buildCopyGenerationMessages,
   buildTemplateSelectionMessages,
+  parseEditorialHook,
+  parseMarketRoundupIntro,
   parseMarketRoundupStockSelections,
+  parseStockPickerResult,
   parseTemplateSelections,
 } from '@/lib/newsletter/prompts'
+import { NEWSLETTER_SUBJECT_MAX_LENGTH } from '@/lib/newsletter/delivery-quality'
 
 describe('parseTemplateSelections', () => {
   it('keeps supported quarterly period selections for fundamentals templates', () => {
@@ -77,6 +81,98 @@ describe('parseTemplateSelections', () => {
         reason: 'The recent tape action is the clearest visual story.',
       },
     ])
+  })
+})
+
+describe('generated subject safety', () => {
+  const market = {
+    candidates: [
+      {
+        symbol: 'NVDA',
+        name: 'NVIDIA Corporation',
+        price: 180,
+        change: 12,
+        changesPercentage: 7.14,
+      },
+    ],
+    newsBySymbol: {},
+  }
+  const featuredStocks = [
+    {
+      ticker: 'NVDA',
+      name: 'NVIDIA Corporation',
+      changesPercentage: 7.14,
+      editorialHook: 'AI demand remains strong.',
+      topHeadlines: [],
+    },
+    {
+      ticker: 'AMD',
+      name: 'Advanced Micro Devices',
+      changesPercentage: 4.2,
+      editorialHook: 'Data-center demand is improving.',
+      topHeadlines: [],
+    },
+  ]
+
+  it('normalizes every model-generated subject parser output', () => {
+    const stockPicker = parseStockPickerResult(
+      JSON.stringify({
+        symbol: 'NVDA',
+        name: 'NVIDIA Corporation',
+        editorialHook:
+          'NVIDIA demand is accelerating into the next product cycle.',
+        subjectLine:
+          'NVDA accelerates...\r\non exceptionally strong demand into the next product cycle… and beyond',
+        pickSource: 'news_catalyst',
+      }),
+      market,
+    )
+    const roundup = parseMarketRoundupIntro(
+      JSON.stringify({
+        subjectLine:
+          'AI leaders rally...\r\nas demand expectations climb into the next major product cycle… and beyond',
+        introText: 'NVIDIA and AMD are leading the tape.',
+      }),
+      featuredStocks,
+    )
+    const editorial = parseEditorialHook(
+      JSON.stringify({
+        editorialHook:
+          'NVIDIA is rallying as AI infrastructure demand stays firm.',
+        subjectLine:
+          'NVDA rallies...\r\non durable AI infrastructure demand into year-end… and beyond',
+      }),
+      'NVDA',
+    )
+
+    for (const subject of [
+      stockPicker.subjectLine,
+      roundup.subjectLine,
+      editorial.subjectLine,
+    ]) {
+      expect(subject.length).toBeLessThanOrEqual(
+        NEWSLETTER_SUBJECT_MAX_LENGTH,
+      )
+      expect(subject).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
+      expect(subject).not.toMatch(/\.{3}|…/)
+    }
+  })
+
+  it('discards a stale subject when the stock picker falls back', () => {
+    const result = parseStockPickerResult(
+      JSON.stringify({
+        symbol: 'FAKE',
+        name: 'Wrong Company',
+        editorialHook: 'This should not survive validation.',
+        subjectLine: 'FAKE is the stock to watch',
+        pickSource: 'news_catalyst',
+      }),
+      market,
+    )
+
+    expect(result.ticker).toBe('NVDA')
+    expect(result.subjectLine).toMatch(/^NVDA:/)
+    expect(result.subjectLine).not.toContain('FAKE')
   })
 })
 
@@ -310,6 +406,7 @@ describe('prompt steering', () => {
     expect(selectionMessages[1]?.content).toContain('Focus on semiconductor weakness after earnings.')
     expect(roundupMessages[1]?.content).toContain('=== USER BRIEF ===')
     expect(roundupMessages[1]?.content).toContain('Focus on semiconductor weakness after earnings.')
+    expect(roundupMessages[0]?.content).toContain('60 characters or fewer')
   })
 
   it('parses roundup stock selections and filters invalid symbols', () => {

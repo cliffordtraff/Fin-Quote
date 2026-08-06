@@ -25,11 +25,12 @@ function createSupabaseWriteClient() {
 export async function createWiimRun(input: {
   runType: WiimRunType
   metadata?: Record<string, unknown>
+  signal?: AbortSignal
 }): Promise<WiimRunRow> {
   const supabase = createSupabaseWriteClient()
   const startedAt = new Date().toISOString()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('wiim_runs')
     .insert({
       run_type: input.runType,
@@ -38,7 +39,8 @@ export async function createWiimRun(input: {
       metadata_json: (input.metadata ?? {}) as Json,
     })
     .select('*')
-    .single()
+  if (input.signal) query = query.abortSignal(input.signal)
+  const { data, error } = await query.single()
 
   if (error || !data) {
     throw new Error(`Failed to create WIIM run: ${error?.message ?? 'unknown error'}`)
@@ -47,11 +49,15 @@ export async function createWiimRun(input: {
   return data
 }
 
-export async function storeWiimCandidates(runId: string, candidates: RankedWiimCandidate[]) {
+export async function storeWiimCandidates(
+  runId: string,
+  candidates: RankedWiimCandidate[],
+  signal?: AbortSignal,
+) {
   if (candidates.length === 0) return
 
   const supabase = createSupabaseWriteClient()
-  const { error } = await supabase.from('wiim_run_candidates').insert(
+  let query = supabase.from('wiim_run_candidates').insert(
     candidates.map((candidate) => ({
       wiim_run_id: runId,
       rank: candidate.rank,
@@ -67,6 +73,8 @@ export async function storeWiimCandidates(runId: string, candidates: RankedWiimC
       metadata_json: candidate.metadata as unknown as Json,
     })),
   )
+  if (signal) query = query.abortSignal(signal)
+  const { error } = await query
 
   if (error) {
     throw new Error(`Failed to store WIIM candidates: ${error.message}`)
@@ -81,9 +89,10 @@ export async function completeWiimRun(input: {
   bestContrarianCandidate?: string | null
   topFive?: RankedWiimCandidate[]
   metadata?: Record<string, unknown>
+  signal?: AbortSignal
 }) {
   const supabase = createSupabaseWriteClient()
-  const { error } = await supabase
+  let query = supabase
     .from('wiim_runs')
     .update({
       status: input.status ?? 'completed',
@@ -95,21 +104,28 @@ export async function completeWiimRun(input: {
       metadata_json: (input.metadata ?? {}) as Json,
     })
     .eq('id', input.runId)
+  if (input.signal) query = query.abortSignal(input.signal)
+  const { error } = await query
 
   if (error) {
     throw new Error(`Failed to update WIIM run: ${error.message}`)
   }
 }
 
-export async function getLatestWiimRun(runType: WiimRunType = 'morning'): Promise<WiimRunRow | null> {
+export async function getLatestWiimRun(
+  runType: WiimRunType = 'morning',
+  signal?: AbortSignal,
+): Promise<WiimRunRow | null> {
   const supabase = createSupabaseWriteClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('wiim_runs')
     .select('*')
     .eq('run_type', runType)
+    .eq('status', 'completed')
     .order('started_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.maybeSingle()
 
   if (error) {
     throw new Error(`Failed to fetch latest WIIM run: ${error.message}`)

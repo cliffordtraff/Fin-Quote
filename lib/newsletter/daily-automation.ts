@@ -24,6 +24,18 @@ import {
 } from './daily-runs'
 import { createNewsletterNotification } from './notifications'
 import { selectNewsletterRecommendedIssues } from './shortlist'
+import {
+  NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+  NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+  NewsletterAutomationLeaseLostError,
+  NewsletterAutomationStageBudgetError,
+  runWithNewsletterAutomationLease,
+} from './automation-lease'
+import {
+  createFinvizAttemptCheckpointer,
+  getDailyAutomationFinalStatus,
+  getFinvizCoverageState,
+} from './automation-coverage'
 
 const TABLE = 'newsletter_daily_automation_runs'
 const FINVIZ_BATCH_SIZE = 30
@@ -78,6 +90,9 @@ export interface NewsletterDailyAutomationRun {
   newsletterFailedCount: number
   invocationCount: number
   lastError: string | null
+  notificationAppliedAt: string | null
+  notificationAttemptCount: number
+  notificationLastError: string | null
   metadata: Record<string, unknown>
   startedAt: string | null
   completedAt: string | null
@@ -164,6 +179,9 @@ function mapRow(row: AutomationRow): NewsletterDailyAutomationRun {
     newsletterFailedCount: row.newsletter_failed_count,
     invocationCount: row.invocation_count,
     lastError: row.last_error,
+    notificationAppliedAt: row.notification_applied_at,
+    notificationAttemptCount: row.notification_attempt_count,
+    notificationLastError: row.notification_last_error,
     metadata: isRecord(row.metadata_json) ? row.metadata_json : {},
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -281,26 +299,32 @@ function retryableStage(value: unknown): NewsletterDailyAutomationStage {
 
 async function updateRun(
   id: string,
+  leaseToken: string,
   patch: Database['public']['Tables']['newsletter_daily_automation_runs']['Update'],
+  signal?: AbortSignal,
 ) {
   const supabase = getServiceClient()
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({
-      ...patch,
-      last_heartbeat_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (error || !data) {
+  let query = supabase.rpc(
+    'update_newsletter_daily_automation_claim',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+      p_patch: patch as Json,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
+  if (error) {
     throw new Error(
-      `Failed to update newsletter automation: ${
-        error?.message ?? 'unknown error'
-      }`,
+      `Failed to update newsletter automation: ${error.message}`,
     )
   }
-  return mapRow(data as AutomationRow)
+  const row = data?.[0]
+  if (!row) {
+    throw new NewsletterAutomationLeaseLostError('Daily newsletter automation')
+  }
+  return mapRow(row as AutomationRow)
 }
 
 export async function getNewsletterDailyAutomationRun(
@@ -316,6 +340,31 @@ export async function getNewsletterDailyAutomationRun(
   const { data, error } = await query.maybeSingle()
   if (error) {
     throw new Error(`Failed to load newsletter automation: ${error.message}`)
+  }
+  return data ? mapRow(data as AutomationRow) : null
+}
+
+export async function getPendingNewsletterDailyTerminalNotification(
+  beforeMarketDate: string,
+): Promise<NewsletterDailyAutomationRun | null> {
+  const cutoff = new Date(
+    Date.parse(`${beforeMarketDate}T12:00:00Z`) - 7 * 86_400_000,
+  ).toISOString().slice(0, 10)
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('*')
+    .in('status', ['completed', 'partial', 'failed'])
+    .is('notification_applied_at', null)
+    .gte('market_date', cutoff)
+    .lt('market_date', beforeMarketDate)
+    .order('market_date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    throw new Error(
+      `Failed to load pending morning notification: ${error.message}`,
+    )
   }
   return data ? mapRow(data as AutomationRow) : null
 }
@@ -353,7 +402,7 @@ async function claimRun(marketDate: string, leaseToken: string) {
     {
       p_market_date: marketDate,
       p_lease_token: leaseToken,
-      p_lease_seconds: 90,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
     },
   )
   if (error) {
@@ -363,15 +412,63 @@ async function claimRun(marketDate: string, leaseToken: string) {
   return row ? mapRow(row as AutomationRow) : null
 }
 
-async function releaseRun(marketDate: string, leaseToken: string) {
+async function renewRun(id: string, leaseToken: string) {
   const supabase = getServiceClient()
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
+    'renew_newsletter_daily_automation',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+    },
+  )
+  if (error || !data?.[0]) {
+    throw new NewsletterAutomationLeaseLostError('Daily newsletter automation')
+  }
+}
+
+async function resetRetryNotification(
+  id: string,
+  leaseToken: string,
+  signal?: AbortSignal,
+): Promise<NewsletterDailyAutomationRun> {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
+    'reset_newsletter_daily_retry_notification',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
+  const row = data?.[0]
+  if (error) {
+    throw new Error(
+      `Failed to reset retry notification state: ${error.message}`,
+    )
+  }
+  if (!row) {
+    throw new NewsletterAutomationLeaseLostError('Daily newsletter automation')
+  }
+  return mapRow(row as AutomationRow)
+}
+
+async function releaseRun(
+  marketDate: string,
+  leaseToken: string,
+  signal?: AbortSignal,
+) {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
     'release_newsletter_daily_automation',
     {
       p_market_date: marketDate,
       p_lease_token: leaseToken,
     },
   )
+  if (signal) query = query.abortSignal(signal)
+  const { error } = await query
   if (error) {
     throw new Error(`Failed to release newsletter automation: ${error.message}`)
   }
@@ -381,25 +478,38 @@ async function runPool<T>(
   items: T[],
   concurrency: number,
   worker: (item: T) => Promise<void>,
+  signal?: AbortSignal,
 ) {
   let nextIndex = 0
   async function runner() {
     while (nextIndex < items.length) {
+      signal?.throwIfAborted()
       const index = nextIndex
       nextIndex += 1
       await worker(items[index])
     }
   }
-  await Promise.all(
+  const results = await Promise.allSettled(
     Array.from(
       { length: Math.min(Math.max(1, concurrency), items.length) },
       () => runner(),
     ),
   )
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failure) throw failure.reason
+  signal?.throwIfAborted()
 }
 
-async function collectCandidates(run: NewsletterDailyAutomationRun) {
-  const fetched = await fetchWiimCandidates()
+async function collectCandidates(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
+  const fetched = await fetchWiimCandidates(signal)
+  signal.throwIfAborted()
   const ranked = rankWiimCandidates(
     fetched.candidates,
     fetched.candidates.length,
@@ -416,7 +526,7 @@ async function collectCandidates(run: NewsletterDailyAutomationRun) {
       `Only ${symbols.length} current market candidates were available; at least 30 are required.`,
     )
   }
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: 'finviz',
     candidate_symbols: symbols,
     candidate_count: symbols.length,
@@ -428,22 +538,26 @@ async function collectCandidates(run: NewsletterDailyAutomationRun) {
       finvizAttempts: {},
       summaryAttempts: {},
     } as unknown as Json,
-  })
+  }, signal)
 }
 
 async function loadFinvizCoverage(
   run: NewsletterDailyAutomationRun,
+  signal?: AbortSignal,
 ): Promise<Map<string, { status: string; fetchedAt: string }>> {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
   const coverage = new Map<string, { status: string; fetchedAt: string }>()
   const since = run.startedAt ?? run.createdAt
   for (let index = 0; index < run.candidateSymbols.length; index += 100) {
     const batch = run.candidateSymbols.slice(index, index + 100)
-    const { data, error } = await supabase
+    let query = supabase
       .from('stock_why_moving_cache')
       .select('symbol, status, fetched_at')
       .in('symbol', batch)
       .gte('fetched_at', since)
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query
     if (error) {
       throw new Error(`Failed to inspect Finviz coverage: ${error.message}`)
     }
@@ -454,74 +568,97 @@ async function loadFinvizCoverage(
       })
     }
   }
+  signal?.throwIfAborted()
   return coverage
 }
 
-async function refreshFinvizBatch(run: NewsletterDailyAutomationRun) {
+async function refreshFinvizBatch(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const attempts = stringNumberMap(run.metadata.finvizAttempts)
-  const before = await loadFinvizCoverage(run)
-  const missing = run.candidateSymbols.filter(
-    (symbol) =>
-      !before.has(symbol) && (attempts[symbol] ?? 0) < MAX_SOURCE_ATTEMPTS,
+  const before = await loadFinvizCoverage(run, signal)
+  const beforeState = getFinvizCoverageState(
+    run.candidateSymbols,
+    before,
+    attempts,
+    MAX_SOURCE_ATTEMPTS,
   )
-  const batch = missing.slice(0, FINVIZ_BATCH_SIZE)
+  const batch = beforeState.retryableSymbols.slice(0, FINVIZ_BATCH_SIZE)
   const results: WarmResult[] = []
+  const checkpointAttempt = createFinvizAttemptCheckpointer(
+    attempts,
+    async (snapshot, symbol) => {
+      await updateRun(run.id, leaseToken, {
+        metadata_json: {
+          ...run.metadata,
+          finvizAttempts: snapshot,
+          finvizLastDispatchedSymbol: symbol,
+          finvizAttemptsCheckpointAt: new Date().toISOString(),
+        } as Json,
+      }, signal)
+    },
+  )
   await runPool(batch, 2, async (symbol) => {
+    await checkpointAttempt(symbol)
+    signal.throwIfAborted()
     const result = await warmSymbol(symbol, {
       dryRun: false,
       forceRefresh: true,
       perSymbolPauseMs: 250,
       jitterMs: 100,
+      signal,
     })
-    attempts[symbol] = (attempts[symbol] ?? 0) + 1
     results.push(result)
-  })
+  }, signal)
 
-  const after = await loadFinvizCoverage(run)
-  const exhausted = run.candidateSymbols.filter(
-    (symbol) =>
-      !after.has(symbol) && (attempts[symbol] ?? 0) >= MAX_SOURCE_ATTEMPTS,
+  const after = await loadFinvizCoverage(run, signal)
+  signal.throwIfAborted()
+  const afterState = getFinvizCoverageState(
+    run.candidateSymbols,
+    after,
+    attempts,
+    MAX_SOURCE_ATTEMPTS,
   )
-  const completedCount = after.size + exhausted.length
-  const foundCount = Array.from(after.values()).filter(
-    (entry) => entry.status === 'found',
-  ).length
   const liveSummary = summarizeWarmResults(results)
-  const done = completedCount >= run.candidateSymbols.length
-  return updateRun(run.id, {
-    stage: done ? 'wiim' : 'finviz',
-    finviz_completed_count: completedCount,
-    finviz_found_count: foundCount,
-    finviz_error_count:
-      exhausted.length +
-      Array.from(after.values()).filter((entry) => entry.status === 'error')
-        .length,
+  return updateRun(run.id, leaseToken, {
+    stage: afterState.done ? 'wiim' : 'finviz',
+    finviz_completed_count: afterState.completedCount,
+    finviz_found_count: afterState.foundCount,
+    finviz_error_count: afterState.errorSymbols.length,
     last_error:
-      exhausted.length > 0
-        ? `${exhausted.length} Finviz symbols exhausted automatic retries.`
+      afterState.exhaustedSymbols.length > 0
+        ? `${afterState.exhaustedSymbols.length} Finviz symbols exhausted automatic retries.`
         : null,
     metadata_json: {
       ...run.metadata,
       finvizAttempts: attempts,
       finvizLastBatch: batch,
       finvizLastBatchSummary: liveSummary,
-      finvizExhaustedSymbols: exhausted,
-      finvizCompletedAt: done ? new Date().toISOString() : null,
+      finvizExhaustedSymbols: afterState.exhaustedSymbols,
+      finvizCompletedAt: afterState.done ? new Date().toISOString() : null,
     } as unknown as Json,
-  })
+  }, signal)
 }
 
-async function createWiimSnapshot(run: NewsletterDailyAutomationRun) {
+async function createWiimSnapshot(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
   const wiim = await runWiimBrief({
     runType: 'morning',
     compareLatest: true,
     label: 'WIIM Automated Morning Brief',
     persist: true,
+    signal,
   })
   if (!wiim.runId) {
     throw new Error('The automated WIIM run did not return a persisted run ID')
   }
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: 'summaries',
     wiim_run_id: wiim.runId,
     last_error: null,
@@ -531,14 +668,20 @@ async function createWiimSnapshot(run: NewsletterDailyAutomationRun) {
       wiimRankedCandidateCount: wiim.rankedCandidateCount,
       wiimTopCandidate: wiim.topCandidate,
     } as Json,
-  })
+  }, signal)
 }
 
-async function generateSummaryBatch(run: NewsletterDailyAutomationRun) {
+async function generateSummaryBatch(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const attempts = stringNumberMap(run.metadata.summaryAttempts)
   const before = await getDailySummaryCoverage(
     run.marketDate,
     run.candidateSymbols,
+    signal,
   )
   const completedBefore = new Set(before.completedSymbols)
   const retryable = run.candidateSymbols.filter(
@@ -553,16 +696,29 @@ async function generateSummaryBatch(run: NewsletterDailyAutomationRun) {
     runId: `newsletter_automation_${run.id}`,
     limit: SUMMARY_BATCH_SIZE,
     concurrency: 4,
-    perSymbolTimeoutMs: 45_000,
+    perSymbolTimeoutMs: 35_000,
+    signal,
+    onBatchDispatched: async (symbols) => {
+      for (const symbol of symbols) {
+        attempts[symbol] = (attempts[symbol] ?? 0) + 1
+      }
+      await updateRun(run.id, leaseToken, {
+        metadata_json: {
+          ...run.metadata,
+          summaryAttempts: { ...attempts },
+          summaryLastDispatchedBatch: symbols,
+          summaryAttemptsCheckpointAt: new Date().toISOString(),
+        } as Json,
+      }, signal)
+    },
   })
-  for (const symbol of result.attemptedSymbols) {
-    attempts[symbol] = (attempts[symbol] ?? 0) + 1
-  }
 
   const after = await getDailySummaryCoverage(
     run.marketDate,
     run.candidateSymbols,
+    signal,
   )
+  signal.throwIfAborted()
   const completedAfter = new Set(after.completedSymbols)
   const exhausted = run.candidateSymbols.filter(
     (symbol) =>
@@ -571,7 +727,7 @@ async function generateSummaryBatch(run: NewsletterDailyAutomationRun) {
   )
   const completedCount = completedAfter.size + exhausted.length
   const done = completedCount >= run.candidateSymbols.length
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: done ? 'newsletters' : 'summaries',
     summary_completed_count: completedCount,
     summary_generated_count: after.generatedSymbols.length,
@@ -589,7 +745,7 @@ async function generateSummaryBatch(run: NewsletterDailyAutomationRun) {
       summaryExhaustedSymbols: exhausted,
       summariesCompletedAt: done ? new Date().toISOString() : null,
     } as Json,
-  })
+  }, signal)
 }
 
 function newsletterRunIds(value: unknown): Record<string, string> {
@@ -601,8 +757,276 @@ function newsletterRunIds(value: unknown): Record<string, string> {
   )
 }
 
-async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
-  const scopes = await listEnabledNewsletterDailyScopes()
+type NewsletterDailyChildItem = Pick<
+  Database['public']['Tables']['newsletter_daily_run_items']['Row'],
+  'run_id' | 'status' | 'retry_count'
+>
+
+type NewsletterDailyChildRun = Pick<
+  Database['public']['Tables']['newsletter_daily_runs']['Row'],
+  | 'id'
+  | 'status'
+  | 'selected_count'
+  | 'generated_count'
+  | 'ready_count'
+  | 'attention_count'
+  | 'failed_count'
+>
+
+interface NewsletterDailyTerminalAggregate {
+  scopeCount: number
+  completedScopeCount: number
+  selectedCount: number
+  generatedCount: number
+  readyCount: number
+  attentionCount: number
+  failedCount: number
+  hasNonterminalWork: boolean
+  hasRetryableWork: boolean
+  finalStatus: NewsletterDailyAutomationStatus
+}
+
+export interface NewsletterDailyTerminalReconciliation {
+  hasDrift: boolean
+  aggregate: NewsletterDailyTerminalAggregate
+}
+
+export class NewsletterDailyTerminalReconciliationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NewsletterDailyTerminalReconciliationError'
+  }
+}
+
+function assertMappedNewsletterDailyRuns(
+  runIds: string[],
+  childRuns: NewsletterDailyChildRun[],
+) {
+  const found = new Set(childRuns.map((childRun) => childRun.id))
+  const missing = runIds.filter((runId) => !found.has(runId))
+  if (missing.length > 0) {
+    throw new NewsletterDailyTerminalReconciliationError(
+      `Terminal newsletter reconciliation is missing mapped child runs: ${missing.join(', ')}`,
+    )
+  }
+}
+
+function aggregateNewsletterDailyTerminalState(
+  runIds: string[],
+  childRuns: NewsletterDailyChildRun[],
+  items: NewsletterDailyChildItem[],
+  run: NewsletterDailyAutomationRun,
+): NewsletterDailyTerminalAggregate {
+  const itemGroups = new Map<string, NewsletterDailyChildItem[]>()
+  for (const item of items) {
+    const group = itemGroups.get(item.run_id) ?? []
+    group.push(item)
+    itemGroups.set(item.run_id, group)
+  }
+
+  let generatedCount = 0
+  let readyCount = 0
+  let attentionCount = 0
+  let failedCount = 0
+  let completedScopeCount = 0
+  let hasNonterminalWork = false
+  let hasRetryableWork = false
+
+  const childRunsById = new Map(
+    childRuns.map((childRun) => [childRun.id, childRun]),
+  )
+  for (const runId of runIds) {
+    const childItems = itemGroups.get(runId) ?? []
+    const childRun = childRunsById.get(runId)
+    if (!childRun) continue
+
+    generatedCount += childRun.generated_count
+    readyCount += childRun.ready_count
+    attentionCount += childRun.attention_count
+    failedCount += childRun.failed_count
+    if (childRun.generated_count >= childRun.selected_count) {
+      completedScopeCount += 1
+    }
+    hasNonterminalWork ||= childItems.some(
+      (item) => item.status === 'queued' || item.status === 'generating',
+    )
+    hasRetryableWork ||= childItems.some(
+      (item) =>
+        (item.status === 'failed' || item.status === 'needs_attention') &&
+        item.retry_count < MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
+    )
+  }
+  hasNonterminalWork ||= childRuns.some(
+    (childRun) =>
+      childRun.status === 'queued' || childRun.status === 'generating',
+  )
+
+  const selectedCount = childRuns.reduce(
+    (total, childRun) => total + childRun.selected_count,
+    0,
+  )
+  return {
+    scopeCount: runIds.length,
+    completedScopeCount,
+    selectedCount,
+    generatedCount,
+    readyCount,
+    attentionCount,
+    failedCount,
+    hasNonterminalWork,
+    hasRetryableWork,
+    finalStatus: getDailyAutomationFinalStatus({
+      selectedCount,
+      readyCount,
+      attentionCount,
+      failedCount,
+      finvizErrorCount: run.finvizErrorCount,
+      summaryErrorCount: run.summaryErrorCount,
+    }),
+  }
+}
+
+function hasNewsletterDailyTerminalDrift(
+  run: NewsletterDailyAutomationRun,
+  aggregate: NewsletterDailyTerminalAggregate,
+): boolean {
+  return (
+    run.newsletterScopeCount !== aggregate.scopeCount ||
+    run.newsletterCompletedScopeCount !== aggregate.completedScopeCount ||
+    run.newsletterSelectedCount !== aggregate.selectedCount ||
+    run.newsletterGeneratedCount !== aggregate.generatedCount ||
+    run.newsletterReadyCount !== aggregate.readyCount ||
+    run.newsletterAttentionCount !== aggregate.attentionCount ||
+    run.newsletterFailedCount !== aggregate.failedCount ||
+    run.status !== aggregate.finalStatus ||
+    aggregate.hasNonterminalWork ||
+    aggregate.hasRetryableWork
+  )
+}
+
+export async function getNewsletterDailyTerminalReconciliation(
+  run: NewsletterDailyAutomationRun,
+  signal?: AbortSignal,
+): Promise<NewsletterDailyTerminalReconciliation> {
+  signal?.throwIfAborted()
+  const runIds = Array.from(
+    new Set(Object.values(newsletterRunIds(run.metadata.newsletterRunIds))),
+  )
+  const emptyAggregate: NewsletterDailyTerminalAggregate = {
+    scopeCount: 0,
+    completedScopeCount: 0,
+    selectedCount: 0,
+    generatedCount: 0,
+    readyCount: 0,
+    attentionCount: 0,
+    failedCount: 0,
+    hasNonterminalWork: false,
+    hasRetryableWork: false,
+    finalStatus: getDailyAutomationFinalStatus({
+      selectedCount: 0,
+      readyCount: 0,
+      attentionCount: 0,
+      failedCount: 0,
+      finvizErrorCount: run.finvizErrorCount,
+      summaryErrorCount: run.summaryErrorCount,
+    }),
+  }
+  if (runIds.length === 0) {
+    return { hasDrift: false, aggregate: emptyAggregate }
+  }
+
+  const supabase = getServiceClient()
+  let runsQuery = supabase
+    .from('newsletter_daily_runs')
+    .select(
+      'id, status, selected_count, generated_count, ready_count, attention_count, failed_count',
+    )
+    .in('id', runIds)
+    .eq('market_date', run.marketDate)
+  let itemsQuery = supabase
+    .from('newsletter_daily_run_items')
+    .select('run_id, status, retry_count')
+    .in('run_id', runIds)
+  if (signal) {
+    runsQuery = runsQuery.abortSignal(signal)
+    itemsQuery = itemsQuery.abortSignal(signal)
+  }
+  const [runsResult, itemsResult] = await Promise.all([runsQuery, itemsQuery])
+  if (runsResult.error || itemsResult.error) {
+    throw new Error(
+      `Failed to load terminal newsletter child state: ${
+        runsResult.error?.message ?? itemsResult.error?.message
+      }`,
+    )
+  }
+  signal?.throwIfAborted()
+  const childRuns = (runsResult.data ?? []) as NewsletterDailyChildRun[]
+  assertMappedNewsletterDailyRuns(runIds, childRuns)
+  const aggregate = aggregateNewsletterDailyTerminalState(
+    runIds,
+    childRuns,
+    (itemsResult.data ?? []) as NewsletterDailyChildItem[],
+    run,
+  )
+  return {
+    hasDrift: hasNewsletterDailyTerminalDrift(run, aggregate),
+    aggregate,
+  }
+}
+
+async function reconcileNewsletterDailyTerminalRun(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  reconciliation: NewsletterDailyTerminalReconciliation,
+  signal: AbortSignal,
+): Promise<NewsletterDailyAutomationRun> {
+  const { aggregate } = reconciliation
+  const reopen = aggregate.hasNonterminalWork || aggregate.hasRetryableWork
+  const completedAt = new Date().toISOString()
+  const upstreamErrors = run.finvizErrorCount + run.summaryErrorCount
+  return updateRun(run.id, leaseToken, {
+    status: reopen ? 'running' : aggregate.finalStatus,
+    stage: reopen
+      ? 'newsletters'
+      : aggregate.finalStatus === 'failed'
+        ? 'failed'
+        : 'completed',
+    newsletter_scope_count: aggregate.scopeCount,
+    newsletter_completed_scope_count: aggregate.completedScopeCount,
+    newsletter_selected_count: aggregate.selectedCount,
+    newsletter_generated_count: aggregate.generatedCount,
+    newsletter_ready_count: aggregate.readyCount,
+    newsletter_attention_count: aggregate.attentionCount,
+    newsletter_failed_count: aggregate.failedCount,
+    last_error: reopen
+      ? `${aggregate.attentionCount + aggregate.failedCount} newsletter issues need an automatic retry.`
+      : aggregate.finalStatus === 'completed'
+        ? null
+        : aggregate.finalStatus === 'failed'
+          ? `Morning report produced no ready newsletter issues; ${upstreamErrors} upstream errors remain.`
+          : `Morning report completed with ${upstreamErrors} upstream errors, ${aggregate.attentionCount} attention, and ${aggregate.failedCount} failed issues.`,
+    completed_at: reopen ? null : completedAt,
+    metadata_json: {
+      ...run.metadata,
+      terminalReconciledAt: completedAt,
+      ...(aggregate.finalStatus === 'failed' && !reopen
+        ? {
+            failureKind: 'quality_gate',
+            lastFailureStage: 'finalizing',
+          }
+        : {}),
+    } as Json,
+  }, signal)
+}
+
+async function generateNewsletterBatch(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+  stageBudgetMs: number,
+) {
+  signal.throwIfAborted()
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
   if (scopes.length === 0) {
     throw new Error(
       'No enabled newsletter automation scope is configured. Set NEWSLETTER_AUTOMATION_OWNER_ID or NEWSLETTER_AUTOMATION_SESSION_ID.',
@@ -611,13 +1035,16 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
 
   const runIds = newsletterRunIds(run.metadata.newsletterRunIds)
   for (const { scope, settings } of scopes) {
+    signal.throwIfAborted()
     const scopeKey = scope.ownerId
       ? `owner:${scope.ownerId}`
       : `session:${scope.sessionId}`
     const dailyRun = await ensureNewsletterDailyRun(scope, {
       marketDate: run.marketDate,
       targetCount: settings.targetCount,
+      signal,
     })
+    signal.throwIfAborted()
     runIds[scopeKey] = dailyRun.id
     const retryable = dailyRun.items.filter(
       (item) =>
@@ -631,6 +1058,13 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
         limit: NEWSLETTER_BATCH_SIZE,
         concurrency: 3,
         retryFailed: true,
+        // Rendering must yield enough wall-clock time for the immutable upload,
+        // draft save, item checkpoint, and lease release to finish safely.
+        chartCaptureBudgetMs: Math.max(
+          1,
+          Math.min(28_000, stageBudgetMs - 12_000),
+        ),
+        signal,
       })
       break
     }
@@ -641,7 +1075,7 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
       const scopeKey = scope.ownerId
         ? `owner:${scope.ownerId}`
         : `session:${scope.sessionId}`
-      return getNewsletterDailyRun(scope, runIds[scopeKey])
+      return getNewsletterDailyRun(scope, runIds[scopeKey], signal)
     }),
   )
   const selected = refreshed.reduce(
@@ -677,7 +1111,7 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
     (dailyRun) => dailyRun.generatedCount >= dailyRun.selectedCount,
   ).length
 
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: active ? 'newsletters' : 'finalizing',
     newsletter_scope_count: scopes.length,
     newsletter_completed_scope_count: completedScopeCount,
@@ -692,22 +1126,30 @@ async function generateNewsletterBatch(run: NewsletterDailyAutomationRun) {
       newsletterRunIds: runIds,
       newsletterUpdatedAt: new Date().toISOString(),
     } as Json,
-  })
+  }, signal)
 }
 
-async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
-  const scopes = await listEnabledNewsletterDailyScopes()
+async function finalizeNewsletters(
+  run: NewsletterDailyAutomationRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
   const runIds = newsletterRunIds(run.metadata.newsletterRunIds)
   const refreshed: Awaited<ReturnType<typeof getNewsletterDailyRun>>[] = []
 
   for (const { scope } of scopes) {
+    signal.throwIfAborted()
     const scopeKey = scope.ownerId
       ? `owner:${scope.ownerId}`
       : `session:${scope.sessionId}`
     const dailyRunId = runIds[scopeKey]
     if (!dailyRunId) continue
-    await finalizeNewsletterDailyItems(scope, dailyRunId)
-    refreshed.push(await getNewsletterDailyRun(scope, dailyRunId))
+    await finalizeNewsletterDailyItems(scope, dailyRunId, undefined, {
+      signal,
+    })
+    refreshed.push(await getNewsletterDailyRun(scope, dailyRunId, signal))
   }
 
   const selected = refreshed.reduce(
@@ -738,7 +1180,7 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
     ),
   )
   if (retryable) {
-    return updateRun(run.id, {
+    return updateRun(run.id, leaseToken, {
       stage: 'newsletters',
       newsletter_selected_count: selected,
       newsletter_generated_count: generated,
@@ -749,15 +1191,22 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
         attention + failed > 0
           ? `${attention + failed} issues need an automatic retry.`
           : null,
-    })
+    }, signal)
   }
 
-  const clean =
-    selected > 0 && ready >= selected && attention === 0 && failed === 0
+  const finalStatus = getDailyAutomationFinalStatus({
+    selectedCount: selected,
+    readyCount: ready,
+    attentionCount: attention,
+    failedCount: failed,
+    finvizErrorCount: run.finvizErrorCount,
+    summaryErrorCount: run.summaryErrorCount,
+  })
+  const upstreamErrors = run.finvizErrorCount + run.summaryErrorCount
   const completedAt = new Date().toISOString()
-  const completed = await updateRun(run.id, {
-    status: clean ? 'completed' : 'partial',
-    stage: 'completed',
+  const completed = await updateRun(run.id, leaseToken, {
+    status: finalStatus,
+    stage: finalStatus === 'failed' ? 'failed' : 'completed',
     newsletter_completed_scope_count: refreshed.filter(
       (dailyRun) => dailyRun.generatedCount >= dailyRun.selectedCount,
     ).length,
@@ -767,26 +1216,50 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
     newsletter_attention_count: attention,
     newsletter_failed_count: failed,
     last_error:
-      clean
+      finalStatus === 'completed'
         ? null
-        : `Morning report completed with ${attention} attention and ${failed} failed issues.`,
+        : finalStatus === 'failed'
+          ? `Morning report produced no ready newsletter issues; ${upstreamErrors} upstream errors remain.`
+          : `Morning report completed with ${upstreamErrors} upstream errors, ${attention} attention, and ${failed} failed issues.`,
     completed_at: completedAt,
     metadata_json: {
       ...run.metadata,
       reportReadyAt: completedAt,
+      ...(finalStatus === 'failed'
+        ? {
+            failureKind: 'quality_gate',
+            lastFailureStage: 'finalizing',
+          }
+        : {}),
     } as Json,
-  })
+  }, signal)
 
-  await Promise.allSettled(
+  return completed
+}
+
+async function notifyNewsletterMorningCompletion(
+  run: NewsletterDailyAutomationRun,
+  signal?: AbortSignal,
+) {
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
+  if (scopes.length === 0) {
+    throw new Error('No enabled newsletter scope can receive the terminal alert.')
+  }
+  const runIds = newsletterRunIds(run.metadata.newsletterRunIds)
+  const clean = run.status === 'completed'
+  await Promise.all(
     scopes.map(async ({ scope }) => {
       const scopeKey = scope.ownerId
         ? `owner:${scope.ownerId}`
         : `session:${scope.sessionId}`
       const dailyRunId = runIds[scopeKey]
-      const dailyRun = refreshed.find((entry) => entry.id === dailyRunId)
-      if (!dailyRun) return
+      if (!dailyRunId) {
+        throw new Error(`Missing newsletter run for ${scopeKey}.`)
+      }
+      const dailyRun = await getNewsletterDailyRun(scope, dailyRunId, signal)
       const shortlist = selectNewsletterRecommendedIssues(dailyRun.items)
       const tickers = shortlist.map((entry) => entry.ticker).join(', ')
+      const upstreamErrors = run.finvizErrorCount + run.summaryErrorCount
       await createNewsletterNotification(scope, {
         marketDate: run.marketDate,
         type: 'morning_completed',
@@ -797,8 +1270,11 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
         message: [
           `${dailyRun.readyCount} of ${dailyRun.selectedCount} issues are ready.`,
           tickers ? `Start with ${tickers}.` : '',
-          attention + failed > 0
-            ? `${attention + failed} issues need attention.`
+          run.newsletterAttentionCount + run.newsletterFailedCount > 0
+            ? `${run.newsletterAttentionCount + run.newsletterFailedCount} issues need attention.`
+            : '',
+          upstreamErrors > 0
+            ? `${upstreamErrors} upstream source or summary errors remain.`
             : '',
         ]
           .filter(Boolean)
@@ -814,10 +1290,10 @@ async function finalizeNewsletters(run: NewsletterDailyAutomationRun) {
           shortlist,
         },
         dedupeKey: `morning-completed:${run.marketDate}`,
+        signal,
       })
     }),
   )
-  return completed
 }
 
 export async function notifyNewsletterMorningLate(input: {
@@ -851,16 +1327,25 @@ export async function notifyNewsletterMorningLate(input: {
 async function notifyNewsletterMorningFailure(
   run: NewsletterDailyAutomationRun,
   failedStage: NewsletterDailyAutomationStage,
+  signal?: AbortSignal,
 ) {
-  const scopes = await listEnabledNewsletterDailyScopes()
-  await Promise.allSettled(
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
+  if (scopes.length === 0) {
+    throw new Error('No enabled newsletter scope can receive the terminal alert.')
+  }
+  const qualityGateFailure = run.metadata.failureKind === 'quality_gate'
+  await Promise.all(
     scopes.map(({ scope }) =>
       createNewsletterNotification(scope, {
         marketDate: run.marketDate,
         type: 'morning_failed',
         severity: 'error',
-        title: 'Morning newsletter automation stopped',
-        message: `${getNewsletterAutomationStageLabel(failedStage)} failed after ${MAX_STAGE_ERRORS} attempts. ${run.lastError ?? 'Review the run before retrying.'}`,
+        title: qualityGateFailure
+          ? 'Morning report did not pass its quality gate'
+          : 'Morning newsletter automation stopped',
+        message: qualityGateFailure
+          ? (run.lastError ?? 'The report did not produce a usable issue.')
+          : `${getNewsletterAutomationStageLabel(failedStage)} failed after ${MAX_STAGE_ERRORS} attempts. ${run.lastError ?? 'Review the run before retrying.'}`,
         actionUrl: '/newsletter/morning-review',
         metadata: {
           automationRunId: run.id,
@@ -868,15 +1353,75 @@ async function notifyNewsletterMorningFailure(
           error: run.lastError,
         },
         dedupeKey: `morning-failed:${run.marketDate}:${failedStage}`,
+        signal,
       }),
     ),
   )
+}
+
+async function recordNewsletterMorningNotificationAttempt(
+  run: NewsletterDailyAutomationRun,
+  succeeded: boolean,
+  error: string | null,
+  signal?: AbortSignal,
+): Promise<NewsletterDailyAutomationRun> {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
+    'record_newsletter_daily_notification_attempt',
+    {
+      p_run_id: run.id,
+      p_succeeded: succeeded,
+      p_error: error,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const result = await query
+  const row = result.data?.[0]
+  if (result.error || !row) {
+    throw new Error(
+      `Failed to record morning notification attempt: ${
+        result.error?.message ?? 'No terminal run returned'
+      }`,
+    )
+  }
+  return mapRow(row as AutomationRow)
+}
+
+export async function ensureNewsletterDailyTerminalNotification(
+  run: NewsletterDailyAutomationRun,
+  signal?: AbortSignal,
+): Promise<NewsletterDailyAutomationRun> {
+  signal?.throwIfAborted()
+  if (run.notificationAppliedAt) return run
+  if (!['completed', 'partial', 'failed'].includes(run.status)) return run
+
+  try {
+    if (run.status === 'failed') {
+      await notifyNewsletterMorningFailure(
+        run,
+        retryableStage(run.metadata.lastFailureStage),
+        signal,
+      )
+    } else {
+      await notifyNewsletterMorningCompletion(run, signal)
+    }
+    return await recordNewsletterMorningNotificationAttempt(run, true, null, signal)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await recordNewsletterMorningNotificationAttempt(run, false, message, signal).catch(
+      () => undefined,
+    )
+    throw new Error(`Morning terminal notification is pending: ${message}`, {
+      cause: error,
+    })
+  }
 }
 
 export async function advanceNewsletterDailyAutomation(input: {
   marketDate?: string
   retryCompleted?: boolean
   retryFailed?: boolean
+  stageBudgetMs?: number
 } = {}): Promise<AdvanceNewsletterDailyAutomationResult> {
   const marketDate =
     input.marketDate ?? getNewsletterAutomationClock().marketDate
@@ -891,66 +1436,159 @@ export async function advanceNewsletterDailyAutomation(input: {
   }
 
   let current = claimed
+  const stageBudgetMs = Math.max(
+    1,
+    Math.min(
+      NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+      Math.floor(
+        input.stageBudgetMs ?? NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+      ),
+    ),
+  )
   try {
-    if (
-      !input.retryCompleted &&
-      (current.status === 'completed' || current.status === 'partial')
-    ) {
-      return { claimed: true, action: 'already-completed', run: current }
-    }
-
-    switch (current.stage) {
-      case 'collecting':
-        current = await collectCandidates(current)
-        return { claimed: true, action: 'candidates-collected', run: current }
-      case 'finviz':
-        current = await refreshFinvizBatch(current)
-        return { claimed: true, action: 'finviz-batch', run: current }
-      case 'wiim':
-        current = await createWiimSnapshot(current)
-        return { claimed: true, action: 'wiim-generated', run: current }
-      case 'summaries':
-        current = await generateSummaryBatch(current)
-        return { claimed: true, action: 'summary-batch', run: current }
-      case 'newsletters':
-        current = await generateNewsletterBatch(current)
-        return { claimed: true, action: 'newsletter-batch', run: current }
-      case 'finalizing':
-        current = await finalizeNewsletters(current)
-        return { claimed: true, action: 'newsletters-finalized', run: current }
-      case 'completed':
-        return { claimed: true, action: 'already-completed', run: current }
-      case 'failed':
-        if (!input.retryFailed) {
-          return { claimed: true, action: 'failed-terminal', run: current }
+    return await runWithNewsletterAutomationLease({
+      renew: () => renewRun(current.id, leaseToken),
+      budgetMs: stageBudgetMs,
+      task: async (signal) => {
+        if (current.status === 'completed' || current.status === 'partial') {
+          if (input.retryCompleted) {
+            const reconciliation =
+              await getNewsletterDailyTerminalReconciliation(current, signal)
+            if (reconciliation.hasDrift) {
+              current = await resetRetryNotification(
+                current.id,
+                leaseToken,
+                signal,
+              )
+              current = await reconcileNewsletterDailyTerminalRun(
+                current,
+                leaseToken,
+                reconciliation,
+                signal,
+              )
+              if (current.status === 'running') {
+                return {
+                  claimed: true,
+                  action: 'terminal-reconciliation-resumed',
+                  run: current,
+                }
+              }
+              try {
+                current = await ensureNewsletterDailyTerminalNotification(
+                  current,
+                  signal,
+                )
+                return {
+                  claimed: true,
+                  action: 'terminal-reconciled',
+                  run: current,
+                }
+              } catch {
+                return {
+                  claimed: true,
+                  action: 'notification-pending',
+                  run: current,
+                }
+              }
+            }
+          }
+          try {
+            current = await ensureNewsletterDailyTerminalNotification(current, signal)
+            return { claimed: true, action: 'already-completed', run: current }
+          } catch {
+            return { claimed: true, action: 'notification-pending', run: current }
+          }
         }
-        const retryStage = retryableStage(current.metadata.lastFailureStage)
-        const stageErrorCounts = stringNumberMap(
-          current.metadata.stageErrorCounts,
-        )
-        delete stageErrorCounts[retryStage]
-        current = await updateRun(current.id, {
-          status: 'running',
-          stage: retryStage,
-          last_error: null,
-          completed_at: null,
-          metadata_json: {
-            ...current.metadata,
-            stageErrorCounts,
-            manualRetryAt: new Date().toISOString(),
-            manualRetryStage: retryStage,
-          } as Json,
-        })
-        return { claimed: true, action: 'failed-stage-resumed', run: current }
-    }
+
+        switch (current.stage) {
+          case 'collecting':
+            current = await collectCandidates(current, leaseToken, signal)
+            return { claimed: true, action: 'candidates-collected', run: current }
+          case 'finviz':
+            current = await refreshFinvizBatch(current, leaseToken, signal)
+            return { claimed: true, action: 'finviz-batch', run: current }
+          case 'wiim':
+            current = await createWiimSnapshot(current, leaseToken, signal)
+            return { claimed: true, action: 'wiim-generated', run: current }
+          case 'summaries':
+            current = await generateSummaryBatch(current, leaseToken, signal)
+            return { claimed: true, action: 'summary-batch', run: current }
+          case 'newsletters':
+            current = await generateNewsletterBatch(
+              current,
+              leaseToken,
+              signal,
+              stageBudgetMs,
+            )
+            return { claimed: true, action: 'newsletter-batch', run: current }
+          case 'finalizing':
+            current = await finalizeNewsletters(current, leaseToken, signal)
+            try {
+              current = await ensureNewsletterDailyTerminalNotification(current, signal)
+              return { claimed: true, action: 'newsletters-finalized', run: current }
+            } catch {
+              return { claimed: true, action: 'notification-pending', run: current }
+            }
+          case 'completed':
+            try {
+              current = await ensureNewsletterDailyTerminalNotification(current, signal)
+              return { claimed: true, action: 'already-completed', run: current }
+            } catch {
+              return { claimed: true, action: 'notification-pending', run: current }
+            }
+          case 'failed': {
+            if (!input.retryFailed) {
+              return { claimed: true, action: 'failed-terminal', run: current }
+            }
+            const retryStage = retryableStage(current.metadata.lastFailureStage)
+            const stageErrorCounts = stringNumberMap(
+              current.metadata.stageErrorCounts,
+            )
+            delete stageErrorCounts[retryStage]
+            current = await resetRetryNotification(
+              current.id,
+              leaseToken,
+              signal,
+            )
+            current = await updateRun(current.id, leaseToken, {
+              status: 'running',
+              stage: retryStage,
+              last_error: null,
+              completed_at: null,
+              metadata_json: {
+                ...current.metadata,
+                stageErrorCounts,
+                manualRetryAt: new Date().toISOString(),
+                manualRetryStage: retryStage,
+              } as Json,
+            }, signal)
+            return { claimed: true, action: 'failed-stage-resumed', run: current }
+          }
+        }
+      },
+    })
   } catch (error) {
+    if (error instanceof NewsletterAutomationStageBudgetError) {
+      return {
+        claimed: true,
+        action: 'invocation-budget-exhausted',
+        run: current,
+      }
+    }
+    if (error instanceof NewsletterAutomationLeaseLostError) {
+      return { claimed: false, action: 'lease-lost', run: current }
+    }
+    if (error instanceof NewsletterDailyTerminalReconciliationError) {
+      throw error
+    }
     const failedStage = current.stage
     const message = error instanceof Error ? error.message : String(error)
     const stageErrors = stringNumberMap(current.metadata.stageErrorCounts)
     const stageErrorCount = (stageErrors[failedStage] ?? 0) + 1
     stageErrors[failedStage] = stageErrorCount
     const terminal = stageErrorCount >= MAX_STAGE_ERRORS
-    current = await updateRun(current.id, {
+    const cleanupSignal = AbortSignal.timeout(5_000)
+    current = await updateRun(current.id, leaseToken, {
       status: terminal ? 'failed' : 'running',
       stage: terminal ? 'failed' : failedStage,
       last_error: message,
@@ -961,19 +1599,34 @@ export async function advanceNewsletterDailyAutomation(input: {
         lastFailureStage: failedStage,
         stageErrorCounts: stageErrors,
       } as Json,
-    })
+    }, cleanupSignal)
     if (terminal) {
-      await notifyNewsletterMorningFailure(current, failedStage)
+      try {
+        current = await ensureNewsletterDailyTerminalNotification(
+          current,
+          cleanupSignal,
+        )
+      } catch {
+        return { claimed: true, action: 'notification-pending', run: current }
+      }
     }
     return { claimed: true, action: 'stage-error', run: current }
   } finally {
-    await releaseRun(marketDate, leaseToken).catch(() => undefined)
+    await releaseRun(
+      marketDate,
+      leaseToken,
+      AbortSignal.timeout(5_000),
+    ).catch(() => undefined)
   }
 }
 
 export const __testOnly = {
+  aggregateNewsletterDailyTerminalState,
+  assertMappedNewsletterDailyRuns,
+  hasNewsletterDailyTerminalDrift,
   mapRow,
   stringNumberMap,
   newsletterRunIds,
   retryableStage,
+  loadFinvizCoverage,
 }

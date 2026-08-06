@@ -189,9 +189,10 @@ function PipelineStatus({ report }: { report: MidMorningBriefReportData }) {
           className={`flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs ${
             automation.status === 'failed'
               ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
-              : automation.status === 'completed' ||
-                  automation.status === 'partial'
+              : automation.status === 'completed'
                 ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200'
+                : automation.status === 'partial'
+                  ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
                 : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200'
           }`}
         >
@@ -201,7 +202,7 @@ function PipelineStatus({ report }: { report: MidMorningBriefReportData }) {
           <span>
             Finviz {automation.finvizCompletedCount}/
             {automation.candidateCount} / Summaries{' '}
-            {automation.summaryCompletedCount}/5
+            {automation.summaryGeneratedCount}/5
           </span>
         </div>
       ) : null}

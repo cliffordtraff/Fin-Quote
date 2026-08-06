@@ -558,6 +558,7 @@ export interface NewsletterDailyBatchSource {
   marketDate: string
   rank: number
   ticker: string
+  companyName?: string
   headline: string
   summary: string
   keyFact: string | null

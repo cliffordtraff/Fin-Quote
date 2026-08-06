@@ -70,10 +70,26 @@ export interface WarmSymbolOptions {
   perSymbolPauseMs: number
   jitterMs: number
   pass?: 1 | 2
+  signal?: AbortSignal
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason)
+      return
+    }
+    const onAbort = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      reject(signal?.reason)
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 export function resolveWarmProfile(profile: string | undefined): WarmProfileSettings {
@@ -124,6 +140,7 @@ export function mergeWarmRetryResults(primary: WarmResult[], retry: WarmResult[]
 
 export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Promise<WarmResult> {
   const pass = options.pass ?? 1
+  options.signal?.throwIfAborted()
 
   if (options.dryRun) {
     return {
@@ -150,7 +167,11 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
     }
   }
 
-  const result = await getStockWhyMovingData(symbol, { forceRefresh: options.forceRefresh })
+  const result = await getStockWhyMovingData(symbol, {
+    forceRefresh: options.forceRefresh,
+    signal: options.signal,
+  })
+  options.signal?.throwIfAborted()
   const liveResult: WarmResult = {
     symbol,
     status: result.status,
@@ -163,7 +184,7 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
   const jitter = options.jitterMs > 0 ? Math.floor(Math.random() * options.jitterMs) : 0
   const pause = options.perSymbolPauseMs + jitter
   if (pause > 0) {
-    await sleep(pause)
+    await sleep(pause, options.signal)
   }
 
   return liveResult

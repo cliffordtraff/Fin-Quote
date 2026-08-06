@@ -585,7 +585,7 @@ export default function NewsletterDraftEditor({
     status: NewsletterDraftStatus | undefined,
     successMessage: string,
   ) {
-    if (!draft) return
+    if (!draft || !record) return
 
     try {
       setSaving(true)
@@ -600,6 +600,7 @@ export default function NewsletterDraftEditor({
         },
         body: JSON.stringify({
           draft,
+          expectedUpdatedAt: record.updatedAt,
           ...(status ? { status } : {}),
         }),
       })
@@ -737,6 +738,8 @@ export default function NewsletterDraftEditor({
       }
     }
 
+    if (!record) return
+
     try {
       setRegeneratingNewsletter(true)
       setError(null)
@@ -747,6 +750,8 @@ export default function NewsletterDraftEditor({
         {
           method: 'POST',
           credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedUpdatedAt: record.updatedAt }),
         },
       )
 
@@ -866,7 +871,7 @@ export default function NewsletterDraftEditor({
               disabled
               className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white opacity-40"
             >
-              Send to Beehiiv
+              Sync Beehiiv draft
             </button>
             <button
               type="button"
@@ -1073,9 +1078,9 @@ export default function NewsletterDraftEditor({
             onClick={() => void beehiivPanelRef.current?.deliver()}
             disabled={beehiivBusy || copyingBeehiiv || dirty}
             className="rounded-lg bg-gray-950 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-            title={dirty ? 'Save draft first to send the latest version' : 'Create or sync the Beehiiv draft'}
+            title={dirty ? 'Save the draft before syncing the latest version' : 'Create or sync the Beehiiv draft'}
           >
-            {beehiivBusy ? 'Syncing…' : 'Send to Beehiiv'}
+            {beehiivBusy ? 'Syncing…' : 'Sync Beehiiv draft'}
           </button>
 
           <button
@@ -1488,12 +1493,13 @@ export default function NewsletterDraftEditor({
         </section>
       </div>
 
-      {chartEditorOpen && draft && selectedBlock ? (
+      {chartEditorOpen && record && draft && selectedBlock ? (
         <NewsletterChartEditorDrawer
           key={selectedBlock.id}
           draftId={draftId}
           draft={draft}
           block={selectedBlock}
+          expectedUpdatedAt={record.updatedAt}
           onClose={() => setChartEditorOpen(false)}
           onSaved={(updatedRecord) => {
             setRecord(updatedRecord)
@@ -1504,12 +1510,13 @@ export default function NewsletterDraftEditor({
         />
       ) : null}
 
-      {chartLibraryOpen && draft && selectedBlock ? (
+      {chartLibraryOpen && record && draft && selectedBlock ? (
         <NewsletterChartLibraryPicker
           key={selectedBlock.id}
           draftId={draftId}
           draft={draft}
           block={selectedBlock}
+          expectedUpdatedAt={record.updatedAt}
           onClose={() => setChartLibraryOpen(false)}
           onInserted={(updatedRecord) => {
             setRecord(updatedRecord)

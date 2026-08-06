@@ -28,6 +28,10 @@ import {
   normalizeNewsletterPriceRange,
 } from './chart-spec'
 import { generateNewsletterWithBackend } from './generation'
+import {
+  isSafeNewsletterLink,
+  normalizeNewsletterSubject,
+} from './delivery-quality'
 import type {
   FundamentalsNewsletterChartSpec,
   NewsletterChartSpec,
@@ -106,6 +110,24 @@ export class NewsletterDraftNotFoundError extends Error {
   constructor(id: string) {
     super(`Newsletter draft not found: ${id}`)
     this.name = 'NewsletterDraftNotFoundError'
+  }
+}
+
+export class NewsletterDraftConflictError extends Error {
+  constructor(id: string) {
+    super(
+      `Newsletter draft ${id} changed while it was being saved. Reload the latest version and try again.`,
+    )
+    this.name = 'NewsletterDraftConflictError'
+  }
+}
+
+export class NewsletterPublishedDraftImmutableError extends Error {
+  constructor(id: string) {
+    super(
+      `Published newsletter draft ${id} is immutable. Create a new draft for further edits.`,
+    )
+    this.name = 'NewsletterPublishedDraftImmutableError'
   }
 }
 
@@ -220,10 +242,16 @@ function normalizeDraftBlock(
   const blockTicker = isPriceNewsletterChartSpec(chartSpec)
     ? chartSpec.symbol
     : chartSpec.stocks[0] ?? ticker
-  const chartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
+  const resolvedChartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
     chartBaseUrl: publicChartBaseUrl,
     theme: 'light',
   }).interactiveUrl
+  const existingChartExportUrl = block.chartExportUrl?.trim() ?? ''
+  const chartExportUrl =
+    isSafeNewsletterLink(existingChartExportUrl) &&
+    !isSafeNewsletterLink(resolvedChartExportUrl)
+      ? existingChartExportUrl
+      : resolvedChartExportUrl
 
   return {
     ...block,
@@ -675,11 +703,24 @@ function persistLocalDraftRow(
   draft: NewsletterDraftDocument,
   status: NewsletterDraftStatus,
   publicChartBaseUrl = getDefaultPublicChartingBaseUrl(),
+  expected?: { updatedAt: string; status: NewsletterDraftStatus },
 ): NewsletterDraftRecord {
   const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
   const previewHtml = renderNewsletterDraftPreviewHtml(normalizedDraft, publicChartBaseUrl)
   const existing = id ? getLocalDraftRow(scope, id) : null
-  const timestamp = new Date().toISOString()
+  if (
+    existing &&
+    expected &&
+    (existing.updated_at !== expected.updatedAt ||
+      existing.status !== expected.status)
+  ) {
+    throw new NewsletterDraftConflictError(existing.id)
+  }
+  const now = new Date().toISOString()
+  const timestamp =
+    existing && now <= existing.updated_at
+      ? new Date(Date.parse(existing.updated_at) + 1).toISOString()
+      : now
   const row: NewsletterDraftRow = {
     id: existing?.id ?? crypto.randomUUID(),
     owner_id: null,
@@ -709,6 +750,7 @@ interface AppendNewsletterDraftEventInput {
   beehiivUrl?: string | null
   metadata?: Record<string, unknown>
   dedupeKey?: string
+  signal?: AbortSignal
 }
 
 export async function appendNewsletterDraftEvent(
@@ -716,6 +758,7 @@ export async function appendNewsletterDraftEvent(
   draftId: string,
   input: AppendNewsletterDraftEventInput,
 ): Promise<NewsletterDraftEvent> {
+  input.signal?.throwIfAborted()
   const timestamp = new Date().toISOString()
 
   if (usesLocalDraftStorage(scope)) {
@@ -732,11 +775,12 @@ export async function appendNewsletterDraftEvent(
     }
     row.history = [...(row.history ?? []), event]
     writeLocalDraftRow(getLocalDraftFilePath(scope, draftId), row)
+    input.signal?.throwIfAborted()
     return event
   }
 
   const supabase = getServiceClient()
-  const { data, error } = await supabase
+  let eventQuery = supabase
     .from(NEWSLETTER_DRAFT_EVENTS_TABLE)
     .insert({
       draft_id: draftId,
@@ -750,15 +794,17 @@ export async function appendNewsletterDraftEvent(
       dedupe_key: input.dedupeKey?.trim() || null,
     })
     .select('*')
-    .single()
+  if (input.signal) eventQuery = eventQuery.abortSignal(input.signal)
+  const { data, error } = await eventQuery.single()
 
   if (error?.code === '23505' && input.dedupeKey?.trim()) {
-    const existing = await supabase
+    let existingQuery = supabase
       .from(NEWSLETTER_DRAFT_EVENTS_TABLE)
       .select('*')
       .eq('draft_id', draftId)
       .eq('dedupe_key', input.dedupeKey.trim())
-      .single()
+    if (input.signal) existingQuery = existingQuery.abortSignal(input.signal)
+    const existing = await existingQuery.single()
     if (existing.error || !existing.data) {
       throw new Error(
         `Failed to load deduplicated newsletter history: ${
@@ -779,7 +825,9 @@ export async function appendNewsletterDraftEvent(
 export async function listNewsletterDraftEvents(
   scope: NewsletterDraftScope,
   draftId: string,
+  signal?: AbortSignal,
 ): Promise<NewsletterDraftEvent[]> {
+  signal?.throwIfAborted()
   if (usesLocalDraftStorage(scope)) {
     return [...(getLocalDraftRow(scope, draftId).history ?? [])].sort((a, b) =>
       a.createdAt.localeCompare(b.createdAt),
@@ -797,6 +845,7 @@ export async function listNewsletterDraftEvents(
     ? query.eq('owner_id', scope.ownerId)
     : query.is('owner_id', null).eq('session_id', scope.sessionId)
 
+  if (signal) query = query.abortSignal(signal)
   const { data, error } = await query
   if (error) {
     throw new Error(`Failed to load newsletter history: ${error.message}`)
@@ -807,10 +856,11 @@ export async function listNewsletterDraftEvents(
 async function hydrateNewsletterDraftHistory(
   scope: NewsletterDraftScope,
   record: NewsletterDraftRecord,
+  signal?: AbortSignal,
 ): Promise<NewsletterDraftRecord> {
   return {
     ...record,
-    history: await listNewsletterDraftEvents(scope, record.id),
+    history: await listNewsletterDraftEvents(scope, record.id, signal),
   }
 }
 
@@ -819,6 +869,13 @@ export function buildNewsletterDraftFromResult(
   publicChartBaseUrl = getDefaultPublicChartingBaseUrl(),
 ): NewsletterDraftDocument {
   const ticker = normalizeTicker(result.ticker)
+  const subjectLine =
+    normalizeNewsletterSubject(result.subjectLine) ||
+    normalizeNewsletterSubject(
+      result.format === 'market_roundup'
+        ? 'Market Roundup'
+        : `${ticker} market update`,
+    )
   const introText = buildNewsletterIntroText(result.todayQuote, result.editorialHook)
   const blocks: NewsletterDraftBlock[] = result.blocks.map((block, index) => {
     const spec = normalizeChartSpec(result.chartSpecs[index], ticker)
@@ -864,14 +921,14 @@ export function buildNewsletterDraftFromResult(
     manualDraft: false,
     generationPrompt: result.generationPrompt?.trim() || undefined,
     generatedAt: result.generatedAt,
-    subjectLine: result.subjectLine,
+    subjectLine,
     introText,
     editorialHook: result.editorialHook,
     todayQuote: result.todayQuote,
     header: buildNewsletterHeader(ticker, new Date(result.generatedAt), {
       format: result.format,
       featuredTickers: result.featuredTickers,
-      subjectLine: result.subjectLine,
+      subjectLine,
     }),
     statsCard:
       result.format === 'market_roundup'
@@ -1143,9 +1200,21 @@ async function persistNewsletterDraftRow(
   draft: NewsletterDraftDocument,
   status: NewsletterDraftStatus,
   publicChartBaseUrl = getDefaultPublicChartingBaseUrl(),
+  signal?: AbortSignal,
+  expected?: { updatedAt: string; status: NewsletterDraftStatus },
 ): Promise<NewsletterDraftRecord> {
+  signal?.throwIfAborted()
   if (usesLocalDraftStorage(scope)) {
-    return persistLocalDraftRow(scope, id, draft, status, publicChartBaseUrl)
+    const saved = persistLocalDraftRow(
+      scope,
+      id,
+      draft,
+      status,
+      publicChartBaseUrl,
+      expected,
+    )
+    signal?.throwIfAborted()
+    return saved
   }
 
   const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
@@ -1170,24 +1239,35 @@ async function persistNewsletterDraftRow(
 
   if (id) {
     query = supabase.from(NEWSLETTER_DRAFTS_TABLE).update(payload).eq('id', id)
+    if (expected) {
+      query = query
+        .eq('updated_at', expected.updatedAt)
+        .eq('status', expected.status)
+    }
     query = scope.ownerId
       ? query.eq('owner_id', scope.ownerId)
       : query.is('owner_id', null).eq('session_id', scope.sessionId)
-    query = query.select('*').single()
+    query = query.select('*')
   } else {
     query = supabase
       .from(NEWSLETTER_DRAFTS_TABLE)
       .insert(payload)
       .select('*')
-      .single()
   }
 
-  const { data, error } = await query
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = id
+    ? await query.maybeSingle()
+    : await query.single()
 
   if (error) {
     throw new Error(
       `Failed to persist newsletter draft: ${formatNewsletterDraftStorageError(error.message)}`,
     )
+  }
+
+  if (!data && id) {
+    throw new NewsletterDraftConflictError(id)
   }
 
   return mapDraftRow(data as NewsletterDraftRow)
@@ -1223,7 +1303,9 @@ function mapDraftSummary(row: NewsletterDraftRow): NewsletterDraftSummary {
 
 export async function listNewsletterDrafts(
   scope: NewsletterDraftScope,
+  signal?: AbortSignal,
 ): Promise<NewsletterDraftSummary[]> {
+  signal?.throwIfAborted()
   if (usesLocalDraftStorage(scope)) {
     return listLocalDraftRows(scope).map(mapDraftSummary)
   }
@@ -1240,6 +1322,7 @@ export async function listNewsletterDrafts(
     ? query.eq('owner_id', scope.ownerId)
     : query.is('owner_id', null).eq('session_id', scope.sessionId)
 
+  if (signal) query = query.abortSignal(signal)
   const { data, error } = await query
 
   if (error) {
@@ -1254,11 +1337,14 @@ export async function listNewsletterDrafts(
 export async function getNewsletterDraft(
   scope: NewsletterDraftScope,
   id: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<NewsletterDraftRecord> {
+  options.signal?.throwIfAborted()
   if (usesLocalDraftStorage(scope)) {
     return hydrateNewsletterDraftHistory(
       scope,
       mapDraftRow(getLocalDraftRow(scope, id)),
+      options.signal,
     )
   }
 
@@ -1268,6 +1354,7 @@ export async function getNewsletterDraft(
     ? query.eq('owner_id', scope.ownerId)
     : query.is('owner_id', null).eq('session_id', scope.sessionId)
 
+  if (options.signal) query = query.abortSignal(options.signal)
   const { data, error } = await query.single()
 
   if (error) {
@@ -1282,13 +1369,16 @@ export async function getNewsletterDraft(
   return hydrateNewsletterDraftHistory(
     scope,
     mapDraftRow(data as NewsletterDraftRow),
+    options.signal,
   )
 }
 
 export async function findNewsletterDraftBySourceReviewKey(
   scope: NewsletterDraftScope,
   reviewKey: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<NewsletterDraftRecord | null> {
+  options.signal?.throwIfAborted()
   const normalizedReviewKey = reviewKey.trim()
   if (!normalizedReviewKey) return null
 
@@ -1300,7 +1390,7 @@ export async function findNewsletterDraftBySourceReviewKey(
         normalizedReviewKey,
     )
     return row
-      ? hydrateNewsletterDraftHistory(scope, mapDraftRow(row))
+      ? hydrateNewsletterDraftHistory(scope, mapDraftRow(row), options.signal)
       : null
   }
 
@@ -1314,6 +1404,7 @@ export async function findNewsletterDraftBySourceReviewKey(
     ? query.eq('owner_id', scope.ownerId)
     : query.is('owner_id', null).eq('session_id', scope.sessionId)
 
+  if (options.signal) query = query.abortSignal(options.signal)
   const { data, error } = await query.maybeSingle()
   if (error) {
     throw new Error(
@@ -1324,6 +1415,7 @@ export async function findNewsletterDraftBySourceReviewKey(
   return hydrateNewsletterDraftHistory(
     scope,
     mapDraftRow(data as NewsletterDraftRow),
+    options.signal,
   )
 }
 
@@ -1334,6 +1426,7 @@ export async function createNewsletterDraftFromDocument(
     status?: NewsletterDraftStatus
     publicChartBaseUrl?: string
     eventMetadata?: Record<string, unknown>
+    signal?: AbortSignal
   } = {},
 ): Promise<NewsletterDraftRecord> {
   const status = options.status ?? 'draft'
@@ -1343,6 +1436,7 @@ export async function createNewsletterDraftFromDocument(
     draft,
     status,
     options.publicChartBaseUrl,
+    options.signal,
   )
   await appendNewsletterDraftEvent(scope, saved.id, {
     type: 'created',
@@ -1353,8 +1447,9 @@ export async function createNewsletterDraftFromDocument(
       sourceReviewKey: saved.sourceReviewKey,
       ...(options.eventMetadata ?? {}),
     },
+    signal: options.signal,
   })
-  return hydrateNewsletterDraftHistory(scope, saved)
+  return hydrateNewsletterDraftHistory(scope, saved, options.signal)
 }
 
 export async function createNewsletterDraft(
@@ -1400,16 +1495,55 @@ export async function saveNewsletterDraft(
   id: string,
   draft: NewsletterDraftDocument,
   status: NewsletterDraftStatus = 'draft',
-  options: { publicChartBaseUrl?: string } = {},
+  options: {
+    publicChartBaseUrl?: string
+    signal?: AbortSignal
+    expectedUpdatedAt?: string
+    protectPublished?: boolean
+  } = {},
 ): Promise<NewsletterDraftRecord> {
-  const existing = await getNewsletterDraft(scope, id)
-  const saved = await persistNewsletterDraftRow(
-    scope,
-    id,
-    draft,
-    status,
-    options.publicChartBaseUrl,
-  )
+  const existing = await getNewsletterDraft(scope, id, {
+    signal: options.signal,
+  })
+  if (
+    options.protectPublished &&
+    existing.status === 'published'
+  ) {
+    return existing
+  }
+  if (existing.status === 'published') {
+    throw new NewsletterPublishedDraftImmutableError(id)
+  }
+  if (
+    options.expectedUpdatedAt &&
+    existing.updatedAt !== options.expectedUpdatedAt
+  ) {
+    throw new NewsletterDraftConflictError(id)
+  }
+
+  let saved: NewsletterDraftRecord
+  try {
+    saved = await persistNewsletterDraftRow(
+      scope,
+      id,
+      draft,
+      status,
+      options.publicChartBaseUrl,
+      options.signal,
+      { updatedAt: existing.updatedAt, status: existing.status },
+    )
+  } catch (error) {
+    if (
+      error instanceof NewsletterDraftConflictError &&
+      options.protectPublished
+    ) {
+      const current = await getNewsletterDraft(scope, id, {
+        signal: options.signal,
+      })
+      if (current.status === 'published') return current
+    }
+    throw error
+  }
 
   if (existing.status !== saved.status) {
     await appendNewsletterDraftEvent(scope, id, {
@@ -1417,6 +1551,7 @@ export async function saveNewsletterDraft(
       fromStatus: existing.status,
       toStatus: saved.status,
       beehiivUrl: saved.beehiivUrl,
+      signal: options.signal,
     })
   }
 
@@ -1428,10 +1563,11 @@ export async function saveNewsletterDraft(
       fromStatus: existing.status,
       toStatus: saved.status,
       beehiivUrl: saved.beehiivUrl,
+      signal: options.signal,
     })
   }
 
-  return hydrateNewsletterDraftHistory(scope, saved)
+  return hydrateNewsletterDraftHistory(scope, saved, options.signal)
 }
 
 export async function deleteNewsletterDraft(
@@ -1439,12 +1575,25 @@ export async function deleteNewsletterDraft(
   id: string,
 ): Promise<void> {
   if (usesLocalDraftStorage(scope)) {
+    const existing = getLocalDraftRow(scope, id)
+    if (existing.status === 'published') {
+      throw new NewsletterPublishedDraftImmutableError(id)
+    }
     deleteLocalDraftRow(scope, id)
     return
   }
 
+  const existing = await getNewsletterDraft(scope, id)
+  if (existing.status === 'published') {
+    throw new NewsletterPublishedDraftImmutableError(id)
+  }
   const supabase = getServiceClient()
-  let query = supabase.from(NEWSLETTER_DRAFTS_TABLE).delete().eq('id', id)
+  let query = supabase
+    .from(NEWSLETTER_DRAFTS_TABLE)
+    .delete()
+    .eq('id', id)
+    .eq('updated_at', existing.updatedAt)
+    .neq('status', 'published')
   query = scope.ownerId
     ? query.eq('owner_id', scope.ownerId)
     : query.is('owner_id', null).eq('session_id', scope.sessionId)
@@ -1458,7 +1607,11 @@ export async function deleteNewsletterDraft(
   }
 
   if (!Array.isArray(data) || data.length === 0) {
-    throw new NewsletterDraftNotFoundError(id)
+    const current = await getNewsletterDraft(scope, id)
+    if (current.status === 'published') {
+      throw new NewsletterPublishedDraftImmutableError(id)
+    }
+    throw new NewsletterDraftConflictError(id)
   }
 }
 
@@ -1466,8 +1619,18 @@ export async function regenerateNewsletterDraft(
   scope: NewsletterDraftScope,
   id: string,
   options?: NewsletterOptions,
+  concurrency: { expectedUpdatedAt?: string } = {},
 ): Promise<NewsletterDraftRecord> {
   const existing = await getNewsletterDraft(scope, id)
+  if (existing.status === 'published') {
+    throw new NewsletterPublishedDraftImmutableError(id)
+  }
+  if (
+    concurrency.expectedUpdatedAt &&
+    existing.updatedAt !== concurrency.expectedUpdatedAt
+  ) {
+    throw new NewsletterDraftConflictError(id)
+  }
   const publicChartBaseUrl =
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
   const isMarketRoundup = existing.draft.format === 'market_roundup'
@@ -1492,6 +1655,8 @@ export async function regenerateNewsletterDraft(
 
   return saveNewsletterDraft(scope, id, draft, 'draft', {
     publicChartBaseUrl,
+    expectedUpdatedAt: concurrency.expectedUpdatedAt ?? existing.updatedAt,
+    protectPublished: true,
   })
 }
 
@@ -1505,6 +1670,7 @@ export async function regenerateNewsletterDraftChart(
     publicChartBaseUrl?: string
     width?: number
     height?: number
+    expectedUpdatedAt?: string
   },
 ): Promise<NewsletterDraftRecord> {
   const chartBaseUrl = options?.chartBaseUrl ?? getDefaultChartingBaseUrl()
@@ -1513,6 +1679,15 @@ export async function regenerateNewsletterDraftChart(
   const width = options?.width
   const height = options?.height
   const existing = await getNewsletterDraft(scope, id)
+  if (existing.status === 'published') {
+    throw new NewsletterPublishedDraftImmutableError(id)
+  }
+  if (
+    options?.expectedUpdatedAt &&
+    existing.updatedAt !== options.expectedUpdatedAt
+  ) {
+    throw new NewsletterDraftConflictError(id)
+  }
   const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
   const block = normalizedDraft.blocks.find((entry) => entry.id === blockId)
 
@@ -1573,10 +1748,12 @@ export async function regenerateNewsletterDraftChart(
       ...normalizedDraft,
       blocks: updatedBlocks,
     },
-    existing.status === 'ready' || existing.status === 'published'
-      ? 'review'
-      : existing.status,
-    { publicChartBaseUrl },
+    existing.status === 'ready' ? 'review' : existing.status,
+    {
+      publicChartBaseUrl,
+      expectedUpdatedAt: options?.expectedUpdatedAt ?? existing.updatedAt,
+      protectPublished: true,
+    },
   )
   await appendNewsletterDraftEvent(scope, id, {
     type: 'chart_attached',

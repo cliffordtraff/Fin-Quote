@@ -1,6 +1,10 @@
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 import { createClient } from '@supabase/supabase-js'
+import {
+  describeImmutableNewsletterImage,
+  isImmutableAssetAlreadyStored,
+} from './immutable-assets'
 
 /**
  * Create a Supabase client with the service role key (bypasses RLS).
@@ -23,32 +27,34 @@ const BUCKET = 'newsletter-charts'
  * Upload chart PNGs to Supabase Storage and return a map of
  * { localFilename → publicUrl }.
  *
- * Files are stored under a date prefix so each day's run gets its own
- * folder (e.g. `2026-03-12/AAPL_revenue_vs_net_income_20260312.png`).
- *
- * Uses `upsert: true` so re-runs safely overwrite previous uploads.
+ * Files are content-addressed, immutable, and safe to reference from sent
+ * email. A retry with different pixels gets a different URL.
  */
 export async function publishChartImages(
   filePaths: string[],
 ): Promise<Record<string, string>> {
   const supabase = createServiceClient()
-  const datePrefix = new Date().toISOString().slice(0, 10) // e.g. '2026-03-12'
   const urlMap: Record<string, string> = {}
 
   for (const filePath of filePaths) {
     const filename = basename(filePath)
-    const storagePath = `${datePrefix}/${filename}`
-
     const fileBuffer = readFileSync(filePath)
+    const asset = describeImmutableNewsletterImage(fileBuffer)
 
     const { error } = await supabase.storage
       .from(BUCKET)
-      .upload(storagePath, fileBuffer, {
-        contentType: 'image/png',
-        upsert: true,
+      .upload(asset.storagePath, fileBuffer, {
+        contentType: asset.contentType,
+        cacheControl: asset.cacheControl,
+        upsert: false,
+        metadata: {
+          sha256: asset.digest,
+          width: asset.width,
+          height: asset.height,
+        },
       })
 
-    if (error) {
+    if (error && !isImmutableAssetAlreadyStored(error)) {
       throw new Error(
         `Failed to upload ${filename} to Supabase Storage: ${error.message}`,
       )
@@ -56,7 +62,7 @@ export async function publishChartImages(
 
     const { data: urlData } = supabase.storage
       .from(BUCKET)
-      .getPublicUrl(storagePath)
+      .getPublicUrl(asset.storagePath)
 
     urlMap[filename] = urlData.publicUrl
   }

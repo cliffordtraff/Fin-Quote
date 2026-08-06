@@ -544,17 +544,17 @@ function DeliverySection({
     {
       label: 'Bounces',
       value: formatMetric(stats.bounces),
-      detail: 'Sent minus delivered',
+      detail: `${formatRate(stats.bounceRate)} · ${formatMetric(stats.hardBounces)} hard / ${formatMetric(stats.softBounces)} soft`,
     },
     {
       label: 'Unsubscribes',
       value: formatMetric(stats.unsubscribes),
-      detail: 'Attributed to these posts',
+      detail: `${formatRate(stats.unsubscribeRate)} · guardrail 0.30%`,
     },
     {
       label: 'Spam reports',
       value: formatMetric(stats.spamReports),
-      detail: 'Attributed to these posts',
+      detail: `${formatRate(stats.spamReportRate)} · guardrail 0.10%`,
     },
     {
       label: 'Web',
@@ -712,6 +712,13 @@ function DeliverySection({
                       title={delivery.lastReconcileError}
                     >
                       {delivery.lastReconcileError}
+                    </span>
+                  ) : delivery.statsLastError ? (
+                    <span
+                      className="block truncate text-amber-700 dark:text-amber-400"
+                      title={delivery.statsLastError}
+                    >
+                      Analytics stale: {delivery.statsLastError}
                     </span>
                   ) : (
                     <span className="text-emerald-700 dark:text-emerald-400">

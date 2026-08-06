@@ -23,6 +23,7 @@ interface NewsletterChartLibraryPickerProps {
   draftId: string
   draft: NewsletterDraftDocument
   block: NewsletterDraftBlock
+  expectedUpdatedAt: string
   onClose: () => void
   onInserted: (record: NewsletterDraftRecord) => void
 }
@@ -41,6 +42,7 @@ export default function NewsletterChartLibraryPicker({
   draftId,
   draft,
   block,
+  expectedUpdatedAt,
   onClose,
   onInserted,
 }: NewsletterChartLibraryPickerProps) {
@@ -122,7 +124,10 @@ export default function NewsletterChartLibraryPicker({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ draft: nextDraft }),
+        body: JSON.stringify({
+          draft: nextDraft,
+          expectedUpdatedAt,
+        }),
       })
       const payload = (await response.json()) as DraftResponse
       if (!response.ok) {

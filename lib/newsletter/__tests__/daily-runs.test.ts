@@ -1,6 +1,45 @@
-import { describe, expect, it } from 'vitest'
-import { __testOnly } from '../daily-runs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  createClient: vi.fn(),
+  from: vi.fn(),
+  select: vi.fn(),
+  eq: vi.fn(),
+  not: vi.fn(),
+  maybeSingle: vi.fn(),
+}))
+
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: mocks.createClient,
+}))
+
+import {
+  __testOnly,
+  getNewsletterDailySettings,
+  listEnabledNewsletterDailyScopes,
+} from '../daily-runs'
 import { resolveExistingRunTarget } from '../daily-target'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-key')
+  vi.stubEnv('NEWSLETTER_AUTOMATION_OWNER_ID', '')
+  vi.stubEnv('NEWSLETTER_AUTOMATION_SESSION_ID', '')
+  mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
+  mocks.not.mockResolvedValue({ data: [], error: null })
+  mocks.eq.mockReturnValue({
+    maybeSingle: mocks.maybeSingle,
+    not: mocks.not,
+  })
+  mocks.select.mockReturnValue({ eq: mocks.eq })
+  mocks.from.mockReturnValue({ select: mocks.select })
+  mocks.createClient.mockReturnValue({ from: mocks.from })
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 describe('daily newsletter run targets', () => {
   it('preserves an existing larger batch when the next-day default is lowered', () => {
@@ -41,5 +80,259 @@ describe('daily newsletter run targets', () => {
         'Capture a final chart for AAPL: The Market Read.',
       ]),
     ).toBe(message)
+  })
+
+  it('fails closed on mismatched retry evidence and rebuilds quarantined drafts', () => {
+    expect(
+      __testOnly.isDailyItemSourceEntityValid({
+        ticker: 'MTCH',
+        headline: 'Huya launches Triple Match 3D mobile game worldwide',
+        candidateMetadata: { companyName: 'Match Group, Inc.' },
+      }),
+    ).toBe(false)
+    expect(
+      __testOnly.isDailyItemSourceEntityValid({
+        ticker: 'MTCH',
+        headline: 'Match Group reports second-quarter results',
+        candidateMetadata: { companyName: 'Match Group, Inc.' },
+      }),
+    ).toBe(true)
+    expect(
+      __testOnly.shouldRebuildDailyDraft({
+        status: 'needs_attention',
+        candidateMetadata: {
+          newsletterSourceRefreshedAt: '2026-08-06T12:00:00.000Z',
+        },
+      }),
+    ).toBe(true)
+    expect(
+      __testOnly.shouldRebuildDailyDraft({
+        status: 'failed',
+        candidateMetadata: {},
+      }),
+    ).toBe(false)
+    expect(
+      __testOnly.consumeNewsletterSourceRefreshMarker({
+        companyName: 'Match Group, Inc.',
+        newsletterSourceRefreshedAt: '2026-08-06T12:00:00.000Z',
+      }),
+    ).toEqual({ companyName: 'Match Group, Inc.' })
+    expect(
+      __testOnly.shouldRebuildDailyDraft({
+        status: 'ready',
+        candidateMetadata: {
+          newsletterSourceRefreshedAt: '2026-08-06T12:00:00.000Z',
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it('returns interrupted claims to their prior state without burning a retry', () => {
+    expect(
+      __testOnly.dailyClaimRestorePayload(
+        {
+          status: 'needs_attention',
+          retryCount: 2,
+          completedAt: '2026-08-06T12:00:00.000Z',
+          errorMessage: 'Manual editorial review is required.',
+        } as never,
+        'Automatic generation was interrupted and will retry.',
+      ),
+    ).toEqual({
+      status: 'needs_attention',
+      retry_count: 1,
+      started_at: null,
+      completed_at: '2026-08-06T12:00:00.000Z',
+      error_message: 'Manual editorial review is required.',
+    })
+
+    expect(
+      __testOnly.dailyClaimRestorePayload(
+        {
+          status: 'queued',
+          retryCount: 0,
+          completedAt: null,
+          errorMessage: null,
+        } as never,
+        'Automatic generation was interrupted and will retry.',
+      ),
+    ).toMatchObject({
+      status: 'queued',
+      retry_count: 0,
+      started_at: null,
+      completed_at: null,
+      error_message: 'Automatic generation was interrupted and will retry.',
+    })
+  })
+
+  it('gives successive claims distinct persistence fences and draft keys', () => {
+    const claimA = {
+      ticker: 'MTCH',
+      startedAt: '2026-08-06T12:00:00.001Z',
+    } as never
+    const claimB = {
+      ticker: 'MTCH',
+      startedAt: '2026-08-06T12:15:00.002Z',
+    } as never
+
+    expect(__testOnly.getDailyClaimFence(claimA)).toEqual({
+      status: 'generating',
+      startedAt: '2026-08-06T12:00:00.001Z',
+    })
+    expect(__testOnly.getDailyClaimFence(claimA)).not.toEqual(
+      __testOnly.getDailyClaimFence(claimB),
+    )
+    expect(__testOnly.dailyItemOperationKey('run-1', claimA)).not.toBe(
+      __testOnly.dailyItemOperationKey('run-1', claimB),
+    )
+    expect(() =>
+      __testOnly.getDailyClaimFence({ ticker: 'MTCH', startedAt: null } as never),
+    ).toThrow('no active claim token')
+  })
+
+  it('waits for started sibling workers before surfacing a pool failure', async () => {
+    let siblingSettled = false
+    await expect(
+      __testOnly.runPool([1, 2], 2, async (item) => {
+        if (item === 1) throw new Error('worker failed')
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        siblingSettled = true
+      }),
+    ).rejects.toThrow('worker failed')
+    expect(siblingSettled).toBe(true)
+  })
+
+  it('reserves fourteen seconds after automated chart capture for durable writes', () => {
+    expect(__testOnly.DAILY_CHART_CAPTURE_BUDGET_MS).toBe(28_000)
+    expect(42_000 - __testOnly.DAILY_CHART_CAPTURE_BUDGET_MS).toBeGreaterThanOrEqual(
+      12_000,
+    )
+  })
+})
+
+describe('daily newsletter automation scope bootstrap', () => {
+  it('uses the same enabled defaults when a configured owner has no row', async () => {
+    vi.stubEnv('NEWSLETTER_AUTOMATION_OWNER_ID', 'owner-1')
+    vi.stubEnv('NEWSLETTER_AUTOMATION_SESSION_ID', 'automation-session')
+    const scope = { ownerId: 'owner-1', sessionId: 'automation-session' }
+
+    const directSettings = await getNewsletterDailySettings(scope)
+    const scopes = await listEnabledNewsletterDailyScopes()
+
+    expect(scopes).toEqual([{ scope, settings: directSettings }])
+    expect(directSettings).toEqual({
+      enabled: true,
+      targetCount: 40,
+      timezone: 'America/New_York',
+      generationHour: 8,
+    })
+    expect(mocks.eq).toHaveBeenCalledWith('scope_key', 'owner:owner-1')
+  })
+
+  it('bootstraps a configured session-only scope when its row is absent', async () => {
+    vi.stubEnv('NEWSLETTER_AUTOMATION_SESSION_ID', 'session-only')
+
+    const scopes = await listEnabledNewsletterDailyScopes()
+
+    expect(scopes).toEqual([
+      {
+        scope: { ownerId: null, sessionId: 'session-only' },
+        settings: {
+          enabled: true,
+          targetCount: 40,
+          timezone: 'America/New_York',
+          generationHour: 8,
+        },
+      },
+    ])
+    expect(mocks.eq).toHaveBeenCalledWith(
+      'scope_key',
+      'session:session-only',
+    )
+  })
+
+  it('respects an explicitly disabled configured settings row', async () => {
+    vi.stubEnv('NEWSLETTER_AUTOMATION_OWNER_ID', 'owner-1')
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        id: 'settings-1',
+        scope_key: 'owner:owner-1',
+        owner_id: 'owner-1',
+        session_id: 'newsletter-daily-automation',
+        enabled: false,
+        target_count: 40,
+        timezone: 'America/New_York',
+        generation_hour: 8,
+        created_at: '2026-08-06T12:00:00.000Z',
+        updated_at: '2026-08-06T12:00:00.000Z',
+      },
+      error: null,
+    })
+
+    await expect(listEnabledNewsletterDailyScopes()).resolves.toEqual([])
+  })
+
+  it('keeps persisted settings and session data when the row exists', async () => {
+    vi.stubEnv('NEWSLETTER_AUTOMATION_OWNER_ID', 'owner-1')
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        id: 'settings-1',
+        scope_key: 'owner:owner-1',
+        owner_id: 'owner-1',
+        session_id: 'persisted-session',
+        enabled: true,
+        target_count: 35,
+        timezone: 'America/Chicago',
+        generation_hour: 7,
+        created_at: '2026-08-06T12:00:00.000Z',
+        updated_at: '2026-08-06T12:00:00.000Z',
+      },
+      error: null,
+    })
+
+    await expect(listEnabledNewsletterDailyScopes()).resolves.toEqual([
+      {
+        scope: { ownerId: 'owner-1', sessionId: 'persisted-session' },
+        settings: {
+          enabled: true,
+          targetCount: 35,
+          timezone: 'America/Chicago',
+          generationHour: 7,
+        },
+      },
+    ])
+  })
+
+  it('retains enabled persisted owner scopes when no scope is configured', async () => {
+    mocks.not.mockResolvedValue({
+      data: [
+        {
+          id: 'settings-2',
+          scope_key: 'owner:owner-2',
+          owner_id: 'owner-2',
+          session_id: 'persisted-session',
+          enabled: true,
+          target_count: 45,
+          timezone: 'America/New_York',
+          generation_hour: 9,
+          created_at: '2026-08-06T12:00:00.000Z',
+          updated_at: '2026-08-06T12:00:00.000Z',
+        },
+      ],
+      error: null,
+    })
+
+    await expect(listEnabledNewsletterDailyScopes()).resolves.toEqual([
+      {
+        scope: { ownerId: 'owner-2', sessionId: 'persisted-session' },
+        settings: {
+          enabled: true,
+          targetCount: 45,
+          timezone: 'America/New_York',
+          generationHour: 9,
+        },
+      },
+    ])
+    expect(mocks.not).toHaveBeenCalledWith('owner_id', 'is', null)
   })
 })

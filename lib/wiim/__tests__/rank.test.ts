@@ -17,6 +17,74 @@ function candidate(overrides: Partial<WiimCandidateInput>): WiimCandidateInput {
 }
 
 describe('rankWiimCandidates', () => {
+  it('does not use an unrelated similarly named product as the company headline', () => {
+    const ranked = rankWiimCandidates([
+      candidate({
+        symbol: 'MTCH',
+        name: 'Match Group, Inc.',
+        changesPercentage: -4.2,
+        news: [
+          {
+            title: 'Huya launches Triple Match 3D mobile game worldwide',
+            text: 'The title is a new puzzle game from Huya.',
+            url: 'https://example.com/huya',
+            publishedDate: '2026-08-06',
+            site: 'Example',
+          },
+          {
+            title: 'Match Group reports second-quarter earnings',
+            text: 'Match Group discussed Tinder trends and its outlook.',
+            url: 'https://example.com/mtch',
+            publishedDate: '2026-08-06',
+            site: 'Example',
+          },
+        ],
+      }),
+    ])
+
+    expect(ranked[0]?.headline).toBe(
+      'Match Group reports second-quarter earnings',
+    )
+    expect(ranked[0]?.sourceRefs.map((source) => source.url)).not.toContain(
+      'https://example.com/huya',
+    )
+    expect(ranked[0]?.signals.newsCount).toBe(1)
+    expect(
+      (ranked[0]?.metadata.topNews as Array<{ url: string }>).map(
+        (article) => article.url,
+      ),
+    ).toEqual(['https://example.com/mtch'])
+  })
+
+  it('does not read the word up from the end of Match Group', () => {
+    const ranked = rankWiimCandidates([
+      candidate({
+        symbol: 'MTCH',
+        name: 'Match Group, Inc.',
+        changesPercentage: -4.33,
+        whyMoving: {
+          symbol: 'MTCH',
+          status: 'found',
+          displayText: 'Match Group lifts its outlook after quarterly results',
+          headline: 'Match Group lifts outlook after quarterly results',
+          summary: null,
+          bulletPoints: [],
+          sentiment: 'positive',
+          source: 'finviz',
+          sourceTimestamp: '2026-08-06T14:00:00Z',
+          isCatalyst: true,
+          sourceUrl: 'https://finviz.com/quote.ashx?t=MTCH',
+          fetchedAt: new Date().toISOString(),
+          errorMessage: null,
+        },
+      }),
+    ])
+
+    expect(ranked[0]?.headline).toBe(
+      'Match Group lifts outlook after quarterly results',
+    )
+  })
+
   it('does not rank non-S&P 500 candidates even when they reach the ranker', () => {
     const ranked = rankWiimCandidates([
       candidate({
@@ -59,7 +127,7 @@ describe('summarizeWiimRun', () => {
         changesPercentage: 8,
         news: [
           { title: 'NVIDIA extends rally', text: '', url: '', publishedDate: '', site: '' },
-          { title: 'Analysts lift AI estimates', text: '', url: '', publishedDate: '', site: '' },
+          { title: 'Analysts lift NVIDIA AI estimates', text: '', url: '', publishedDate: '', site: '' },
         ],
       }),
       candidate({

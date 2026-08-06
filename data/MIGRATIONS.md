@@ -24,6 +24,44 @@ When you run a migration, check the box:
 ### Phase 4: Cost Tracking
 - [ ] `add-cost-tracking.sql` - Adds token usage and cost tracking columns
 
+### August 6, 2026: Newsletter Reliability Follow-up
+
+These four versioned Supabase migrations belong to one release and must be
+applied in filename order **before** the matching application code is promoted.
+They are intentionally unchecked: the implementation and migration files have
+been reviewed and exercised locally, but this tracker does not yet have linked
+production-application evidence.
+
+- [ ] `20260806135000_newsletter_cron_observability.sql` — Creates the
+  service-role-owned `newsletter_cron_runs` heartbeat table for daily,
+  mid-morning, Beehiiv-reconciliation, and webhook-outbox invocations. Each row
+  records `running`, `succeeded`, or `failed` state with bounded error codes and
+  timing, giving the health route durable evidence instead of relying on
+  transient request logs.
+- [ ] `20260806140000_fence_newsletter_automation_leases.sql` — Replaces the
+  daily and mid-morning claim functions with bounded leases and adds renew and
+  allowlisted JSON-patch RPCs. Every mutation requires both the current lease
+  token and an unexpired database lease, so a worker that resumes after expiry
+  and takeover cannot overwrite its successor. Terminal `completed`, `partial`,
+  and `failed` states remain terminal when claimed again.
+- [ ] `20260806141000_retry_terminal_newsletter_notifications.sql` — Adds
+  `notification_applied_at`, attempt count, and last-error fields to daily and
+  mid-morning automation runs, plus service-role RPCs that record terminal
+  notification attempts. The applied timestamp advances only after success,
+  preserving retryability across the crash boundary between committing the run
+  result and durably enqueueing its deduplicated operator notification.
+- [ ] `20260806142000_track_beehiiv_stats_health.sql` — Adds independent
+  Beehiiv statistics freshness and error fields. Lifecycle reconciliation can
+  succeed while an optional analytics request fails; that failure preserves
+  the last known statistics, records their staleness, and clears only after a
+  later successful fetch.
+
+Production completion means more than checking these boxes. Capture the linked
+dry run, apply exactly these four versions, verify the new table/columns/RPCs
+and service-role-only grants, require an empty second dry run, then attach the
+application deployment and cron/health/Beehiiv smoke evidence. Do not mark a
+migration complete merely because its file exists in the repository.
+
 ## Checking if a Migration Was Run
 
 You can check if columns exist in Supabase:
