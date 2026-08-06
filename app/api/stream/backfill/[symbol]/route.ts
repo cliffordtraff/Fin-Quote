@@ -14,15 +14,16 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getProvider } from '@/lib/providers'
 import type { CandleTimespan } from '@/lib/providers/types'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ symbol: string }> },
 ) {
   const { symbol } = await params
-  const fmpSymbol = decodeURIComponent(symbol).toUpperCase()
+  const fmpSymbol = normalizeMarketSymbol(decodeURIComponent(symbol))
 
-  if (!/^[A-Z]{1,5}(=[A-Z])?$/.test(fmpSymbol)) {
+  if (!isValidMarketSymbol(fmpSymbol)) {
     return NextResponse.json({ error: 'Invalid symbol' }, { status: 400 })
   }
 

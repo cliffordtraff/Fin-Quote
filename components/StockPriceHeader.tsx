@@ -83,7 +83,10 @@ export default function StockPriceHeader({
   ].filter(Boolean) as string[]
 
   return (
-    <section className="sticky top-0 z-30 h-16 bg-cream-100/90 dark:bg-gray-900/90 backdrop-blur-sm">
+    <section
+      aria-label={`${symbol} quote`}
+      className="sticky top-[6.625rem] z-30 h-16 bg-cream-100/95 backdrop-blur-sm dark:bg-gray-900/95 lg:top-[6.375rem]"
+    >
       <div className="mx-auto flex h-full max-w-[1600px] items-center px-4 sm:px-12 lg:px-20">
         <div className="flex w-full items-center justify-between gap-3">
           {/* Company Info */}
@@ -99,7 +102,7 @@ export default function StockPriceHeader({
           </div>
 
           {/* Price Display */}
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          <div aria-live="polite" className="flex shrink-0 items-center gap-2 sm:gap-4">
             <div className="whitespace-nowrap text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
               ${price.toFixed(2)}
             </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getStockIntradayOHLC } from '@/app/actions/stock-intraday-ohlc'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
 
 const TTL_MS = 15_000
 
@@ -10,10 +11,10 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
-  const rawSymbol = decodeURIComponent((await params).symbol)
+  const rawSymbol = normalizeMarketSymbol(decodeURIComponent((await params).symbol))
 
-  // Validate: stock tickers (1-5 alpha) or futures (e.g. ES=F, NQ=F)
-  if (!/^[A-Z]{1,5}(=[A-Z])?$/.test(rawSymbol)) {
+  // Validate stocks, class shares (BRK.B), and futures (ES=F).
+  if (!isValidMarketSymbol(rawSymbol)) {
     return NextResponse.json(
       { error: 'Invalid symbol' },
       { status: 400 }

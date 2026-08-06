@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 
 type StatementType = 'income' | 'balance' | 'cashflow'
 
@@ -119,18 +119,55 @@ interface FinancialStatementsTabsProps {
   cashFlow: CashFlowData[]
 }
 
+function firstAvailableStatement(
+  incomeCount: number,
+  balanceCount: number,
+  cashFlowCount: number,
+): StatementType {
+  if (incomeCount > 0) return 'income'
+  if (balanceCount > 0) return 'balance'
+  if (cashFlowCount > 0) return 'cashflow'
+  return 'income'
+}
+
 export default function FinancialStatementsTabs({
   incomeStatement,
   balanceSheet,
   cashFlow,
 }: FinancialStatementsTabsProps) {
-  const [activeTab, setActiveTab] = useState<StatementType>('income')
+  const [activeTab, setActiveTab] = useState<StatementType>(() => firstAvailableStatement(
+    incomeStatement.length,
+    balanceSheet.length,
+    cashFlow.length,
+  ))
   const [sortAscending, setSortAscending] = useState(false)
+  const componentId = useId()
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  useEffect(() => {
+    setActiveTab((currentTab) => {
+      const activeHasData = currentTab === 'income'
+        ? incomeStatement.length > 0
+        : currentTab === 'balance'
+          ? balanceSheet.length > 0
+          : cashFlow.length > 0
+
+      return activeHasData
+        ? currentTab
+        : firstAvailableStatement(
+          incomeStatement.length,
+          balanceSheet.length,
+          cashFlow.length,
+        )
+    })
+  }, [balanceSheet.length, cashFlow.length, incomeStatement.length])
 
   // Get unique years, sorted based on user preference
-  const years = [...new Set(incomeStatement.map(f => f.year))].sort((a, b) =>
-    sortAscending ? a - b : b - a
-  )
+  const years = [
+    ...new Set(
+      [...incomeStatement, ...balanceSheet, ...cashFlow].map((statement) => statement.year),
+    ),
+  ].sort((a, b) => (sortAscending ? a - b : b - a))
 
   // Format helpers
   const formatCurrency = (value: number | null): string => {
@@ -278,8 +315,8 @@ export default function FinancialStatementsTabs({
     { label: 'Price to Free Cash Flow', key: 'priceToFreeCashFlow', format: 'ratio' },
   ]
 
-  const getRows = () => {
-    switch (activeTab) {
+  const getRows = (statementType: StatementType) => {
+    switch (statementType) {
       case 'income':
         return incomeRows
       case 'balance':
@@ -289,8 +326,8 @@ export default function FinancialStatementsTabs({
     }
   }
 
-  const getData = () => {
-    switch (activeTab) {
+  const getData = (statementType: StatementType) => {
+    switch (statementType) {
       case 'income':
         return incomeStatement
       case 'balance':
@@ -319,28 +356,55 @@ export default function FinancialStatementsTabs({
     }
   }
 
-  const rows = getRows()
-  const data = getData()
-
   const tabs = [
     { id: 'income' as StatementType, label: 'Income Statement' },
     { id: 'balance' as StatementType, label: 'Balance Sheet' },
     { id: 'cashflow' as StatementType, label: 'Cash Flow' },
   ]
 
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null
+
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = tabs.length - 1
+
+    if (nextIndex === null) return
+
+    event.preventDefault()
+    setActiveTab(tabs[nextIndex].id)
+    tabRefs.current[nextIndex]?.focus()
+  }
+
   if (years.length === 0) return null
 
   return (
-    <div>
+    <div className="min-w-0">
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
-        <div className="flex items-center justify-between">
-          <nav className="flex space-x-4" aria-label="Financial Statements">
-            {tabs.map((tab) => (
+        <div className="flex min-w-0 flex-col gap-2 pb-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:pb-0">
+          <div
+            role="tablist"
+            aria-label="Financial statements"
+            aria-orientation="horizontal"
+            className="grid w-full min-w-0 grid-cols-3 sm:w-auto sm:flex sm:space-x-4"
+          >
+            {tabs.map((tab, index) => (
               <button
                 key={tab.id}
+                ref={(element) => {
+                  tabRefs.current[index] = element
+                }}
+                id={`${componentId}-${tab.id}-tab`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`${componentId}-${tab.id}-panel`}
+                tabIndex={activeTab === tab.id ? 0 : -1}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
+                className={`min-h-11 min-w-0 border-b-2 px-1 py-2 text-[11px] font-medium leading-tight transition-colors sm:min-h-0 sm:px-4 sm:text-sm ${
                   activeTab === tab.id
                     ? 'border-sage-500 text-sage-600 dark:text-sage-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -349,12 +413,18 @@ export default function FinancialStatementsTabs({
                 {tab.label}
               </button>
             ))}
-          </nav>
+          </div>
           <button
+            type="button"
             onClick={() => setSortAscending(!sortAscending)}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-cream-50 dark:hover:bg-gray-700 rounded transition-colors"
+            aria-label={sortAscending ? 'Show newest fiscal year first' : 'Show oldest fiscal year first'}
+            aria-pressed={sortAscending}
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 self-end rounded px-3 py-2 text-gray-600 transition-colors hover:bg-cream-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200 sm:min-h-0 sm:p-2"
             title={sortAscending ? 'Showing oldest first - click to show newest first' : 'Showing newest first - click to show oldest first'}
           >
+            <span className="text-xs sm:sr-only">
+              {sortAscending ? 'Oldest first' : 'Newest first'}
+            </span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -373,41 +443,68 @@ export default function FinancialStatementsTabs({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-cream-50 dark:bg-gray-800">
-            <tr>
-              <th className="px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                Metric
-              </th>
-              {years.map(year => (
-                <th key={year} className="px-2 py-1.5 text-right text-[11px] font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                  FY {year}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-            {rows.map((row, idx) => (
-              <tr key={idx} className="hover:bg-cream-50 dark:hover:bg-gray-800">
-                <td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-gray-900 dark:text-gray-100">
-                  {row.label}
-                </td>
-                {years.map(year => {
-                  const yearData = data.find(d => d.year === year)
-                  const value = yearData ? (yearData as any)[row.key] : null
-                  return (
-                    <td key={year} className="whitespace-nowrap px-2 py-1 text-xs text-right text-gray-900 dark:text-gray-100">
-                      {formatValue(value, row.format)}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {tabs.map((tab) => {
+        const rows = getRows(tab.id)
+        const data = getData(tab.id)
+
+        return (
+          <div
+            key={tab.id}
+            id={`${componentId}-${tab.id}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${componentId}-${tab.id}-tab`}
+            tabIndex={0}
+            hidden={activeTab !== tab.id}
+            className="min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+          >
+            {/* Keep wide fiscal histories inside this scroll region on narrow screens. */}
+            <div
+              role="region"
+              aria-label={`${tab.label} table`}
+              tabIndex={0}
+              className="max-w-full overflow-x-auto overscroll-x-contain"
+            >
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <caption className="sr-only">
+                  {tab.label} by fiscal year, {sortAscending ? 'oldest to newest' : 'newest to oldest'}
+                </caption>
+                <thead className="bg-cream-50 dark:bg-gray-800">
+                  <tr>
+                    <th scope="col" className="px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                      Metric
+                    </th>
+                    {years.map(year => (
+                      <th key={year} scope="col" className="px-2 py-1.5 text-right text-[11px] font-medium uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                        FY {year}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                  {rows.map((row) => (
+                    <tr key={row.key} className="hover:bg-cream-50 dark:hover:bg-gray-800">
+                      <th scope="row" className="whitespace-nowrap px-2 py-1 text-left text-xs font-medium text-gray-900 dark:text-gray-100">
+                        {row.label}
+                      </th>
+                      {years.map(year => {
+                        const yearData = data.find(d => d.year === year)
+                        const value = yearData
+                          ? (yearData as unknown as Record<string, number | null>)[row.key]
+                          : null
+                        return (
+                          <td key={year} className="whitespace-nowrap px-2 py-1 text-xs text-right text-gray-900 dark:text-gray-100">
+                            {formatValue(value, row.format)}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

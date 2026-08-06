@@ -6,6 +6,7 @@ interface TimezoneContextType {
   timezone: string
   setTimezone: (tz: string) => void
   isAutoDetected: boolean
+  resetToAutoDetect: () => void
 }
 
 const TimezoneContext = createContext<TimezoneContextType | null>(null)
@@ -72,7 +73,7 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <TimezoneContext.Provider value={{ timezone, setTimezone, isAutoDetected }}>
+    <TimezoneContext.Provider value={{ timezone, setTimezone, isAutoDetected, resetToAutoDetect }}>
       {children}
     </TimezoneContext.Provider>
   )
@@ -85,7 +86,8 @@ export function useTimezone() {
     return {
       timezone: 'America/New_York',
       setTimezone: () => {},
-      isAutoDetected: true
+      isAutoDetected: true,
+      resetToAutoDetect: () => {},
     }
   }
   return context

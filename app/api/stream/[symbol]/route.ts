@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 
 import { getBroker } from '@/lib/ws/massive-broker'
 import type { BrokerEvent } from '@/lib/ws/massive-broker'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 
@@ -22,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ symbol: string }> },
 ) {
   const { symbol } = await params
-  const fmpSymbol = decodeURIComponent(symbol).toUpperCase()
+  const fmpSymbol = normalizeMarketSymbol(decodeURIComponent(symbol))
 
   const url = new URL(request.url)
   const timeframe = url.searchParams.get('timeframe') ?? '1s'
@@ -31,8 +32,8 @@ export async function GET(
     return new Response('Invalid timeframe. Use 1s or 10s.', { status: 400 })
   }
 
-  // Validate symbol format: stocks (1-5 alpha), futures (1-4 alpha + =F)
-  if (!/^[A-Z]{1,5}(=[A-Z])?$/.test(fmpSymbol)) {
+  // Validate stocks, class shares (BRK.B), and futures (ES=F).
+  if (!isValidMarketSymbol(fmpSymbol)) {
     return new Response('Invalid symbol', { status: 400 })
   }
 

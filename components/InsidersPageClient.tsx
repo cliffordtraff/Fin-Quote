@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type KeyboardEvent } from 'react'
 import type { InsiderTrade } from '@/app/actions/insider-trading'
 import {
   getInsiderTradesBySymbol,
@@ -8,7 +8,10 @@ import {
   getTopInsiderTrades,
   searchInsiderTradesByName
 } from '@/app/actions/insider-trading'
-import InsiderTradesTable from './InsiderTradesTable'
+import InsiderTradesTable, {
+  sortInsiderTrades,
+  type InsiderTradeSort,
+} from './InsiderTradesTable'
 
 type ViewType = 'latest' | 'top' | 'ticker' | 'insider'
 
@@ -21,15 +24,22 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
   const [activeView, setActiveView] = useState<ViewType>('latest')
   const [trades, setTrades] = useState<InsiderTrade[]>(initialTrades)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Search state
   const [tickerQuery, setTickerQuery] = useState('')
   const [insiderQuery, setInsiderQuery] = useState('')
+  const [searchRequestVersion, setSearchRequestVersion] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const viewRequestIdRef = useRef(0)
 
   // Filter state
   const [transactionFilter, setTransactionFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('all')
+  const [sort, setSort] = useState<InsiderTradeSort>({
+    field: 'transactionDate',
+    direction: 'desc',
+  })
 
   // Pagination state
   const [page, setPage] = useState(1)
@@ -40,6 +50,15 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     setPage(1)
   }, [transactionFilter, dateFilter, activeView, tickerQuery, insiderQuery])
 
+  const defaultSortByValue = activeView === 'top'
+
+  useEffect(() => {
+    setSort({
+      field: defaultSortByValue ? 'value' : 'transactionDate',
+      direction: 'desc',
+    })
+  }, [defaultSortByValue])
+
   // Debounced ticker search
   useEffect(() => {
     if (activeView !== 'ticker') return
@@ -47,6 +66,8 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    setIsLoading(false)
+    setErrorMessage(null)
 
     if (tickerQuery.length < 1) {
       setTrades([])
@@ -65,11 +86,13 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
             setTrades(result.trades)
           } else {
             setTrades([])
+            setErrorMessage(result.error)
           }
         }
-      } catch (err) {
+      } catch {
         if (!controller.signal.aborted) {
           setTrades([])
+          setErrorMessage('Unable to search insider trades right now. Please try again.')
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -82,7 +105,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [tickerQuery, activeView])
+  }, [tickerQuery, activeView, searchRequestVersion])
 
   // Debounced insider name search
   useEffect(() => {
@@ -91,6 +114,8 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    setIsLoading(false)
+    setErrorMessage(null)
 
     if (insiderQuery.trim().length < 2) {
       // Show all trades if query is too short
@@ -114,11 +139,13 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
             setTrades(result.trades)
           } else {
             setTrades([])
+            setErrorMessage(result.error)
           }
         }
-      } catch (err) {
+      } catch {
         if (!controller.signal.aborted) {
           setTrades([])
+          setErrorMessage('Unable to search insider trades right now. Please try again.')
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -131,29 +158,62 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [insiderQuery, activeView, initialTrades])
+  }, [insiderQuery, activeView, initialTrades, searchRequestVersion])
 
   // Handle view change
   const handleViewChange = async (view: ViewType) => {
+    const requestId = viewRequestIdRef.current + 1
+    viewRequestIdRef.current = requestId
+    abortControllerRef.current?.abort()
     setActiveView(view)
     setTickerQuery('')
     setInsiderQuery('')
+    setErrorMessage(null)
+    setIsLoading(false)
 
     if (view === 'latest') {
       setIsLoading(true)
-      const result = await getLatestInsiderTrades(200)
-      if ('trades' in result) {
-        setTrades(result.trades)
+      try {
+        const result = await getLatestInsiderTrades(200)
+        if (viewRequestIdRef.current !== requestId) return
+        if ('trades' in result) {
+          setTrades(result.trades)
+        } else {
+          setTrades([])
+          setErrorMessage(result.error)
+        }
+      } catch {
+        if (viewRequestIdRef.current === requestId) {
+          setTrades([])
+          setErrorMessage('Unable to load the latest insider trades. Please try again.')
+        }
+      } finally {
+        if (viewRequestIdRef.current === requestId) {
+          setIsLoading(false)
+        }
       }
-      setIsLoading(false)
     } else if (view === 'top') {
       // Use dedicated server action for top trades (already sorted by value)
       setIsLoading(true)
-      const result = await getTopInsiderTrades(7, 200)
-      if ('trades' in result) {
-        setTrades(result.trades)
+      try {
+        const result = await getTopInsiderTrades(7, 200)
+        if (viewRequestIdRef.current !== requestId) return
+        if ('trades' in result) {
+          setTrades(result.trades)
+        } else {
+          setTrades([])
+          setErrorMessage(result.error)
+        }
+      } catch {
+        if (viewRequestIdRef.current === requestId) {
+          setTrades([])
+          setErrorMessage('Unable to load the top insider trades. Please try again.')
+        }
+      } finally {
+        if (viewRequestIdRef.current === requestId) {
+          setIsLoading(false)
+        }
       }
-      setIsLoading(false)
     } else if (view === 'ticker') {
       // Clear trades for ticker search, user needs to enter a symbol
       setTrades([])
@@ -161,6 +221,15 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
       // Show initial trades for insider search
       setTrades(initialTrades)
     }
+  }
+
+  const retryCurrentView = () => {
+    if (activeView === 'latest' || activeView === 'top') {
+      void handleViewChange(activeView)
+      return
+    }
+
+    setSearchRequestVersion((version) => version + 1)
   }
 
   // Client-side filtering
@@ -201,12 +270,22 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     return result
   }, [trades, transactionFilter, dateFilter, activeView])
 
-  // Pagination
-  const totalPages = Math.ceil(filteredTrades.length / ROWS_PER_PAGE)
-  const paginatedTrades = filteredTrades.slice(
+  const sortedTrades = useMemo(
+    () => sortInsiderTrades(filteredTrades, sort),
+    [filteredTrades, sort],
+  )
+
+  // Pagination happens after sorting so every control orders the full result set.
+  const totalPages = Math.ceil(sortedTrades.length / ROWS_PER_PAGE)
+  const paginatedTrades = sortedTrades.slice(
     (page - 1) * ROWS_PER_PAGE,
     page * ROWS_PER_PAGE
   )
+
+  const handleSortChange = (nextSort: InsiderTradeSort) => {
+    setSort(nextSort)
+    setPage(1)
+  }
 
   const tabs = [
     { id: 'latest' as ViewType, label: 'Latest Trades' },
@@ -215,21 +294,51 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
     { id: 'insider' as ViewType, label: 'By Insider' },
   ]
 
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, tabIndex: number) => {
+    let nextIndex: number | null = null
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      nextIndex = (tabIndex + 1) % tabs.length
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      nextIndex = (tabIndex - 1 + tabs.length) % tabs.length
+    } else if (event.key === 'Home') {
+      nextIndex = 0
+    } else if (event.key === 'End') {
+      nextIndex = tabs.length - 1
+    }
+
+    if (nextIndex === null) return
+
+    event.preventDefault()
+    const nextTab = tabs[nextIndex]
+    document.getElementById(`insiders-tab-${nextTab.id}`)?.focus()
+    void handleViewChange(nextTab.id)
+  }
+
   return (
     <div className="space-y-4">
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex space-x-4" aria-label="Insider Trading Views">
-          {tabs.map((tab) => (
+      <div className="rounded-lg bg-cream-100 p-1 dark:bg-gray-800 sm:rounded-none sm:border-b sm:border-gray-200 sm:bg-transparent sm:p-0 dark:sm:border-gray-700 dark:sm:bg-transparent">
+        <nav
+          className="grid grid-cols-2 gap-1 sm:flex sm:gap-1"
+          aria-label="Insider trading views"
+          role="tablist"
+        >
+          {tabs.map((tab, tabIndex) => (
             <button
               key={tab.id}
+              id={`insiders-tab-${tab.id}`}
               type="button"
-              aria-pressed={activeView === tab.id}
-              onClick={() => handleViewChange(tab.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              role="tab"
+              aria-selected={activeView === tab.id}
+              aria-controls="insiders-results-panel"
+              tabIndex={activeView === tab.id ? 0 : -1}
+              onClick={() => void handleViewChange(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, tabIndex)}
+              className={`min-h-11 rounded-md border-b-2 px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 sm:rounded-none sm:px-4 ${
                 activeView === tab.id
-                  ? 'border-sage-500 text-sage-600 dark:text-sage-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  ? 'border-sage-500 bg-white text-sage-700 shadow-sm dark:bg-gray-700 dark:text-sage-300 sm:bg-transparent sm:shadow-none dark:sm:bg-transparent'
+                  : 'border-transparent text-gray-600 hover:border-gray-300 hover:bg-white/70 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white sm:hover:bg-transparent'
               }`}
             >
               {tab.label}
@@ -238,17 +347,25 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
         </nav>
       </div>
 
+      <section
+        id="insiders-results-panel"
+        role="tabpanel"
+        aria-labelledby={`insiders-tab-${activeView}`}
+        aria-busy={isLoading}
+        tabIndex={0}
+        className="space-y-4 focus:outline-none"
+      >
       {/* Filters and Search Row */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="grid grid-cols-2 items-center gap-3 sm:flex sm:flex-wrap sm:gap-4">
         {/* Transaction Type Filter */}
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <label htmlFor="insider-transaction-filter" className="text-xs text-gray-600 dark:text-gray-400">Type:</label>
           <select
             id="insider-transaction-filter"
             name="transactionType"
             value={transactionFilter}
             onChange={(e) => setTransactionFilter(e.target.value)}
-            className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
+            className="min-h-10 min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-none"
           >
             <option value="all">All</option>
             <option value="purchase">Purchase</option>
@@ -261,14 +378,14 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
 
         {/* Date Range Filter - hidden for "top" view */}
         {activeView !== 'top' && (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <label htmlFor="insider-date-filter" className="text-xs text-gray-600 dark:text-gray-400">Date:</label>
             <select
               id="insider-date-filter"
               name="dateRange"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sage-500"
+              className="min-h-10 min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-none"
             >
               <option value="all">All Time</option>
               <option value="week">Past Week</option>
@@ -281,14 +398,14 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
 
         {/* Top Trades indicator */}
         {activeView === 'top' && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+          <div className="text-xs italic text-gray-500 dark:text-gray-400 sm:col-auto">
             Showing highest value trades from past 7 days
           </div>
         )}
 
         {/* Search Input - Ticker */}
         {activeView === 'ticker' && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="col-span-2 flex min-w-0 items-center gap-2 sm:ml-auto">
             <input
               type="text"
               name="tickerSearch"
@@ -296,17 +413,17 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               value={tickerQuery}
               onChange={(e) => setTickerQuery(e.target.value.toUpperCase())}
               placeholder="Enter symbol (e.g., AAPL)"
-              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-sage-500"
+              className="min-h-11 min-w-0 flex-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 sm:w-56 sm:flex-none"
             />
             {isLoading && (
-              <div className="w-4 h-4 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
+              <div aria-hidden="true" className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sage-500 border-t-transparent motion-reduce:animate-none" />
             )}
           </div>
         )}
 
         {/* Search Input - Insider */}
         {activeView === 'insider' && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="col-span-2 flex min-w-0 items-center gap-2 sm:ml-auto">
             <input
               type="text"
               name="insiderSearch"
@@ -314,30 +431,59 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               value={insiderQuery}
               onChange={(e) => setInsiderQuery(e.target.value)}
               placeholder="Search insider name..."
-              className="text-xs px-3 py-1.5 w-48 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-sage-500"
+              aria-describedby="insider-search-hint"
+              className="min-h-11 min-w-0 flex-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 sm:w-56 sm:flex-none"
             />
             {isLoading && (
-              <div className="w-4 h-4 border-2 border-sage-500 border-t-transparent rounded-full animate-spin" />
+              <div aria-hidden="true" className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sage-500 border-t-transparent motion-reduce:animate-none" />
             )}
+            <span id="insider-search-hint" className="sr-only">Enter at least two characters to search by name.</span>
           </div>
         )}
       </div>
 
+      {errorMessage && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>{errorMessage}</span>
+          <button
+            type="button"
+            onClick={retryCurrentView}
+            className="min-h-10 self-start rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-100 dark:hover:bg-rose-900 sm:self-auto"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* Results Count */}
-      <div className="text-xs text-gray-500 dark:text-gray-400">
+      <div role="status" aria-live="polite" aria-atomic="true" className="text-xs text-gray-500 dark:text-gray-400">
         {isLoading ? (
-          'Loading...'
+          'Loading insider trades…'
+        ) : errorMessage ? (
+          'The results could not be updated.'
+        ) : activeView === 'ticker' && tickerQuery.length === 0 ? (
+          'Enter a ticker symbol to find insider trades.'
+        ) : activeView === 'insider' && insiderQuery.trim().length === 1 ? (
+          'Enter at least two characters to search by name.'
         ) : (
           `Showing ${paginatedTrades.length} of ${filteredTrades.length} trades`
         )}
       </div>
 
       {/* Table */}
-      <InsiderTradesTable trades={paginatedTrades} defaultSortByValue={activeView === 'top'} />
+      <InsiderTradesTable
+        trades={paginatedTrades}
+        defaultSortByValue={defaultSortByValue}
+        sort={sort}
+        onSortChange={handleSortChange}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4">
+        <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-gray-500 dark:text-gray-400">
             Page {page} of {totalPages}
           </div>
@@ -346,7 +492,7 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               type="button"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-11 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500"
             >
               Previous
             </button>
@@ -354,13 +500,14 @@ export default function InsidersPageClient({ initialTrades }: InsidersPageClient
               type="button"
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-11 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500"
             >
               Next
             </button>
           </div>
         </div>
       )}
+      </section>
     </div>
   )
 }
