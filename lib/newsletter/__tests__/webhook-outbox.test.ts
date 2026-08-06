@@ -15,6 +15,8 @@ import {
   processNewsletterWebhookOutbox,
 } from '../webhook-outbox'
 
+const TEST_SIGNING_SECRET = 'x'.repeat(32)
+
 function outboxRow(overrides: Record<string, unknown> = {}) {
   return {
     id: '10000000-0000-4000-8000-000000000001',
@@ -50,7 +52,7 @@ describe('newsletter webhook outbox', () => {
     )
     vi.stubEnv(
       'NEWSLETTER_ALERT_WEBHOOK_SECRET',
-      'test-signing-secret-that-is-at-least-32-characters',
+      TEST_SIGNING_SECRET,
     )
   })
 
@@ -63,7 +65,7 @@ describe('newsletter webhook outbox', () => {
       eventId: 'event-123',
       timestamp: '2026-08-06T12:00:00.000Z',
       body: '{"hello":"world"}',
-      signingSecret: 'test-signing-secret-that-is-at-least-32-characters',
+      signingSecret: TEST_SIGNING_SECRET,
     }
 
     const headers = createNewsletterWebhookHeaders(input)
