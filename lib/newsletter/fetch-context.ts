@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getProvider } from '@/lib/providers'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { filterToSP500, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
 import type {
   NewsletterContext,
@@ -415,7 +416,11 @@ export async function fetchGainersLosers(): Promise<StockCandidate[]> {
  */
 export async function fetchRecentPicks(days = 14): Promise<RecentPick[]> {
   try {
-    const supabase = createDirectClient()
+    // Editorial history is server-owned; reads and writes both use the trusted
+    // server client so no public policy can reveal upcoming issue choices.
+    // newsletter_picks predates the generated Database snapshot.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createServiceRoleClient() as any
     const since = new Date()
     since.setDate(since.getDate() - days)
 
@@ -443,9 +448,13 @@ export async function fetchRecentPicks(days = 14): Promise<RecentPick[]> {
  */
 export async function recordPick(result: StockPickerResult): Promise<void> {
   try {
-    const supabase = createDirectClient()
+    // Picks are server-owned editorial history. Never rely on a public INSERT
+    // policy for this write.
+    // newsletter_picks predates the generated Database snapshot.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createServiceRoleClient() as any
 
-    await supabase.from('newsletter_picks').insert({
+    const { error } = await supabase.from('newsletter_picks').insert({
       ticker: result.ticker,
       name: result.name,
       editorial_hook: result.editorialHook,
@@ -454,6 +463,10 @@ export async function recordPick(result: StockPickerResult): Promise<void> {
       picked_at: new Date().toISOString(),
       pick_source: result.pickSource || null,
     })
+
+    if (error) {
+      console.warn('Failed to record pick:', error)
+    }
   } catch (err) {
     console.warn('Failed to record pick:', err)
   }

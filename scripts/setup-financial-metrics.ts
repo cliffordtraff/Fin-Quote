@@ -14,19 +14,16 @@ import * as path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import dotenv from 'dotenv'
+import { requireSupabaseServiceRoleCredentials } from './lib/require-supabase-service-role'
 
 dotenv.config({ path: '.env.local' })
 
 const execAsync = promisify(exec)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Missing Supabase credentials in .env.local')
-  process.exit(1)
-}
-
-const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+const { url: supabaseUrl, serviceRoleKey } =
+  requireSupabaseServiceRoleCredentials()
+const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+})
 
 interface MetricRecord {
   symbol: string
@@ -105,7 +102,6 @@ async function setup() {
   // Step 5: Insert in batches
   console.log('5️⃣  Inserting metrics into Supabase...')
   const BATCH_SIZE = 500
-  let inserted = 0
 
   for (let i = 0; i < metrics.length; i += BATCH_SIZE) {
     const batch = metrics.slice(i, i + BATCH_SIZE)
@@ -119,7 +115,6 @@ async function setup() {
     if (error) {
       console.error(`   ❌ Batch ${i / BATCH_SIZE + 1} failed:`, error.message)
     } else {
-      inserted += batch.length
       const progress = ((i + batch.length) / metrics.length) * 100
       console.log(`   ✓ Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(metrics.length / BATCH_SIZE)}: ${batch.length} records (${progress.toFixed(1)}%)`)
     }

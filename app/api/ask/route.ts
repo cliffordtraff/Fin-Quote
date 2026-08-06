@@ -8,7 +8,7 @@ import { buildToolSelectionMessages, buildFinalAnswerPrompt, buildFollowUpQuesti
 import { generateFinancialChart, generatePriceChart } from '@/lib/chart-helpers'
 import { validateAnswer } from '@/lib/validators'
 import { shouldRegenerateAnswer, determineRegenerationAction, buildRegenerationPrompt } from '@/lib/regeneration'
-import { logQuery } from '@/app/actions/ask-question'
+import { logQuery } from '@/lib/query-logs'
 import { createFlowEmitter } from '@/lib/flow/events'
 import {
   AuthenticationRequiredError,

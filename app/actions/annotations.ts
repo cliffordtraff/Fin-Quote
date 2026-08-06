@@ -1,6 +1,7 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { requireAdminUser } from '@/lib/auth/admin'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 export type Annotation = {
   id: string
@@ -19,17 +20,15 @@ export type AnnotationInput = {
   comment?: string
 }
 
-// Helper to get supabase client with any type to bypass missing table types
-async function getSupabase() {
+// Helper to get a service-role client with any type to bypass missing table types.
+// Every exported action authenticates the caller before this helper is reached.
+function getSupabase() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return await createServerClient() as any
+  return createServiceRoleClient() as any
 }
 
-/**
- * Get all annotations for a specific evaluation file
- */
-export async function getAnnotations(evaluationFile: string): Promise<Annotation[]> {
-  const supabase = await getSupabase()
+async function fetchAnnotations(evaluationFile: string): Promise<Annotation[]> {
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -46,13 +45,22 @@ export async function getAnnotations(evaluationFile: string): Promise<Annotation
 }
 
 /**
+ * Get all annotations for a specific evaluation file
+ */
+export async function getAnnotations(evaluationFile: string): Promise<Annotation[]> {
+  await requireAdminUser()
+  return fetchAnnotations(evaluationFile)
+}
+
+/**
  * Get annotation for a specific question
  */
 export async function getAnnotation(
   evaluationFile: string,
   questionId: number
 ): Promise<Annotation | null> {
-  const supabase = await getSupabase()
+  await requireAdminUser()
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -74,7 +82,8 @@ export async function getAnnotation(
  * Upsert (create or update) an annotation
  */
 export async function upsertAnnotation(input: AnnotationInput): Promise<Annotation> {
-  const supabase = await getSupabase()
+  await requireAdminUser()
+  const supabase = getSupabase()
 
   const { data, error } = await supabase
     .from('evaluation_annotations')
@@ -107,7 +116,8 @@ export async function deleteAnnotation(
   evaluationFile: string,
   questionId: number
 ): Promise<void> {
-  const supabase = await getSupabase()
+  await requireAdminUser()
+  const supabase = getSupabase()
 
   const { error } = await supabase
     .from('evaluation_annotations')
@@ -125,7 +135,8 @@ export async function deleteAnnotation(
  * Get annotations grouped by action type
  */
 export async function getAnnotationsSummary(evaluationFile: string) {
-  const annotations = await getAnnotations(evaluationFile)
+  await requireAdminUser()
+  const annotations = await fetchAnnotations(evaluationFile)
 
   const summary = {
     fix_bug: annotations.filter((a) => a.action === 'fix_bug'),

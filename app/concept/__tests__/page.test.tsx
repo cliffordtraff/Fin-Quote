@@ -6,24 +6,8 @@ vi.mock('@/components/Navigation', () => ({
   default: () => <nav>Navigation</nav>,
 }))
 
-vi.mock('@/app/actions/mag7-returns', () => ({
-  getMag7Returns: vi.fn(),
-}))
-
-vi.mock('@/app/actions/sp500-distribution', () => ({
-  getSP500Distribution: vi.fn(),
-}))
-
-vi.mock('@/app/actions/advance-decline', () => ({
-  getAdvanceDeclineSnapshot: vi.fn(),
-}))
-
-vi.mock('@/app/actions/nyse-advance-decline', () => ({
-  getNYSEAdvanceDeclineSnapshot: vi.fn(),
-}))
-
 describe('ConceptChartPage server render', () => {
-  it('renders a deterministic loading shell without generating placeholder candles', () => {
+  it('renders an explicit unavailable state without generating placeholder data', () => {
     const randomSpy = vi.spyOn(Math, 'random')
 
     const firstHtml = renderToStaticMarkup(<ConceptChartPage />)
@@ -31,9 +15,9 @@ describe('ConceptChartPage server render', () => {
 
     expect(randomSpy).not.toHaveBeenCalled()
     expect(firstHtml).toBe(secondHtml)
-    expect(firstHtml).toContain('Loading advance-decline data...')
-    expect(firstHtml).toContain('Loading NYSE advance-decline data...')
-    expect(firstHtml).not.toContain('Advances:')
-    expect(firstHtml).not.toContain('Declines:')
+    expect(firstHtml).toContain('Historical market breadth is temporarily unavailable')
+    expect(firstHtml).toContain('We removed the placeholder history from this page.')
+    expect(firstHtml).toContain('href="/dashboard/pulse-today"')
+    expect(firstHtml).not.toContain('Loading advance-decline data...')
   })
 })

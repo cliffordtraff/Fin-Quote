@@ -459,6 +459,7 @@ export interface Database {
       query_logs: {
         Row: {
           id: string
+          user_id: string | null
           session_id: string
           user_question: string
           tool_selected: string
@@ -496,6 +497,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          user_id?: string | null
           session_id: string
           user_question: string
           tool_selected: string
@@ -533,6 +535,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          user_id?: string | null
           session_id?: string
           user_question?: string
           tool_selected?: string

@@ -70,6 +70,7 @@ describe('Navigation', () => {
     expect(screen.getByRole('link', { name: 'Fundamentals' })).toHaveAttribute('href', '/workspace/fundamentals?symbol=MSFT')
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/workspace/overview?symbol=MSFT')
     expect(screen.getByTestId('stock-search')).toHaveAttribute('data-pathname', '/stock/msft')
+    expect(screen.queryByRole('link', { name: 'Market Internals' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Charting (Beta)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Fundamentals Charting' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Charting (Old)' })).not.toBeInTheDocument()

@@ -1777,3 +1777,181 @@ health.
 system that refuses the wrong evidence, fences yesterday's worker, remembers
 which receipt is still missing, preserves the exact artifact it published, and
 admits plainly which release gates have not happened yet.
+
+---
+
+## August 6, 2026: The Database Needed Two Locks, Not One Sign
+
+The next deep audit began with a simple question: what is the most important
+thing to improve after the newsletter can generate, publish, and report its own
+health? The answer was not another chart. It was making sure every existing
+surface deserved to be trusted.
+
+Supabase exposes PostgreSQL through a convenient Data API. That convenience can
+hide a crucial detail: **database authorization has two separate locks**.
+PostgreSQL grants decide whether a role may attempt `SELECT`, `INSERT`,
+`UPDATE`, `DELETE`, or function execution at all. Row Level Security then
+decides which rows an allowed operation can touch.
+
+Imagine an office with a front-door badge reader and locked rooms inside. A
+table grant is the front-door badge; an RLS policy is the room key. Giving
+someone the badge and hanging a sign that says “staff only” on an unlocked room
+does not secure the files. Removing the badge while carefully programming the
+room lock does not let a legitimate employee do their job. Both layers must
+tell the same story.
+
+Historical migrations had granted broad access to current and future public
+tables, sequences, and functions, then expected RLS to supply all the nuance.
+Some old policies also had reassuring names such as “service role” without an
+actual `TO service_role` clause. In PostgreSQL, leaving out `TO` means the policy
+targets `PUBLIC`. Even more subtly, RLS policies are permissive by default:
+matching policies are joined with `OR`, not `AND`. One broad policy can open a
+path that five careful policies appear to close.
+
+The audit found examples across ingestion, cache, insider, evaluation, and
+newsletter-selection data. Query history had an anonymous-session condition
+that accepted rows with a non-empty session id, but the database had no trusted
+way to prove that a caller owned the supplied id. This finding establishes that
+the boundary was too broad; it is not evidence that someone exploited it.
+
+### Authorization Is Now A Written Matrix
+
+The repair starts by revoking the inherited browser-role grants and rebuilding
+them from an explicit inventory:
+
+- anonymous callers can read only the market and reference tables deliberately
+  used by public product pages;
+- signed-in callers get those reads plus narrowly defined operations on their
+  own conversations, workspace documents, watchlists, and newsletter records;
+- operational runs, evaluation data, ingestion state, caches, and server-owned
+  writes belong to `service_role`; and
+- new public-schema tables, sequences, and functions start private to browser
+  roles through PostgreSQL default privileges.
+
+Owner policies now say `TO authenticated`. Server policies say
+`TO service_role`. Query logs are signed-in and tied to `auth.uid()`; there is
+no caller-chosen anonymous session shortcut. Their telemetry is created by a
+server-only service client, while a user may update only the two feedback
+columns—not fabricate costs, validation results, or review outcomes. Newsletter
+notifications use the same least-privilege idea: the reader may update
+`read_at`, not quietly rewrite the notification's severity or message. Raw
+filing chunks and embeddings are server-only rather than a bulk public API.
+
+This is more maintainable than relying on policy names or institutional memory.
+The role matrix is executable and reviewable. If a future feature needs a new
+browser write, its migration must expand both the grant and its precise RLS
+policy—and update the authorization test that describes the intended contract.
+
+### A Powerful Function Must Still Know Who Is Calling
+
+Database functions are doors too. A `SECURITY DEFINER` function runs with its
+owner's authority, which is useful for tightly designed administrative RPCs but
+dangerous as a casual shortcut. The old conversation-title helper could read a
+message with elevated rights and had broad execution privileges.
+
+Title generation now uses `SECURITY INVOKER`, so the caller keeps their normal
+RLS context, and the query independently confirms that the conversation belongs
+to `auth.uid()`. Only authenticated and service roles may execute it. Mutating
+ingestion helpers are service-only, the stale filing-search overload is gone,
+and the supported search bounds result counts instead of accepting an
+unlimited request.
+
+This is the restaurant-kitchen lesson: a waiter may need a service window, but
+that does not justify handing every guest the kitchen master key. Definer-rights
+functions should be rare, purpose-built, search-path safe, and tested as an
+attacker would call them.
+
+### The Service Key Belongs On The Server
+
+Tightening the database immediately reveals code that had been depending on
+overly broad access. Supported financial-metric, stock-registry, and segment
+ingestion commands previously constructed clients with the public anonymous
+key. They now require `SUPABASE_SERVICE_ROLE_KEY`, disable session persistence,
+and fail before doing work if that server credential is missing. If an
+anonymous key is accidentally copied into the service-role variable, the newly
+restrictive database policies still make the write fail closed.
+
+That failure is intentional. A pipeline that “keeps going” with weak credentials
+teaches operators to reopen the database just to make a script green. A clear
+configuration error preserves the boundary and tells the person running the
+job exactly what must be fixed.
+
+The same ordering rule now protects admin server actions. Review, annotation,
+validation, and cost functions authenticate an administrator *before* they
+construct a service-role client. Once created, that client bypasses ordinary
+RLS by design. Authorization after construction is like checking a pilot's
+license after takeoff: the sequence itself is part of the safety property.
+
+### Supabase Storage Has A Platform-Owned Lock
+
+Storage required a different kind of honesty. The underlying
+`storage.objects` grants are owned by Supabase's reserved
+`supabase_storage_admin` role. A normal application migration cannot assume
+that role and should not claim it revoked platform-managed ACLs.
+
+For the `filings` and `newsletter-charts` buckets, browser mutation is instead
+closed at the supported boundary: Storage RLS. Policies that allowed browser
+insert, overwrite, or delete are removed, public reads remain where the product
+requires them, and server uploads continue through `service_role`.
+
+The important testing lesson is to verify the effect, not a convenient proxy.
+An ACL inspection alone looks alarming because the platform role deliberately
+retains its grants. The regression test checks that RLS is enabled, that no
+browser write policy matches either bucket, and then actually tries insert,
+update, and delete operations as anonymous and authenticated callers. Those
+operations must fail. That is a stronger proof than pretending ownership we do
+not have.
+
+### Financial Software Cannot Use Stage Props
+
+The trust review also found a product problem rather than a database problem.
+The Market Internals experiment drew historical advance/decline values with
+`Math.random()`. The screen looked like financial analysis, but its history was
+generated each time the component rendered.
+
+Placeholder data can be useful while building a layout, but it becomes a lie
+when it is reachable from production navigation without unmistakable labeling.
+The random chart is gone. Market Internals is removed from navigation and its
+route is a non-indexed unavailable state explaining that the feature will
+return only after a verified, reproducible breadth-data source exists. Useful
+live links remain, but they point only to production-backed market views.
+
+The public schema-debug route and its ad hoc mutation helpers are gone too.
+Schema work belongs in reviewable migrations and operator workflows, not in a
+web page that happens to know an RPC name. Deleting that tooling reduces both
+attack surface and architectural ambiguity: there is now one boring, auditable
+road for database change.
+
+### Tests Are The Map Of The Boundary
+
+The authorization contract is covered at several levels:
+
+- pgTAP inventories service-managed, service-only, and owner-scoped tables;
+- role tests inspect grants, column privileges, policy targets, sequence access,
+  function execution, owner-table RLS, and invoker/definer behavior;
+- fixture tests switch between anonymous users, two signed-in owners, and the
+  service role to prove both allowed work and cross-owner denial;
+- Storage tests perform real forbidden writes rather than trusting policy names;
+- action tests prove every admin export checks authorization before creating a
+  privileged client;
+- script tests reject missing or blank service-role configuration, while the
+  database suite proves browser-role writes remain denied; and
+- component tests preserve the honest Market Internals unavailable state and
+  keep it out of navigation.
+
+There is a useful mindset underneath all of these checks: security tests should
+describe capabilities, not implementation trivia. “A policy named *private*
+exists” is weak evidence. “User A cannot read User B's record, anon cannot write
+this table, and only the server can execute this RPC” is a contract.
+
+At the time this chapter was written, the hardening work was a release candidate
+in the repository. It had not yet been promoted to production, so this document
+does not pretend the live boundary changed merely because the patch exists.
+Production migration, application promotion, a second empty migration dry run,
+and live read/denial probes are separate proof still required by the release
+process.
+
+**The lesson:** trustworthy engineering is rarely one clever lock. It is a
+boring agreement between grants, policies, functions, credentials, routes, and
+tests—and the discipline to remove a beautiful chart when its numbers are not
+real.

@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { requireSupabaseServiceRoleCredentials } from './lib/require-supabase-service-role'
 
 // Configuration
 const FMP_BASE_URL = 'https://financialmodelingprep.com/api/v4'
@@ -288,20 +289,22 @@ async function main() {
     process.exit(1)
   }
 
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const FMP_API_KEY = process.env.FMP_API_KEY
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !FMP_API_KEY) {
-    console.error('Error: Missing required environment variables')
+  if (!FMP_API_KEY) {
+    console.error('Error: Missing FMP_API_KEY')
     process.exit(1)
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  const { url: supabaseUrl, serviceRoleKey } =
+    requireSupabaseServiceRoleCredentials()
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 
   // Fetch stocks with pagination (Supabase limits to 1000 rows per request)
   const PAGE_SIZE = 1000
-  let allStocks: USStock[] = []
+  const allStocks: USStock[] = []
   let page = 0
 
   while (true) {

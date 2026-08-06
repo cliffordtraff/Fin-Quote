@@ -78,14 +78,54 @@ The August 6 production release added the next reliability layer:
 
 The package passed the full Vitest suite, TypeScript, ESLint with no errors, a
 production Next.js build, the production dependency audit, a clean local
-Supabase replay, database lint, and an empty local schema diff. The production
-migration ledger now matches all 85 repository migrations, a second push dry
-run is empty, the app is promoted, protected cron calls were exercised through
-the Vault-signed path, and all five schedules are active.
+Supabase replay, database lint, and an empty local schema diff. The subsequent
+reliability release brought the production ledger through all 89 migrations
+ending at `20260806142000`; its second push dry run was empty, the app was
+promoted, protected cron calls were exercised through the Vault-signed path,
+and all five schedules were active. The new authorization migration described
+below is migration 90 and is not included in that production claim.
 
 No `NEWSLETTER_ALERT_WEBHOOK_URL` is configured in production. In-app
 notifications remain useful without it; the outbox intentionally performs no
 network delivery until a real receiver and dedicated signing secret are set.
+
+## August 6 P0 Authorization And Trust Hardening
+
+The next release candidate closes a set of historical trust gaps that mattered
+more than adding another feature:
+
+- the Supabase Data API now has an explicit role matrix: public market data is
+  read-only, signed-in user data is owner-scoped, operational and evaluation
+  data is service-only, and new database objects start private;
+- anonymous access to query history and internal WIIM, ranking, ingestion, and
+  newsletter-selection records is removed;
+- query telemetry is written only by trusted server code; signed-in users can
+  read/delete their own history and update only its feedback fields, while raw
+  filing chunks and embeddings are no longer directly public;
+- owner-facing policies explicitly target `authenticated`, while ingestion and
+  cache mutation explicitly target `service_role`;
+- database functions no longer inherit broad execution rights. Conversation
+  title generation is an invoker-rights helper with an ownership check, and
+  mutating/search RPCs are restricted to the server role;
+- supported ingestion commands now require
+  `SUPABASE_SERVICE_ROLE_KEY` and fail closed instead of quietly writing with
+  the public anonymous key;
+- admin review, annotation, validation, and cost actions authenticate an
+  administrator before constructing their service-role database client;
+- browser writes to the `filings` and `newsletter-charts` Storage buckets are
+  denied by the Storage RLS policy set; and
+- the public schema-debug page and its mutation helpers are gone. The Market
+  Internals experiment no longer displays randomly generated financial history,
+  is removed from navigation, and now explains that verified breadth data is
+  required before the feature returns.
+
+The contract is backed by pgTAP role, policy, function, ownership, and effective
+Storage-DML checks, plus focused tests for admin authorization order,
+service-role-only scripts, and the retired placeholder surface. This section
+describes the release candidate in the repository; it does **not** claim that
+the authorization migration or application changes have been promoted to
+production yet. Promotion, a second migration dry run, and live denial/read
+checks remain the release gate.
 
 ## Next Priorities
 
@@ -122,6 +162,16 @@ network delivery until a real receiver and dedicated signing secret are set.
 - Consolidate experimental chart routes after their useful behavior is
   absorbed into the primary surfaces.
 
+### P4: Restore Market Internals With Real Data
+
+- Choose a licensed, reproducible source for advance/decline and breadth
+  history.
+- Persist source timestamps and provenance so a chart can explain where every
+  point came from.
+- Add freshness, missing-session, and reconciliation checks before restoring
+  the navigation entry or search indexing.
+- Never substitute generated placeholder values on a financial-data surface.
+
 ## Deferred Or Retired
 
 - The former chart toolbar, clipped mobile control, unnamed-form-field, and
@@ -130,6 +180,10 @@ network delivery until a real receiver and dedicated signing secret are set.
 - Old dashboard layout experiments are reference material, not parallel
   products.
 - Hidden feature-flag navigation for Pulse Today is retired.
+- Public schema mutation/debug tooling is retired; schema changes belong in
+  reviewed migrations and operator-only workflows.
+- The random-data Market Internals prototype is retired. Its route is a
+  non-indexed unavailable state until a verified data pipeline replaces it.
 - Duplicate local repository folders are not an archive strategy.
 - New plan documents should update this roadmap or link back to it.
 
