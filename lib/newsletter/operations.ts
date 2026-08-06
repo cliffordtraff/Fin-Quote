@@ -259,38 +259,65 @@ function normalizeBeehiivStats(
 ): NewsletterOperationsDeliveryStats {
   const email = isRecord(stats.email) ? stats.email : {}
   const web = isRecord(stats.web) ? stats.web : {}
-  const sent = numericField(email, ['recipients', 'sent'])
-  const delivered = numericField(email, ['delivered'])
-  const uniqueOpens = numericField(email, ['unique_opens', 'uniqueOpens'])
-  const uniqueClicks = numericField(email, ['unique_clicks', 'uniqueClicks'])
+  const sent = numericField(email, ['total_sent', 'recipients', 'sent'])
+  const delivered = numericField(email, ['total_delivered', 'delivered'])
+  const uniqueOpens = numericField(email, [
+    'total_unique_opened',
+    'unique_opens',
+    'uniqueOpens',
+  ])
+  const uniqueClicks = numericField(email, [
+    'total_unique_email_clicked_verified',
+    'total_unique_email_clicked_raw',
+    'unique_clicks',
+    'uniqueClicks',
+  ])
   const reportedBounces = numericField(email, [
     'bounces',
     'bounced',
     'total_bounces',
   ])
+  const hardBounces = numericField(email, ['total_hard_bounced'])
+  const softBounces = numericField(email, ['total_soft_bounced'])
+  const providerBounces =
+    hardBounces !== null || softBounces !== null
+      ? (hardBounces ?? 0) + (softBounces ?? 0)
+      : null
 
   return {
     sent,
     delivered,
-    opens: numericField(email, ['opens']),
+    opens: numericField(email, ['total_opened', 'opens']),
     uniqueOpens,
     openRate:
       numericField(email, ['open_rate', 'openRate']) ??
       (delivered && uniqueOpens !== null ? uniqueOpens / delivered : null),
-    clicks: numericField(email, ['clicks']),
+    clicks: numericField(email, [
+      'total_email_clicked_verified',
+      'total_email_clicked_raw',
+      'clicks',
+    ]),
     uniqueClicks,
     clickRate:
       numericField(email, ['click_rate', 'clickRate']) ??
       (delivered && uniqueClicks !== null ? uniqueClicks / delivered : null),
     bounces:
       reportedBounces ??
+      providerBounces ??
       (sent !== null && delivered !== null
         ? Math.max(0, sent - delivered)
         : null),
-    unsubscribes: numericField(email, ['unsubscribes']),
-    spamReports: numericField(email, ['spam_reports', 'spamReports']),
-    webViews: numericField(web, ['views']),
-    webClicks: numericField(web, ['clicks']),
+    unsubscribes: numericField(email, [
+      'total_unsubscribes',
+      'unsubscribes',
+    ]),
+    spamReports: numericField(email, [
+      'total_spam_reported',
+      'spam_reports',
+      'spamReports',
+    ]),
+    webViews: numericField(web, ['total_web_viewed', 'views']),
+    webClicks: numericField(web, ['total_web_clicked', 'clicks']),
   }
 }
 

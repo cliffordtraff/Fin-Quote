@@ -57,9 +57,9 @@ These checks establish the complete path from unattended generation through
 one real mailbox. They do not establish inbox placement at scale; that needs a
 gradual sending history and Postmaster evidence.
 
-## Release Candidate In This Branch
+## August 6 Release Completed
 
-The August 6 launch-hardening branch adds the next reliability layer:
+The August 6 production release added the next reliability layer:
 
 - atomic, leased Beehiiv sync claims so two requests cannot create the same
   post concurrently;
@@ -76,10 +76,12 @@ The August 6 launch-hardening branch adds the next reliability layer:
   existing live tables, and applies the genuinely missing review/cache
   security changes.
 
-This package has been replayed against a clean local Supabase database. At the
-time of this audit, the final Fin Quote validation and production migration/app
-deployment are still pending. The production database must receive the
-reviewed migration sequence before the app code that depends on it.
+The package passed the full Vitest suite, TypeScript, ESLint with no errors, a
+production Next.js build, the production dependency audit, a clean local
+Supabase replay, database lint, and an empty local schema diff. The production
+migration ledger now matches all 85 repository migrations, a second push dry
+run is empty, the app is promoted, protected cron calls were exercised through
+the Vault-signed path, and all five schedules are active.
 
 No `NEWSLETTER_ALERT_WEBHOOK_URL` is configured in production. In-app
 notifications remain useful without it; the outbox intentionally performs no
@@ -87,17 +89,7 @@ network delivery until a real receiver and dedicated signing secret are set.
 
 ## Next Priorities
 
-### P0: Complete The Fin Quote Release
-
-- Review the migration convergence ledger and apply the approved production
-  sequence before deploying the app.
-- Run the final full test, type-check, build, lint/diff, and database checks.
-- Deploy the Fin Quote branch and verify protected cron, manual reconciliation,
-  lifecycle statistics, and outbox health in production.
-- Confirm a second migration dry run is empty and the live ledger matches the
-  repository.
-
-### P1: Establish Sending Reputation
+### P0: Establish Sending Reputation
 
 - Send to a small, engaged audience and increase volume gradually.
 - Monitor Google Postmaster reputation, spam rate, and authentication instead
@@ -107,7 +99,7 @@ network delivery until a real receiver and dedicated signing secret are set.
 - Keep subject lines, cadence, and audience quality consistent while the domain
   warms.
 
-### P2: Finish External Alerting
+### P1: Finish External Alerting
 
 - Choose the actual operational receiver.
 - Configure `NEWSLETTER_ALERT_WEBHOOK_URL` and a dedicated
@@ -116,13 +108,13 @@ network delivery until a real receiver and dedicated signing secret are set.
   outbox records delivery.
 - Define who responds to late, failed, and stuck-delivery alerts.
 
-### P3: Editorial Throughput
+### P2: Editorial Throughput
 
 - Add queue aging and stale-catalyst indicators.
 - Add shortlist overrides so editorial decisions can improve future ranking.
 - Add safe bulk review actions for high-volume catalyst sessions.
 
-### P4: Research Depth
+### P3: Research Depth
 
 - Decide whether the browser-local Market Overview watchlist should sync into
   Pulse Today for signed-in users without creating a second watchlist model.

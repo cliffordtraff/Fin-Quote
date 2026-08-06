@@ -1407,10 +1407,11 @@ not get to replace inspection. Check the resolved dependency graph, current
 advisories, and actual audit result. Then either repair the current system or
 close the obsolete work with evidence.
 
-The Fin Quote launch-hardening branch was still awaiting its final complete
-validation, production migrations, and app deployment when this section was
-written. Keeping that sentence is part of the engineering work. Documentation
-should not promote code merely because the code exists.
+The Fin Quote launch-hardening release then completed its full validation,
+production migrations, isolated deployment, promotion, and smoke checks. The
+database jobs were paused before schema work and resumed only after the live
+app had exercised its signed cron paths. Documentation changed state only
+after those gates passed.
 
 ### How We Verify A Pass
 
@@ -1432,10 +1433,11 @@ Verification should match the risk instead of relying on one happy path:
 - `git diff --check` protects the handoff from malformed patches.
 
 Exact suite counts are deliberately omitted here because they become stale as
-soon as another test is added. The release record should capture the final
-commands and results after the branch completes validation. As of the August 6
-checkpoint above, that final Fin Quote release validation and deployment were
-still pending.
+soon as another test is added. The August 6 release record instead captures the
+commands and gates: the full Vitest suite, TypeScript, ESLint, production build,
+production dependency audit, clean Supabase replay, database lint, local diff,
+linked migration dry run, Vercel promotion, protected-route checks, and live
+reconciliation all passed.
 
 The most reusable lesson from this pass is simple: **make invalid states
 representable but unmistakable, and make expensive states reachable only

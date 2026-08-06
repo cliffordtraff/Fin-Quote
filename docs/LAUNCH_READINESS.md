@@ -10,10 +10,10 @@ Beehiiv delivery from end to end. The companion Charting Platform repair is
 also merged and deployed, including the repaired `charts.theintraday.com`
 custom domain.
 
-The Fin Quote launch-hardening code and migration convergence package are still
-a release candidate at the time of this document. They must not be described
-as production behavior until the final validation, production migration, app
-deployment, and smoke checks finish.
+The Fin Quote launch-hardening code and migration convergence package are now
+live. The production ledger matches all 85 repository migrations, the second
+push dry run is empty, the isolated Vercel build was promoted, protected cron
+calls passed, and all five schedules were resumed.
 
 ## Readiness At A Glance
 
@@ -29,8 +29,8 @@ deployment, and smoke checks finish.
 | Chart custom domain | Verified | `https://charts.theintraday.com/health` returns `200` |
 | Chart mobile/a11y repair | Deployed | Charting Platform PR #2 is merged and deployed |
 | Fin dependency posture | Verified locally | Next.js 15.5.22, React 19.2.1, zero production audit vulnerabilities |
-| Fin launch-hardening package | Pending release | Implemented in branch; final validation/deploy not complete |
-| Supabase ledger convergence | Pending production | Clean local replay completed; production application not complete |
+| Fin launch-hardening package | Deployed | Full validation, promotion, protected-route smoke, and reconciliation checks passed |
+| Supabase ledger convergence | Complete | All 85 versions align; second push dry run is empty |
 | External alert delivery | Not configured | No production `NEWSLETTER_ALERT_WEBHOOK_URL` exists |
 
 ## Verified Product Routes
@@ -41,10 +41,10 @@ deployment, and smoke checks finish.
 | Pulse Today | `/dashboard/pulse-today` | Existing production surface | Primary market cockpit |
 | Morning Brief | `/dashboard/morning-brief` | Existing production surface | Persisted pre-open baseline |
 | Morning Report | `/newsletter/morning-review` | Production path exercised | Unattended 40/40 batch and canary source |
-| Newsletter Operations | `/newsletter/operations` | Existing surface; release update pending | New stats/manual reconcile/outbox panels require Fin deployment |
+| Newsletter Operations | `/newsletter/operations` | Deployed and exercised | Stats, manual reconcile, lifecycle health, notifications, and outbox health are live |
 | Mid-Morning Brief | `/dashboard/mid-morning-brief` | Existing production surface | Opening-session delta |
 | Stock detail | `/stock/AAPL` | Existing production surface | Embedded chart path available |
-| Chart workspace | `/workspace/chart` | Owning app repair deployed | Final Fin release smoke check still required |
+| Chart workspace | `/workspace/chart` | Owning app repair deployed | Public chart health and workspace routing verified |
 | Fundamentals workspace | `/workspace/fundamentals` | Owning app repair deployed | Mobile layout and accessible-name fixes shipped in chart PR #2 |
 | Overview workspace | `/workspace/overview` | Owning app repair deployed | Custom chart domain is healthy |
 
@@ -75,9 +75,9 @@ and stale Tesla media request. The change is merged and deployed. DNS and the
 Vercel custom-domain attachment for `charts.theintraday.com` were repaired, and
 the public health route returns `200`.
 
-## Pending Fin Quote Release Package
+## Deployed Fin Quote Release Package
 
-The branch contains, but production does not yet run, these additions:
+Production now runs these additions:
 
 - atomic Beehiiv sync claims and leases;
 - durable create/update/recovery states and an ambiguous-create fail-safe;
@@ -91,10 +91,10 @@ The branch contains, but production does not yet run, these additions:
 - the converged Supabase migration history plus the genuinely missing schema
   and cache-policy changes.
 
-The convergence package has replayed successfully on a clean local Supabase
-database. Production application remains a release gate. Apply migrations
-before app code, verify the live objects and cron jobs, then require a second
-dry run with no pending migrations.
+The convergence package replayed successfully from an empty local database and
+was then applied with newsletter and dashboard jobs paused. The live tables,
+policies, grants, RPCs, cron schedules, and migration ledger were verified; a
+second push dry run reports the remote database is up to date.
 
 ## Notification And Webhook Contract
 
@@ -120,20 +120,24 @@ dedicated signing secret exist.
 The stale automated Fin Quote security PR was closed because its proposed
 baseline no longer described the repository. The reviewed versions are
 Next.js 15.5.22 and React 19.2.1, and `npm audit --omit=dev` reports zero
-production vulnerabilities. This does not replace the final branch test,
-type-check, build, and deployment gates.
+production vulnerabilities. The final branch test, type-check, build, secret
+scan, Supabase Preview, Vercel Preview, and production smoke gates all passed.
 
-## Release Sequence
+## Completed Release Sequence
 
-1. Review the migration convergence runbook and production backup.
-2. Repair/adopt the historical migration ledger exactly as documented.
-3. Dry-run the push and confirm that only the intended migrations remain.
-4. Apply database migrations before the dependent app code.
-5. Verify tables, policies, RPCs, cron jobs, and an empty second dry run.
-6. Run the final Fin Quote test, type-check, build, and diff checks.
-7. Deploy the Fin Quote application.
-8. Smoke-test protected cron calls, manual Beehiiv reconciliation, statistics,
-   and operations/outbox health.
+1. Confirmed the production backup and captured a schema checksum.
+2. Paused all related cron jobs and confirmed no relevant run was active.
+3. Applied the two verified missing historical effects and repaired/adopted the
+   ledger.
+4. Required an exact three-migration dry run, applied it, and re-paused the
+   recreated jobs.
+5. Resolved the final reviewed schema drift with a forward migration and
+   confirmed all 85 local and remote versions align.
+6. Passed application, database, dependency, secret-scan, preview, and build
+   gates.
+7. Promoted the isolated production deployment and exercised public and
+   protected routes.
+8. Proved Beehiiv reconciliation idempotency, then resumed all five schedules.
 9. After choosing an alert receiver, configure the URL and signing secret and
    send the admin webhook canary.
 
@@ -141,10 +145,6 @@ type-check, build, and deployment gates.
 
 - Inbox placement is still warming even though authentication and provider
   delivery passed.
-- The Fin launch-hardening behavior is not live until its migrations and app
-  deployment complete.
-- The production migration ledger is not converged until the reviewed sequence
-  is applied and a second dry run is empty.
 - External alerts cannot leave the durable outbox until a real destination is
   configured.
 

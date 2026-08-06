@@ -52,7 +52,8 @@ marked applied after its fingerprint is verified; it must not be executed there.
 
 Local validation completed on 2026-08-06:
 
-- supabase db reset --local --no-seed replayed all 84 migrations successfully;
+- supabase db reset --local --no-seed replayed all 85 migrations successfully
+  after the post-repair convergence follow-up;
 - supabase db diff --local --schema public reported no schema changes;
 - supabase db lint --local --schema public --level error reported no errors;
 - the six adopted tables matched production across all 51 columns, 8
@@ -401,6 +402,51 @@ Expected:
 Save all three outputs and their checksums with the original preflight artifacts.
 Resume crons and deployments only after application smoke tests and logs are
 clean.
+
+## August 6, 2026 Execution Record
+
+The production repair completed with the reviewed freeze and verification
+sequence:
+
+- Supabase reported a completed physical backup from 2026-08-06 05:12:47 UTC.
+- The fresh schema snapshot retained SHA-256
+  `b797e0e973c27675c2e343e6759a3c14537e31c4140d4326732bf8f6df36fb56`.
+- All four existing related cron jobs were paused and no relevant job was
+  running before the first write.
+- The two missing historical effects were applied and verified before the 53
+  historical versions and adoption version were marked applied.
+- The first push dry run listed exactly `20260806130000`, `20260806131000`,
+  and `20260806133000`; those migrations applied successfully.
+
+The required linked schema diff then did useful work: it exposed a partial
+manual company-metric migration, a live integer cache identifier that disagreed
+with the canonical UUID replay, and stale browser write privileges on
+`stock_summaries`, `wiim_summary_runs`, and `us_stocks`. Those were not waved
+away as noise. Forward migration `20260806134000_complete_schema_convergence.sql`
+was added, clean-replayed, previewed, and applied. Verification proved:
+
+- all 223 `market_summary_cache` rows survived with 223 distinct UUIDs;
+- the retired integer sequence is absent;
+- 323,717 previously unclassified `segment_revenue` rows were backfilled, with
+  zero remaining unclassified rows;
+- anon and authenticated now have SELECT only on the three server-owned tables;
+  and
+- each table has one public-read policy and one service-role policy.
+
+The final migration list aligns all 85 repository and production versions, and
+the second push dry run reports that the remote database is up to date. The
+remaining linked diff text recreates five already identical read policies and
+reformats five existing trigger/search functions. Direct catalog comparison
+confirmed identical policy roles, commands, and predicates; three normalized
+function definitions are byte-identical and the other two differ only in SQL
+casing and equivalent PL/pgSQL assignment syntax (`=` versus `:=`). This is
+reviewed diff-tool normalization, not structural drift.
+
+After the isolated Vercel build was promoted, public routes returned `200`,
+unauthenticated cron requests returned `401`, and Vault-signed webhook and
+Beehiiv reconciliation requests returned `200`. Beehiiv reconciliation then
+produced one deduplicated lifecycle event; an immediate second invocation was a
+zero-attempt no-op. All five cron jobs were resumed on their reviewed schedules.
 
 ## Rollback And Recovery
 

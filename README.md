@@ -299,10 +299,10 @@ Start here:
 
 The August 6 convergence package restores remote-only history, adopts live
 tables that predated the local ledger, and isolates the migrations that truly
-still need to run. It has replayed on a clean local Supabase database, but it
-has not yet been applied to production. Follow the convergence runbook and
-apply database changes before deploying application code that depends on the
-new Beehiiv and webhook RPCs.
+needed to run. It replayed from an empty local database and is now applied in
+production. All 85 local and remote versions align, and a second push dry run
+reports the remote database is up to date. The execution record and remaining
+reviewed diff-tool normalization are documented in the convergence runbook.
 
 ## Scripts
 
@@ -463,9 +463,9 @@ be warmed with a small, engaged audience before volume increases.
 
 The companion Charting Platform mobile/accessibility repair is merged and
 deployed, and `https://charts.theintraday.com/health` returns `200` after its
-DNS/custom-domain repair. The Fin Quote Beehiiv/outbox/operations hardening in
-this checkout still requires final validation, production migrations, and app
-deployment before it should be treated as live behavior.
+DNS/custom-domain repair. The Fin Quote Beehiiv/outbox/operations hardening is
+also deployed: protected cron calls, lifecycle reconciliation, the operations
+surface, and the resumed schedules were exercised in production.
 
 ## Testing
 
@@ -523,5 +523,6 @@ This README is intentionally high-level. The repo is active and contains both pr
 At the August 6 audit, the repository resolves to Next.js 15.5.22 and React
 19.2.1, and `npm audit --omit=dev` reports zero production vulnerabilities. A
 stale automated security PR that targeted an older dependency state was closed.
-Those facts describe the dependency baseline; the current launch-hardening
-branch still needs its final full validation and deployment gates.
+Those facts describe the dependency baseline. The launch-hardening release has
+also passed its full application, database, preview, migration, and production
+smoke gates.

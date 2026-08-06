@@ -180,6 +180,48 @@ describe('newsletter operations', () => {
     })
   })
 
+  it('normalizes the post-stats payload returned by Beehiiv', () => {
+    const stats = {
+      email: {
+        total_sent: 1,
+        total_delivered: 1,
+        total_opened: 2,
+        total_unique_opened: 1,
+        total_email_clicked_raw: 3,
+        total_unique_email_clicked_raw: 2,
+        total_email_clicked_verified: 1,
+        total_unique_email_clicked_verified: 1,
+        total_hard_bounced: 0,
+        total_soft_bounced: 0,
+        total_unsubscribes: 0,
+        total_spam_reported: 0,
+        open_rate: 100,
+        click_rate: 50,
+      },
+      web: {
+        total_web_viewed: 4,
+        total_web_clicked: 2,
+        total_unique_web_clicked: 1,
+      },
+    }
+
+    expect(__testOnly.normalizeBeehiivStats(stats)).toEqual({
+      sent: 1,
+      delivered: 1,
+      opens: 2,
+      uniqueOpens: 1,
+      openRate: 100,
+      clicks: 1,
+      uniqueClicks: 1,
+      clickRate: 50,
+      bounces: 0,
+      unsubscribes: 0,
+      spamReports: 0,
+      webViews: 4,
+      webClicks: 2,
+    })
+  })
+
   it('reports lifecycle freshness and average delivery latency', () => {
     const delivery = {
       lifecycleStatus: 'published',
