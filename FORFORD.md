@@ -1760,7 +1760,8 @@ open, zero bounces, zero spam reports, and a fresh error-free statistics fetch.
 The release gate also passed 129 Vitest files and 682 tests, TypeScript, ESLint
 with zero errors, a production build, full and production dependency audits
 with zero vulnerabilities, 56/56 database assertions, Supabase Preview, and
-Vercel Preview. GitHub Actions itself was in a declared major outage: hosted
+Vercel Preview. [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74)
+reported a critical Actions incident with the component in major outage: hosted
 jobs were cancelled while still waiting for runners and produced no test
 output. The off-site watchdog must be rerun after Actions recovers. A live
 Vercel 5xx rule supplies an independent error signal in the meantime. The

@@ -47,7 +47,7 @@ off-site watchdog workflow, and independent Beehiiv statistics health.
 | Terminal notification receipts | Verified in production | Daily and mid-morning terminal notifications each have a durable applied receipt with no last error |
 | Immutable images and delivery gates | Deployed | Content-addressed PNGs plus subject, preheader, link, image, alt-text, and HTML-size validation are active |
 | Cron heartbeat health | Healthy in production | `/api/health/newsletter` returned `200`; all four cron routes recorded fresh `succeeded` rows |
-| Off-site watchdog | Workflow ready; hosted execution externally blocked | GitHub Actions was in a declared major outage, so queued jobs never received a runner; Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` is live |
+| Off-site watchdog | Workflow ready; hosted execution externally blocked | [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74) reported a critical Actions incident with the component in major outage, so queued jobs never received a runner; Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` is live |
 | Beehiiv statistics health | Verified in production | Latest published canary stats reconciled without lifecycle or statistics errors |
 | Optional webhook delivery | Intentionally not configured | Missing `NEWSLETTER_ALERT_WEBHOOK_URL` is a warning; durable in-app notifications and core health remain healthy |
 
@@ -181,7 +181,8 @@ runs are missing, stale, failed, or observability itself is unavailable.
 The off-site GitHub Actions watchdog is configured to call that endpoint every ten minutes and
 fails on an unreachable deployment, non-200 response, or unhealthy body. That
 solves the “the monitor died with the app” blind spot. It does not, by itself,
-prove a person will be paged. GitHub Actions had a declared major outage during
+prove a person will be paged. [GitHub Status](https://www.githubstatus.com/incidents/qcvjkzcs7j74)
+reported a critical Actions incident with the component in major outage during
 this release: the workflow jobs were cancelled while still queued and produced
 no repository failure output. Rerun the watchdog after GitHub restores Actions,
 then verify workflow-failure notifications reach the chosen on-call
@@ -261,7 +262,7 @@ Steps 1–8 describe the earlier baseline release.
 - Inbox placement is still warming even though authentication and provider
   delivery passed.
 - The GitHub watchdog still needs a hosted rerun and human-notification proof
-  after the declared GitHub Actions outage ends. The live Vercel 5xx rule
+  after the GitHub Actions incident ends. The live Vercel 5xx rule
   provides an independent application-error path in the meantime.
 - External webhook alerts cannot leave the durable outbox until a real
   destination is configured, but that does not block in-app notifications or
