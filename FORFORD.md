@@ -1944,12 +1944,25 @@ describe capabilities, not implementation trivia. “A policy named *private*
 exists” is weak evidence. “User A cannot read User B's record, anon cannot write
 this table, and only the server can execute this RPC” is a contract.
 
-At the time this chapter was written, the hardening work was a release candidate
-in the repository. It had not yet been promoted to production, so this document
-does not pretend the live boundary changed merely because the patch exists.
-Production migration, application promotion, a second empty migration dry run,
-and live read/denial probes are separate proof still required by the release
-process.
+The release process later supplied that separate proof. Merge commit `cc36eab`
+was promoted as Vercel production deployment
+`dpl_7Xp2amJdaRFr2p6166J7oaYNdd5j`. Supabase recorded the authorization change
+as migration 90, `20260806143000`, and the second linked push dry run found
+nothing left to apply. The canonical site served the honest Market Internals
+state, returned `404` for the retired schema route, and kept the newsletter
+health monitor green.
+
+Then the verification acted like an untrusted browser instead of trusting the
+deployment receipts. A deliberate public company read returned `200`; attempts
+to read query history or raw filing chunks, forge query telemetry, or execute a
+privileged ingestion RPC were denied. A correctly shaped PNG upload to the
+newsletter chart bucket reached the Storage authorization boundary and was
+rejected with `AccessDenied`. The production schema dump independently showed
+the intended grants, RLS policies, and function revocations, while the release
+window contained no Vercel runtime errors. These observations prove that the
+new boundary is live. They do not prove or imply that someone abused the old
+one; finding an overbroad capability and finding evidence of exploitation are
+different investigations.
 
 **The lesson:** trustworthy engineering is rarely one clever lock. It is a
 boring agreement between grants, policies, functions, credentials, routes, and
