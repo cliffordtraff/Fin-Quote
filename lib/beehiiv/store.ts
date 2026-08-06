@@ -17,6 +17,22 @@ import {
 import type { BeehiivOAuthCredentials } from './oauth-provider'
 
 const PROVIDER = 'beehiiv'
+const DELIVERY_LIST_PAGE_SIZE = 1_000
+const DELIVERY_LIST_HARD_LIMIT = 10_000
+
+export class BeehiivDeliveryListLimitError extends Error {
+  readonly limit: number
+  readonly continuationOffset: number
+
+  constructor(limit = DELIVERY_LIST_HARD_LIMIT) {
+    super(
+      `Beehiiv delivery listing exceeded ${limit} rows. Narrow the draft filter before retrying.`,
+    )
+    this.name = 'BeehiivDeliveryListLimitError'
+    this.limit = limit
+    this.continuationOffset = limit
+  }
+}
 
 export class BeehiivReconciliationLeaseLostError extends Error {
   constructor() {
@@ -56,6 +72,8 @@ interface BeehiivDeliveryRow {
   published_at: string | null
   web_url: string | null
   stats_json: unknown
+  stats_last_fetched_at: string | null
+  stats_last_error: string | null
   synced_at: string
   last_reconciled_at: string | null
   last_reconcile_error: string | null
@@ -148,6 +166,8 @@ function mapDeliveryRow(row: BeehiivDeliveryRow): BeehiivDeliveryRecord {
       !Array.isArray(row.stats_json)
         ? (row.stats_json as Record<string, unknown>)
         : {},
+    statsLastFetchedAt: row.stats_last_fetched_at,
+    statsLastError: row.stats_last_error,
     syncedAt: row.synced_at,
     lastReconciledAt: row.last_reconciled_at,
     lastReconcileError: row.last_reconcile_error,
@@ -468,24 +488,55 @@ export async function getBeehiivDelivery(
 export async function listBeehiivDeliveries(
   ownerId: string,
   draftIds: string[] = [],
+  signal?: AbortSignal,
 ): Promise<BeehiivDeliveryRecord[]> {
+  signal?.throwIfAborted()
   const normalizedIds = Array.from(new Set(draftIds.filter(Boolean)))
   if (draftIds.length > 0 && normalizedIds.length === 0) return []
 
   const supabase = createServiceRoleClient()
-  let query = supabase
-    .from('newsletter_beehiiv_deliveries')
-    .select('*')
-    .eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false })
-  if (normalizedIds.length > 0) {
-    query = query.in('draft_id', normalizedIds)
+  const deliveriesById = new Map<string, BeehiivDeliveryRow>()
+  let offset = 0
+
+  const loadRange = async (from: number, size: number) => {
+    let query = supabase
+      .from('newsletter_beehiiv_deliveries')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+    if (normalizedIds.length > 0) {
+      query = query.in('draft_id', normalizedIds)
+    }
+    let rangeQuery = query.range(from, from + size - 1)
+    if (signal) rangeQuery = rangeQuery.abortSignal(signal)
+    const { data, error } = await rangeQuery
+    if (error) {
+      throw new Error(`Failed to load Beehiiv deliveries: ${error.message}`)
+    }
+    return (data ?? []) as BeehiivDeliveryRow[]
   }
-  const { data, error } = await query
-  if (error) {
-    throw new Error(`Failed to load Beehiiv deliveries: ${error.message}`)
+
+  while (offset < DELIVERY_LIST_HARD_LIMIT) {
+    const size = Math.min(
+      DELIVERY_LIST_PAGE_SIZE,
+      DELIVERY_LIST_HARD_LIMIT - offset,
+    )
+    const page = await loadRange(offset, size)
+    for (const row of page) {
+      if (!deliveriesById.has(row.id)) deliveriesById.set(row.id, row)
+    }
+    offset += page.length
+    if (page.length < size) {
+      return Array.from(deliveriesById.values(), mapDeliveryRow)
+    }
   }
-  return ((data ?? []) as BeehiivDeliveryRow[]).map(mapDeliveryRow)
+
+  const continuation = await loadRange(offset, 1)
+  if (continuation.length > 0) {
+    throw new BeehiivDeliveryListLimitError()
+  }
+  return Array.from(deliveriesById.values(), mapDeliveryRow)
 }
 
 export async function claimBeehiivDeliveriesForReconciliation(input: {

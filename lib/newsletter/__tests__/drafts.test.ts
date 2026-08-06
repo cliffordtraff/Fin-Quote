@@ -8,10 +8,14 @@ import {
   buildNewsletterDraftFromResult,
   createBlankNewsletterDraft,
   deleteNewsletterDraft,
+  getNewsletterDraft,
   listNewsletterDrafts,
+  NewsletterDraftConflictError,
+  NewsletterPublishedDraftImmutableError,
   normalizeNewsletterDraftDocument,
   preserveNewsletterDraftServerMetadata,
   renderNewsletterDraftPreviewHtml,
+  saveNewsletterDraft,
 } from '@/lib/newsletter/drafts'
 
 const sampleResult: NewsletterResult = {
@@ -143,6 +147,19 @@ describe('newsletter drafts', () => {
     expect(draft.blocks[0]?.chartImageUrl).toBe('/newsletter-charts/AAPL_revenue_vs_net_income.png')
     expect(draft.blocks[0]?.chartExportUrl).toContain('/tos/AAPL')
     expect(draft.blocks[0]?.chartNeedsRegeneration).toBe(false)
+  })
+
+  it('normalizes generated subjects at the draft boundary', () => {
+    const draft = buildNewsletterDraftFromResult({
+      ...sampleResult,
+      subjectLine:
+        'Apple advances...\r\non durable services growth and stronger margins into the next fiscal year… and beyond',
+    })
+
+    expect(draft.subjectLine.length).toBeLessThanOrEqual(60)
+    expect(draft.subjectLine).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
+    expect(draft.subjectLine).not.toMatch(/\.{3}|…/)
+    expect(draft.header?.title).toBe(draft.subjectLine)
   })
 
   it('persists the durable published chart URL instead of a serverless file path', () => {
@@ -444,6 +461,112 @@ describe('newsletter drafts', () => {
         recursive: true,
         force: true,
       })
+    }
+  })
+
+  it('rejects a stale draft save instead of overwriting a concurrent edit', async () => {
+    const scope = {
+      ownerId: null,
+      sessionId: `test-session-${randomUUID()}`,
+    }
+    const sessionDir = resolve('.newsletter-drafts', scope.sessionId)
+
+    try {
+      const original = await createBlankNewsletterDraft(scope, 'AAPL', {
+        publicChartBaseUrl: 'https://charts.theintraday.com',
+      })
+      const first = await saveNewsletterDraft(
+        scope,
+        original.id,
+        { ...original.draft, subjectLine: 'The first durable edit' },
+        'draft',
+        { expectedUpdatedAt: original.updatedAt },
+      )
+
+      await expect(
+        saveNewsletterDraft(
+          scope,
+          original.id,
+          { ...original.draft, subjectLine: 'A stale overwrite' },
+          'draft',
+          { expectedUpdatedAt: original.updatedAt },
+        ),
+      ).rejects.toBeInstanceOf(NewsletterDraftConflictError)
+
+      expect((await getNewsletterDraft(scope, original.id)).subjectLine).toBe(
+        first.subjectLine,
+      )
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true })
+    }
+  })
+
+  it('never lets an automated stale write regress a published draft', async () => {
+    const scope = {
+      ownerId: null,
+      sessionId: `test-session-${randomUUID()}`,
+    }
+    const sessionDir = resolve('.newsletter-drafts', scope.sessionId)
+
+    try {
+      const original = await createBlankNewsletterDraft(scope, 'AAPL', {
+        publicChartBaseUrl: 'https://charts.theintraday.com',
+      })
+      const publication = {
+        beehiivUrl: 'https://theintraday.beehiiv.com/p/apple',
+        publishedAt: '2026-08-06T13:00:00.000Z',
+      }
+      await saveNewsletterDraft(
+        scope,
+        original.id,
+        { ...original.draft, publication },
+        'published',
+        { expectedUpdatedAt: original.updatedAt },
+      )
+
+      const protectedResult = await saveNewsletterDraft(
+        scope,
+        original.id,
+        {
+          ...original.draft,
+          subjectLine: 'Stale finalizer copy',
+          publication: {
+            beehiivUrl: 'https://attacker.example/stale-publication',
+            publishedAt: '2000-01-01T00:00:00.000Z',
+          },
+        },
+        'published',
+        {
+          expectedUpdatedAt: original.updatedAt,
+          protectPublished: true,
+        },
+      )
+
+      expect(protectedResult).toMatchObject({
+        status: 'published',
+        beehiivUrl: publication.beehiivUrl,
+        publishedAt: publication.publishedAt,
+      })
+      expect(protectedResult.draft.publication).toEqual(publication)
+
+      await expect(
+        saveNewsletterDraft(
+          scope,
+          original.id,
+          { ...protectedResult.draft, subjectLine: 'Rewrite published copy' },
+          'published',
+          { expectedUpdatedAt: protectedResult.updatedAt },
+        ),
+      ).rejects.toBeInstanceOf(NewsletterPublishedDraftImmutableError)
+      await expect(deleteNewsletterDraft(scope, original.id)).rejects.toBeInstanceOf(
+        NewsletterPublishedDraftImmutableError,
+      )
+      await expect(getNewsletterDraft(scope, original.id)).resolves.toMatchObject({
+        status: 'published',
+        beehiivUrl: publication.beehiivUrl,
+      })
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true })
     }
   })
 

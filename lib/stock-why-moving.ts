@@ -106,8 +106,20 @@ function isLikelyFinvizQuotePage(html: string): boolean {
   return hasQuoteTitle && (hasFinvizBranding || hasWhyMovingFeature || hasFeatureFlags)
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms: number, signal?: AbortSignal) {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms))
+  signal.throwIfAborted()
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal.reason ?? new Error('Finviz refresh was cancelled'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function htmlFingerprint(html: string): string {
@@ -324,18 +336,24 @@ function writeInMemoryWhyMoving(record: StockWhyMovingRecord): void {
   }
 }
 
-async function readCachedWhyMoving(symbol: string): Promise<StockWhyMovingRecord | null> {
+async function readCachedWhyMoving(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<StockWhyMovingRecord | null> {
+  signal?.throwIfAborted()
   const supabasePublic = getSupabasePublic()
   if (!supabasePublic) {
     return null
   }
 
   try {
-    const { data, error } = await supabasePublic
+    let query = supabasePublic
       .from('stock_why_moving_cache')
       .select('*')
       .eq('symbol', symbol)
-      .maybeSingle()
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query.maybeSingle()
+    signal?.throwIfAborted()
 
     if (error || !data) {
       if (error) {
@@ -349,12 +367,17 @@ async function readCachedWhyMoving(symbol: string): Promise<StockWhyMovingRecord
 
     return mapCacheRow(data)
   } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error
     console.error('[stock-why-moving] Unexpected cache read error:', error)
     return null
   }
 }
 
-async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void> {
+async function writeCachedWhyMoving(
+  record: StockWhyMovingRecord,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted()
   const supabaseAdmin = getSupabaseAdmin()
   if (!supabaseAdmin) {
     console.log('[stock-why-moving] Skipping cache write: SUPABASE_SERVICE_ROLE_KEY is missing')
@@ -362,9 +385,12 @@ async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void>
   }
 
   try {
-    const { error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('stock_why_moving_cache')
       .upsert(toCacheInsert(record), { onConflict: 'symbol' })
+    if (signal) query = query.abortSignal(signal)
+    const { error } = await query
+    signal?.throwIfAborted()
 
     if (error) {
       if (isMissingCacheTableError(error)) {
@@ -373,15 +399,20 @@ async function writeCachedWhyMoving(record: StockWhyMovingRecord): Promise<void>
       console.error('[stock-why-moving] Failed to write cache:', error.message)
     }
   } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error
     console.error('[stock-why-moving] Unexpected cache write error:', error)
   }
 }
 
-async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecord> {
+async function fetchFinvizWhyMoving(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<StockWhyMovingRecord> {
   const normalized = normalizeSymbol(symbol)
   const sourceUrl = buildFinvizQuoteUrl(normalized)
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    signal?.throwIfAborted()
     const fetchedAt = new Date().toISOString()
 
     try {
@@ -392,12 +423,14 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
           'Accept-Language': 'en-US,en;q=0.9',
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
         },
-        signal: AbortSignal.timeout(10_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+          : AbortSignal.timeout(10_000),
       })
 
       if (!response.ok) {
         if (attempt < 2) {
-          await sleep(250 * (attempt + 1))
+          await sleep(250 * (attempt + 1), signal)
           continue
         }
 
@@ -420,6 +453,7 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
       }
 
       const html = await response.text()
+      signal?.throwIfAborted()
       const parsed = parseFinvizWhyMovingHtml(html)
 
       if (!parsed) {
@@ -443,7 +477,7 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
         }
 
         if (attempt < 2) {
-          await sleep(250 * (attempt + 1))
+          await sleep(250 * (attempt + 1), signal)
           continue
         }
 
@@ -494,8 +528,9 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
         rawPayload: parsed as Json,
       }
     } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error
       if (attempt < 2) {
-        await sleep(250 * (attempt + 1))
+        await sleep(250 * (attempt + 1), signal)
         continue
       }
 
@@ -538,8 +573,9 @@ async function fetchFinvizWhyMoving(symbol: string): Promise<StockWhyMovingRecor
 
 export async function getStockWhyMovingData(
   symbol: string,
-  options?: { forceRefresh?: boolean }
+  options?: { forceRefresh?: boolean; signal?: AbortSignal }
 ): Promise<StockWhyMovingResult> {
+  options?.signal?.throwIfAborted()
   const normalized = normalizeSymbol(symbol)
   const inMemoryCached = readInMemoryWhyMoving(normalized)
 
@@ -547,7 +583,8 @@ export async function getStockWhyMovingData(
     return stripRawPayload(inMemoryCached)
   }
 
-  const cached = await readCachedWhyMoving(normalized)
+  const cached = await readCachedWhyMoving(normalized, options?.signal)
+  options?.signal?.throwIfAborted()
 
   if (!options?.forceRefresh && cached && isFreshRecord(cached)) {
     writeInMemoryWhyMoving(cached)
@@ -555,7 +592,8 @@ export async function getStockWhyMovingData(
   }
 
   const fallbackCached = cached ?? inMemoryCached
-  const live = await fetchFinvizWhyMoving(normalized)
+  const live = await fetchFinvizWhyMoving(normalized, options?.signal)
+  options?.signal?.throwIfAborted()
 
   if (live.status === 'error') {
     if (fallbackCached) {
@@ -563,11 +601,13 @@ export async function getStockWhyMovingData(
     }
 
     writeInMemoryWhyMoving(live)
-    await writeCachedWhyMoving(live)
+    await writeCachedWhyMoving(live, options?.signal)
+    options?.signal?.throwIfAborted()
     return stripRawPayload(live)
   }
 
   writeInMemoryWhyMoving(live)
-  await writeCachedWhyMoving(live)
+  await writeCachedWhyMoving(live, options?.signal)
+  options?.signal?.throwIfAborted()
   return stripRawPayload(live)
 }

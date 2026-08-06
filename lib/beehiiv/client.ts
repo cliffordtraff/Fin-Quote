@@ -12,6 +12,7 @@ import type { BeehiivPostState, BeehiivPublication } from './types'
 
 const BEEHIIV_MCP_URL = new URL('https://mcp.beehiiv.com/mcp')
 const BEEHIIV_MCP_REQUEST_TIMEOUT_MS = 15_000
+const BEEHIIV_MCP_STATS_TIMEOUT_MS = 8_000
 
 const BEEHIIV_MCP_REQUEST_OPTIONS = {
   timeout: BEEHIIV_MCP_REQUEST_TIMEOUT_MS,
@@ -100,11 +101,12 @@ function assertToolResult(result: ToolResultLike, action: string): void {
 async function callBeehiivTool(
   client: Client,
   input: Parameters<Client['callTool']>[0],
+  timeoutMs = BEEHIIV_MCP_REQUEST_TIMEOUT_MS,
 ): Promise<CallToolResult> {
   return (await client.callTool(
     input,
     undefined,
-    BEEHIIV_MCP_REQUEST_OPTIONS,
+    { timeout: timeoutMs, maxTotalTimeout: timeoutMs },
   )) as CallToolResult
 }
 
@@ -316,18 +318,27 @@ async function loadBeehiivPostState(
   // Beehiiv exposes them through a separate tool, so reuse this connection
   // and preserve the last persisted snapshot when the optional call fails.
   let stats: Record<string, unknown> | null = null
+  let statsError: string | null = null
   try {
-    const statsResult = await callBeehiivTool(client, {
-      name: 'get_post_stats',
-      arguments: { post_id: postId },
-    })
+    const statsResult = await callBeehiivTool(
+      client,
+      {
+        name: 'get_post_stats',
+        arguments: { post_id: postId },
+      },
+      BEEHIIV_MCP_STATS_TIMEOUT_MS,
+    )
     assertToolResult(statsResult, 'load the newsletter delivery statistics')
     stats = parseBeehiivPostStats(statsResult)
-  } catch {
+  } catch (error) {
     stats = null
+    statsError =
+      error instanceof Error
+        ? error.message.slice(0, 2_000)
+        : String(error).slice(0, 2_000)
   }
 
-  return { ...state, stats }
+  return { ...state, stats, statsError }
 }
 
 function collectPublicationCandidates(

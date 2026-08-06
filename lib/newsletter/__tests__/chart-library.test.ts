@@ -1,10 +1,11 @@
 import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { resolve } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteNewsletterChartLibraryItem,
   listNewsletterChartLibraryItems,
+  uploadNewsletterChartImage,
   updateNewsletterChartLibraryItem,
   type NewsletterChartLibraryItem,
 } from '@/lib/newsletter/chart-library'
@@ -16,6 +17,8 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true })
   }
   cleanupPaths.clear()
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 function seedLocalChart(sessionId: string): NewsletterChartLibraryItem {
@@ -96,5 +99,59 @@ describe('newsletter chart library local storage', () => {
         title: 'x'.repeat(121),
       }),
     ).rejects.toThrow('120 characters or fewer')
+  })
+})
+
+describe('newsletter chart library upload cancellation', () => {
+  it('passes caller cancellation through to the Supabase Storage fetch', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-test-key')
+
+    const fixtureDir = resolve('.newsletter-chart-library', `upload-test-${randomUUID()}`)
+    const outputPath = resolve(fixtureDir, 'chart.png')
+    const pngHeader = Buffer.alloc(24)
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(pngHeader)
+    pngHeader.writeUInt32BE(1, 16)
+    pngHeader.writeUInt32BE(1, 20)
+    mkdirSync(fixtureDir, { recursive: true })
+    writeFileSync(outputPath, pngHeader)
+    cleanupPaths.add(fixtureDir)
+
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => {
+      markFetchStarted = resolve
+    })
+    let storageFetchSignal: AbortSignal | null | undefined
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      storageFetchSignal = init?.signal
+      markFetchStarted?.()
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        if (!signal) return
+        const rejectAbort = () => reject(signal.reason)
+        if (signal.aborted) rejectAbort()
+        else signal.addEventListener('abort', rejectAbort, { once: true })
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const controller = new AbortController()
+    const reason = new Error('chart stage lease expired')
+    const upload = uploadNewsletterChartImage({
+      ownerId: randomUUID(),
+      chartId: randomUUID(),
+      symbol: 'AAPL',
+      outputPath,
+      signal: controller.signal,
+    })
+
+    await fetchStarted
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(storageFetchSignal).toBeDefined()
+    controller.abort(reason)
+
+    await expect(upload).rejects.toBe(reason)
+    expect(storageFetchSignal?.aborted).toBe(true)
+    expect(storageFetchSignal?.reason).toBe(reason)
   })
 })

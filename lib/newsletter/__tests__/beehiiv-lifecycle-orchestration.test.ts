@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   appendNewsletterDraftEvent: vi.fn(),
   claimBeehiivDeliveriesForReconciliation: vi.fn(),
   createServiceRoleClient: vi.fn(),
+  createNewsletterNotification: vi.fn(),
   getBeehiivPostState: vi.fn(),
   getNewsletterDraft: vi.fn(),
   markBeehiivLifecycleApplied: vi.fn(),
@@ -46,6 +47,10 @@ vi.mock('@/lib/newsletter/publication', () => ({
   recordNewsletterPublication: mocks.recordNewsletterPublication,
 }))
 
+vi.mock('@/lib/newsletter/notifications', () => ({
+  createNewsletterNotification: mocks.createNewsletterNotification,
+}))
+
 import {
   reconcileBeehiivDelivery,
   reconcileBeehiivDeliveryQueue,
@@ -75,6 +80,8 @@ function deliveryFixture(
     scheduledAt: null,
     publishedAt: null,
     stats: {},
+    statsLastFetchedAt: null,
+    statsLastError: null,
     syncedAt: '2026-08-06T12:00:00.000Z',
     lastReconciledAt: null,
     lastReconcileError: null,
@@ -86,6 +93,10 @@ function deliveryFixture(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.createNewsletterNotification.mockResolvedValue({
+    notification: {},
+    created: true,
+  })
   const builder = {
     select: vi.fn(),
     eq: vi.fn(),

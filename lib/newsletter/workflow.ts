@@ -2,6 +2,14 @@ import type {
   NewsletterDraftDocument,
   NewsletterDraftStatus,
 } from './types'
+import { getSP500Constituent } from '@/lib/sp500'
+import {
+  hasUnsafeNewsletterControlCharacters,
+  isSafeNewsletterLink,
+  NEWSLETTER_SUBJECT_MAX_LENGTH,
+} from './delivery-quality'
+import { isNewsletterSourceEntityMatch } from './source-integrity'
+import { isDailySourceFresh } from './daily-selection'
 
 export interface NewsletterWorkflowStage {
   id: NewsletterDraftStatus
@@ -78,12 +86,90 @@ export function getNewsletterDraftReadiness(
       label: 'Replace the placeholder subject line.',
     })
   }
+  if (subjectLine.length > NEWSLETTER_SUBJECT_MAX_LENGTH) {
+    issues.push({
+      id: 'subject-line-length',
+      label: `Shorten the subject line to ${NEWSLETTER_SUBJECT_MAX_LENGTH} characters or fewer.`,
+    })
+  }
+  if (hasUnsafeNewsletterControlCharacters(draft.subjectLine ?? '')) {
+    issues.push({
+      id: 'subject-line-controls',
+      label: 'Remove hidden control characters from the subject line.',
+    })
+  }
 
   if (!hasVisibleText(draft.introText)) {
     issues.push({
       id: 'intro',
       label: 'Add newsletter intro copy.',
     })
+  }
+
+  if (draft.source?.type === 'daily_batch') {
+    const source = draft.source.dailyBatch
+    const constituent = getSP500Constituent(source.ticker)
+    const companyName =
+      constituent?.name ??
+      source.companyName?.trim() ??
+      source.ticker
+    if (!constituent) {
+      issues.push({
+        id: 'source-registry',
+        label: `Use a current S&P 500 company identity for ${source.ticker}.`,
+      })
+    }
+    if (
+      !isNewsletterSourceEntityMatch({
+        ticker: source.ticker,
+        companyName,
+        text: source.headline,
+      })
+    ) {
+      issues.push({
+        id: 'source-entity',
+        label: `Replace the source headline with evidence about ${companyName} (${source.ticker}).`,
+      })
+    }
+    if (
+      !isNewsletterSourceEntityMatch({
+        ticker: source.ticker,
+        companyName,
+        text: source.summary,
+      })
+    ) {
+      issues.push({
+        id: 'source-summary-entity',
+        label: `Replace the issue summary with verified reporting about ${companyName} (${source.ticker}).`,
+      })
+    }
+    const hasFreshEntityEvidence = source.sourceRefs.some((sourceRef) => {
+      const maxAgeDays =
+        sourceRef.kind === 'earnings'
+          ? 1
+          : sourceRef.kind === 'news' || sourceRef.kind === 'finviz'
+            ? 2
+            : null
+      return (
+        maxAgeDays != null &&
+        isDailySourceFresh(
+          sourceRef.publishedAt,
+          source.marketDate,
+          maxAgeDays,
+        ) &&
+        isNewsletterSourceEntityMatch({
+          ticker: source.ticker,
+          companyName,
+          text: sourceRef.label,
+        })
+      )
+    })
+    if (!hasFreshEntityEvidence) {
+      issues.push({
+        id: 'source-evidence',
+        label: `Attach a fresh, entity-verified source for ${companyName} (${source.ticker}).`,
+      })
+    }
   }
 
   if (!Array.isArray(draft.blocks) || draft.blocks.length === 0) {
@@ -119,6 +205,33 @@ export function getNewsletterDraftReadiness(
         label: `Capture a final chart for ${sectionLabel}.`,
       })
     }
+
+    if (
+      !hasVisibleText(block.chartAlt) ||
+      (block.chartAlt?.trim().length ?? 0) < 12
+    ) {
+      issues.push({
+        id: `block-${block.id}-chart-alt`,
+        blockId: block.id,
+        label: `Add descriptive chart alt text to ${sectionLabel}.`,
+      })
+    }
+
+    if (block.chartExportUrl && !isSafeNewsletterLink(block.chartExportUrl)) {
+      issues.push({
+        id: `block-${block.id}-chart-link`,
+        blockId: block.id,
+        label: `Use a public HTTPS chart link for ${sectionLabel}.`,
+      })
+    }
+
+    if (block.ctaUrl && !isSafeNewsletterLink(block.ctaUrl)) {
+      issues.push({
+        id: `block-${block.id}-cta-link`,
+        blockId: block.id,
+        label: `Use a public HTTPS CTA link for ${sectionLabel}.`,
+      })
+    }
   }
 
   return {
@@ -143,8 +256,7 @@ export function canSetNewsletterDraftStatus(
   if (beehiivUrl) {
     try {
       const parsed = new URL(beehiivUrl)
-      hasValidPublicationUrl =
-        parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      hasValidPublicationUrl = parsed.protocol === 'https:'
     } catch {
       hasValidPublicationUrl = false
     }

@@ -12,6 +12,7 @@ import type {
   StockNewsItem,
 } from './types'
 import { isPriceNewsletterChartSpec } from './chart-spec'
+import { normalizeNewsletterSubject } from './delivery-quality'
 import { pickRankedTemplates, type TemplateScore } from './template-scoring'
 
 const DEFAULT_TEMPLATE_TOP_K = 6
@@ -220,7 +221,7 @@ export function buildStockPickerMessages(
 
   systemParts.push(
     'Output JSON only:',
-    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick", "subjectLine": "short punchy email subject < 60 chars", "pickSource": "earnings|big_mover|news_catalyst|fallback" }',
+    '{ "symbol": "...", "name": "...", "editorialHook": "1-2 sentences explaining why this stock is today\'s pick", "subjectLine": "short punchy email subject, 60 characters or fewer", "pickSource": "earnings|big_mover|news_catalyst|fallback" }',
   )
 
   // User message: earnings section first, then candidates
@@ -399,13 +400,25 @@ export function parseStockPickerResult(
   let pickSource: StockPickerResult['pickSource']
 
   try {
-    const parsed = JSON.parse(responseText)
-    symbol = parsed.symbol?.toUpperCase()
-    name = parsed.name
-    editorialHook = parsed.editorialHook || ''
-    subjectLine = parsed.subjectLine || ''
-    if (['earnings', 'big_mover', 'news_catalyst', 'fallback'].includes(parsed.pickSource)) {
-      pickSource = parsed.pickSource
+    const parsed = JSON.parse(responseText) as Record<string, unknown>
+    symbol =
+      typeof parsed.symbol === 'string'
+        ? parsed.symbol.trim().toUpperCase()
+        : undefined
+    name = typeof parsed.name === 'string' ? parsed.name.trim() : undefined
+    editorialHook =
+      typeof parsed.editorialHook === 'string'
+        ? parsed.editorialHook.trim()
+        : ''
+    subjectLine =
+      typeof parsed.subjectLine === 'string' ? parsed.subjectLine.trim() : ''
+    if (
+      typeof parsed.pickSource === 'string' &&
+      ['earnings', 'big_mover', 'news_catalyst', 'fallback'].includes(
+        parsed.pickSource,
+      )
+    ) {
+      pickSource = parsed.pickSource as StockPickerResult['pickSource']
     }
   } catch {
     // Fall through to fallback
@@ -421,19 +434,26 @@ export function parseStockPickerResult(
     symbol = fallback.symbol
     name = fallback.name
     editorialHook = `${fallback.name} moved ${fallback.changesPercentage >= 0 ? '+' : ''}${fallback.changesPercentage.toFixed(1)}% today.`
+    subjectLine = ''
     pickSource = 'fallback'
   }
 
   const candidate = market.candidates.find((c) => c.symbol === symbol)!
   const topHeadlines = (market.newsBySymbol[symbol] || []).slice(0, 3)
   const resolvedName = name || candidate.name
+  const fallbackSubject = editorialHook
+    ? `${symbol}: ${editorialHook}`
+    : `${symbol} market update`
+  const normalizedSubject =
+    normalizeNewsletterSubject(subjectLine) ||
+    normalizeNewsletterSubject(fallbackSubject)
 
   return {
     ticker: symbol,
     name: resolvedName,
     changesPercentage: candidate.changesPercentage,
     editorialHook,
-    subjectLine: subjectLine || `${symbol}: ${editorialHook}`.slice(0, 60),
+    subjectLine: normalizedSubject,
     topHeadlines,
     pickSource,
   }
@@ -455,7 +475,7 @@ export function buildMarketRoundupMessages(
     'If a user brief is provided, use it to shape the framing as long as it fits the featured stocks.',
     '',
     'Output JSON only:',
-    '{ "subjectLine": "short punchy email subject < 70 chars", "introText": "1-2 sentences" }',
+    '{ "subjectLine": "short punchy email subject, 60 characters or fewer", "introText": "1-2 sentences" }',
   ].join('\n')
 
   const userSections = []
@@ -506,17 +526,21 @@ export function parseMarketRoundupIntro(
 
   try {
     const parsed = JSON.parse(responseText)
-    const subjectLine =
+    const subjectLine = normalizeNewsletterSubject(
       typeof parsed.subjectLine === 'string' && parsed.subjectLine.trim()
         ? parsed.subjectLine.trim()
-        : fallbackSubject
+        : fallbackSubject,
+    )
     const introText =
       typeof parsed.introText === 'string' && parsed.introText.trim()
         ? parsed.introText.trim()
         : fallbackIntro
     return { subjectLine, introText }
   } catch {
-    return { subjectLine: fallbackSubject, introText: fallbackIntro }
+    return {
+      subjectLine: normalizeNewsletterSubject(fallbackSubject),
+      introText: fallbackIntro,
+    }
   }
 }
 
@@ -540,7 +564,7 @@ export function buildEditorialHookMessages(
     'If a user brief is provided, use it to guide the framing when the available quote and headlines support it.',
     '',
     'Output JSON only:',
-    '{ "editorialHook": "1-2 sentences", "subjectLine": "short punchy email subject < 60 chars" }',
+    '{ "editorialHook": "1-2 sentences", "subjectLine": "short punchy email subject, 60 characters or fewer" }',
   ].join('\n')
 
   const sign = quote.changesPercentage >= 0 ? '+' : ''
@@ -576,10 +600,21 @@ export function parseEditorialHook(
   ticker?: string,
 ): { editorialHook: string; subjectLine: string } {
   try {
-    const parsed = JSON.parse(responseText)
-    const editorialHook = parsed.editorialHook || ''
+    const parsed = JSON.parse(responseText) as Record<string, unknown>
+    const editorialHook =
+      typeof parsed.editorialHook === 'string'
+        ? parsed.editorialHook.trim()
+        : ''
+    const generatedSubject =
+      typeof parsed.subjectLine === 'string' ? parsed.subjectLine.trim() : ''
+    const fallbackSubject = ticker
+      ? editorialHook
+        ? `${ticker}: ${editorialHook}`
+        : `${ticker} market update`
+      : editorialHook
     const subjectLine =
-      parsed.subjectLine || (ticker ? `${ticker}: ${editorialHook}`.slice(0, 60) : editorialHook.slice(0, 60))
+      normalizeNewsletterSubject(generatedSubject) ||
+      normalizeNewsletterSubject(fallbackSubject)
     return { editorialHook, subjectLine }
   } catch {
     return { editorialHook: '', subjectLine: '' }

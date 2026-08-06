@@ -12,6 +12,19 @@ import {
 import type { NewsletterAutomationClock } from './daily-automation'
 import { listEnabledNewsletterDailyScopes } from './daily-runs'
 import { createNewsletterNotification } from './notifications'
+import {
+  NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+  NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+  NewsletterAutomationLeaseLostError,
+  NewsletterAutomationStageBudgetError,
+  runWithNewsletterAutomationLease,
+} from './automation-lease'
+import {
+  classifySummaryCoverage,
+  createFinvizAttemptCheckpointer,
+  getFinvizCoverageState,
+  getMidMorningAutomationFinalStatus,
+} from './automation-coverage'
 
 const TABLE = 'newsletter_mid_morning_runs'
 const FINVIZ_BATCH_SIZE = 10
@@ -56,6 +69,9 @@ export interface NewsletterMidMorningRun {
   meaningfulChange: boolean | null
   invocationCount: number
   lastError: string | null
+  notificationAppliedAt: string | null
+  notificationAttemptCount: number
+  notificationLastError: string | null
   metadata: Record<string, unknown>
   startedAt: string | null
   completedAt: string | null
@@ -125,6 +141,9 @@ function mapRow(row: MidMorningRow): NewsletterMidMorningRun {
     meaningfulChange: row.meaningful_change,
     invocationCount: row.invocation_count,
     lastError: row.last_error,
+    notificationAppliedAt: row.notification_applied_at,
+    notificationAttemptCount: row.notification_attempt_count,
+    notificationLastError: row.notification_last_error,
     metadata: isRecord(row.metadata_json) ? row.metadata_json : {},
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -194,26 +213,34 @@ function retryableStage(value: unknown): NewsletterMidMorningStage {
 
 async function updateRun(
   id: string,
+  leaseToken: string,
   patch: Database['public']['Tables']['newsletter_mid_morning_runs']['Update'],
+  signal?: AbortSignal,
 ) {
   const supabase = getServiceClient()
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({
-      ...patch,
-      last_heartbeat_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (error || !data) {
+  let query = supabase.rpc(
+    'update_newsletter_mid_morning_automation_claim',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+      p_patch: patch as Json,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
+  if (error) {
     throw new Error(
-      `Failed to update mid-morning automation: ${
-        error?.message ?? 'No row returned'
-      }`,
+      `Failed to update mid-morning automation: ${error.message}`,
     )
   }
-  return mapRow(data as MidMorningRow)
+  const row = data?.[0]
+  if (!row) {
+    throw new NewsletterAutomationLeaseLostError(
+      'Mid-morning newsletter automation',
+    )
+  }
+  return mapRow(row as MidMorningRow)
 }
 
 export async function getNewsletterMidMorningRun(
@@ -229,6 +256,31 @@ export async function getNewsletterMidMorningRun(
   const { data, error } = await query.maybeSingle()
   if (error) {
     throw new Error(`Failed to load mid-morning automation: ${error.message}`)
+  }
+  return data ? mapRow(data as MidMorningRow) : null
+}
+
+export async function getPendingNewsletterMidMorningTerminalNotification(
+  beforeMarketDate: string,
+): Promise<NewsletterMidMorningRun | null> {
+  const cutoff = new Date(
+    Date.parse(`${beforeMarketDate}T12:00:00Z`) - 7 * 86_400_000,
+  ).toISOString().slice(0, 10)
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select('*')
+    .in('status', ['completed', 'partial', 'failed'])
+    .is('notification_applied_at', null)
+    .gte('market_date', cutoff)
+    .lt('market_date', beforeMarketDate)
+    .order('market_date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    throw new Error(
+      `Failed to load pending mid-morning notification: ${error.message}`,
+    )
   }
   return data ? mapRow(data as MidMorningRow) : null
 }
@@ -255,7 +307,7 @@ async function claimRun(marketDate: string, leaseToken: string) {
     {
       p_market_date: marketDate,
       p_lease_token: leaseToken,
-      p_lease_seconds: 90,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
     },
   )
   if (error) {
@@ -265,15 +317,67 @@ async function claimRun(marketDate: string, leaseToken: string) {
   return row ? mapRow(row as MidMorningRow) : null
 }
 
-async function releaseRun(marketDate: string, leaseToken: string) {
+async function renewRun(id: string, leaseToken: string) {
   const supabase = getServiceClient()
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
+    'renew_newsletter_mid_morning_automation',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+      p_lease_seconds: NEWSLETTER_AUTOMATION_LEASE_SECONDS,
+    },
+  )
+  if (error || !data?.[0]) {
+    throw new NewsletterAutomationLeaseLostError(
+      'Mid-morning newsletter automation',
+    )
+  }
+}
+
+async function resetRetryNotification(
+  id: string,
+  leaseToken: string,
+  signal?: AbortSignal,
+): Promise<NewsletterMidMorningRun> {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
+    'reset_newsletter_mid_morning_retry_notification',
+    {
+      p_run_id: id,
+      p_lease_token: leaseToken,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
+  const row = data?.[0]
+  if (error) {
+    throw new Error(
+      `Failed to reset mid-morning retry notification state: ${error.message}`,
+    )
+  }
+  if (!row) {
+    throw new NewsletterAutomationLeaseLostError(
+      'Mid-morning newsletter automation',
+    )
+  }
+  return mapRow(row as MidMorningRow)
+}
+
+async function releaseRun(
+  marketDate: string,
+  leaseToken: string,
+  signal?: AbortSignal,
+) {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
     'release_newsletter_mid_morning_automation',
     {
       p_market_date: marketDate,
       p_lease_token: leaseToken,
     },
   )
+  if (signal) query = query.abortSignal(signal)
+  const { error } = await query
   if (error) {
     throw new Error(
       `Failed to release mid-morning automation: ${error.message}`,
@@ -308,7 +412,12 @@ function easternDateBounds(date: string) {
   }
 }
 
-async function collectCandidates(run: NewsletterMidMorningRun) {
+async function collectCandidates(
+  run: NewsletterMidMorningRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const supabase = getServiceClient()
   const bounds = easternDateBounds(run.marketDate)
   const morning = await supabase
@@ -320,6 +429,7 @@ async function collectCandidates(run: NewsletterMidMorningRun) {
     .lt('started_at', bounds.end)
     .order('started_at', { ascending: false })
     .limit(1)
+    .abortSignal(signal)
     .maybeSingle()
   if (morning.error) {
     throw new Error(`Failed to load the morning WIIM run: ${morning.error.message}`)
@@ -328,7 +438,8 @@ async function collectCandidates(run: NewsletterMidMorningRun) {
     throw new Error('The completed morning WIIM run is not available yet.')
   }
 
-  const fetched = await fetchWiimCandidates()
+  const fetched = await fetchWiimCandidates(signal)
+  signal.throwIfAborted()
   const ranked = rankWiimCandidates(fetched.candidates, fetched.candidates.length)
   const symbols = Array.from(
     new Set(
@@ -342,7 +453,7 @@ async function collectCandidates(run: NewsletterMidMorningRun) {
       `Only ${symbols.length} live candidates were available for the mid-morning report.`,
     )
   }
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: 'finviz',
     candidate_symbols: symbols,
     candidate_count: symbols.length,
@@ -355,17 +466,23 @@ async function collectCandidates(run: NewsletterMidMorningRun) {
       finvizAttempts: {},
       summaryAttempts: {},
     } as unknown as Json,
-  })
+  }, signal)
 }
 
-async function loadFinvizCoverage(run: NewsletterMidMorningRun) {
+async function loadFinvizCoverage(
+  run: NewsletterMidMorningRun,
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
   const coverage = new Map<string, { status: string; fetchedAt: string }>()
-  const { data, error } = await supabase
+  let query = supabase
     .from('stock_why_moving_cache')
     .select('symbol, status, fetched_at')
     .in('symbol', run.candidateSymbols)
     .gte('fetched_at', run.startedAt ?? run.createdAt)
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
   if (error) {
     throw new Error(`Failed to inspect Finviz coverage: ${error.message}`)
   }
@@ -375,71 +492,97 @@ async function loadFinvizCoverage(run: NewsletterMidMorningRun) {
       fetchedAt: row.fetched_at,
     })
   }
+  signal?.throwIfAborted()
   return coverage
 }
 
-async function refreshFinvizBatch(run: NewsletterMidMorningRun) {
+async function refreshFinvizBatch(
+  run: NewsletterMidMorningRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const attempts = stringNumberMap(run.metadata.finvizAttempts)
-  const before = await loadFinvizCoverage(run)
-  const batch = run.candidateSymbols
-    .filter(
-      (symbol) =>
-        !before.has(symbol) &&
-        (attempts[symbol] ?? 0) < MAX_SOURCE_ATTEMPTS,
-    )
-    .slice(0, FINVIZ_BATCH_SIZE)
+  const before = await loadFinvizCoverage(run, signal)
+  const beforeState = getFinvizCoverageState(
+    run.candidateSymbols,
+    before,
+    attempts,
+    MAX_SOURCE_ATTEMPTS,
+  )
+  const batch = beforeState.retryableSymbols.slice(0, FINVIZ_BATCH_SIZE)
   const results: WarmResult[] = []
-  await Promise.all(
+  const checkpointAttempt = createFinvizAttemptCheckpointer(
+    attempts,
+    async (snapshot, symbol) => {
+      await updateRun(run.id, leaseToken, {
+        metadata_json: {
+          ...run.metadata,
+          finvizAttempts: snapshot,
+          finvizLastDispatchedSymbol: symbol,
+          finvizAttemptsCheckpointAt: new Date().toISOString(),
+        } as Json,
+      }, signal)
+    },
+  )
+  const warmResults = await Promise.allSettled(
     batch.map(async (symbol) => {
+      await checkpointAttempt(symbol)
+      signal.throwIfAborted()
       const result = await warmSymbol(symbol, {
         dryRun: false,
         forceRefresh: true,
         perSymbolPauseMs: 200,
         jitterMs: 100,
+        signal,
       })
-      attempts[symbol] = (attempts[symbol] ?? 0) + 1
       results.push(result)
     }),
   )
-  const after = await loadFinvizCoverage(run)
-  const exhausted = run.candidateSymbols.filter(
-    (symbol) =>
-      !after.has(symbol) &&
-      (attempts[symbol] ?? 0) >= MAX_SOURCE_ATTEMPTS,
+  const warmFailure = warmResults.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
   )
-  const completed = after.size + exhausted.length
-  const done = completed >= run.candidateSymbols.length
-  return updateRun(run.id, {
-    stage: done ? 'wiim' : 'finviz',
-    finviz_completed_count: completed,
-    finviz_found_count: Array.from(after.values()).filter(
-      (entry) => entry.status === 'found',
-    ).length,
-    finviz_error_count:
-      exhausted.length +
-      Array.from(after.values()).filter((entry) => entry.status === 'error')
-        .length,
+  if (warmFailure) throw warmFailure.reason
+  signal.throwIfAborted()
+  const after = await loadFinvizCoverage(run, signal)
+  signal.throwIfAborted()
+  const afterState = getFinvizCoverageState(
+    run.candidateSymbols,
+    after,
+    attempts,
+    MAX_SOURCE_ATTEMPTS,
+  )
+  return updateRun(run.id, leaseToken, {
+    stage: afterState.done ? 'wiim' : 'finviz',
+    finviz_completed_count: afterState.completedCount,
+    finviz_found_count: afterState.foundCount,
+    finviz_error_count: afterState.errorSymbols.length,
     last_error:
-      exhausted.length > 0
-        ? `${exhausted.length} Finviz refreshes exhausted retries.`
+      afterState.exhaustedSymbols.length > 0
+        ? `${afterState.exhaustedSymbols.length} Finviz refreshes exhausted retries.`
         : null,
     metadata_json: {
       ...run.metadata,
       finvizAttempts: attempts,
       finvizLastBatch: batch,
       finvizLastBatchSummary: summarizeWarmResults(results),
-      finvizExhaustedSymbols: exhausted,
+      finvizExhaustedSymbols: afterState.exhaustedSymbols,
     } as unknown as Json,
-  })
+  }, signal)
 }
 
-async function createMidMorningWiim(run: NewsletterMidMorningRun) {
+async function createMidMorningWiim(
+  run: NewsletterMidMorningRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
   const wiim = await runWiimBrief({
     runType: 'mid_morning',
     compareRunType: 'morning',
     compareLatest: true,
     label: 'WIIM Automated Mid-Morning Delta',
     persist: true,
+    signal,
   })
   if (!wiim.runId) {
     throw new Error('The mid-morning WIIM run did not return a persisted ID.')
@@ -447,7 +590,7 @@ async function createMidMorningWiim(run: NewsletterMidMorningRun) {
   const topFiveSymbols = wiim.topFive.flatMap((candidate) =>
     candidate.ticker ? [candidate.ticker] : [],
   )
-  return updateRun(run.id, {
+  return updateRun(run.id, leaseToken, {
     stage: 'summaries',
     mid_morning_wiim_run_id: wiim.runId,
     last_error: null,
@@ -458,34 +601,46 @@ async function createMidMorningWiim(run: NewsletterMidMorningRun) {
       topFiveSymbols,
       delta: wiim.metadata.delta ?? null,
     } as Json,
-  })
+  }, signal)
 }
 
-async function loadFreshSummarySymbols(runId: string) {
+async function loadFreshSummaryCoverage(
+  runId: string,
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('stock_summaries')
     .select('symbol, summary_text, no_summary_reason')
     .eq('run_id', runId)
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query
   if (error) {
     throw new Error(
       `Failed to inspect mid-morning summaries: ${error.message}`,
     )
   }
-  return new Set((data ?? []).map((row) => row.symbol))
+  signal?.throwIfAborted()
+  return classifySummaryCoverage(data ?? [])
 }
 
-async function generateSummaryBatch(run: NewsletterMidMorningRun) {
+async function generateSummaryBatch(
+  run: NewsletterMidMorningRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const symbols = stringArray(run.metadata.topFiveSymbols)
   if (symbols.length === 0) {
     throw new Error('The mid-morning WIIM run did not produce a top five.')
   }
   const summaryRunId = `newsletter_mid_morning_${run.id}`
-  const completedBefore = await loadFreshSummarySymbols(summaryRunId)
+  const before = await loadFreshSummaryCoverage(summaryRunId, signal)
   const attempts = stringNumberMap(run.metadata.summaryAttempts)
   const retryable = symbols.filter(
     (symbol) =>
-      !completedBefore.has(symbol) &&
+      !before.completedSymbols.has(symbol) &&
       (attempts[symbol] ?? 0) < MAX_SOURCE_ATTEMPTS,
   )
   const result = await generateDailySummaryBatch({
@@ -495,23 +650,35 @@ async function generateSummaryBatch(run: NewsletterMidMorningRun) {
     runId: summaryRunId,
     limit: 5,
     concurrency: 4,
-    perSymbolTimeoutMs: 45_000,
+    perSymbolTimeoutMs: 35_000,
     force: true,
+    signal,
+    onBatchDispatched: async (symbols) => {
+      for (const symbol of symbols) {
+        attempts[symbol] = (attempts[symbol] ?? 0) + 1
+      }
+      await updateRun(run.id, leaseToken, {
+        metadata_json: {
+          ...run.metadata,
+          summaryAttempts: { ...attempts },
+          summaryLastDispatchedBatch: symbols,
+          summaryAttemptsCheckpointAt: new Date().toISOString(),
+        } as Json,
+      }, signal)
+    },
   })
-  for (const symbol of result.attemptedSymbols) {
-    attempts[symbol] = (attempts[symbol] ?? 0) + 1
-  }
-  const completedAfter = await loadFreshSummarySymbols(summaryRunId)
+  const after = await loadFreshSummaryCoverage(summaryRunId, signal)
+  signal.throwIfAborted()
   const exhausted = symbols.filter(
     (symbol) =>
-      !completedAfter.has(symbol) &&
+      !after.completedSymbols.has(symbol) &&
       (attempts[symbol] ?? 0) >= MAX_SOURCE_ATTEMPTS,
   )
-  const completed = completedAfter.size + exhausted.length
-  return updateRun(run.id, {
+  const completed = after.completedSymbols.size + exhausted.length
+  return updateRun(run.id, leaseToken, {
     stage: completed >= symbols.length ? 'finalizing' : 'summaries',
     summary_completed_count: completed,
-    summary_generated_count: completedAfter.size,
+    summary_generated_count: after.generatedSymbols.size,
     summary_error_count: exhausted.length,
     last_error:
       exhausted.length > 0
@@ -523,12 +690,22 @@ async function generateSummaryBatch(run: NewsletterMidMorningRun) {
       summaryRunId,
       summaryLastFailures: result.failed,
       summaryExhaustedSymbols: exhausted,
+      summaryNoResultSymbols: Array.from(after.noResultSymbols),
+      summaryValidationRejectedSymbols: Array.from(
+        after.validationRejectedSymbols,
+      ),
     } as Json,
-  })
+  }, signal)
 }
 
-async function notifyCompletion(run: NewsletterMidMorningRun) {
-  const scopes = await listEnabledNewsletterDailyScopes()
+async function notifyCompletion(
+  run: NewsletterMidMorningRun,
+  signal?: AbortSignal,
+) {
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
+  if (scopes.length === 0) {
+    throw new Error('No enabled newsletter scope can receive the terminal alert.')
+  }
   const delta = isRecord(run.metadata.delta) ? run.metadata.delta : {}
   const notable = Array.isArray(delta.notableText)
     ? delta.notableText.filter(
@@ -536,18 +713,28 @@ async function notifyCompletion(run: NewsletterMidMorningRun) {
       )
     : []
   const topFive = stringArray(run.metadata.topFiveSymbols)
-  await Promise.allSettled(
+  const degraded = run.status === 'partial'
+  const upstreamErrors = run.finvizErrorCount + run.summaryErrorCount
+  await Promise.all(
     scopes.map(({ scope }) =>
       createNewsletterNotification(scope, {
         marketDate: run.marketDate,
         type: 'mid_morning_completed',
-        severity: run.meaningfulChange ? 'warning' : 'success',
-        title: run.meaningfulChange
-          ? 'Mid-morning report found meaningful changes'
-          : 'Mid-morning report is ready',
-        message:
+        severity: degraded || run.meaningfulChange ? 'warning' : 'success',
+        title: degraded
+          ? 'Mid-morning report completed with coverage gaps'
+          : run.meaningfulChange
+            ? 'Mid-morning report found meaningful changes'
+            : 'Mid-morning report is ready',
+        message: [
           notable[0] ??
-          `Updated leaders: ${topFive.join(', ')}. Morning calls are otherwise holding.`,
+            `Updated leaders: ${topFive.join(', ')}. Morning calls are otherwise holding.`,
+          degraded
+            ? `${run.summaryGeneratedCount} of ${topFive.length} summaries were generated; ${upstreamErrors} upstream errors remain.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
         actionUrl: '/dashboard/mid-morning-brief',
         metadata: {
           midMorningRunId: run.id,
@@ -557,42 +744,76 @@ async function notifyCompletion(run: NewsletterMidMorningRun) {
           delta,
         },
         dedupeKey: `mid-morning-completed:${run.marketDate}`,
+        signal,
       }),
     ),
   )
 }
 
-async function finalizeRun(run: NewsletterMidMorningRun) {
+async function finalizeRun(
+  run: NewsletterMidMorningRun,
+  leaseToken: string,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted()
   const delta = isRecord(run.metadata.delta) ? run.metadata.delta : {}
   const meaningfulChange = delta.shouldNotify === true
+  const targetCount = stringArray(run.metadata.topFiveSymbols).length
+  const finalStatus = getMidMorningAutomationFinalStatus({
+    targetCount,
+    generatedCount: run.summaryGeneratedCount,
+    finvizErrorCount: run.finvizErrorCount,
+    summaryErrorCount: run.summaryErrorCount,
+  })
+  const upstreamErrors = run.finvizErrorCount + run.summaryErrorCount
   const completedAt = new Date().toISOString()
-  const completed = await updateRun(run.id, {
-    status: run.summaryErrorCount > 0 ? 'partial' : 'completed',
-    stage: 'completed',
+  const completed = await updateRun(run.id, leaseToken, {
+    status: finalStatus,
+    stage: finalStatus === 'failed' ? 'failed' : 'completed',
     meaningful_change: meaningfulChange,
     completed_at: completedAt,
+    last_error:
+      finalStatus === 'completed'
+        ? null
+        : finalStatus === 'failed'
+          ? `Mid-morning report produced no usable summaries; ${upstreamErrors} upstream errors remain.`
+          : `Mid-morning report completed with ${run.summaryGeneratedCount} of ${targetCount} summaries and ${upstreamErrors} upstream errors.`,
     metadata_json: {
       ...run.metadata,
       reportReadyAt: completedAt,
+      ...(finalStatus === 'failed'
+        ? {
+            failureKind: 'quality_gate',
+            lastFailureStage: 'finalizing',
+          }
+        : {}),
     } as Json,
-  })
-  await notifyCompletion(completed)
+  }, signal)
   return completed
 }
 
 async function notifyFailure(
   run: NewsletterMidMorningRun,
   failedStage: NewsletterMidMorningStage,
+  signal?: AbortSignal,
 ) {
-  const scopes = await listEnabledNewsletterDailyScopes()
-  await Promise.allSettled(
+  const scopes = await listEnabledNewsletterDailyScopes(signal)
+  if (scopes.length === 0) {
+    throw new Error('No enabled newsletter scope can receive the terminal alert.')
+  }
+  const qualityGateFailure = run.metadata.failureKind === 'quality_gate'
+  await Promise.all(
     scopes.map(({ scope }) =>
       createNewsletterNotification(scope, {
         marketDate: run.marketDate,
         type: 'mid_morning_failed',
         severity: 'error',
-        title: 'Mid-morning report automation stopped',
-        message: `${getMidMorningAutomationStageLabel(failedStage)} failed after ${MAX_STAGE_ERRORS} attempts. ${run.lastError ?? ''}`.trim(),
+        title: qualityGateFailure
+          ? 'Mid-morning report did not pass its quality gate'
+          : 'Mid-morning report automation stopped',
+        message: qualityGateFailure
+          ? (run.lastError ?? 'The report did not produce a usable summary.')
+          : `${getMidMorningAutomationStageLabel(failedStage)} failed after ${MAX_STAGE_ERRORS} attempts. ${run.lastError ?? ''}`.trim(),
         actionUrl: '/dashboard/mid-morning-brief',
         metadata: {
           midMorningRunId: run.id,
@@ -600,14 +821,74 @@ async function notifyFailure(
           error: run.lastError,
         },
         dedupeKey: `mid-morning-failed:${run.marketDate}:${failedStage}`,
+        signal,
       }),
     ),
   )
 }
 
+async function recordMidMorningNotificationAttempt(
+  run: NewsletterMidMorningRun,
+  succeeded: boolean,
+  error: string | null,
+  signal?: AbortSignal,
+): Promise<NewsletterMidMorningRun> {
+  const supabase = getServiceClient()
+  let query = supabase.rpc(
+    'record_newsletter_mid_morning_notification_attempt',
+    {
+      p_run_id: run.id,
+      p_succeeded: succeeded,
+      p_error: error,
+    },
+  )
+  if (signal) query = query.abortSignal(signal)
+  const result = await query
+  const row = result.data?.[0]
+  if (result.error || !row) {
+    throw new Error(
+      `Failed to record mid-morning notification attempt: ${
+        result.error?.message ?? 'No terminal run returned'
+      }`,
+    )
+  }
+  return mapRow(row as MidMorningRow)
+}
+
+export async function ensureNewsletterMidMorningTerminalNotification(
+  run: NewsletterMidMorningRun,
+  signal?: AbortSignal,
+): Promise<NewsletterMidMorningRun> {
+  signal?.throwIfAborted()
+  if (run.notificationAppliedAt) return run
+  if (!['completed', 'partial', 'failed'].includes(run.status)) return run
+
+  try {
+    if (run.status === 'failed') {
+      await notifyFailure(
+        run,
+        retryableStage(run.metadata.lastFailureStage),
+        signal,
+      )
+    } else {
+      await notifyCompletion(run, signal)
+    }
+    return await recordMidMorningNotificationAttempt(run, true, null, signal)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await recordMidMorningNotificationAttempt(run, false, message, signal).catch(
+      () => undefined,
+    )
+    throw new Error(`Mid-morning terminal notification is pending: ${message}`, {
+      cause: error,
+    })
+  }
+}
+
 export async function advanceNewsletterMidMorningAutomation(input: {
   marketDate: string
   retryFailed?: boolean
+  stageBudgetMs?: number
 }): Promise<{
   claimed: boolean
   action: string
@@ -624,59 +905,115 @@ export async function advanceNewsletterMidMorningAutomation(input: {
   }
 
   let current = claimed
+  const stageBudgetMs = Math.max(
+    1,
+    Math.min(
+      NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+      Math.floor(
+        input.stageBudgetMs ?? NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+      ),
+    ),
+  )
   try {
-    if (current.status === 'completed' || current.status === 'partial') {
-      return { claimed: true, action: 'already-completed', run: current }
-    }
-    switch (current.stage) {
-      case 'collecting':
-        current = await collectCandidates(current)
-        return { claimed: true, action: 'candidates-collected', run: current }
-      case 'finviz':
-        current = await refreshFinvizBatch(current)
-        return { claimed: true, action: 'finviz-batch', run: current }
-      case 'wiim':
-        current = await createMidMorningWiim(current)
-        return { claimed: true, action: 'wiim-generated', run: current }
-      case 'summaries':
-        current = await generateSummaryBatch(current)
-        return { claimed: true, action: 'summary-batch', run: current }
-      case 'finalizing':
-        current = await finalizeRun(current)
-        return { claimed: true, action: 'report-finalized', run: current }
-      case 'completed':
-        return { claimed: true, action: 'already-completed', run: current }
-      case 'failed':
-        if (!input.retryFailed) {
-          return { claimed: true, action: 'failed-terminal', run: current }
+    return await runWithNewsletterAutomationLease({
+      renew: () => renewRun(current.id, leaseToken),
+      budgetMs: stageBudgetMs,
+      task: async (signal) => {
+        if (current.status === 'completed' || current.status === 'partial') {
+          try {
+            current = await ensureNewsletterMidMorningTerminalNotification(
+              current,
+              signal,
+            )
+            return { claimed: true, action: 'already-completed', run: current }
+          } catch {
+            return { claimed: true, action: 'notification-pending', run: current }
+          }
         }
-        const retryStage = retryableStage(current.metadata.lastFailureStage)
-        const stageErrorCounts = stringNumberMap(
-          current.metadata.stageErrorCounts,
-        )
-        delete stageErrorCounts[retryStage]
-        current = await updateRun(current.id, {
-          status: 'running',
-          stage: retryStage,
-          completed_at: null,
-          last_error: null,
-          metadata_json: {
-            ...current.metadata,
-            stageErrorCounts,
-            manualRetryAt: new Date().toISOString(),
-            manualRetryStage: retryStage,
-          } as Json,
-        })
-        return { claimed: true, action: 'failed-stage-resumed', run: current }
-    }
+        switch (current.stage) {
+          case 'collecting':
+            current = await collectCandidates(current, leaseToken, signal)
+            return { claimed: true, action: 'candidates-collected', run: current }
+          case 'finviz':
+            current = await refreshFinvizBatch(current, leaseToken, signal)
+            return { claimed: true, action: 'finviz-batch', run: current }
+          case 'wiim':
+            current = await createMidMorningWiim(current, leaseToken, signal)
+            return { claimed: true, action: 'wiim-generated', run: current }
+          case 'summaries':
+            current = await generateSummaryBatch(current, leaseToken, signal)
+            return { claimed: true, action: 'summary-batch', run: current }
+          case 'finalizing':
+            current = await finalizeRun(current, leaseToken, signal)
+            try {
+              current = await ensureNewsletterMidMorningTerminalNotification(
+                current,
+                signal,
+              )
+              return { claimed: true, action: 'report-finalized', run: current }
+            } catch {
+              return { claimed: true, action: 'notification-pending', run: current }
+            }
+          case 'completed':
+            try {
+              current = await ensureNewsletterMidMorningTerminalNotification(
+                current,
+                signal,
+              )
+              return { claimed: true, action: 'already-completed', run: current }
+            } catch {
+              return { claimed: true, action: 'notification-pending', run: current }
+            }
+          case 'failed': {
+            if (!input.retryFailed) {
+              return { claimed: true, action: 'failed-terminal', run: current }
+            }
+            const retryStage = retryableStage(current.metadata.lastFailureStage)
+            const stageErrorCounts = stringNumberMap(
+              current.metadata.stageErrorCounts,
+            )
+            delete stageErrorCounts[retryStage]
+            current = await resetRetryNotification(
+              current.id,
+              leaseToken,
+              signal,
+            )
+            current = await updateRun(current.id, leaseToken, {
+              status: 'running',
+              stage: retryStage,
+              completed_at: null,
+              last_error: null,
+              metadata_json: {
+                ...current.metadata,
+                stageErrorCounts,
+                manualRetryAt: new Date().toISOString(),
+                manualRetryStage: retryStage,
+              } as Json,
+            }, signal)
+            return { claimed: true, action: 'failed-stage-resumed', run: current }
+          }
+        }
+      },
+    })
   } catch (error) {
+    if (error instanceof NewsletterAutomationStageBudgetError) {
+      return {
+        claimed: true,
+        action: 'invocation-budget-exhausted',
+        run: current,
+      }
+    }
+    if (error instanceof NewsletterAutomationLeaseLostError) {
+      return { claimed: false, action: 'lease-lost', run: current }
+    }
     const failedStage = current.stage
     const message = error instanceof Error ? error.message : String(error)
     const stageErrors = stringNumberMap(current.metadata.stageErrorCounts)
     const count = (stageErrors[failedStage] ?? 0) + 1
     stageErrors[failedStage] = count
     const terminal = count >= MAX_STAGE_ERRORS
-    current = await updateRun(current.id, {
+    const cleanupSignal = AbortSignal.timeout(5_000)
+    current = await updateRun(current.id, leaseToken, {
       status: terminal ? 'failed' : 'running',
       stage: terminal ? 'failed' : failedStage,
       last_error: message,
@@ -687,11 +1024,24 @@ export async function advanceNewsletterMidMorningAutomation(input: {
         lastFailureAt: new Date().toISOString(),
         lastFailureStage: failedStage,
       } as Json,
-    })
-    if (terminal) await notifyFailure(current, failedStage)
+    }, cleanupSignal)
+    if (terminal) {
+      try {
+        current = await ensureNewsletterMidMorningTerminalNotification(
+          current,
+          cleanupSignal,
+        )
+      } catch {
+        return { claimed: true, action: 'notification-pending', run: current }
+      }
+    }
     return { claimed: true, action: 'stage-error', run: current }
   } finally {
-    await releaseRun(input.marketDate, leaseToken).catch(() => undefined)
+    await releaseRun(
+      input.marketDate,
+      leaseToken,
+      AbortSignal.timeout(5_000),
+    ).catch(() => undefined)
   }
 }
 
@@ -700,4 +1050,7 @@ export const __testOnly = {
   stringNumberMap,
   stringArray,
   retryableStage,
+  collectCandidates,
+  loadFinvizCoverage,
+  loadFreshSummaryCoverage,
 }

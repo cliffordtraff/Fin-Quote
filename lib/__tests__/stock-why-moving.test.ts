@@ -1,11 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildFinvizQuoteUrl,
   buildWhyMovingDisplayText,
   isFreshWhyMovingResult,
+  getStockWhyMovingData,
   parseFinvizWhyMovingHtml,
   WHY_MOVING_CACHE_TTL,
 } from '@/lib/stock-why-moving'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 
 describe('buildFinvizQuoteUrl', () => {
   it('uses Finviz class-share aliases without changing the canonical symbol', () => {
@@ -108,5 +114,41 @@ describe('isFreshWhyMovingResult', () => {
     expect(
       isFreshWhyMovingResult({ status: 'error', fetchedAt }, now),
     ).toBe(false)
+  })
+})
+
+describe('stock why-moving cancellation', () => {
+  it('interrupts an in-flight Finviz attempt when the stage lease aborts', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+    let markFetchStarted: (() => void) | undefined
+    const fetchStarted = new Promise<void>((resolve) => {
+      markFetchStarted = resolve
+    })
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      markFetchStarted?.()
+      return (
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal
+          if (!signal) return
+          const rejectAbort = () => reject(signal.reason)
+          if (signal.aborted) rejectAbort()
+          else signal.addEventListener('abort', rejectAbort, { once: true })
+        })
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+    const reason = new Error('lease budget exhausted')
+    const result = getStockWhyMovingData('AAPL', {
+      forceRefresh: true,
+      signal: controller.signal,
+    })
+
+    await fetchStarted
+    expect(fetchMock).toHaveBeenCalledOnce()
+    controller.abort(reason)
+    await expect(result).rejects.toBe(reason)
   })
 })

@@ -65,6 +65,8 @@ describe('daily newsletter draft builder', () => {
     })
 
     expect(draft.subjectLine).toContain('ACME up 8.3%')
+    expect(draft.subjectLine.length).toBeLessThanOrEqual(60)
+    expect(draft.subjectLine).not.toMatch(/(?:\.{3}|…)$/)
     expect(draft.source?.type).toBe('daily_batch')
     expect(draft.source?.attachedChartIds).toEqual(['chart-1'])
     expect(draft.blocks[0].chartNeedsRegeneration).toBe(false)
@@ -72,6 +74,7 @@ describe('daily newsletter draft builder', () => {
     expect(draft.blocks[0].body).toContain(
       'raises full-year guidance. The stock is +8.25%',
     )
+    expect(draft.blocks[0].ctaText).toBe('View cited source')
     expect(draft.header?.logoUrl).toBe('')
     expect(draft.header?.logoUrls).toEqual([])
   })

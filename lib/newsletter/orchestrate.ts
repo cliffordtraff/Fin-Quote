@@ -41,6 +41,7 @@ import {
   parseTemplateSelections,
 } from './prompts'
 import { ensureStockMentionInCopy } from './copy-normalization'
+import { normalizeNewsletterSubject } from './delivery-quality'
 import { resolveNewsletterOutputDirectory } from './output-directory'
 import { resolveEditorialChart } from './resolve-chart'
 import { pickFundamentalsYearRange } from './template-scoring'
@@ -524,14 +525,17 @@ async function generateMarketRoundupNewsletter(params: {
 
   const autoPickedStock = featuredTickers.length === 0
   if (autoPickedStock) {
+    const roundupSubject = normalizeNewsletterSubject(
+      `Market Roundup: ${selectedStocks
+        .slice(0, 3)
+        .map((entry) => entry.ticker)
+        .join(', ')}`,
+    )
     Promise.all(
       selectedStocks.map((stock) =>
         recordPick({
           ...stock,
-          subjectLine: `Market Roundup: ${selectedStocks
-            .slice(0, 3)
-            .map((entry) => entry.ticker)
-            .join(', ')}`,
+          subjectLine: roundupSubject,
         }),
       ),
     ).catch(console.warn)
@@ -753,6 +757,10 @@ export async function generateNewsletter(
           generationPrompt,
         })
 
+  const subjectLine =
+    normalizeNewsletterSubject(generationResult.subjectLine) ||
+    normalizeNewsletterSubject(`${generationResult.ticker} market update`)
+
   const headerOverride =
     format === 'market_roundup'
       ? buildNewsletterHeader(generationResult.ticker, now, {
@@ -775,7 +783,7 @@ export async function generateNewsletter(
     now,
     generationResult.todayQuote,
     generationResult.editorialHook,
-    generationResult.subjectLine,
+    subjectLine,
     assemblyOptions,
   )
 
@@ -785,7 +793,7 @@ export async function generateNewsletter(
     now,
     generationResult.todayQuote,
     generationResult.editorialHook,
-    generationResult.subjectLine,
+    subjectLine,
     assemblyOptions,
   )
 
@@ -848,7 +856,7 @@ export async function generateNewsletter(
         ? generationResult.featuredTickers
         : [generationResult.ticker],
     generatedAt: now.toISOString(),
-    subjectLine: generationResult.subjectLine,
+    subjectLine,
     generationPrompt,
     selections: generationResult.selections,
     blocks: generationResult.blocks,

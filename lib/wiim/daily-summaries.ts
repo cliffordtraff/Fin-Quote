@@ -59,37 +59,79 @@ async function runPool<T>(
       await worker(items[index])
     }
   }
-  await Promise.all(
+  const results = await Promise.allSettled(
     Array.from(
       { length: Math.min(Math.max(1, concurrency), items.length) },
       () => runner(),
     ),
   )
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failure) throw failure.reason
 }
 
-function withTimeout<T>(
-  promise: Promise<T>,
+export async function withAbortTimeout<T>(
+  worker: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
   label: string,
+  upstreamSignal?: AbortSignal,
 ): Promise<T> {
-  let timer: NodeJS.Timeout | null = null
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      )
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer)
+  const controller = new AbortController()
+  let timedOut = false
+  const onUpstreamAbort = () => controller.abort(upstreamSignal?.reason)
+  if (upstreamSignal?.aborted) onUpstreamAbort()
+  else upstreamSignal?.addEventListener('abort', onUpstreamAbort, {
+    once: true,
   })
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort(new Error(`${label} timed out after ${timeoutMs}ms`))
+  }, timeoutMs)
+  let removeWorkerAbortListener: () => void = () => undefined
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const onWorkerAbort = () => {
+      reject(
+        controller.signal.reason ??
+          new Error(`${label} generation was cancelled`),
+      )
+    }
+    if (controller.signal.aborted) {
+      onWorkerAbort()
+      return
+    }
+    controller.signal.addEventListener('abort', onWorkerAbort, { once: true })
+    removeWorkerAbortListener = () =>
+      controller.signal.removeEventListener('abort', onWorkerAbort)
+  })
+  try {
+    // Provider reads do not all support cancellation. Racing the abort keeps
+    // the leased cron invocation bounded; persistence happens only after this
+    // wrapper resolves, so a detached read can never write a stale summary.
+    return await Promise.race([
+      Promise.resolve().then(() => worker(controller.signal)),
+      aborted,
+    ])
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`${label} timed out after ${timeoutMs}ms`, {
+        cause: error,
+      })
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+    removeWorkerAbortListener()
+    upstreamSignal?.removeEventListener('abort', onUpstreamAbort)
+  }
 }
 
 export async function getDailySummaryCoverage(
   marketDate: string,
   symbols: string[],
+  signal?: AbortSignal,
 ): Promise<DailySummaryCoverage> {
+  signal?.throwIfAborted()
   const normalized = uniqueSymbols(symbols)
   if (normalized.length === 0) {
     return {
@@ -107,24 +149,28 @@ export async function getDailySummaryCoverage(
     no_summary_reason: string | null
   }> = []
   for (let index = 0; index < normalized.length; index += 100) {
+    signal?.throwIfAborted()
     const batch = normalized.slice(index, index + 100)
-    const { data, error } = await supabase
+    let query = supabase
       .from('stock_summaries')
       .select('symbol, summary_text, no_summary_reason')
       .eq('summary_date', marketDate)
       .eq('config_version', WIIM_SUMMARY_CONFIG_VERSION)
       .in('symbol', batch)
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query
     if (error) {
       throw new Error(`Failed to read daily summary coverage: ${error.message}`)
     }
     rows.push(...(data ?? []))
   }
+  signal?.throwIfAborted()
 
   const generated = new Set<string>()
   const noResult = new Set<string>()
   const rejected = new Set<string>()
   for (const row of rows) {
-    if (row.summary_text) generated.add(row.symbol)
+    if (row.summary_text?.trim()) generated.add(row.symbol)
     else if (row.no_summary_reason === 'validation_rejected') {
       rejected.add(row.symbol)
     } else {
@@ -151,7 +197,11 @@ export async function generateDailySummaryBatch(input: {
   perSymbolTimeoutMs?: number
   model?: string
   force?: boolean
+  signal?: AbortSignal
+  /** Persist retry bookkeeping after the exact batch is known, before work starts. */
+  onBatchDispatched?: (symbols: string[]) => Promise<void>
 }): Promise<DailySummaryBatchResult> {
+  input.signal?.throwIfAborted()
   const normalized = uniqueSymbols(input.symbols)
   const coverage = input.force
     ? {
@@ -160,7 +210,8 @@ export async function generateDailySummaryBatch(input: {
         noResultSymbols: [],
         validationRejectedSymbols: [],
       }
-    : await getDailySummaryCoverage(input.marketDate, normalized)
+    : await getDailySummaryCoverage(input.marketDate, normalized, input.signal)
+  input.signal?.throwIfAborted()
   const completed = new Set(coverage.completedSymbols)
   const attemptedSymbols = normalized
     .filter((symbol) => !completed.has(symbol))
@@ -179,11 +230,15 @@ export async function generateDailySummaryBatch(input: {
     process.env.WIIM_SUMMARY_MODEL ??
     process.env.OPENAI_MODEL ??
     'gpt-5-nano'
-  const { data: existingRun, error: existingRunError } = await supabase
+  let existingRunQuery = supabase
     .from('wiim_summary_runs')
     .select('run_date, tickers')
     .eq('run_id', input.runId)
-    .maybeSingle()
+  if (input.signal) {
+    existingRunQuery = existingRunQuery.abortSignal(input.signal)
+  }
+  const { data: existingRun, error: existingRunError } =
+    await existingRunQuery.maybeSingle()
   if (existingRunError) {
     throw new Error(
       `Failed to inspect daily summary run: ${existingRunError.message}`,
@@ -195,7 +250,8 @@ export async function generateDailySummaryBatch(input: {
     existingSymbols,
     input.runSymbols ?? normalized,
   )
-  const { error: runError } = await supabase.from('wiim_summary_runs').upsert({
+  input.signal?.throwIfAborted()
+  let runUpsert = supabase.from('wiim_summary_runs').upsert({
     run_id: input.runId,
     run_date: input.marketDate,
     ticker_count: runSymbols.length,
@@ -203,28 +259,44 @@ export async function generateDailySummaryBatch(input: {
     model,
     config_version: WIIM_SUMMARY_CONFIG_VERSION,
   })
+  if (input.signal) runUpsert = runUpsert.abortSignal(input.signal)
+  const { error: runError } = await runUpsert
   if (runError) {
     throw new Error(`Failed to record daily summary run: ${runError.message}`)
   }
+
+  input.signal?.throwIfAborted()
+  await input.onBatchDispatched?.([...attemptedSymbols])
+  input.signal?.throwIfAborted()
 
   await runPool(
     attemptedSymbols,
     Math.max(1, Math.min(6, input.concurrency ?? 4)),
     async (symbol) => {
       try {
-        const summary = await withTimeout(
-          generateStockWhyMovingSummary({
+        input.signal?.throwIfAborted()
+        const summary = await withAbortTimeout(
+          (signal) => generateStockWhyMovingSummary({
             symbol,
             summaryDate: input.marketDate,
             model,
+            signal,
           }),
           input.perSymbolTimeoutMs ?? 45_000,
           symbol,
+          input.signal,
         )
-        await storeGeneratedWhyMovingSummary(summary, input.runId)
+        input.signal?.throwIfAborted()
+        await storeGeneratedWhyMovingSummary(
+          summary,
+          input.runId,
+          input.signal,
+        )
+        input.signal?.throwIfAborted()
         if (summary.summaryText) generatedSymbols.push(symbol)
         else noResultSymbols.push(symbol)
       } catch (error) {
+        if (input.signal?.aborted) throw input.signal.reason
         failed.push({
           symbol,
           error: error instanceof Error ? error.message : String(error),
@@ -232,6 +304,8 @@ export async function generateDailySummaryBatch(input: {
       }
     },
   )
+
+  input.signal?.throwIfAborted()
 
   return { attemptedSymbols, generatedSymbols, noResultSymbols, failed }
 }

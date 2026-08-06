@@ -5,6 +5,7 @@ export interface SP500Constituent {
   name: string
   sector: string
   sub_industry: string
+  cik?: string
   is_active?: boolean
   alternate_symbols?: Record<string, string>
 }

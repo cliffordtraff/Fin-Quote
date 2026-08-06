@@ -100,8 +100,8 @@ describe('Beehiiv post state parsing', () => {
       },
     })
     expect(callTool.mock.calls[1]?.[2]).toMatchObject({
-      timeout: 15_000,
-      maxTotalTimeout: 15_000,
+      timeout: 8_000,
+      maxTotalTimeout: 8_000,
     })
     expect(state.stats).toEqual({
       email: { recipients: 10, delivered: 9 },

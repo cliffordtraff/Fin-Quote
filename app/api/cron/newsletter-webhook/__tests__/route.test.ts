@@ -2,8 +2,10 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  heartbeat: vi.fn(),
   process: vi.fn(),
   log: vi.fn(),
+  markFailed: vi.fn(),
 }))
 
 vi.mock('@/lib/newsletter/webhook-outbox', () => ({
@@ -12,6 +14,11 @@ vi.mock('@/lib/newsletter/webhook-outbox', () => ({
 
 vi.mock('@/lib/newsletter/cron-logging', () => ({
   logNewsletterCron: mocks.log,
+}))
+
+vi.mock('@/lib/newsletter/cron-observability', () => ({
+  markNewsletterCronResponseFailed: mocks.markFailed,
+  withNewsletterCronHeartbeat: mocks.heartbeat,
 }))
 
 import { GET } from '@/app/api/cron/newsletter-webhook/route'
@@ -28,6 +35,10 @@ describe('newsletter webhook cron route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('CRON_SECRET', 'test-cron-secret')
+    mocks.heartbeat.mockImplementation(
+      async (_job: string, operation: () => Promise<Response>) => operation(),
+    )
+    mocks.markFailed.mockImplementation((response: Response) => response)
     mocks.process.mockResolvedValue({
       configured: true,
       claimed: 2,
@@ -46,6 +57,7 @@ describe('newsletter webhook cron route', () => {
 
     expect(response.status).toBe(401)
     expect(mocks.process).not.toHaveBeenCalled()
+    expect(mocks.heartbeat).not.toHaveBeenCalled()
     expect(mocks.log).toHaveBeenCalledWith(
       expect.objectContaining({
         job: 'webhook',
@@ -58,7 +70,12 @@ describe('newsletter webhook cron route', () => {
     const response = await GET(request())
 
     expect(response.status).toBe(200)
+    expect(mocks.heartbeat).toHaveBeenCalledWith(
+      'webhook_outbox',
+      expect.any(Function),
+    )
     expect(mocks.process).toHaveBeenCalledWith({ limit: 5 })
+    expect(mocks.markFailed).toHaveBeenCalledTimes(1)
     expect(mocks.log).toHaveBeenCalledWith(
       expect.objectContaining({
         job: 'webhook',
@@ -66,6 +83,35 @@ describe('newsletter webhook cron route', () => {
         claimed: 2,
         delivered: 1,
         failed: 1,
+      }),
+    )
+  })
+
+  it('treats an unconfigured optional webhook as a successful skipped run', async () => {
+    mocks.process.mockResolvedValueOnce({
+      configured: false,
+      claimed: 0,
+      delivered: 0,
+      failed: 0,
+      results: [],
+      configurationError:
+        'Missing NEWSLETTER_ALERT_WEBHOOK_URL and NEWSLETTER_ALERT_WEBHOOK_SECRET.',
+    })
+
+    const response = await GET(request())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      configured: false,
+      claimed: 0,
+      failed: 0,
+    })
+    expect(mocks.markFailed).not.toHaveBeenCalled()
+    expect(mocks.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job: 'webhook',
+        event: 'delivery-skipped',
+        configured: false,
       }),
     )
   })

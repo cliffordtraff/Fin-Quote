@@ -662,12 +662,13 @@ export async function fetchTodayQuote(ticker: string): Promise<TodayQuote> {
 export async function fetchTickerNews(
   ticker: string,
   limit = 5,
+  signal?: AbortSignal,
 ): Promise<StockNewsItem[]> {
   const apiKey = process.env.FMP_API_KEY
   if (!apiKey) return []
 
   const url = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${ticker.toUpperCase()}&limit=${limit}&apikey=${apiKey}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal })
   if (!res.ok) return []
 
   const data = await res.json()

@@ -70,6 +70,8 @@ export interface BeehiivDeliveryRecord {
   scheduledAt: string | null
   publishedAt: string | null
   stats: Record<string, unknown>
+  statsLastFetchedAt: string | null
+  statsLastError: string | null
   syncedAt: string
   lastReconciledAt: string | null
   lastReconcileError: string | null
@@ -83,6 +85,7 @@ export interface BeehiivPostState {
   publishDate: string | null
   webUrl: string | null
   stats: Record<string, unknown> | null
+  statsError?: string | null
 }
 
 export type BeehiivDeliveryMode = 'created' | 'updated' | 'unchanged'

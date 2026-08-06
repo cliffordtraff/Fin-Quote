@@ -8,6 +8,7 @@ import type {
   NewsletterDailyBatchSource,
   PriceNewsletterChartSpec,
 } from './types'
+import { normalizeNewsletterSubject } from './delivery-quality'
 
 interface DailyDraftInput {
   runId: string
@@ -18,6 +19,7 @@ interface DailyDraftInput {
   chart: NewsletterChartLibraryItem | null
   warning?: string | null
   generatedAt?: string
+  operationKey?: string
 }
 
 function escapeHtml(value: string): string {
@@ -156,17 +158,19 @@ function fallbackChartImage(ticker: string): string {
 
 function toSource(
   input: DailyDraftInput,
-  generatedAt: string,
 ): NewsletterDailyBatchSource {
   const candidate = input.candidate
   return {
     runId: input.runId,
     itemId: input.itemId,
-    itemKey: `daily:${input.runId}:${candidate.ticker}`,
+    itemKey:
+      input.operationKey?.trim() ||
+      `daily:${input.runId}:${candidate.ticker}`,
     sourceWiimRunId: input.sourceWiimRunId,
     marketDate: input.marketDate,
     rank: candidate.rank,
     ticker: candidate.ticker,
+    companyName: companyName(candidate),
     headline: candidate.headline,
     summary: candidate.summaryText,
     keyFact: candidate.keyFact,
@@ -195,9 +199,8 @@ export function buildDailyNewsletterDraft(
       : candidate.movePercent >= 0
         ? `up ${Math.abs(candidate.movePercent).toFixed(1)}%`
         : `down ${Math.abs(candidate.movePercent).toFixed(1)}%`
-  const subjectLine = truncate(
+  const subjectLine = normalizeNewsletterSubject(
     `${ticker} ${moveVerb}: ${candidate.headline}`,
-    118,
   )
   const summary = truncate(candidate.summaryText || candidate.headline, 420)
   const keyFact = candidate.keyFact
@@ -217,7 +220,7 @@ export function buildDailyNewsletterDraft(
     featuredTickers: [ticker],
     source: {
       type: 'daily_batch',
-      dailyBatch: toSource(input, generatedAt),
+      dailyBatch: toSource(input),
       attachedChartIds: input.chart ? [input.chart.id] : [],
       automatedAt: generatedAt,
       automationStatus: input.chart ? 'complete' : 'needs_chart',
@@ -225,7 +228,10 @@ export function buildDailyNewsletterDraft(
     },
     generatedAt,
     subjectLine,
-    introText: `${name} (${ticker}) is ${moveVerb} as investors process a fresh ${candidate.reasonType?.replace(/_/g, ' ') || 'market'} catalyst. Here is the evidence, the chart, and the next signal to watch.`,
+    introText: sentence(
+      candidate.keyFact?.trim() ||
+        `${name} (${ticker}) is ${moveVerb}. ${summary}`,
+    ),
     editorialHook: summary,
     todayQuote:
       price == null
@@ -271,7 +277,7 @@ export function buildDailyNewsletterDraft(
         chartSpec,
         chartNeedsRegeneration: !input.chart,
         caption: `${ticker} price action through ${formatMarketDate(input.marketDate)}. Source set: WIIM ranking, market data, and ${source?.kind ?? 'current catalyst'} evidence.`,
-        ctaText: source?.url ? 'Read primary source' : undefined,
+        ctaText: source?.url ? 'View cited source' : undefined,
         ctaUrl: source?.url,
         footer:
           'For informational purposes only. Market data may be delayed.',

@@ -4,6 +4,10 @@ export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { logNewsletterCron } from '@/lib/newsletter/cron-logging'
+import {
+  markNewsletterCronResponseFailed,
+  withNewsletterCronHeartbeat,
+} from '@/lib/newsletter/cron-observability'
 import { processNewsletterWebhookOutbox } from '@/lib/newsletter/webhook-outbox'
 
 function isAuthorized(request: NextRequest): boolean {
@@ -24,6 +28,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  return withNewsletterCronHeartbeat('webhook_outbox', () =>
+    runAuthorizedNewsletterWebhook(startedAt),
+  )
+}
+
+async function runAuthorizedNewsletterWebhook(startedAt: number) {
   try {
     const result = await processNewsletterWebhookOutbox({ limit: 5 })
     logNewsletterCron({
@@ -36,7 +46,10 @@ export async function GET(request: NextRequest) {
       configurationError: result.configurationError,
       durationMs: Date.now() - startedAt,
     })
-    return NextResponse.json(result)
+    const response = NextResponse.json(result)
+    return result.failed
+      ? markNewsletterCronResponseFailed(response)
+      : response
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logNewsletterCron({

@@ -867,7 +867,9 @@ export default function NewsletterMorningReview() {
         <section
           aria-label="Overnight automation status"
           className={`mt-4 border-y px-4 py-3 ${
-            automation.status === 'completed'
+            automation.status === 'failed'
+              ? 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
+              : automation.status === 'completed'
               ? 'border-green-200 bg-green-50 text-green-950 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200'
               : automation.status === 'partial'
                 ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
@@ -891,7 +893,9 @@ export default function NewsletterMorningReview() {
               )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
-                  {automation.stage === 'completed'
+                  {automation.stage === 'failed'
+                    ? 'Morning report did not pass its quality gate'
+                    : automation.stage === 'completed'
                     ? 'Morning report ready'
                     : automation.stage === 'finviz'
                       ? 'Refreshing Finviz catalysts'
@@ -920,9 +924,9 @@ export default function NewsletterMorningReview() {
               </div>
               <div>
                 <p className="font-semibold">
-                  {automation.summaryCompletedCount}/{automation.candidateCount}
+                  {automation.summaryGeneratedCount}/{automation.candidateCount}
                 </p>
-                <p className="opacity-70">Summaries</p>
+                <p className="opacity-70">Generated</p>
               </div>
               <div>
                 <p className="font-semibold">

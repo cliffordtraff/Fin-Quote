@@ -19,6 +19,7 @@ import {
   getDefaultChartingBaseUrl,
   getDefaultPublicChartingBaseUrl,
 } from './charting-platform-export'
+import { normalizeNewsletterSubject } from './delivery-quality'
 import type {
   NewsletterDraftBlock,
   NewsletterDraftDocument,
@@ -238,7 +239,7 @@ export function buildApprovedCatalystNewsletterDraft(
     generationPrompt:
       'Automatically created from an approved Why This Stock Moved catalyst.',
     generatedAt: now.toISOString(),
-    subjectLine: `${symbol}: ${headline}`.slice(0, 180),
+    subjectLine: normalizeNewsletterSubject(`${symbol}: ${headline}`),
     introText: `${input.candidate.name} (${symbol}) is ${move} in the ${input.candidate.session.replace('cash', 'regular')} session. ${summary}`,
     editorialHook: summary,
     todayQuote: {
@@ -399,6 +400,11 @@ export async function ensureApprovedCatalystNewsletterDraft(
       existing.id,
       repairedDocument,
       existing.status,
+      {
+        publicChartBaseUrl: dependencies.publicChartBaseUrl,
+        expectedUpdatedAt: existing.updatedAt,
+        protectPublished: true,
+      },
     )
   } else {
     let reusedConcurrentDraft = false

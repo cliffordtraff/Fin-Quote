@@ -1,10 +1,13 @@
 import type { NewsletterBlock, NewsletterBlockContent, SlotName } from './types'
+import { load } from 'cheerio'
 import { getLayoutTemplate } from './layout-templates'
 import {
   NEWSLETTER_CARD_MAX_WIDTH,
+  NEWSLETTER_CHART_DISPLAY_HEIGHT,
   NEWSLETTER_CHART_DISPLAY_WIDTH,
   NEWSLETTER_CHART_SIDE_GUTTER,
 } from './render-dimensions'
+import { assertSafeNewsletterLink } from './delivery-quality'
 
 // ---------------------------------------------------------------------------
 // Brand colors (from tailwind.config.ts sage/cream tokens)
@@ -21,8 +24,8 @@ const BRAND = {
   white: '#ffffff',
 } as const
 
-const NEWSLETTER_TEXT_COLUMN_PADDING = 32
 const NEWSLETTER_CHART_WIDTH = NEWSLETTER_CHART_DISPLAY_WIDTH
+const NEWSLETTER_CHART_HEIGHT = NEWSLETTER_CHART_DISPLAY_HEIGHT
 
 // ---------------------------------------------------------------------------
 // Content → slot mapping
@@ -70,15 +73,46 @@ function renderHeading(text: string): string {
 }
 
 const BODY_ALLOWED_TAGS = new Set(['p', 'strong', 'em', 'br', 'ul', 'ol', 'li'])
+const BODY_DROP_WITH_CONTENT_TAGS = new Set([
+  'script',
+  'style',
+  'iframe',
+  'object',
+  'embed',
+  'svg',
+  'math',
+])
 
 function looksLikeHtml(value: string): boolean {
   return /<\w+[^>]*>/.test(value)
 }
 
 function sanitizeBodyHtml(html: string): string {
-  return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>/g, (match, tagName) => {
-    return BODY_ALLOWED_TAGS.has(String(tagName).toLowerCase()) ? match.replace(/\s[^>]*/, '') : ''
+  const $ = load(`<body>${html}</body>`)
+  $('body *').each((_, element) => {
+    const tagName = element.tagName?.toLowerCase()
+    if (!tagName) return
+    if (BODY_DROP_WITH_CONTENT_TAGS.has(tagName)) {
+      $(element).remove()
+      return
+    }
+    if (!BODY_ALLOWED_TAGS.has(tagName)) {
+      $(element).replaceWith($(element).contents())
+      return
+    }
+    for (const attribute of Object.keys(element.attribs ?? {})) {
+      $(element).removeAttr(attribute)
+    }
   })
+  $('body')
+    .contents()
+    .filter((_, node) => node.type === 'comment')
+    .remove()
+  $('body *')
+    .contents()
+    .filter((_, node) => node.type === 'comment')
+    .remove()
+  return $('body').html() ?? ''
 }
 
 function renderBody(text: string): string {
@@ -102,7 +136,8 @@ function renderBody(text: string): string {
 }
 
 function renderChart(imageUrl: string, alt: string, chartUrl?: string): string {
-  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="${NEWSLETTER_CHART_WIDTH}" style="display:block;max-width:100%;height:auto;border-radius:6px;margin:0 auto;" />`
+  if (chartUrl) assertSafeNewsletterLink(chartUrl, 'Chart link')
+  const img = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" width="${NEWSLETTER_CHART_WIDTH}" height="${NEWSLETTER_CHART_HEIGHT}" style="display:block;max-width:100%;height:auto;border-radius:6px;margin:0 auto;" />`
   const content = chartUrl
     ? `<a href="${escapeHtml(chartUrl)}" target="_blank" style="display:inline-block;text-decoration:none;">${img}</a>`
     : img
@@ -120,6 +155,7 @@ function renderCaption(text: string): string {
 }
 
 function renderCta(text: string, url: string): string {
+  assertSafeNewsletterLink(url, 'CTA link')
   // VML fallback for rounded-corner buttons in Outlook
   return `<tr><td style="padding:16px 32px;" align="center">
   <!--[if mso]>
@@ -190,6 +226,12 @@ export function buildNewsletterBlock(
   layoutId: string,
   content: NewsletterBlockContent,
 ): NewsletterBlock {
+  if (content.chartExportUrl) {
+    assertSafeNewsletterLink(content.chartExportUrl, 'Chart link')
+  }
+  if (content.ctaUrl) {
+    assertSafeNewsletterLink(content.ctaUrl, 'CTA link')
+  }
   const layout = getLayoutTemplate(layoutId)
   if (!layout) {
     throw new Error(`Unknown newsletter layout: "${layoutId}"`)

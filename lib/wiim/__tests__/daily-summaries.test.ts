@@ -1,17 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { mergeWiimSummaryRunSymbols } from '../daily-summaries'
+import { withAbortTimeout } from '../daily-summaries'
 
-describe('daily WIIM summary run metadata', () => {
-  it('preserves the full symbol universe across progressively smaller batches', () => {
-    const original = ['AAPL', 'MSFT', 'NVDA', 'AMZN']
-    const retryBatch = ['nvda', ' amzn ']
-
-    expect(mergeWiimSummaryRunSymbols(original, retryBatch)).toEqual(original)
+describe('daily summary cancellation', () => {
+  it('aborts the underlying worker when its time budget expires', async () => {
+    let observedAbort = false
+    await expect(() =>
+      withAbortTimeout(
+        (signal) =>
+          new Promise<void>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                observedAbort = true
+                reject(signal.reason)
+              },
+              { once: true },
+            )
+          }),
+        10,
+        'AAPL',
+      ),
+    ).rejects.toThrow('AAPL timed out after 10ms')
+    expect(observedAbort).toBe(true)
   })
 
-  it('adds newly discovered symbols without duplicates', () => {
-    expect(
-      mergeWiimSummaryRunSymbols(['AAPL', 'MSFT'], ['MSFT', 'GOOG']),
-    ).toEqual(['AAPL', 'MSFT', 'GOOG'])
+  it('returns on deadline even when a provider ignores cancellation', async () => {
+    await expect(() =>
+      withAbortTimeout(
+        () => new Promise<never>(() => undefined),
+        10,
+        'MSFT',
+      ),
+    ).rejects.toThrow('MSFT timed out after 10ms')
   })
 })

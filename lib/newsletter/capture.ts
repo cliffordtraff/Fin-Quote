@@ -11,6 +11,8 @@ const CHART_EXPORT_RENDER_ROUTE_PATH = '/api/chart-export/render'
 const DEFAULT_RENDER_ATTEMPTS = 4
 const DEFAULT_RETRY_DELAY_MS = 1_000
 const MAX_RETRY_DELAY_MS = 65_000
+const DEFAULT_TOTAL_TIMEOUT_MS = 40_000
+const MAX_TOTAL_TIMEOUT_MS = 55_000
 const RETRYABLE_RENDER_STATUSES = new Set([408, 425, 429, 502, 503, 504])
 
 export interface CaptureChartOptions {
@@ -28,6 +30,10 @@ export interface CaptureChartOptions {
   maxAttempts?: number
   /** Base delay when the service does not return Retry-After (default: 1000). */
   retryDelayMs?: number
+  /** Absolute budget across retries and fallback routes (default: 40000). */
+  totalTimeoutMs?: number
+  /** Optional caller cancellation signal. */
+  signal?: AbortSignal
 }
 
 class ChartRenderRequestError extends Error {
@@ -98,12 +104,45 @@ async function renderErrorDetail(response: Response): Promise<string> {
       const text = (await response.text()).trim()
       if (text) detail = text
     }
-  } catch (_err) {}
+  } catch {}
   return detail
 }
 
-function wait(delayMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs))
+function wait(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!signal) {
+      setTimeout(resolve, delayMs)
+      return
+    }
+    const onAbort = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', onAbort)
+      reject(signal.reason ?? new Error('Chart render cancelled'))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function totalTimeoutMs(options: CaptureChartOptions): number {
+  return Math.max(
+    1,
+    Math.min(
+      MAX_TOTAL_TIMEOUT_MS,
+      Math.floor(options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS),
+    ),
+  )
+}
+
+function deadlineError(errorPrefix: string, budgetMs: number): Error {
+  return new Error(`${errorPrefix} exceeded its ${budgetMs}ms execution budget`)
 }
 
 async function requestChartImage(
@@ -111,6 +150,7 @@ async function requestChartImage(
   body: Record<string, unknown>,
   errorPrefix: string,
   options: CaptureChartOptions,
+  deadlineAt: number,
 ): Promise<Buffer> {
   const maxAttempts = Math.max(
     1,
@@ -123,14 +163,29 @@ async function requestChartImage(
       Math.floor(options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS),
     ),
   )
+  const budgetMs = totalTimeoutMs(options)
 
   let lastError: unknown
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (options.signal?.aborted) {
+      throw options.signal.reason ?? new Error(`${errorPrefix} was cancelled`)
+    }
+    const remainingMs = deadlineAt - Date.now()
+    if (remainingMs <= 0) throw deadlineError(errorPrefix, budgetMs)
     try {
+      const attemptTimeoutMs = Math.max(
+        1,
+        Math.min(Math.floor(options.timeout ?? 30_000), remainingMs),
+      )
+      const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs)
+      const signal = options.signal
+        ? AbortSignal.any([options.signal, timeoutSignal])
+        : timeoutSignal
       const response = await fetch(renderUrl, {
         method: 'POST',
         headers: renderHeaders(),
         body: JSON.stringify(body),
+        signal,
       })
       if (!response.ok) {
         throw new ChartRenderRequestError(
@@ -147,6 +202,12 @@ async function requestChartImage(
       return pngBytes
     } catch (error) {
       lastError = error
+      if (options.signal?.aborted) {
+        throw options.signal.reason ?? error
+      }
+      if (Date.now() >= deadlineAt) {
+        throw deadlineError(errorPrefix, budgetMs)
+      }
       const retryable =
         error instanceof ChartRenderRequestError
           ? RETRYABLE_RENDER_STATUSES.has(error.status)
@@ -157,11 +218,18 @@ async function requestChartImage(
         MAX_RETRY_DELAY_MS,
         baseDelayMs * 2 ** (attempt - 1),
       )
-      await wait(
+      const requestedDelay =
         error instanceof ChartRenderRequestError &&
           error.retryAfterMs != null
           ? error.retryAfterMs
-          : fallbackDelay,
+          : fallbackDelay
+      const remainingBeforeDelay = deadlineAt - Date.now()
+      if (remainingBeforeDelay <= 1) {
+        throw deadlineError(errorPrefix, budgetMs)
+      }
+      await wait(
+        Math.min(requestedDelay, remainingBeforeDelay - 1),
+        options.signal,
       )
     }
   }
@@ -175,6 +243,7 @@ async function captureChartFromExportSpec(
   spec: PriceNewsletterChartSpec,
   options: CaptureChartOptions,
 ): Promise<string> {
+  const deadlineAt = Date.now() + totalTimeoutMs(options)
   const chartExportSpec = buildPriceExportEditorBaseSpec(spec, {
     theme: spec.chartExportSpec?.theme === 'dark' ? 'dark' : 'light',
   })
@@ -192,6 +261,7 @@ async function captureChartFromExportSpec(
       },
       'Chart export render failed',
       options,
+      deadlineAt,
     )
   } catch (error) {
     const routeUnavailable =
@@ -213,6 +283,7 @@ async function captureChartFromExportSpec(
       },
       'Legacy chart render failed',
       options,
+      deadlineAt,
     )
   }
   writeFileSync(options.outputPath, pngBytes)
@@ -249,6 +320,7 @@ export async function captureChart(
     height,
   })
   const renderUrl = getChartingPlatformRenderUrl(chartBaseUrl)
+  const deadlineAt = Date.now() + totalTimeoutMs(options)
 
   const pngBytes = await requestChartImage(
     renderUrl,
@@ -258,6 +330,7 @@ export async function captureChart(
     },
     'Chart render failed',
     options,
+    deadlineAt,
   )
 
   writeFileSync(outputPath, pngBytes)

@@ -126,6 +126,8 @@ export interface NewsletterOperationsDelivery {
   syncedAt: string
   lastReconciledAt: string | null
   lastReconcileError: string | null
+  statsLastFetchedAt: string | null
+  statsLastError: string | null
   stats: NewsletterOperationsDeliveryStats
 }
 
@@ -139,8 +141,15 @@ export interface NewsletterOperationsDeliveryStats {
   uniqueClicks: number | null
   clickRate: number | null
   bounces: number | null
+  hardBounces: number | null
+  softBounces: number | null
+  deferred: number | null
+  suppressed: number | null
+  bounceRate: number | null
   unsubscribes: number | null
+  unsubscribeRate: number | null
   spamReports: number | null
+  spamReportRate: number | null
   webViews: number | null
   webClicks: number | null
 }
@@ -254,6 +263,22 @@ function numericField(
   return null
 }
 
+function rateField(
+  record: Record<string, unknown>,
+  keys: string[],
+): number | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim().endsWith('%')) {
+      const parsed = Number.parseFloat(value)
+      if (Number.isFinite(parsed)) return parsed / 100
+    }
+    const parsed = typeof value === 'number' ? value : Number(value)
+    if (Number.isFinite(parsed)) return parsed > 1 ? parsed / 100 : parsed
+  }
+  return null
+}
+
 function normalizeBeehiivStats(
   stats: Record<string, unknown>,
 ): NewsletterOperationsDeliveryStats {
@@ -283,6 +308,21 @@ function normalizeBeehiivStats(
     hardBounces !== null || softBounces !== null
       ? (hardBounces ?? 0) + (softBounces ?? 0)
       : null
+  const bounces =
+    reportedBounces ??
+    providerBounces ??
+    (sent !== null && delivered !== null
+      ? Math.max(0, sent - delivered)
+      : null)
+  const unsubscribes = numericField(email, [
+    'total_unsubscribes',
+    'unsubscribes',
+  ])
+  const spamReports = numericField(email, [
+    'total_spam_reported',
+    'spam_reports',
+    'spamReports',
+  ])
 
   return {
     sent,
@@ -290,7 +330,7 @@ function normalizeBeehiivStats(
     opens: numericField(email, ['total_opened', 'opens']),
     uniqueOpens,
     openRate:
-      numericField(email, ['open_rate', 'openRate']) ??
+      rateField(email, ['open_rate', 'openRate']) ??
       (delivered && uniqueOpens !== null ? uniqueOpens / delivered : null),
     clicks: numericField(email, [
       'total_email_clicked_verified',
@@ -299,23 +339,29 @@ function normalizeBeehiivStats(
     ]),
     uniqueClicks,
     clickRate:
-      numericField(email, ['click_rate', 'clickRate']) ??
+      rateField(email, ['click_rate', 'clickRate']) ??
       (delivered && uniqueClicks !== null ? uniqueClicks / delivered : null),
-    bounces:
-      reportedBounces ??
-      providerBounces ??
-      (sent !== null && delivered !== null
-        ? Math.max(0, sent - delivered)
-        : null),
-    unsubscribes: numericField(email, [
-      'total_unsubscribes',
-      'unsubscribes',
+    bounces,
+    hardBounces,
+    softBounces,
+    deferred: numericField(email, ['total_deferred', 'deferred']),
+    suppressed: numericField(email, [
+      'total_suppressed',
+      'suppressed',
+      'total_dropped',
+      'dropped',
     ]),
-    spamReports: numericField(email, [
-      'total_spam_reported',
-      'spam_reports',
-      'spamReports',
-    ]),
+    bounceRate:
+      rateField(email, ['bounce_rate', 'bounceRate']) ??
+      (sent && bounces !== null ? bounces / sent : null),
+    unsubscribes,
+    unsubscribeRate:
+      rateField(email, ['unsubscribe_rate', 'unsubscribeRate']) ??
+      (sent && unsubscribes !== null ? unsubscribes / sent : null),
+    spamReports,
+    spamReportRate:
+      rateField(email, ['spam_rate', 'spamRate', 'complaint_rate']) ??
+      (sent && spamReports !== null ? spamReports / sent : null),
     webViews: numericField(web, ['total_web_viewed', 'views']),
     webClicks: numericField(web, ['total_web_clicked', 'clicks']),
   }
@@ -329,6 +375,10 @@ const DELIVERY_STATS_FIELDS: Array<keyof NewsletterOperationsDeliveryStats> = [
   'clicks',
   'uniqueClicks',
   'bounces',
+  'hardBounces',
+  'softBounces',
+  'deferred',
+  'suppressed',
   'unsubscribes',
   'spamReports',
   'webViews',
@@ -359,6 +409,18 @@ function aggregateBeehiivStats(
   aggregate.clickRate =
     delivered && aggregate.uniqueClicks !== null
       ? aggregate.uniqueClicks / delivered
+      : null
+  aggregate.bounceRate =
+    aggregate.sent && aggregate.bounces !== null
+      ? aggregate.bounces / aggregate.sent
+      : null
+  aggregate.unsubscribeRate =
+    aggregate.sent && aggregate.unsubscribes !== null
+      ? aggregate.unsubscribes / aggregate.sent
+      : null
+  aggregate.spamReportRate =
+    aggregate.sent && aggregate.spamReports !== null
+      ? aggregate.spamReports / aggregate.sent
       : null
   return aggregate
 }
@@ -816,7 +878,8 @@ export async function getNewsletterOperationsSnapshot(
       overallCounts,
       overallTotal: allDeliveries.length,
       reconcileErrors: marketDateDeliveries.filter(
-        (delivery) => Boolean(delivery.lastReconcileError),
+        (delivery) =>
+          Boolean(delivery.lastReconcileError || delivery.statsLastError),
       ).length,
       staleCount,
       lifecycle: summarizeBeehiivLifecycle(
@@ -837,6 +900,8 @@ export async function getNewsletterOperationsSnapshot(
         syncedAt: delivery.syncedAt,
         lastReconciledAt: delivery.lastReconciledAt,
         lastReconcileError: delivery.lastReconcileError,
+        statsLastFetchedAt: delivery.statsLastFetchedAt,
+        statsLastError: delivery.statsLastError,
         stats: normalizeBeehiivStats(delivery.stats),
       })),
     },

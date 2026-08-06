@@ -20,6 +20,7 @@ export interface RunWiimBriefOptions {
   compareRunType?: WiimRunType
   label?: string
   persist?: boolean
+  signal?: AbortSignal
 }
 
 export interface RunWiimBriefResult extends WiimRunSummary {
@@ -40,6 +41,7 @@ export async function runWiimBrief(
       ? 'WIIM Mid-Morning Brief'
       : 'WIIM Morning Brief')
   const persist = options.persist ?? true
+  options.signal?.throwIfAborted()
 
   if (!['morning', 'mid_morning'].includes(runType)) {
     throw new Error(`Unsupported WIIM run type: ${runType}`)
@@ -48,15 +50,17 @@ export async function runWiimBrief(
     throw new Error(`Unsupported WIIM comparison run type: ${compareRunType}`)
   }
 
-  const fetched = await fetchWiimCandidates()
+  const fetched = await fetchWiimCandidates(options.signal)
+  options.signal?.throwIfAborted()
   const rankedCandidates = rankWiimCandidates(
     fetched.candidates,
     fetched.candidates.length,
   )
   const topFive = rankedCandidates.slice(0, 5)
   const latestRun = compareLatest
-    ? await getLatestWiimRun(compareRunType)
+    ? await getLatestWiimRun(compareRunType, options.signal)
     : null
+  options.signal?.throwIfAborted()
   const previousTopFive = Array.isArray(latestRun?.top_five_json)
     ? (latestRun.top_five_json as unknown as RankedWiimCandidate[])
     : []
@@ -94,6 +98,7 @@ export async function runWiimBrief(
 
   let runId: string | null = null
   try {
+    options.signal?.throwIfAborted()
     const run = await createWiimRun({
       runType,
       metadata: {
@@ -101,9 +106,12 @@ export async function runWiimBrief(
         candidateCount: fetched.candidates.length,
         automation: true,
       },
+      signal: options.signal,
     })
     runId = run.id
-    await storeWiimCandidates(run.id, rankedCandidates)
+    options.signal?.throwIfAborted()
+    await storeWiimCandidates(run.id, rankedCandidates, options.signal)
+    options.signal?.throwIfAborted()
     await completeWiimRun({
       runId: run.id,
       status: 'completed',
@@ -122,6 +130,7 @@ export async function runWiimBrief(
         delta,
         automation: true,
       },
+      signal: options.signal,
     })
   } catch (error) {
     if (runId) {
@@ -132,6 +141,7 @@ export async function runWiimBrief(
           automation: true,
           error: error instanceof Error ? error.message : String(error),
         },
+        signal: AbortSignal.timeout(5_000),
       }).catch(() => undefined)
     }
     throw error

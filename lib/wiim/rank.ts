@@ -1,4 +1,5 @@
 import { isSP500, normalizeSP500Symbol } from '@/lib/sp500'
+import { isNewsletterSourceEntityMatch } from '@/lib/newsletter/source-integrity'
 
 import type {
   RankedWiimCandidate,
@@ -34,15 +35,26 @@ function hasDirectionalMismatch(candidate: WiimCandidateInput): boolean {
 
   const moveUp = candidate.changesPercentage > 0.75
   const moveDown = candidate.changesPercentage < -0.75
-  const textSaysUp = /(rise|rises|rose|up |surge|surges|surged|gain|gains|gained|jump|jumps|jumped|climb|climbs|climbed)/.test(catalyst)
-  const textSaysDown = /(fall|falls|fell|down |drop|drops|dropped|slide|slides|slid|sink|sinks|sank)/.test(catalyst)
+  const textSaysUp = /\b(?:rise|rises|rose|up|surge|surges|surged|gain|gains|gained|jump|jumps|jumped|climb|climbs|climbed)\b/.test(catalyst)
+  const textSaysDown = /\b(?:fall|falls|fell|down|drop|drops|dropped|slide|slides|slid|sink|sinks|sank)\b/.test(catalyst)
 
   return (moveUp && textSaysDown) || (moveDown && textSaysUp)
 }
 
+function relevantNews(candidate: WiimCandidateInput) {
+  return candidate.news.filter((article) =>
+    isNewsletterSourceEntityMatch({
+      ticker: candidate.symbol,
+      companyName: candidate.name,
+      text: `${article.title} ${article.text ?? ''}`,
+    }),
+  )
+}
+
 function pickHeadline(candidate: WiimCandidateInput): string {
   if (candidate.whyMoving?.headline && !hasDirectionalMismatch(candidate)) return candidate.whyMoving.headline
-  if (candidate.news[0]?.title) return candidate.news[0].title
+  const article = relevantNews(candidate)[0]
+  if (article?.title) return article.title
 
   const move = `${candidate.changesPercentage >= 0 ? '+' : ''}${round2(candidate.changesPercentage)}%`
   return `${candidate.symbol} is moving ${move}`
@@ -59,14 +71,15 @@ function buildWhyItMatters(candidate: WiimCandidateInput): string {
     const when = candidate.earningsReport.hoursAgo <= 0
       ? `${Math.abs(candidate.earningsReport.hoursAgo)} hours ago`
       : `in ${candidate.earningsReport.hoursAgo} hours`
-    const newsLead = candidate.news[0]?.title
+    const newsLead = relevantNews(candidate)[0]?.title
     return newsLead
       ? `${candidate.symbol} is moving ${move} around earnings (${when}). Key angle: ${newsLead}`
       : `${candidate.symbol} is moving ${move} around earnings (${when}), which makes it one of the cleaner S&P 500 catalyst names this morning.`
   }
 
-  if (candidate.news[0]?.title) {
-    return `${candidate.symbol} is moving ${move}. The leading headline is: ${candidate.news[0].title}`
+  const newsLead = relevantNews(candidate)[0]?.title
+  if (newsLead) {
+    return `${candidate.symbol} is moving ${move}. The leading headline is: ${newsLead}`
   }
 
   return `${candidate.symbol} is moving ${move}, which is enough to keep it on the S&P 500 morning watchlist even without a clear catalyst yet.`
@@ -76,7 +89,7 @@ function buildStateLabel(candidate: WiimCandidateInput): RankedWiimCandidate['st
   if (candidate.recentPick && Math.abs(candidate.changesPercentage) < 4 && !candidate.earningsReport) {
     return 'persistent'
   }
-  if (candidate.recentPick && Math.abs(candidate.changesPercentage) < 2 && candidate.news.length === 0) {
+  if (candidate.recentPick && Math.abs(candidate.changesPercentage) < 2 && relevantNews(candidate).length === 0) {
     return 'fading'
   }
   return 'new'
@@ -84,9 +97,10 @@ function buildStateLabel(candidate: WiimCandidateInput): RankedWiimCandidate['st
 
 function hasStrongEditorialSetup(candidate: WiimCandidateInput): boolean {
   const moveAbs = Math.abs(candidate.changesPercentage)
+  const news = relevantNews(candidate)
   const finvizText = candidate.whyMoving?.displayText?.toLowerCase() ?? ''
   const hasEarnings = Boolean(candidate.earningsReport)
-  const hasFreshNewsDepth = candidate.news.length >= 2
+  const hasFreshNewsDepth = news.length >= 2
   const looksLikeCorporateFluff = /(opens bookings|culinary program|launches|announces program|unveils|introduces)/.test(finvizText)
   const looksLikeHardCatalyst = /(beats|misses|guidance|stake|acquisition|buyback|cuts workforce|raises|lowers|deal|invested)/.test(finvizText)
 
@@ -99,12 +113,13 @@ function hasStrongEditorialSetup(candidate: WiimCandidateInput): boolean {
 function buildCandidateType(candidate: WiimCandidateInput): RankedWiimCandidate['candidateType'] {
   if (hasStrongEditorialSetup(candidate)) return 'newsletter'
   if (Math.abs(candidate.changesPercentage) >= 7) return 'chart_of_day'
-  if (candidate.news.length >= 2) return 'roundup'
+  if (relevantNews(candidate).length >= 2) return 'roundup'
   return 'watch_only'
 }
 
 function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
   const now = Date.now()
+  const news = relevantNews(candidate)
   const earningsRecencyHours = candidate.earningsReport?.hoursAgo ?? null
   const finvizFreshnessMinutes = candidate.whyMoving?.fetchedAt
     ? Math.round((now - new Date(candidate.whyMoving.fetchedAt).getTime()) / (1000 * 60))
@@ -117,14 +132,14 @@ function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
   const hasFreshEarnings = candidate.earningsReport ? Math.abs(candidate.earningsReport.hoursAgo) <= 36 : false
   const finvizText = candidate.whyMoving?.displayText?.toLowerCase() ?? ''
   const hasFreshFinviz = Boolean(candidate.whyMoving?.displayText && finvizFreshnessMinutes != null && finvizFreshnessMinutes <= 240)
-  const hasStrongHeadline = candidate.news.length >= 2
+  const hasStrongHeadline = news.length >= 2
   const mismatchPenalty = hasDirectionalMismatch(candidate) ? -10 : 0
   const fluffPenalty = /(opens bookings|culinary program|launches|announces program|unveils|introduces)/.test(finvizText) ? -8 : 0
   const hardCatalystBonus = /(beats|misses|guidance|stake|acquisition|buyback|cuts workforce|raises|lowers|deal|invested)/.test(finvizText) ? 6 : 0
 
   const scoreBreakdown = {
     move: clamp(moveAbs * 4.2, 0, 26),
-    news: candidate.news.length > 0 ? Math.min(candidate.news.length * 5, 15) : -6,
+    news: news.length > 0 ? Math.min(news.length * 5, 15) : -6,
     earnings: hasFreshEarnings ? 18 - Math.min(Math.abs(candidate.earningsReport!.hoursAgo), 36) / 3 : 0,
     finviz: hasFreshFinviz ? 8 : 0,
     novelty: candidate.recentPick ? -14 : 8,
@@ -134,8 +149,8 @@ function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
   return {
     movePercent: round2(candidate.changesPercentage),
     moveAbsPercent: round2(Math.abs(candidate.changesPercentage)),
-    hasNews: candidate.news.length > 0,
-    newsCount: candidate.news.length,
+    hasNews: news.length > 0,
+    newsCount: news.length,
     hasEarnings: Boolean(candidate.earningsReport),
     earningsRecencyHours,
     hasFinvizCatalyst: Boolean(candidate.whyMoving?.displayText),
@@ -180,7 +195,7 @@ function buildSourceRefs(candidate: WiimCandidateInput): RankedWiimCandidate['so
     })
   }
 
-  for (const article of candidate.news.slice(0, 2)) {
+  for (const article of relevantNews(candidate).slice(0, 2)) {
     refs.push({
       kind: 'news',
       label: article.title,
@@ -230,7 +245,7 @@ export function rankWiimCandidates(inputs: WiimCandidateInput[], limit = 5): Ran
         price: entry.candidate.price,
         change: entry.candidate.change,
         changesPercentage: entry.candidate.changesPercentage,
-        topNews: entry.candidate.news.slice(0, 3),
+        topNews: relevantNews(entry.candidate).slice(0, 3),
         earningsReport: entry.candidate.earningsReport,
         recentPick: entry.candidate.recentPick,
         whyMoving: entry.candidate.whyMoving,

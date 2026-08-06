@@ -32,6 +32,19 @@ describe('assembleNewsletterHtml', () => {
     expect(html).not.toContain('reuters.com')
   })
 
+  it('labels standalone HTML as preview-only without fake compliance data', () => {
+    const html = assembleNewsletterHtml(
+      'AAPL',
+      [{ layoutId: 'chart_plus_commentary', data: {} as any, html: '<tr><td>Block</td></tr>' }],
+      new Date('2026-03-26T12:00:00.000Z'),
+    )
+
+    expect(html).toContain('data-preview-only="true"')
+    expect(html).toContain('Preview only — not sendable HTML')
+    expect(html).not.toContain('{{email}}')
+    expect(html).not.toContain('123 Market St')
+  })
+
   it('supports an editable intro text override for draft previews', () => {
     const html = assembleNewsletterHtml(
       'AAPL',

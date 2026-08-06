@@ -51,11 +51,15 @@ import type {
   NewsletterDraftStatus,
 } from './types'
 import { canSetNewsletterDraftStatus } from './workflow'
+import { isNewsletterSourceEntityMatch } from './source-integrity'
+import { getSP500Constituent } from '@/lib/sp500'
 
 const SETTINGS_TABLE = 'newsletter_daily_settings'
 const RUNS_TABLE = 'newsletter_daily_runs'
 const ITEMS_TABLE = 'newsletter_daily_run_items'
 const STALE_GENERATION_MINUTES = 15
+const NEWSLETTER_SOURCE_REFRESH_MARKER = 'newsletterSourceRefreshedAt'
+const DAILY_CHART_CAPTURE_BUDGET_MS = 28_000
 export const MAX_NEWSLETTER_DAILY_ITEM_RETRIES = 3
 
 type DailySettingsRow =
@@ -74,6 +78,7 @@ interface SourceWiimRunRow {
 interface DailyRunDependencies {
   listCharts?: (
     scope: NewsletterDraftScope,
+    signal?: AbortSignal,
   ) => Promise<NewsletterChartLibraryItem[]>
   createChart?: (
     scope: NewsletterDraftScope,
@@ -88,6 +93,8 @@ export interface DailyProcessOptions {
   retryFailed?: boolean
   chartBaseUrl?: string
   publicChartBaseUrl?: string
+  chartCaptureBudgetMs?: number
+  signal?: AbortSignal
 }
 
 export class NewsletterDailyRunNotFoundError extends Error {
@@ -221,6 +228,15 @@ function mapSettingsRow(row: DailySettingsRow): NewsletterDailySettings {
   }
 }
 
+function defaultNewsletterDailySettings(): NewsletterDailySettings {
+  return {
+    enabled: true,
+    targetCount: DEFAULT_NEWSLETTER_DAILY_TARGET,
+    timezone: 'America/New_York',
+    generationHour: 8,
+  }
+}
+
 function mapItemRow(row: DailyItemRow): NewsletterDailyRunItem {
   return {
     id: row.id,
@@ -288,6 +304,7 @@ function mapRunRow(
 async function loadSourceUniverse(
   marketDate: string,
   targetCount: number,
+  options: { allowPartial?: boolean; signal?: AbortSignal } = {},
 ): Promise<{
   run: SourceWiimRunRow
   candidates: NewsletterDailyCandidate[]
@@ -296,7 +313,8 @@ async function loadSourceUniverse(
 }> {
   const supabase = getServiceClient()
   const bounds = getEasternDateBounds(marketDate)
-  const { data: runRows, error: runError } = await supabase
+  options.signal?.throwIfAborted()
+  let runQuery = supabase
     .from('wiim_runs')
     .select('id, started_at, completed_at, metadata_json')
     .eq('run_type', 'morning')
@@ -305,6 +323,8 @@ async function loadSourceUniverse(
     .lt('started_at', bounds.end)
     .order('started_at', { ascending: false })
     .limit(12)
+  if (options.signal) runQuery = runQuery.abortSignal(options.signal)
+  const { data: runRows, error: runError } = await runQuery
 
   if (runError) {
     throw new NewsletterDailySourceError(
@@ -315,13 +335,18 @@ async function loadSourceUniverse(
   let sourceRun: SourceWiimRunRow | null = null
   let candidateRows: DailyWiimCandidateRow[] = []
   for (const run of (runRows ?? []) as SourceWiimRunRow[]) {
-    const { data, error } = await supabase
+    options.signal?.throwIfAborted()
+    let candidateQuery = supabase
       .from('wiim_run_candidates')
       .select(
         'id, wiim_run_id, rank, ticker, headline, why_it_matters, confidence_score, candidate_type, state_label, signals_json, source_refs_json, metadata_json',
       )
       .eq('wiim_run_id', run.id)
       .order('rank', { ascending: true })
+    if (options.signal) {
+      candidateQuery = candidateQuery.abortSignal(options.signal)
+    }
+    const { data, error } = await candidateQuery
 
     if (error) {
       throw new NewsletterDailySourceError(
@@ -344,7 +369,8 @@ async function loadSourceUniverse(
   const symbols = candidateRows
     .map((row) => row.ticker)
     .filter((symbol): symbol is string => Boolean(symbol))
-  const { data: summaryRows, error: summaryError } = await supabase
+  options.signal?.throwIfAborted()
+  let summaryQuery = supabase
     .from('stock_summaries')
     .select(
       'symbol, summary_text, no_summary_reason, generated_at, model, run_id, winning_event, metadata',
@@ -354,6 +380,8 @@ async function loadSourceUniverse(
     .in('symbol', symbols)
     .order('generated_at', { ascending: false })
     .limit(5000)
+  if (options.signal) summaryQuery = summaryQuery.abortSignal(options.signal)
+  const { data: summaryRows, error: summaryError } = await summaryQuery
 
   if (summaryError) {
     throw new NewsletterDailySourceError(
@@ -368,7 +396,7 @@ async function loadSourceUniverse(
     targetCount,
   })
 
-  if (candidates.length < targetCount) {
+  if (!options.allowPartial && candidates.length < targetCount) {
     throw new NewsletterDailySourceError(
       `Only ${candidates.length} candidates passed the current-news quality gate; ${targetCount} are required for this run.`,
     )
@@ -384,24 +412,22 @@ async function loadSourceUniverse(
 
 export async function getNewsletterDailySettings(
   scope: NewsletterDraftScope,
+  signal?: AbortSignal,
 ): Promise<NewsletterDailySettings> {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from(SETTINGS_TABLE)
     .select('*')
     .eq('scope_key', getNewsletterDailyScopeKey(scope))
-    .maybeSingle()
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.maybeSingle()
 
   if (error) {
     throw new Error(`Failed to load newsletter daily settings: ${error.message}`)
   }
   if (!data) {
-    return {
-      enabled: true,
-      targetCount: DEFAULT_NEWSLETTER_DAILY_TARGET,
-      timezone: 'America/New_York',
-      generationHour: 8,
-    }
+    return defaultNewsletterDailySettings()
   }
   return mapSettingsRow(data as DailySettingsRow)
 }
@@ -409,10 +435,12 @@ export async function getNewsletterDailySettings(
 export async function saveNewsletterDailySettings(
   scope: NewsletterDraftScope,
   input: Partial<NewsletterDailySettings>,
+  signal?: AbortSignal,
 ): Promise<NewsletterDailySettings> {
-  const current = await getNewsletterDailySettings(scope)
+  signal?.throwIfAborted()
+  const current = await getNewsletterDailySettings(scope, signal)
   const supabase = getServiceClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from(SETTINGS_TABLE)
     .upsert(
       {
@@ -435,7 +463,8 @@ export async function saveNewsletterDailySettings(
       { onConflict: 'scope_key' },
     )
     .select('*')
-    .single()
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.single()
 
   if (error || !data) {
     throw new Error(
@@ -448,15 +477,17 @@ export async function saveNewsletterDailySettings(
 async function syncItemDraftStates(
   scope: NewsletterDraftScope,
   items: NewsletterDailyRunItem[],
+  signal?: AbortSignal,
 ): Promise<NewsletterDailyRunItem[]> {
+  signal?.throwIfAborted()
   if (!items.some((item) => item.draftId)) return items
   const draftIds = items.flatMap((item) =>
     item.draftId ? [item.draftId] : [],
   )
   const [summaries, deliveries] = await Promise.all([
-    listNewsletterDrafts(scope),
+    listNewsletterDrafts(scope, signal),
     scope.ownerId
-      ? listBeehiivDeliveries(scope.ownerId, draftIds)
+      ? listBeehiivDeliveries(scope.ownerId, draftIds, signal)
       : Promise.resolve([]),
   ])
   const byId = new Map(summaries.map((draft) => [draft.id, draft]))
@@ -506,23 +537,27 @@ async function syncItemDraftStates(
 export async function getNewsletterDailyRun(
   scope: NewsletterDraftScope,
   id: string,
+  signal?: AbortSignal,
 ): Promise<NewsletterDailyRun> {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
   const scopeKey = getNewsletterDailyScopeKey(scope)
-  const [{ data: run, error: runError }, { data: itemRows, error: itemError }] =
-    await Promise.all([
-      supabase
+  let runQuery = supabase
         .from(RUNS_TABLE)
         .select('*')
         .eq('id', id)
         .eq('scope_key', scopeKey)
-        .maybeSingle(),
-      supabase
+  let itemsQuery = supabase
         .from(ITEMS_TABLE)
         .select('*')
         .eq('run_id', id)
-        .order('rank', { ascending: true }),
-    ])
+        .order('rank', { ascending: true })
+  if (signal) {
+    runQuery = runQuery.abortSignal(signal)
+    itemsQuery = itemsQuery.abortSignal(signal)
+  }
+  const [{ data: run, error: runError }, { data: itemRows, error: itemError }] =
+    await Promise.all([runQuery.maybeSingle(), itemsQuery])
 
   if (runError || itemError) {
     throw new Error(
@@ -536,6 +571,7 @@ export async function getNewsletterDailyRun(
   const items = await syncItemDraftStates(
     scope,
     ((itemRows ?? []) as DailyItemRow[]).map(mapItemRow),
+    signal,
   )
   return mapRunRow(run as DailyRunRow, items)
 }
@@ -561,17 +597,11 @@ export async function getLatestNewsletterDailyRun(
   return data ? getNewsletterDailyRun(scope, data.id) : null
 }
 
-function candidateItemPayload(
-  runId: string,
+function candidateItemContentPayload(
   candidate: NewsletterDailyCandidate,
-  rank: number,
+  metadataOverrides: Record<string, unknown> = {},
 ) {
   return {
-    id: crypto.randomUUID(),
-    run_id: runId,
-    rank,
-    ticker: candidate.ticker,
-    status: 'queued',
     quality_band: candidate.qualityBand,
     relevance_score: candidate.relevanceScore,
     confidence_score: candidate.confidenceScore,
@@ -590,7 +620,125 @@ function candidateItemPayload(
       companyName: candidate.companyName,
       price: candidate.price,
       change: candidate.change,
+      ...metadataOverrides,
     } as Json,
+  }
+}
+
+function candidateItemPayload(
+  runId: string,
+  candidate: NewsletterDailyCandidate,
+  rank: number,
+) {
+  return {
+    id: crypto.randomUUID(),
+    run_id: runId,
+    rank,
+    ticker: candidate.ticker,
+    status: 'queued',
+    ...candidateItemContentPayload(candidate),
+  }
+}
+
+function isDailyItemSourceEntityValid(
+  item: Pick<
+    NewsletterDailyRunItem,
+    'ticker' | 'headline' | 'summaryText' | 'candidateMetadata'
+  >,
+): boolean {
+  const companyName = getSP500Constituent(item.ticker)?.name
+  if (!companyName) return false
+  return [item.headline, item.summaryText].every((text) =>
+    isNewsletterSourceEntityMatch({
+      ticker: item.ticker,
+      companyName,
+      text,
+    }),
+  )
+}
+
+function shouldRebuildDailyDraft(
+  item: Pick<NewsletterDailyRunItem, 'status' | 'candidateMetadata'>,
+): boolean {
+  return (
+    (item.status === 'failed' || item.status === 'needs_attention') &&
+    typeof item.candidateMetadata[NEWSLETTER_SOURCE_REFRESH_MARKER] === 'string'
+  )
+}
+
+function consumeNewsletterSourceRefreshMarker(
+  metadata: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...metadata }
+  delete next[NEWSLETTER_SOURCE_REFRESH_MARKER]
+  return next
+}
+
+async function refreshRetryableDailyItemSources(
+  run: NewsletterDailyRun,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted()
+  const retryable = run.items.filter(
+    (item) =>
+      (item.status === 'failed' || item.status === 'needs_attention') &&
+      item.retryCount < MAX_NEWSLETTER_DAILY_ITEM_RETRIES &&
+      !isDailyItemSourceEntityValid(item),
+  )
+  if (retryable.length === 0) return
+
+  const source = await loadSourceUniverse(
+    run.marketDate,
+    MAX_NEWSLETTER_DAILY_TARGET,
+    { allowPartial: true, signal },
+  )
+  signal?.throwIfAborted()
+  const candidates = new Map(
+    source.candidates.map((candidate) => [candidate.ticker, candidate]),
+  )
+  const supabase = getServiceClient()
+  for (const item of retryable) {
+    signal?.throwIfAborted()
+    const candidate = candidates.get(item.ticker)
+    if (!candidate) {
+      let closeQuery = supabase
+        .from(ITEMS_TABLE)
+        .update({
+          status: 'needs_attention',
+          retry_count: MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
+          error_message:
+            'No entity-validated replacement source is available; manual editorial review is required.',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', item.id)
+        .eq('run_id', run.id)
+        .in('status', ['failed', 'needs_attention'])
+      if (signal) closeQuery = closeQuery.abortSignal(signal)
+      const { error } = await closeQuery
+      if (error) {
+        throw new Error(
+          `Failed to close exhausted source repair for ${item.ticker}: ${error.message}`,
+        )
+      }
+      continue
+    }
+    let refreshQuery = supabase
+      .from(ITEMS_TABLE)
+      .update(
+        candidateItemContentPayload(candidate, {
+          [NEWSLETTER_SOURCE_REFRESH_MARKER]: new Date().toISOString(),
+        }),
+      )
+      .eq('id', item.id)
+      .eq('run_id', run.id)
+      .in('status', ['failed', 'needs_attention'])
+    if (signal) refreshQuery = refreshQuery.abortSignal(signal)
+    const { error } = await refreshQuery
+    if (error) {
+      throw new Error(
+        `Failed to refresh newsletter source for ${item.ticker}: ${error.message}`,
+      )
+    }
   }
 }
 
@@ -599,33 +747,44 @@ export async function ensureNewsletterDailyRun(
   options: {
     marketDate?: string
     targetCount?: number
+    signal?: AbortSignal
   } = {},
 ): Promise<NewsletterDailyRun> {
+  options.signal?.throwIfAborted()
   const marketDate = options.marketDate ?? toEasternDate()
   const settings = await saveNewsletterDailySettings(scope, {
     targetCount: options.targetCount,
-  })
+  }, options.signal)
+  options.signal?.throwIfAborted()
   const targetCount = clampNewsletterDailyTarget(
     options.targetCount ?? settings.targetCount,
   )
-  const source = await loadSourceUniverse(marketDate, targetCount)
+  const source = await loadSourceUniverse(marketDate, targetCount, {
+    signal: options.signal,
+  })
+  options.signal?.throwIfAborted()
   const supabase = getServiceClient()
   const scopeKey = getNewsletterDailyScopeKey(scope)
 
-  let { data: run, error: runError } = await supabase
+  let existingRunQuery = supabase
     .from(RUNS_TABLE)
     .select('*')
     .eq('scope_key', scopeKey)
     .eq('market_date', marketDate)
     .eq('edition', 'morning')
-    .maybeSingle()
+  if (options.signal) {
+    existingRunQuery = existingRunQuery.abortSignal(options.signal)
+  }
+  const { data: existingRun, error: runError } =
+    await existingRunQuery.maybeSingle()
+  let run = existingRun
 
   if (runError) {
     throw new Error(`Failed to find today's newsletter run: ${runError.message}`)
   }
 
   if (!run) {
-    const inserted = await supabase
+    let insertQuery = supabase
       .from(RUNS_TABLE)
       .insert({
         scope_key: scopeKey,
@@ -649,7 +808,8 @@ export async function ensureNewsletterDailyRun(
         },
       })
       .select('*')
-      .single()
+    if (options.signal) insertQuery = insertQuery.abortSignal(options.signal)
+    const inserted = await insertQuery.single()
     if (inserted.error || !inserted.data) {
       throw new Error(
         `Failed to create newsletter daily run: ${
@@ -659,7 +819,7 @@ export async function ensureNewsletterDailyRun(
     }
     run = inserted.data
   } else {
-    const updated = await supabase
+    let updateQuery = supabase
       .from(RUNS_TABLE)
       .update({
         target_count: resolveExistingRunTarget(
@@ -673,7 +833,8 @@ export async function ensureNewsletterDailyRun(
       })
       .eq('id', run.id)
       .select('*')
-      .single()
+    if (options.signal) updateQuery = updateQuery.abortSignal(options.signal)
+    const updated = await updateQuery.single()
     if (updated.error || !updated.data) {
       throw new Error(
         `Failed to update newsletter daily run: ${
@@ -684,11 +845,16 @@ export async function ensureNewsletterDailyRun(
     run = updated.data
   }
 
-  const { data: existingRows, error: existingError } = await supabase
+  options.signal?.throwIfAborted()
+  let existingRowsQuery = supabase
     .from(ITEMS_TABLE)
     .select('ticker, rank')
     .eq('run_id', run.id)
     .order('rank', { ascending: true })
+  if (options.signal) {
+    existingRowsQuery = existingRowsQuery.abortSignal(options.signal)
+  }
+  const { data: existingRows, error: existingError } = await existingRowsQuery
   if (existingError) {
     throw new Error(
       `Failed to inspect newsletter daily items: ${existingError.message}`,
@@ -711,22 +877,31 @@ export async function ensureNewsletterDailyRun(
     )
 
   if (additions.length > 0) {
-    const { error } = await supabase.from(ITEMS_TABLE).insert(additions)
+    let additionsQuery = supabase.from(ITEMS_TABLE).insert(additions)
+    if (options.signal) additionsQuery = additionsQuery.abortSignal(options.signal)
+    const { error } = await additionsQuery
     if (error) {
       throw new Error(`Failed to create newsletter daily items: ${error.message}`)
     }
   }
 
-  await recalculateNewsletterDailyRun(run.id)
-  return getNewsletterDailyRun(scope, run.id)
+  options.signal?.throwIfAborted()
+  await recalculateNewsletterDailyRun(run.id, options.signal)
+  return getNewsletterDailyRun(scope, run.id, options.signal)
 }
 
-async function recalculateNewsletterDailyRun(runId: string): Promise<void> {
+async function recalculateNewsletterDailyRun(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
-  const { data, error } = await supabase
+  let countQuery = supabase
     .from(ITEMS_TABLE)
     .select('status')
     .eq('run_id', runId)
+  if (signal) countQuery = countQuery.abortSignal(signal)
+  const { data, error } = await countQuery
   if (error) {
     throw new Error(`Failed to count newsletter daily items: ${error.message}`)
   }
@@ -767,7 +942,7 @@ async function recalculateNewsletterDailyRun(runId: string): Promise<void> {
 
   const terminal =
     status === 'completed' || status === 'partial' || status === 'failed'
-  const { error: updateError } = await supabase
+  let updateQuery = supabase
     .from(RUNS_TABLE)
     .update({
       status,
@@ -779,6 +954,8 @@ async function recalculateNewsletterDailyRun(runId: string): Promise<void> {
       completed_at: terminal ? new Date().toISOString() : null,
     })
     .eq('id', runId)
+  if (signal) updateQuery = updateQuery.abortSignal(signal)
+  const { error: updateError } = await updateQuery
   if (updateError) {
     throw new Error(
       `Failed to update newsletter daily counts: ${updateError.message}`,
@@ -786,12 +963,13 @@ async function recalculateNewsletterDailyRun(runId: string): Promise<void> {
   }
 }
 
-async function recoverStaleDailyItems(runId: string) {
+async function recoverStaleDailyItems(runId: string, signal?: AbortSignal) {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
   const cutoff = new Date(
     Date.now() - STALE_GENERATION_MINUTES * 60_000,
   ).toISOString()
-  const { error } = await supabase
+  let query = supabase
     .from(ITEMS_TABLE)
     .update({
       status: 'queued',
@@ -801,6 +979,8 @@ async function recoverStaleDailyItems(runId: string) {
     .eq('run_id', runId)
     .eq('status', 'generating')
     .lt('started_at', cutoff)
+  if (signal) query = query.abortSignal(signal)
+  const { error } = await query
   if (error) {
     throw new Error(`Failed to recover stale newsletter items: ${error.message}`)
   }
@@ -821,6 +1001,7 @@ async function claimDailyItems(
   runId: string,
   options: DailyProcessOptions,
 ): Promise<NewsletterDailyRunItem[]> {
+  options.signal?.throwIfAborted()
   const supabase = getServiceClient()
   const eligible = options.retryFailed
     ? ['queued', 'failed', 'needs_attention']
@@ -832,7 +1013,7 @@ async function claimDailyItems(
       Math.floor(options.limit ?? MAX_NEWSLETTER_DAILY_TARGET),
     ),
   )
-  const { data, error } = await supabase
+  let candidatesQuery = supabase
     .from(ITEMS_TABLE)
     .select('*')
     .eq('run_id', runId)
@@ -841,43 +1022,141 @@ async function claimDailyItems(
     .order('retry_count', { ascending: true })
     .order('rank', { ascending: true })
     .limit(limit)
+  if (options.signal) {
+    candidatesQuery = candidatesQuery.abortSignal(options.signal)
+  }
+  const { data, error } = await candidatesQuery
   if (error) {
     throw new Error(`Failed to find queued newsletter items: ${error.message}`)
   }
 
   const claimed: NewsletterDailyRunItem[] = []
-  for (const row of (data ?? []) as DailyItemRow[]) {
-    if (
-      !canClaimDailyItem(
-        row.status as NewsletterDailyItemStatus,
-        row.retry_count,
-        options.retryFailed === true,
-      )
-    ) {
-      continue
+  try {
+    options.signal?.throwIfAborted()
+    for (const row of (data ?? []) as DailyItemRow[]) {
+      options.signal?.throwIfAborted()
+      const original = mapItemRow(row)
+      if (
+        !canClaimDailyItem(
+          row.status as NewsletterDailyItemStatus,
+          row.retry_count,
+          options.retryFailed === true,
+        )
+      ) {
+        continue
+      }
+      if (
+        row.status !== 'queued' &&
+        options.retryFailed === true &&
+        !isDailyItemSourceEntityValid(original)
+      ) {
+        continue
+      }
+      let claimQuery = supabase
+        .from(ITEMS_TABLE)
+        .update({
+          status: 'generating',
+          started_at: new Date().toISOString(),
+          completed_at: null,
+          error_message: null,
+          retry_count: row.retry_count + (row.status === 'queued' ? 0 : 1),
+        })
+        .eq('id', row.id)
+        .eq('status', row.status)
+        .eq('retry_count', row.retry_count)
+        .select('*')
+      if (options.signal) claimQuery = claimQuery.abortSignal(options.signal)
+      const { data: claimedRow, error: claimError } =
+        await claimQuery.maybeSingle()
+      if (claimError) {
+        throw new Error(
+          `Failed to claim newsletter item ${row.ticker}: ${claimError.message}`,
+        )
+      }
+      if (claimedRow) {
+        claimed.push({
+          ...mapItemRow(claimedRow as DailyItemRow),
+          status: original.status,
+          completedAt: original.completedAt,
+          errorMessage: original.errorMessage,
+        })
+      }
+      options.signal?.throwIfAborted()
     }
-    const { data: claimedRow, error: claimError } = await supabase
-      .from(ITEMS_TABLE)
-      .update({
-        status: 'generating',
-        started_at: new Date().toISOString(),
-        completed_at: null,
-        error_message: null,
-        retry_count: row.retry_count + (row.status === 'queued' ? 0 : 1),
-      })
-      .eq('id', row.id)
-      .in('status', eligible)
-      .lt('retry_count', MAX_NEWSLETTER_DAILY_ITEM_RETRIES)
-      .select('*')
-      .maybeSingle()
-    if (claimError) {
-      throw new Error(
-        `Failed to claim newsletter item ${row.ticker}: ${claimError.message}`,
-      )
-    }
-    if (claimedRow) claimed.push(mapItemRow(claimedRow as DailyItemRow))
+    return claimed
+  } catch (error) {
+    await restoreUnfinishedDailyClaims(
+      claimed,
+      'Automatic generation was interrupted and will retry.',
+      AbortSignal.timeout(5_000),
+    )
+    throw error
   }
-  return claimed
+}
+
+function dailyClaimRestorePayload(
+  item: NewsletterDailyRunItem,
+  interruptionMessage: string,
+) {
+  const restoringRetry = item.status !== 'queued'
+  return {
+    status: item.status,
+    retry_count: Math.max(0, item.retryCount - (restoringRetry ? 1 : 0)),
+    started_at: null,
+    completed_at: item.completedAt,
+    error_message:
+      restoringRetry && item.errorMessage
+        ? item.errorMessage
+        : interruptionMessage,
+  }
+}
+
+function getDailyClaimFence(
+  item: Pick<NewsletterDailyRunItem, 'ticker' | 'startedAt'>,
+) {
+  if (!item.startedAt) {
+    throw new Error(`Newsletter item ${item.ticker} has no active claim token.`)
+  }
+  return { status: 'generating' as const, startedAt: item.startedAt }
+}
+
+function dailyItemOperationKey(
+  runId: string,
+  item: Pick<NewsletterDailyRunItem, 'ticker' | 'startedAt'>,
+): string {
+  const fence = getDailyClaimFence(item)
+  return `daily:${runId}:${item.ticker}:${fence.startedAt}`
+}
+
+async function restoreUnfinishedDailyClaims(
+  items: NewsletterDailyRunItem[],
+  interruptionMessage: string,
+  signal?: AbortSignal,
+) {
+  const supabase = getServiceClient()
+  const results = await Promise.allSettled(
+    items.map(async (item) => {
+      if (!item.startedAt) return
+      const fence = getDailyClaimFence(item)
+      let restoreQuery = supabase
+        .from(ITEMS_TABLE)
+        .update(dailyClaimRestorePayload(item, interruptionMessage))
+        .eq('id', item.id)
+        .eq('status', fence.status)
+        .eq('started_at', fence.startedAt)
+      if (signal) restoreQuery = restoreQuery.abortSignal(signal)
+      const { error } = await restoreQuery
+      if (error) {
+        throw new Error(
+          `Failed to restore interrupted newsletter item ${item.ticker}: ${error.message}`,
+        )
+      }
+    }),
+  )
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failure) throw failure.reason
 }
 
 function isChartCurrent(
@@ -922,6 +1201,16 @@ async function createDefaultDailyChart(
         options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
       width: 1200,
       height: 675,
+      captureTotalTimeoutMs: Math.max(
+        1,
+        Math.min(
+          DAILY_CHART_CAPTURE_BUDGET_MS,
+          Math.floor(
+            options.chartCaptureBudgetMs ?? DAILY_CHART_CAPTURE_BUDGET_MS,
+          ),
+        ),
+      ),
+      signal: options.signal,
     },
   )
 }
@@ -956,7 +1245,10 @@ async function persistGeneratedItem(
   draft: NewsletterDraftRecord,
   chart: NewsletterChartLibraryItem | null,
   warning: string | null,
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted()
+  const fence = getDailyClaimFence(item)
   const supabase = getServiceClient()
   const complete = Boolean(chart) && !warning
   const status: NewsletterDailyItemStatus = complete
@@ -966,7 +1258,10 @@ async function persistGeneratedItem(
         ? 'published'
         : 'generated'
     : 'needs_attention'
-  const { error } = await supabase
+  const candidateMetadata = consumeNewsletterSourceRefreshMarker(
+    item.candidateMetadata,
+  )
+  let query = supabase
     .from(ITEMS_TABLE)
     .update({
       status,
@@ -979,13 +1274,24 @@ async function persistGeneratedItem(
         chart?.chartImageUrl ??
         draft.draft.blocks[0]?.chartImageUrl ??
         null,
+      candidate_json: candidateMetadata as Json,
       error_message: warning,
       completed_at: new Date().toISOString(),
     })
     .eq('id', item.id)
+    .eq('status', fence.status)
+    .eq('started_at', fence.startedAt)
+    .select('id')
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.maybeSingle()
   if (error) {
     throw new Error(
       `Failed to save generated newsletter item ${item.ticker}: ${error.message}`,
+    )
+  }
+  if (!data) {
+    throw new Error(
+      `Newsletter item ${item.ticker} lost its generation claim before completion.`,
     )
   }
 }
@@ -1010,11 +1316,20 @@ async function processDailyItem(
   options: DailyProcessOptions,
   dependencies: DailyRunDependencies,
 ): Promise<'generated' | 'failed'> {
-  const itemKey = `daily:${run.id}:${item.ticker}`
+  const fence = getDailyClaimFence(item)
+  const itemKey = dailyItemOperationKey(run.id, item)
+  const rebuildingQuarantinedDraft = shouldRebuildDailyDraft(item)
 
   try {
-    const existing = await findNewsletterDraftBySourceReviewKey(scope, itemKey)
+    options.signal?.throwIfAborted()
+    const existing = await findNewsletterDraftBySourceReviewKey(
+      scope,
+      itemKey,
+      { signal: options.signal },
+    )
+    options.signal?.throwIfAborted()
     if (
+      !rebuildingQuarantinedDraft &&
       existing?.draft.source?.type === 'daily_batch' &&
       existing.draft.source.automationStatus === 'complete' &&
       !existing.draft.blocks.some((block) => block.chartNeedsRegeneration)
@@ -1040,6 +1355,7 @@ async function processDailyItem(
             }
           : null,
         null,
+        options.signal,
       )
       return 'generated'
     }
@@ -1051,8 +1367,10 @@ async function processDailyItem(
         const createChart =
           dependencies.createChart ?? createDefaultDailyChart
         chart = await createChart(scope, item, options)
+        options.signal?.throwIfAborted()
         chartsBySymbol.set(item.ticker, chart)
       } catch (error) {
+        if (options.signal?.aborted) throw options.signal.reason ?? error
         warning =
           error instanceof Error
             ? `Automatic chart capture failed: ${error.message}`
@@ -1069,13 +1387,17 @@ async function processDailyItem(
       candidate: item,
       chart,
       warning,
+      generatedAt: fence.startedAt,
+      operationKey: itemKey,
     })
 
     let draft: NewsletterDraftRecord
     if (existing) {
-      const document = chart
-        ? mergeRepairedDailyDraft(existing.draft, rebuilt)
-        : existing.draft
+      const document = rebuildingQuarantinedDraft
+        ? rebuilt
+        : chart
+          ? mergeRepairedDailyDraft(existing.draft, rebuilt)
+          : existing.draft
       draft = await saveNewsletterDraft(
         scope,
         existing.id,
@@ -1084,8 +1406,12 @@ async function processDailyItem(
         {
           publicChartBaseUrl:
             options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
+          signal: options.signal,
+          expectedUpdatedAt: existing.updatedAt,
+          protectPublished: true,
         },
       )
+      options.signal?.throwIfAborted()
       if (chart) {
         await appendNewsletterDraftEvent(scope, draft.id, {
           type: 'chart_attached',
@@ -1097,6 +1423,7 @@ async function processDailyItem(
             chartIds: [chart.id],
             repaired: true,
           },
+          signal: options.signal,
         })
       }
     } else {
@@ -1111,15 +1438,33 @@ async function processDailyItem(
           rank: item.rank,
           chartIds: chart ? [chart.id] : [],
         },
+        signal: options.signal,
       })
+      options.signal?.throwIfAborted()
     }
 
-    await persistGeneratedItem(item, draft, chart, warning)
+    await persistGeneratedItem(item, draft, chart, warning, options.signal)
     return 'generated'
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const supabase = getServiceClient()
-    await supabase
+    if (options.signal?.aborted) {
+      let restoreQuery = supabase
+        .from(ITEMS_TABLE)
+        .update(
+          dailyClaimRestorePayload(
+            item,
+            'Automatic generation was interrupted and will retry.',
+          ),
+        )
+        .eq('id', item.id)
+        .eq('status', fence.status)
+        .eq('started_at', fence.startedAt)
+      restoreQuery = restoreQuery.abortSignal(AbortSignal.timeout(5_000))
+      await restoreQuery
+      throw options.signal.reason ?? error
+    }
+    let failureQuery = supabase
       .from(ITEMS_TABLE)
       .update({
         status: 'failed',
@@ -1127,6 +1472,21 @@ async function processDailyItem(
         completed_at: new Date().toISOString(),
       })
       .eq('id', item.id)
+      .eq('status', fence.status)
+      .eq('started_at', fence.startedAt)
+      .select('id')
+    if (options.signal) failureQuery = failureQuery.abortSignal(options.signal)
+    const failedWrite = await failureQuery.maybeSingle()
+    if (failedWrite.error) {
+      throw new Error(
+        `Failed to record newsletter item error for ${item.ticker}: ${failedWrite.error.message}`,
+      )
+    }
+    if (!failedWrite.data) {
+      throw new Error(
+        `Newsletter item ${item.ticker} lost its generation claim while handling an error.`,
+      )
+    }
     return 'failed'
   }
 }
@@ -1135,21 +1495,28 @@ async function runPool<T>(
   items: T[],
   concurrency: number,
   worker: (item: T) => Promise<void>,
+  signal?: AbortSignal,
 ) {
   let nextIndex = 0
   async function runner() {
     while (nextIndex < items.length) {
+      signal?.throwIfAborted()
       const index = nextIndex
       nextIndex += 1
       await worker(items[index])
     }
   }
-  await Promise.all(
+  const results = await Promise.allSettled(
     Array.from(
       { length: Math.min(concurrency, items.length) },
       () => runner(),
     ),
   )
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failure) throw failure.reason
+  signal?.throwIfAborted()
 }
 
 export async function processNewsletterDailyRun(
@@ -1158,63 +1525,100 @@ export async function processNewsletterDailyRun(
   options: DailyProcessOptions = {},
   dependencies: DailyRunDependencies = {},
 ): Promise<NewsletterDailyProcessingResult> {
-  await recoverStaleDailyItems(runId)
-  const run = await getNewsletterDailyRun(scope, runId)
+  options.signal?.throwIfAborted()
+  await recoverStaleDailyItems(runId, options.signal)
+  let run = await getNewsletterDailyRun(scope, runId, options.signal)
+  options.signal?.throwIfAborted()
+  if (options.retryFailed) {
+    await refreshRetryableDailyItemSources(run, options.signal)
+    run = await getNewsletterDailyRun(scope, runId, options.signal)
+    options.signal?.throwIfAborted()
+  }
   const items = await claimDailyItems(runId, options)
   if (items.length === 0) {
-    await recalculateNewsletterDailyRun(runId)
+    options.signal?.throwIfAborted()
+    await recalculateNewsletterDailyRun(runId, options.signal)
     return {
-      run: await getNewsletterDailyRun(scope, runId),
+      run: await getNewsletterDailyRun(scope, runId, options.signal),
       attempted: 0,
       generated: 0,
       failed: 0,
     }
   }
 
-  const supabase = getServiceClient()
-  await supabase
-    .from(RUNS_TABLE)
-    .update({
-      status: 'generating',
-      started_at: run.startedAt ?? new Date().toISOString(),
-      completed_at: null,
-      error_message: null,
-    })
-    .eq('id', runId)
+  try {
+    options.signal?.throwIfAborted()
+    const supabase = getServiceClient()
+    let runUpdateQuery = supabase
+      .from(RUNS_TABLE)
+      .update({
+        status: 'generating',
+        started_at: run.startedAt ?? new Date().toISOString(),
+        completed_at: null,
+        error_message: null,
+      })
+      .eq('id', runId)
+    if (options.signal) {
+      runUpdateQuery = runUpdateQuery.abortSignal(options.signal)
+    }
+    await runUpdateQuery
 
-  const listCharts = dependencies.listCharts ?? listNewsletterChartLibraryItems
-  const charts = await listCharts(scope)
-  const chartsBySymbol = new Map<string, NewsletterChartLibraryItem>()
-  for (const chart of charts) {
-    const symbol = chart.symbol.trim().toUpperCase()
-    if (!chartsBySymbol.has(symbol)) chartsBySymbol.set(symbol, chart)
-  }
+    const listCharts = dependencies.listCharts ?? listNewsletterChartLibraryItems
+    const charts = await listCharts(scope, options.signal)
+    options.signal?.throwIfAborted()
+    const chartsBySymbol = new Map<string, NewsletterChartLibraryItem>()
+    for (const chart of charts) {
+      const symbol = chart.symbol.trim().toUpperCase()
+      if (!chartsBySymbol.has(symbol)) chartsBySymbol.set(symbol, chart)
+    }
 
-  let generated = 0
-  let failed = 0
-  const concurrency = Math.max(
-    1,
-    Math.min(4, Math.floor(options.concurrency ?? 3)),
-  )
-  await runPool(items, concurrency, async (item) => {
-    const result = await processDailyItem(
-      scope,
-      run,
-      item,
-      chartsBySymbol,
-      options,
-      dependencies,
+    let generated = 0
+    let failed = 0
+    const concurrency = Math.max(
+      1,
+      Math.min(4, Math.floor(options.concurrency ?? 3)),
     )
-    if (result === 'generated') generated += 1
-    else failed += 1
-  })
+    await runPool(
+      items,
+      concurrency,
+      async (item) => {
+        const result = await processDailyItem(
+          scope,
+          run,
+          item,
+          chartsBySymbol,
+          options,
+          dependencies,
+        )
+        if (result === 'generated') generated += 1
+        else failed += 1
+      },
+      options.signal,
+    )
 
-  await recalculateNewsletterDailyRun(runId)
-  return {
-    run: await getNewsletterDailyRun(scope, runId),
-    attempted: items.length,
-    generated,
-    failed,
+    await recalculateNewsletterDailyRun(runId, options.signal)
+    return {
+      run: await getNewsletterDailyRun(scope, runId, options.signal),
+      attempted: items.length,
+      generated,
+      failed,
+    }
+  } catch (error) {
+    const interruptionMessage = options.signal?.aborted
+      ? 'Automatic generation was interrupted and will retry.'
+      : `Automatic generation stopped before completion: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+    const cleanupSignal = AbortSignal.timeout(5_000)
+    await Promise.allSettled([
+      restoreUnfinishedDailyClaims(
+        items,
+        interruptionMessage,
+        cleanupSignal,
+      ),
+      recalculateNewsletterDailyRun(runId, cleanupSignal),
+    ])
+    throw error
   }
 }
 
@@ -1222,9 +1626,10 @@ export async function finalizeNewsletterDailyItems(
   scope: NewsletterDraftScope,
   runId: string,
   itemIds?: string[],
-  options: { publicChartBaseUrl?: string } = {},
+  options: { publicChartBaseUrl?: string; signal?: AbortSignal } = {},
 ): Promise<NewsletterDailyRun> {
-  const run = await getNewsletterDailyRun(scope, runId)
+  options.signal?.throwIfAborted()
+  const run = await getNewsletterDailyRun(scope, runId, options.signal)
   const selectedIds = itemIds?.length ? new Set(itemIds) : null
   const items = run.items.filter(
     (item) =>
@@ -1237,13 +1642,16 @@ export async function finalizeNewsletterDailyItems(
   const supabase = getServiceClient()
 
   await runPool(items, 5, async (item) => {
+    options.signal?.throwIfAborted()
     try {
-      const draft = await getNewsletterDraft(scope, item.draftId!)
+      const draft = await getNewsletterDraft(scope, item.draftId!, {
+        signal: options.signal,
+      })
       const readiness = canSetNewsletterDraftStatus(draft.draft, 'ready')
       if (!readiness.ready) {
         const automationWarning =
           draft.draft.source?.automationWarning ?? item.errorMessage
-        await supabase
+        let attentionQuery = supabase
           .from(ITEMS_TABLE)
           .update({
             status: 'needs_attention',
@@ -1254,6 +1662,16 @@ export async function finalizeNewsletterDailyItems(
             ),
           })
           .eq('id', item.id)
+        if (options.signal) {
+          attentionQuery = attentionQuery.abortSignal(options.signal)
+        }
+        const { error: attentionError } = await attentionQuery
+        options.signal?.throwIfAborted()
+        if (attentionError) {
+          throw new Error(
+            `Failed to mark newsletter item ${item.ticker} as needing attention: ${attentionError.message}`,
+          )
+        }
         return
       }
 
@@ -1263,8 +1681,12 @@ export async function finalizeNewsletterDailyItems(
           : await saveNewsletterDraft(scope, draft.id, draft.draft, 'ready', {
               publicChartBaseUrl:
                 options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
+              signal: options.signal,
+              expectedUpdatedAt: draft.updatedAt,
+              protectPublished: true,
             })
-      await supabase
+      options.signal?.throwIfAborted()
+      let readyQuery = supabase
         .from(ITEMS_TABLE)
         .update({
           status: saved.status === 'published' ? 'published' : 'ready',
@@ -1274,40 +1696,111 @@ export async function finalizeNewsletterDailyItems(
           completed_at: new Date().toISOString(),
         })
         .eq('id', item.id)
+      if (options.signal) readyQuery = readyQuery.abortSignal(options.signal)
+      const { error: readyError } = await readyQuery
+      options.signal?.throwIfAborted()
+      if (readyError) {
+        throw new Error(
+          `Failed to finalize newsletter item ${item.ticker}: ${readyError.message}`,
+        )
+      }
     } catch (error) {
-      await supabase
+      if (options.signal?.aborted) throw options.signal.reason ?? error
+      const primaryError =
+        error instanceof Error ? error : new Error(String(error))
+      let failureQuery = supabase
         .from(ITEMS_TABLE)
         .update({
           status: 'needs_attention',
-          error_message:
-            error instanceof Error ? error.message : String(error),
+          error_message: primaryError.message,
         })
         .eq('id', item.id)
-    }
-  })
+      if (options.signal) {
+        failureQuery = failureQuery.abortSignal(options.signal)
+      }
 
-  await recalculateNewsletterDailyRun(runId)
-  return getNewsletterDailyRun(scope, runId)
+      let failureError: unknown = null
+      try {
+        const result = await failureQuery
+        options.signal?.throwIfAborted()
+        failureError = result.error
+      } catch (fallbackError) {
+        if (options.signal?.aborted) {
+          throw options.signal.reason ?? fallbackError
+        }
+        failureError = fallbackError
+      }
+
+      if (failureError) {
+        const fallbackError =
+          failureError instanceof Error
+            ? failureError
+            : new Error(
+                typeof failureError === 'object' &&
+                  failureError !== null &&
+                  'message' in failureError &&
+                  typeof failureError.message === 'string'
+                  ? failureError.message
+                  : String(failureError),
+              )
+        throw new AggregateError(
+          [primaryError, fallbackError],
+          `${primaryError.message} Failed to persist newsletter item ${item.ticker} retry state: ${fallbackError.message}`,
+        )
+      }
+    }
+  }, options.signal)
+
+  await recalculateNewsletterDailyRun(runId, options.signal)
+  return getNewsletterDailyRun(scope, runId, options.signal)
 }
 
-export async function listEnabledNewsletterDailyScopes(): Promise<
+export async function listEnabledNewsletterDailyScopes(
+  signal?: AbortSignal,
+): Promise<
   Array<{ scope: NewsletterDraftScope; settings: NewsletterDailySettings }>
 > {
+  signal?.throwIfAborted()
   const supabase = getServiceClient()
   const configuredScope = getConfiguredNewsletterAutomationScope()
+
+  if (configuredScope) {
+    let query = supabase
+      .from(SETTINGS_TABLE)
+      .select('*')
+      .eq('scope_key', getNewsletterDailyScopeKey(configuredScope))
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query.maybeSingle()
+    if (error) {
+      throw new Error(
+        `Failed to list newsletter cron settings: ${error.message}`,
+      )
+    }
+    if (!data) {
+      return [
+        {
+          scope: configuredScope,
+          settings: defaultNewsletterDailySettings(),
+        },
+      ]
+    }
+    const row = data as DailySettingsRow
+    return row.enabled
+      ? [
+          {
+            scope: { ownerId: row.owner_id, sessionId: row.session_id },
+            settings: mapSettingsRow(row),
+          },
+        ]
+      : []
+  }
+
   let query = supabase
     .from(SETTINGS_TABLE)
     .select('*')
     .eq('enabled', true)
-  if (configuredScope?.ownerId) {
-    query = query.eq('owner_id', configuredScope.ownerId)
-  } else if (configuredScope) {
-    query = query
-      .is('owner_id', null)
-      .eq('session_id', configuredScope.sessionId)
-  } else {
-    query = query.not('owner_id', 'is', null)
-  }
+    .not('owner_id', 'is', null)
+  if (signal) query = query.abortSignal(signal)
   const { data, error } = await query
   if (error) {
     throw new Error(`Failed to list newsletter cron settings: ${error.message}`)
@@ -1326,5 +1819,13 @@ export const __testOnly = {
   mapRunRow,
   canClaimDailyItem,
   mergeDailyItemAttentionMessage,
+  isDailyItemSourceEntityValid,
+  shouldRebuildDailyDraft,
+  consumeNewsletterSourceRefreshMarker,
+  dailyClaimRestorePayload,
+  getDailyClaimFence,
+  dailyItemOperationKey,
+  runPool,
+  DAILY_CHART_CAPTURE_BUDGET_MS,
   MAX_NEWSLETTER_DAILY_ITEM_RETRIES,
 }

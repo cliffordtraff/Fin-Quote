@@ -96,7 +96,33 @@ async function fetchRecentWhyMovingBySymbol(symbols: string[]): Promise<Map<stri
   }
 }
 
-export async function fetchWiimCandidates(): Promise<WiimFetchCandidatesResult> {
+export async function raceReadOnlyWiimFetch<T>(
+  worker: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return worker()
+  signal.throwIfAborted()
+  let removeAbortListener: () => void = () => undefined
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const onAbort = () => {
+      reject(signal.reason ?? new Error('WIIM candidate fetch was cancelled'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    removeAbortListener = () => signal.removeEventListener('abort', onAbort)
+  })
+  try {
+    // Candidate collection is read-only. Some provider clients cannot consume
+    // AbortSignal yet, so race the lease signal and discard any late result.
+    return await Promise.race([
+      Promise.resolve().then(worker),
+      aborted,
+    ])
+  } finally {
+    removeAbortListener()
+  }
+}
+
+async function fetchWiimCandidatesUnbounded(): Promise<WiimFetchCandidatesResult> {
   const [market, recentPicks] = await Promise.all([
     fetchMarketContext(),
     fetchRecentPicks(14),
@@ -155,4 +181,10 @@ export async function fetchWiimCandidates(): Promise<WiimFetchCandidatesResult> 
     marketCandidateCount: canonicalCandidates.length,
     candidates,
   }
+}
+
+export async function fetchWiimCandidates(
+  signal?: AbortSignal,
+): Promise<WiimFetchCandidatesResult> {
+  return raceReadOnlyWiimFetch(fetchWiimCandidatesUnbounded, signal)
 }

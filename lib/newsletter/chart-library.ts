@@ -20,6 +20,10 @@ import type {
   PriceChartExportSpec,
   PriceNewsletterChartSpec,
 } from './types'
+import {
+  describeImmutableNewsletterImage,
+  isImmutableAssetAlreadyStored,
+} from './immutable-assets'
 
 const NEWSLETTER_CHART_LIBRARY_DIR = './.newsletter-chart-library'
 const NEWSLETTER_CHART_OUTPUT_DIR = './.newsletter-output'
@@ -50,6 +54,9 @@ export interface SaveNewsletterChartLibraryOptions {
   publicChartBaseUrl?: string
   width?: number
   height?: number
+  /** Absolute budget for the render portion, excluding upload/persistence. */
+  captureTotalTimeoutMs?: number
+  signal?: AbortSignal
 }
 
 export interface UpdateNewsletterChartLibraryInput {
@@ -72,7 +79,7 @@ interface NewsletterChartLibraryRow {
   updated_at: string
 }
 
-function getServiceClient() {
+function getServiceClient(signal?: AbortSignal) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -80,7 +87,24 @@ function getServiceClient() {
     throw new Error('Missing Supabase service role configuration for newsletter chart library')
   }
 
-  return createSupabaseClient(url, key)
+  if (!signal) {
+    return createSupabaseClient(url, key)
+  }
+
+  const abortableFetch: typeof fetch = (input, init) => {
+    const requestSignal = init?.signal
+    const combinedSignal = requestSignal && requestSignal !== signal
+      ? AbortSignal.any([requestSignal, signal])
+      : signal
+    return globalThis.fetch(input, {
+      ...init,
+      signal: combinedSignal,
+    })
+  }
+
+  return createSupabaseClient(url, key, {
+    global: { fetch: abortableFetch },
+  })
 }
 
 function sanitizeStorageKey(value: string): string {
@@ -199,14 +223,18 @@ function buildPriceChartSpec(
 
 export async function listNewsletterChartLibraryItems(
   scope: NewsletterDraftScope,
+  signal?: AbortSignal,
 ): Promise<NewsletterChartLibraryItem[]> {
+  signal?.throwIfAborted()
   if (scope.ownerId) {
     const supabase = getServiceClient()
-    const { data, error } = await supabase
+    let query = supabase
       .from(NEWSLETTER_CHART_LIBRARY_TABLE)
       .select('*')
       .eq('owner_id', scope.ownerId)
       .order('updated_at', { ascending: false })
+    if (signal) query = query.abortSignal(signal)
+    const { data, error } = await query
 
     if (error) {
       throw new Error(`Failed to list newsletter chart library: ${error.message}`)
@@ -242,20 +270,48 @@ export async function uploadNewsletterChartImage(options: {
   chartId: string
   symbol: string
   outputPath: string
+  signal?: AbortSignal
 }): Promise<{ imagePath: string; imageUrl: string }> {
-  const supabase = getServiceClient()
-  const safeSymbol = options.symbol.replace(/[^A-Z0-9._-]/g, '_')
-  const imagePath = `owners/${options.ownerId}/${options.chartId}/${safeSymbol}.png`
+  options.signal?.throwIfAborted()
+  // StorageFileApi.upload does not expose a signal parameter. Build this
+  // operation's client with a fetch wrapper so cancellation reaches the
+  // actual network request in addition to releasing the caller below.
+  const supabase = getServiceClient(options.signal)
   const fileBuffer = readFileSync(options.outputPath)
+  const asset = describeImmutableNewsletterImage(fileBuffer)
+  const imagePath = asset.storagePath
 
-  const { error } = await supabase.storage
+  const upload = supabase.storage
     .from(NEWSLETTER_CHART_STORAGE_BUCKET)
     .upload(imagePath, fileBuffer, {
-      contentType: 'image/png',
-      upsert: true,
+      contentType: asset.contentType,
+      cacheControl: asset.cacheControl,
+      upsert: false,
+      metadata: {
+        sha256: asset.digest,
+        width: asset.width,
+        height: asset.height,
+      },
     })
+  let removeAbortListener: () => void = () => undefined
+  const aborted = new Promise<never>((_resolve, reject) => {
+    if (!options.signal) return
+    const onAbort = () =>
+      reject(
+        options.signal?.reason ?? new Error('Chart upload was cancelled'),
+      )
+    if (options.signal.aborted) onAbort()
+    else {
+      options.signal.addEventListener('abort', onAbort, { once: true })
+      removeAbortListener = () =>
+        options.signal?.removeEventListener('abort', onAbort)
+    }
+  })
+  const { error } = await Promise.race([upload, aborted]).finally(
+    removeAbortListener,
+  )
 
-  if (error) {
+  if (error && !isImmutableAssetAlreadyStored(error)) {
     throw new Error(`Failed to upload newsletter chart image: ${error.message}`)
   }
 
@@ -298,7 +354,10 @@ export async function saveNewsletterChartLibraryItem(
       chartBaseUrl,
       width: options.width,
       height: options.height,
+      totalTimeoutMs: options.captureTotalTimeoutMs,
+      signal: options.signal,
     })
+    options.signal?.throwIfAborted()
 
     const chartImageUrl = `/newsletter-charts/${filename}`
     const chartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
@@ -307,12 +366,15 @@ export async function saveNewsletterChartLibraryItem(
     }).interactiveUrl
 
     if (scope.ownerId) {
+      options.signal?.throwIfAborted()
       const { imagePath, imageUrl } = await uploadNewsletterChartImage({
         ownerId: scope.ownerId,
         chartId: id,
         symbol: chartSpec.symbol,
         outputPath,
+        signal: options.signal,
       })
+      options.signal?.throwIfAborted()
       const supabase = getServiceClient()
       const payload = {
         id,
@@ -328,11 +390,12 @@ export async function saveNewsletterChartLibraryItem(
         chart_export_url: chartExportUrl,
       }
 
-      const { data, error } = await supabase
+      let insert = supabase
         .from(NEWSLETTER_CHART_LIBRARY_TABLE)
         .insert(payload)
         .select('*')
-        .single()
+      if (options.signal) insert = insert.abortSignal(options.signal)
+      const { data, error } = await insert.single()
 
       if (error) {
         throw new Error(`Failed to save newsletter chart library item: ${error.message}`)
@@ -424,46 +487,23 @@ export async function deleteNewsletterChartLibraryItem(
 ): Promise<void> {
   if (scope.ownerId) {
     const supabase = getServiceClient()
-    const { data, error: fetchError } = await supabase
-      .from(NEWSLETTER_CHART_LIBRARY_TABLE)
-      .select('id,image_path,thumbnail_path')
-      .eq('id', id)
-      .eq('owner_id', scope.ownerId)
-      .single()
-
-    if (fetchError || !data) {
-      if (fetchError?.code === 'PGRST116') {
-        throw new Error(`Newsletter chart library item not found: ${id}`)
-      }
-      throw new Error(
-        `Failed to find newsletter chart library item: ${
-          fetchError?.message ?? 'Unknown error'
-        }`,
-      )
-    }
-
-    const row = data as Pick<NewsletterChartLibraryRow, 'id' | 'image_path' | 'thumbnail_path'>
-    const paths = [row.image_path, row.thumbnail_path]
-      .filter((value): value is string => Boolean(value))
-      .filter((value, index, values) => values.indexOf(value) === index)
-
-    if (paths.length > 0) {
-      const { error: removeError } = await supabase.storage
-        .from(NEWSLETTER_CHART_STORAGE_BUCKET)
-        .remove(paths)
-      if (removeError) {
-        throw new Error(`Failed to delete newsletter chart image: ${removeError.message}`)
-      }
-    }
-
-    const { error: deleteError } = await supabase
+    // Content-addressed images may be shared by other library records, active
+    // drafts, and already-sent email. Deleting a library row must never delete
+    // the immutable blob; storage cleanup requires a separate reference-aware
+    // retention job.
+    const { data, error: deleteError } = await supabase
       .from(NEWSLETTER_CHART_LIBRARY_TABLE)
       .delete()
       .eq('id', id)
       .eq('owner_id', scope.ownerId)
+      .select('id')
+      .maybeSingle()
 
     if (deleteError) {
       throw new Error(`Failed to delete newsletter chart library item: ${deleteError.message}`)
+    }
+    if (!data) {
+      throw new Error(`Newsletter chart library item not found: ${id}`)
     }
     return
   }

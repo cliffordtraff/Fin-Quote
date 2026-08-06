@@ -66,5 +66,7 @@ export async function recordNewsletterPublication(
     throw new NewsletterPublicationReadinessError(readiness)
   }
 
-  return saveNewsletterDraft(scope, draftId, draft, 'published')
+  return saveNewsletterDraft(scope, draftId, draft, 'published', {
+    expectedUpdatedAt: existing.updatedAt,
+  })
 }

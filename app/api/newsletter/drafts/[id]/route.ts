@@ -5,7 +5,9 @@ import { isDeepStrictEqual } from 'node:util'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   deleteNewsletterDraft,
+  NewsletterDraftConflictError,
   NewsletterDraftNotFoundError,
+  NewsletterPublishedDraftImmutableError,
   getNewsletterDraft,
   normalizeNewsletterDraftDocument,
   preserveNewsletterDraftServerMetadata,
@@ -28,6 +30,12 @@ function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof NewsletterDraftNotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 })
   }
+  if (error instanceof NewsletterDraftConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 })
+  }
+  if (error instanceof NewsletterPublishedDraftImmutableError) {
+    return NextResponse.json({ error: error.message }, { status: 409 })
+  }
 
   const message =
     error instanceof Error ? error.message : 'Newsletter draft request failed'
@@ -41,6 +49,13 @@ function normalizeStatus(
   if (value === undefined) return fallback
   if (!isNewsletterDraftStatus(value)) {
     throw new Error('Invalid newsletter draft status')
+  }
+  return value
+}
+
+function requireExpectedUpdatedAt(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('expectedUpdatedAt is required')
   }
   return value
 }
@@ -88,6 +103,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'draft is required' }, { status: 400 })
     }
 
+    const expectedUpdatedAt = requireExpectedUpdatedAt(body?.expectedUpdatedAt)
+
     const existing = await getNewsletterDraft(scope, id)
     const host = request.headers.get('host')
     const publicChartBaseUrl = getDefaultPublicChartingBaseUrlForHost(host)
@@ -126,13 +143,15 @@ export async function PATCH(
       id,
       normalizedDraft,
       nextStatus,
+      { expectedUpdatedAt },
     )
     const response = NextResponse.json({ draft: saved })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
     if (
       error instanceof Error &&
-      error.message === 'Invalid newsletter draft status'
+      (error.message === 'Invalid newsletter draft status' ||
+        error.message === 'expectedUpdatedAt is required')
     ) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }

@@ -82,6 +82,140 @@ describe('newsletter publishing workflow', () => {
     ])
   })
 
+  it('blocks long subjects, unsafe links, and weak chart alt text', () => {
+    const draft = buildDraft({
+      subjectLine: 'A'.repeat(61),
+      blocks: [
+        {
+          ...buildDraft().blocks[0],
+          chartAlt: 'Chart',
+          chartExportUrl: 'javascript:alert(1)',
+          ctaText: 'Read more',
+          ctaUrl: 'http://insecure.example.com/story',
+        },
+      ],
+    })
+
+    expect(
+      getNewsletterDraftReadiness(draft).issues.map((issue) => issue.id),
+    ).toEqual([
+      'subject-line-length',
+      'block-block-1-chart-alt',
+      'block-block-1-chart-link',
+      'block-block-1-cta-link',
+    ])
+  })
+
+  it('blocks a daily draft whose source headline belongs to another entity', () => {
+    const draft = buildDraft({
+      source: {
+        type: 'daily_batch',
+        dailyBatch: {
+          runId: 'run-1',
+          itemId: 'item-1',
+          itemKey: 'daily:run-1:MTCH',
+          sourceWiimRunId: 'wiim-1',
+          marketDate: '2026-08-06',
+          rank: 1,
+          ticker: 'MTCH',
+          companyName: 'Match Group, Inc.',
+          headline: 'Huya launches Triple Match 3D mobile game worldwide',
+          summary: 'A similarly named game launched.',
+          keyFact: null,
+          reasonType: 'product',
+          movePercent: -5,
+          confidenceScore: 80,
+          relevanceScore: 80,
+          qualityBand: 'strong',
+          sourceRefs: [],
+        },
+        attachedChartIds: [],
+        automatedAt: '2026-08-06T12:00:00.000Z',
+        automationStatus: 'complete',
+      },
+    })
+
+    expect(getNewsletterDraftReadiness(draft).issues).toContainEqual({
+      id: 'source-entity',
+      label:
+        'Replace the source headline with evidence about Match Group (MTCH).',
+    })
+  })
+
+  it('uses the stock registry to gate legacy daily sources without a company name', () => {
+    const draft = buildDraft({
+      source: {
+        type: 'daily_batch',
+        dailyBatch: {
+          runId: 'run-legacy',
+          itemId: 'item-legacy',
+          itemKey: 'daily:run-legacy:MTCH',
+          sourceWiimRunId: 'wiim-legacy',
+          marketDate: '2026-08-06',
+          rank: 1,
+          ticker: 'MTCH',
+          headline: 'Huya launches Triple Match 3D mobile game worldwide',
+          summary: 'A similarly named game launched.',
+          keyFact: null,
+          reasonType: 'product',
+          movePercent: -5,
+          confidenceScore: 80,
+          relevanceScore: 80,
+          qualityBand: 'strong',
+          sourceRefs: [],
+        },
+        attachedChartIds: [],
+        automatedAt: '2026-08-06T12:00:00.000Z',
+        automationStatus: 'complete',
+      },
+    })
+
+    expect(
+      getNewsletterDraftReadiness(draft).issues.map((issue) => issue.id),
+    ).toContain('source-entity')
+  })
+
+  it('blocks mismatched summary prose even when the headline source is valid', () => {
+    const draft = buildDraft({
+      source: {
+        type: 'daily_batch',
+        dailyBatch: {
+          runId: 'run-2',
+          itemId: 'item-2',
+          itemKey: 'daily:run-2:MTCH',
+          sourceWiimRunId: 'wiim-2',
+          marketDate: '2026-08-06',
+          rank: 1,
+          ticker: 'MTCH',
+          companyName: 'Huya Inc.',
+          headline: 'Match Group announces second-quarter results',
+          summary: 'Huya launched Triple Match 3D worldwide.',
+          keyFact: null,
+          reasonType: 'product',
+          movePercent: -5,
+          confidenceScore: 80,
+          relevanceScore: 80,
+          qualityBand: 'strong',
+          sourceRefs: [
+            {
+              kind: 'news',
+              label: 'Match Group announces second-quarter results',
+              url: 'https://example.com/mtch',
+              publishedAt: '2026-08-04T20:13:06Z',
+            },
+          ],
+        },
+        attachedChartIds: [],
+        automatedAt: '2026-08-06T12:00:00.000Z',
+        automationStatus: 'complete',
+      },
+    })
+
+    expect(
+      getNewsletterDraftReadiness(draft).issues.map((issue) => issue.id),
+    ).toContain('source-summary-entity')
+  })
+
   it('allows draft and review stages while gating ready and published', () => {
     const incomplete = buildDraft({ introText: '' })
 

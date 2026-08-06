@@ -95,6 +95,8 @@ const snapshot = {
         syncedAt: '2026-08-06T12:35:00.000Z',
         lastReconciledAt: '2026-08-06T12:59:00.000Z',
         lastReconcileError: null,
+        statsLastFetchedAt: '2026-08-06T12:59:00.000Z',
+        statsLastError: null,
         stats: {
           sent: 10,
           delivered: 9,
