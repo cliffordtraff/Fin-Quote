@@ -1,4 +1,4 @@
-export type NewsletterCronJob = 'daily' | 'mid-morning'
+export type NewsletterCronJob = 'daily' | 'mid-morning' | 'webhook'
 
 export type NewsletterCronLogLevel = 'info' | 'error'
 

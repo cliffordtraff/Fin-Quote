@@ -997,6 +997,8 @@ export interface Database {
           editor_url: string
           content_hash: string
           lifecycle_status: string
+          lifecycle_applied_status: string | null
+          lifecycle_applied_at: string | null
           beehiiv_status: string | null
           scheduled_at: string | null
           published_at: string | null
@@ -1004,6 +1006,8 @@ export interface Database {
           stats_json: Json
           last_reconciled_at: string | null
           last_reconcile_error: string | null
+          reconcile_lease_token: string | null
+          reconcile_lease_expires_at: string | null
           synced_at: string
           created_at: string
           updated_at: string
@@ -1019,6 +1023,8 @@ export interface Database {
           editor_url: string
           content_hash: string
           lifecycle_status?: string
+          lifecycle_applied_status?: string | null
+          lifecycle_applied_at?: string | null
           beehiiv_status?: string | null
           scheduled_at?: string | null
           published_at?: string | null
@@ -1026,6 +1032,8 @@ export interface Database {
           stats_json?: Json
           last_reconciled_at?: string | null
           last_reconcile_error?: string | null
+          reconcile_lease_token?: string | null
+          reconcile_lease_expires_at?: string | null
           synced_at?: string
           created_at?: string
           updated_at?: string
@@ -1040,6 +1048,8 @@ export interface Database {
           editor_url?: string
           content_hash?: string
           lifecycle_status?: string
+          lifecycle_applied_status?: string | null
+          lifecycle_applied_at?: string | null
           beehiiv_status?: string | null
           scheduled_at?: string | null
           published_at?: string | null
@@ -1047,6 +1057,8 @@ export interface Database {
           stats_json?: Json
           last_reconciled_at?: string | null
           last_reconcile_error?: string | null
+          reconcile_lease_token?: string | null
+          reconcile_lease_expires_at?: string | null
           synced_at?: string
           created_at?: string
           updated_at?: string
@@ -1054,6 +1066,80 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "newsletter_beehiiv_deliveries_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "newsletter_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_beehiiv_sync_operations: {
+        Row: {
+          draft_id: string
+          owner_id: string
+          publication_id: string
+          operation_kind: string
+          operation_key: string
+          content_hash: string
+          title: string
+          sync_state: string
+          remote_post_id: string | null
+          remote_preview_url: string | null
+          remote_editor_url: string | null
+          lease_token: string | null
+          lease_expires_at: string | null
+          attempt_count: number
+          last_error: string | null
+          started_at: string
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          draft_id: string
+          owner_id: string
+          publication_id: string
+          operation_kind: string
+          operation_key: string
+          content_hash: string
+          title: string
+          sync_state?: string
+          remote_post_id?: string | null
+          remote_preview_url?: string | null
+          remote_editor_url?: string | null
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          attempt_count?: number
+          last_error?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          draft_id?: string
+          owner_id?: string
+          publication_id?: string
+          operation_kind?: string
+          operation_key?: string
+          content_hash?: string
+          title?: string
+          sync_state?: string
+          remote_post_id?: string | null
+          remote_preview_url?: string | null
+          remote_editor_url?: string | null
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          attempt_count?: number
+          last_error?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_beehiiv_sync_operations_draft_id_fkey"
             columns: ["draft_id"]
             isOneToOne: true
             referencedRelation: "newsletter_drafts"
@@ -1071,6 +1157,7 @@ export interface Database {
           from_status: string | null
           to_status: string | null
           beehiiv_url: string | null
+          dedupe_key: string | null
           metadata: Json
           created_at: string
         }
@@ -1083,6 +1170,7 @@ export interface Database {
           from_status?: string | null
           to_status?: string | null
           beehiiv_url?: string | null
+          dedupe_key?: string | null
           metadata?: Json
           created_at?: string
         }
@@ -1094,6 +1182,7 @@ export interface Database {
           from_status?: string | null
           to_status?: string | null
           beehiiv_url?: string | null
+          dedupe_key?: string | null
           metadata?: Json
           created_at?: string
         }
@@ -1202,6 +1291,68 @@ export interface Database {
           updated_at?: string
         }
         Relationships: []
+      }
+      newsletter_webhook_outbox: {
+        Row: {
+          id: string
+          event_id: string
+          notification_id: string | null
+          scope_key: string
+          payload_json: Json
+          status: string
+          attempt_count: number
+          next_attempt_at: string
+          last_attempt_at: string | null
+          last_error: string | null
+          delivered_at: string | null
+          lease_token: string | null
+          lease_expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          notification_id?: string | null
+          scope_key: string
+          payload_json: Json
+          status?: string
+          attempt_count?: number
+          next_attempt_at?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          delivered_at?: string | null
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          notification_id?: string | null
+          scope_key?: string
+          payload_json?: Json
+          status?: string
+          attempt_count?: number
+          next_attempt_at?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          delivered_at?: string | null
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_webhook_outbox_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: true
+            referencedRelation: "newsletter_notifications"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       newsletter_drafts: {
         Row: {
@@ -2074,6 +2225,90 @@ export interface Database {
           p_lease_seconds?: number
         }
         Returns: Database['public']['Tables']['newsletter_mid_morning_runs']['Row'][]
+      }
+      claim_newsletter_webhook_outbox: {
+        Args: {
+          p_lease_token: string
+          p_limit?: number
+          p_lease_seconds?: number
+          p_outbox_id?: string | null
+        }
+        Returns: Database['public']['Tables']['newsletter_webhook_outbox']['Row'][]
+      }
+      claim_newsletter_beehiiv_reconciliation: {
+        Args: {
+          p_lease_token: string
+          p_limit?: number
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
+      claim_newsletter_beehiiv_sync: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_publication_id: string
+          p_operation_kind: string
+          p_operation_key: string
+          p_content_hash: string
+          p_title: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_sync_operations']['Row'][]
+      }
+      renew_newsletter_beehiiv_reconciliation: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
+      update_newsletter_beehiiv_lifecycle_claim: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_post_id: string
+          p_lease_token: string
+          p_lifecycle_status: string
+          p_beehiiv_status: string | null
+          p_scheduled_at: string | null
+          p_published_at: string | null
+          p_web_url: string | null
+          p_stats_json: Json
+          p_error?: string | null
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
+      mark_newsletter_beehiiv_lifecycle_applied: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_lease_token: string
+          p_lifecycle_status: string
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
+      record_newsletter_beehiiv_reconcile_error: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_lease_token: string
+          p_error: string
+        }
+        Returns: boolean
+      }
+      complete_newsletter_webhook_attempt: {
+        Args: {
+          p_outbox_id: string
+          p_lease_token: string
+          p_delivered: boolean
+          p_error: string | null
+          p_next_attempt_at: string
+        }
+        Returns: Database['public']['Tables']['newsletter_webhook_outbox']['Row'][]
       }
       generate_conversation_title: {
         Args: { conversation_id: string }

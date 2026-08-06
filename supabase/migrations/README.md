@@ -4,8 +4,8 @@ This directory is the schema history for the app's Supabase project.
 
 Current state:
 
-- 59 SQL migrations
-- Span: October 2024 to July 2026
+- 84 SQL migrations as of 2026-08-06
+- Span: October 2024 to August 2026
 - Covers core financial tables, filings search, chatbot evaluation/review infrastructure, S&P 500 expansion, insider data, cache tables, and charting-workspace persistence
 
 ## How To Read This Folder
@@ -19,6 +19,7 @@ Primary related references:
 - `data/MIGRATIONS.md`
 - `lib/database.types.ts`
 - `supabase/config.toml`
+- `docs/migration-ledger-convergence.md`
 
 ## Migration History
 
@@ -60,12 +61,33 @@ Primary related references:
 | 2026-02-01 | `20260201000004_add_segment_status_to_us_stocks.sql` | Restore segment-ingestion status tracking after the US stocks table creation |
 | 2026-02-03 | `20260203000002_create_market_movers_cache.sql` | Add market-movers cache table |
 | 2026-03-08 | `20260308000001_create_charting_docs_table.sql` | Add `docs` table for charting workspace persistence/cloud sync |
+| 2026-03-20 | `20260320210000_create_monthly_ratio_snapshots.sql` | Add reproducible monthly valuation-ratio snapshots |
+| 2026-03-20 | `20260320214500_add_fcf_yield_to_monthly_ratio_snapshots.sql` | Add free-cash-flow yield to monthly ratio snapshots |
+| 2026-03-21 | `20260321140000_add_cash_to_financials_std.sql` | Add standardized cash and cash-equivalents data |
+| 2026-03-21 | `20260321150000_add_bulk_update_cash_fn.sql` | Add the bulk cash backfill function |
+| 2026-03-22 | `20260322100000_create_stock_summaries.sql` | Add stock summaries, ranker configs, evaluations, and manual reviews |
+| 2026-03-22 | `20260322160000_add_source_type_boosts.sql` | Historical ranker source boosts; retired by the August convergence migration |
+| 2026-03-22 | `20260322170000_create_finviz_wism_corpus.sql` | Historical FinViz WIIM corpus; retired by the August convergence migration |
 | 2026-03-25 | `20260325000001_create_stock_why_moving_cache.sql` | Add cache table for stock “why moving” summaries |
 | 2026-03-26 | `20260326000002_create_newsletter_drafts_table.sql` | Add editable newsletter draft persistence |
 | 2026-03-26 | `20260326000003_allow_anonymous_newsletter_drafts.sql` | Add anonymous session support for newsletter drafts |
 | 2026-03-27 | `20260327000001_create_dashboard_chart_of_day_settings.sql` | Add dashboard chart-of-the-day settings |
 | 2026-03-27 | `20260327000002_add_chart_spec_to_dashboard_chart_of_day_settings.sql` | Store chart specs for dashboard chart-of-the-day settings |
 | 2026-03-27 | `20260327000003_create_newsletter_chart_library.sql` | Add reusable newsletter chart library metadata and Storage bucket |
+| 2026-04-02 | `20260402080000_add_finviz_catalyst_type_to_evals.sql` | Add catalyst-type classification to summary evaluations |
+| 2026-04-02 | `20260402090000_add_bucket_to_evals.sql` | Add three-bucket evaluation classification |
+| 2026-04-03 | `20260403000000_add_direct_rank_columns.sql` | Add direct-ranker comparison instrumentation |
+| 2026-04-03 | `20260403000001_add_candidate_pool_columns.sql` | Persist evaluation candidate pools and matched titles |
+| 2026-04-03 | `20260403121500_add_bucket_detail_to_evals.sql` | Add granular evaluation bucket details |
+| 2026-04-03 | `20260403170000_add_selected_event_columns_to_evals.sql` | Persist selected event metadata on evaluations |
+| 2026-04-03 | `20260403183000_add_eval_quality_columns.sql` | Separate benchmark match from explanation quality |
+| 2026-04-03 | `20260403193000_add_canonical_explanation_to_summary_evals.sql` | Persist canonical WIIM explanations |
+| 2026-04-03 | `20260403200000_add_miss_reason_to_evals.sql` | Add structured miss reasons |
+| 2026-04-04 | `20260404073000_create_wiim_cost_runs.sql` | Track WIIM replay and optimization costs |
+| 2026-04-04 | `20260404160000_add_feedback_to_stock_summaries.sql` | Add human feedback to stock summaries |
+| 2026-04-04 | `20260404180000_add_summary_versioning.sql` | Add summary run history and versioning |
+| 2026-04-04 | `20260404200000_create_company_profiles_cache.sql` | Add provider-backed company profile cache |
+| 2026-04-06 | `20260406080000_create_finviz_catalysts.sql` | Add current FinViz catalyst storage |
 | 2026-05-20 | `20260520200500_create_wiim_runs.sql` | Add WIIM morning brief run and candidate tables |
 | 2026-05-31 | `20260531162000_enable_rls_on_remaining_public_tables.sql` | Enable RLS on remaining public tables |
 | 2026-05-31 | `20260531170000_explicit_data_api_grants.sql` | Add explicit Data API grants for public tables |
@@ -83,6 +105,10 @@ Primary related references:
 | 2026-07-30 | `20260730120000_create_beehiiv_mcp_delivery.sql` | Persist encrypted Beehiiv MCP connections and idempotent draft deliveries |
 | 2026-07-30 | `20260730143000_complete_newsletter_operations.sql` | Add notifications, Beehiiv lifecycle reconciliation, mid-morning automation, and all three operating cron schedules |
 | 2026-08-03 | `20260803170000_schedule_dashboard_market_context.sql` | Retry missing dashboard commentary components at 10:15, 10:22, and 10:29 ET behind the protected scheduler boundary |
+| 2026-08-06 | `20260806130000_harden_beehiiv_delivery.sql` | Add leased, recoverable Beehiiv synchronization and lifecycle hardening |
+| 2026-08-06 | `20260806131000_newsletter_webhook_outbox.sql` | Add leased, HMAC-signed newsletter alert delivery with durable exponential retries |
+| 2026-08-06 | `20260806132000_adopt_untracked_live_tables.sql` | Reproduce six live tables that predated the migration ledger |
+| 2026-08-06 | `20260806133000_converge_review_schema_and_cache_security.sql` | Converge catalyst review schema, cache RLS, and retired WIIM objects |
 
 ## Major Schema Areas
 
@@ -119,6 +145,18 @@ Primary related references:
   mid-morning production runs, durable notifications, and Beehiiv lifecycle
   reconciliation
 - WIIM morning brief runs and generated summary batches
+
+## Ledger Drift
+
+Migration files, live schema, and `supabase_migrations.schema_migrations` are
+three separate records. Never make them agree by editing an applied file or
+blindly replaying historical SQL.
+
+The repository was audited and reconciled in August 2026. The evidence, exact
+version lists, adoption-table fingerprints, backup gate, repair commands, and
+post-change assertions live in
+`docs/migration-ledger-convergence.md`. Follow that runbook for this project;
+do not improvise with `migration repair` or `--include-all`.
 
 ## Creating New Migrations
 

@@ -69,6 +69,9 @@ describe('daily newsletter draft builder', () => {
     expect(draft.source?.attachedChartIds).toEqual(['chart-1'])
     expect(draft.blocks[0].chartNeedsRegeneration).toBe(false)
     expect(draft.blocks[0].body).toContain('What to watch')
+    expect(draft.blocks[0].body).toContain(
+      'raises full-year guidance. The stock is +8.25%',
+    )
     expect(draft.header?.logoUrl).toBe('')
     expect(draft.header?.logoUrls).toEqual([])
   })

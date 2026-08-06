@@ -4,35 +4,16 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCurrentUser } from '@/lib/auth/current-user'
 import { listBeehiivPublications } from '@/lib/beehiiv/client'
+import { selectBeehiivPublication } from '@/lib/beehiiv/publication'
 import {
   BEEHIIV_OAUTH_COOKIE,
   finishBeehiivOAuth,
 } from '@/lib/beehiiv/oauth'
 import {
+  deleteBeehiivIntegration,
   saveBeehiivIntegrationConnection,
   saveBeehiivPublication,
 } from '@/lib/beehiiv/store'
-import type { BeehiivPublication } from '@/lib/beehiiv/types'
-
-function selectPublication(
-  publications: BeehiivPublication[],
-): BeehiivPublication | null {
-  const configuredId = process.env.BEEHIIV_PUBLICATION_ID?.trim()
-  if (configuredId) {
-    const configured = publications.find(
-      (publication) => publication.id === configuredId,
-    )
-    if (configured) return configured
-  }
-
-  return (
-    publications.find(
-      (publication) => publication.name.toLowerCase() === 'the intraday',
-    ) ??
-    publications[0] ??
-    null
-  )
-}
 
 function redirectWithResult(
   request: NextRequest,
@@ -83,25 +64,28 @@ export async function GET(request: NextRequest) {
     })
     await saveBeehiivIntegrationConnection(user.id, completed.credentials)
 
-    let publicationSaved = false
     try {
       const publications = await listBeehiivPublications(user.id)
-      const publication = selectPublication(publications)
-      if (publication) {
-        await saveBeehiivPublication(user.id, publication)
-        publicationSaved = true
+      const publication = selectBeehiivPublication(publications)
+      if (!publication) {
+        throw new Error(
+          'The Beehiiv connection does not expose an available publication.',
+        )
       }
-    } catch {
-      publicationSaved = false
+      await saveBeehiivPublication(user.id, publication)
+    } catch (error) {
+      // The new credentials deliberately cleared any publication cached by an
+      // older account. If verification fails, remove the partial connection so
+      // the UI cannot report a connected but unverified destination.
+      await deleteBeehiivIntegration(user.id).catch(() => undefined)
+      throw error
     }
 
     return redirectWithResult(
       request,
       completed.returnTo,
       'connected',
-      publicationSaved
-        ? 'Beehiiv connected.'
-        : 'Beehiiv connected. Publication details will refresh on the next sync.',
+      'Beehiiv connected.',
     )
   } catch {
     return redirectWithResult(

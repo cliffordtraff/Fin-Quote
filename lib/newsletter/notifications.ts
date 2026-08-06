@@ -35,25 +35,6 @@ function mapRow(row: NotificationRow): NewsletterNotification {
   }
 }
 
-async function deliverWebhook(notification: NewsletterNotification) {
-  const url = process.env.NEWSLETTER_ALERT_WEBHOOK_URL?.trim()
-  if (!url) return false
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      source: 'the-intraday-newsletter',
-      ...notification,
-    }),
-    signal: AbortSignal.timeout(10_000),
-  })
-  if (!response.ok) {
-    throw new Error(`Notification webhook returned HTTP ${response.status}`)
-  }
-  return true
-}
-
 export async function createNewsletterNotification(
   scope: NewsletterDraftScope,
   input: {
@@ -126,20 +107,10 @@ export async function createNewsletterNotification(
     )
   }
 
-  let notification = mapRow(data as NotificationRow)
-  try {
-    if (await deliverWebhook(notification)) {
-      const deliveredAt = new Date().toISOString()
-      await supabase
-        .from(TABLE)
-        .update({ delivered_at: deliveredAt })
-        .eq('id', notification.id)
-      notification = { ...notification, deliveredAt }
-    }
-  } catch (webhookError) {
-    console.error('Newsletter notification webhook failed', webhookError)
-  }
-  return { notification, created: true }
+  // The database trigger writes or refreshes the durable webhook outbox in the
+  // same transaction. Network delivery is deliberately decoupled from the
+  // morning pipeline and handled by the bounded retry processor.
+  return { notification: mapRow(data as NotificationRow), created: true }
 }
 
 export async function listNewsletterNotifications(

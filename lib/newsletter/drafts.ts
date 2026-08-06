@@ -85,6 +85,7 @@ interface NewsletterDraftEventRow {
   from_status: NewsletterDraftStatus | null
   to_status: NewsletterDraftStatus | null
   beehiiv_url: string | null
+  dedupe_key?: string | null
   metadata: Record<string, unknown> | null
   created_at: string
 }
@@ -707,6 +708,7 @@ interface AppendNewsletterDraftEventInput {
   toStatus?: NewsletterDraftStatus | null
   beehiivUrl?: string | null
   metadata?: Record<string, unknown>
+  dedupeKey?: string
 }
 
 export async function appendNewsletterDraftEvent(
@@ -745,9 +747,27 @@ export async function appendNewsletterDraftEvent(
       to_status: input.toStatus ?? null,
       beehiiv_url: input.beehiivUrl?.trim() || null,
       metadata: input.metadata ?? {},
+      dedupe_key: input.dedupeKey?.trim() || null,
     })
     .select('*')
     .single()
+
+  if (error?.code === '23505' && input.dedupeKey?.trim()) {
+    const existing = await supabase
+      .from(NEWSLETTER_DRAFT_EVENTS_TABLE)
+      .select('*')
+      .eq('draft_id', draftId)
+      .eq('dedupe_key', input.dedupeKey.trim())
+      .single()
+    if (existing.error || !existing.data) {
+      throw new Error(
+        `Failed to load deduplicated newsletter history: ${
+          existing.error?.message ?? 'No row returned'
+        }`,
+      )
+    }
+    return mapDraftEventRow(existing.data as NewsletterDraftEventRow)
+  }
 
   if (error) {
     throw new Error(`Failed to append newsletter history: ${error.message}`)

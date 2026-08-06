@@ -15,13 +15,14 @@ import {
   NewsletterOperationsActionError,
   type NewsletterOperationsAction,
   type NewsletterOperationsPipeline,
+  type NewsletterOperationsPipelineAction,
 } from '@/lib/newsletter/operations'
 
 const PIPELINES = new Set<NewsletterOperationsPipeline>([
   'morning',
   'mid_morning',
 ])
-const ACTIONS = new Set<NewsletterOperationsAction>([
+const PIPELINE_ACTIONS = new Set<NewsletterOperationsPipelineAction>([
   'run_now',
   'retry_failed',
 ])
@@ -58,7 +59,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const pipeline = body?.pipeline as NewsletterOperationsPipeline
     const action = body?.action as NewsletterOperationsAction
-    if (!PIPELINES.has(pipeline) || !ACTIONS.has(action)) {
+    if (action === 'reconcile_beehiiv') {
+      const result = await executeNewsletterOperationsAction(user.id, {
+        action,
+      })
+      return NextResponse.json({ result })
+    }
+    if (
+      !PIPELINES.has(pipeline) ||
+      !PIPELINE_ACTIONS.has(action as NewsletterOperationsPipelineAction)
+    ) {
       return NextResponse.json(
         { error: 'Invalid newsletter operation.' },
         { status: 400 },
@@ -70,7 +80,7 @@ export async function POST(request: NextRequest) {
         : getNewsletterAutomationClock().marketDate
     const result = await executeNewsletterOperationsAction(user.id, {
       pipeline,
-      action,
+      action: action as NewsletterOperationsPipelineAction,
       marketDate,
     })
     return NextResponse.json({ result })

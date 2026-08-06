@@ -94,6 +94,43 @@ describe('newsletter operations API', () => {
     })
   })
 
+  it('runs authenticated Beehiiv reconciliation and returns its counts', async () => {
+    mocks.executeAction.mockResolvedValue({
+      attempted: 4,
+      updated: 3,
+      failed: [{ draftId: 'draft-1', error: 'Beehiiv timeout' }],
+    })
+
+    const response = await POST(
+      postRequest({ action: 'reconcile_beehiiv' }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.executeAction).toHaveBeenCalledWith('user-1', {
+      action: 'reconcile_beehiiv',
+    })
+    await expect(response.json()).resolves.toEqual({
+      result: {
+        attempted: 4,
+        updated: 3,
+        failed: [{ draftId: 'draft-1', error: 'Beehiiv timeout' }],
+      },
+    })
+  })
+
+  it('does not expose Beehiiv reconciliation to signed-out callers', async () => {
+    mocks.requireCurrentUser.mockRejectedValue(
+      new AuthenticationRequiredError(),
+    )
+
+    const response = await POST(
+      postRequest({ action: 'reconcile_beehiiv' }),
+    )
+
+    expect(response.status).toBe(401)
+    expect(mocks.executeAction).not.toHaveBeenCalled()
+  })
+
   it('returns a conflict when a retry is not valid', async () => {
     mocks.executeAction.mockRejectedValue(
       new NewsletterOperationsActionError(

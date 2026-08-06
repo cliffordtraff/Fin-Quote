@@ -1,130 +1,162 @@
 # Fin Quote Launch Readiness
 
-Last verified: July 30, 2026
+Last verified: August 6, 2026
 
 ## Current Status
 
-The integrated application is deployed at `https://www.theintraday.com`.
-Production verification covers the Morning Report and Mid-Morning Brief at
-desktop and mobile widths, live Supabase persistence, and protected cron
-boundaries.
+The existing application is live at `https://www.theintraday.com`. The August
+6 audit proved the unattended morning-generation path and a one-recipient
+Beehiiv delivery from end to end. The companion Charting Platform repair is
+also merged and deployed, including the repaired `charts.theintraday.com`
+custom domain.
 
-Do not run `supabase db push` against the linked project in its current state.
-The live schema contains the new feature objects, but the remote migration
-ledger does not match the local migration directory.
+The Fin Quote launch-hardening code and migration convergence package are still
+a release candidate at the time of this document. They must not be described
+as production behavior until the final validation, production migration, app
+deployment, and smoke checks finish.
+
+## Readiness At A Glance
+
+| Capability | State | Evidence / limitation |
+|---|---|---|
+| Unattended morning generation | Verified in production | 40 ready issues out of 40 |
+| Public newsletter charts | Verified in production | Distinct public PNGs were reachable and nonblank |
+| Beehiiv draft synchronization | Verified canary | Repeating an unchanged sync reused the same remote post |
+| Beehiiv publish and provider delivery | Verified canary | One message published and Beehiiv reported one sent and delivered |
+| Email authentication | Verified canary | Gmail reported SPF, DKIM, and DMARC pass |
+| Inbox placement | Warming, not certified | The first canary initially landed in Spam |
+| Google Postmaster | Verified | `theintraday.com` is enrolled for reputation monitoring |
+| Chart custom domain | Verified | `https://charts.theintraday.com/health` returns `200` |
+| Chart mobile/a11y repair | Deployed | Charting Platform PR #2 is merged and deployed |
+| Fin dependency posture | Verified locally | Next.js 15.5.22, React 19.2.1, zero production audit vulnerabilities |
+| Fin launch-hardening package | Pending release | Implemented in branch; final validation/deploy not complete |
+| Supabase ledger convergence | Pending production | Clean local replay completed; production application not complete |
+| External alert delivery | Not configured | No production `NEWSLETTER_ALERT_WEBHOOK_URL` exists |
 
 ## Verified Product Routes
 
-| Surface | Route | Desktop | Mobile | Notes |
-|---|---|---|---|---|
-| Market Overview | `/dashboard` | Verified | Verified | Live index and futures data, charts, refresh, and explicit fallbacks |
-| Pulse Today | `/dashboard/pulse-today` | Verified | Verified | Responsive market cockpit |
-| Morning Brief | `/dashboard/morning-brief` | Verified | Verified | Persisted pre-open market baseline |
-| Morning Report | `/newsletter/morning-review` | Verified | Verified | Shortlist, issue lifecycle, and Beehiiv controls |
-| Newsletter Operations | `/newsletter/operations` | Verified | Verified | Signed-in health, retries, alerts, and delivery lifecycle |
-| Mid-Morning Brief | `/dashboard/mid-morning-brief` | Verified | Verified | Automated opening-session delta and fresh summaries |
-| Pre-Market | `/dashboard/premarket` | Verified | Verified | Wide data tables scroll within their section |
-| Market Internals | `/concept` | Verified | Verified | Compact closed-session state |
-| Stock detail | `/stock/AAPL` | Verified | Verified | Embedded chart loads |
-| Chart workspace | `/workspace/chart` | Verified | Partial | Owning chart app has mobile toolbar collisions |
-| Fundamentals workspace | `/workspace/fundamentals` | Verified | Partial | Embedded chart form fields need accessible names |
-| Overview workspace | `/workspace/overview` | Verified | Partial | Same chart-app accessibility issue |
-| Calendar | `/calendar` | Verified | Verified | Shared shell and responsive layout |
-| Insiders | `/insiders` | Verified | Verified | Filters, tabs, and pagination are labeled |
+| Surface | Route | Status | Notes |
+|---|---|---|---|
+| Market Overview | `/dashboard` | Existing production surface | Live data with explicit fallbacks |
+| Pulse Today | `/dashboard/pulse-today` | Existing production surface | Primary market cockpit |
+| Morning Brief | `/dashboard/morning-brief` | Existing production surface | Persisted pre-open baseline |
+| Morning Report | `/newsletter/morning-review` | Production path exercised | Unattended 40/40 batch and canary source |
+| Newsletter Operations | `/newsletter/operations` | Existing surface; release update pending | New stats/manual reconcile/outbox panels require Fin deployment |
+| Mid-Morning Brief | `/dashboard/mid-morning-brief` | Existing production surface | Opening-session delta |
+| Stock detail | `/stock/AAPL` | Existing production surface | Embedded chart path available |
+| Chart workspace | `/workspace/chart` | Owning app repair deployed | Final Fin release smoke check still required |
+| Fundamentals workspace | `/workspace/fundamentals` | Owning app repair deployed | Mobile layout and accessible-name fixes shipped in chart PR #2 |
+| Overview workspace | `/workspace/overview` | Owning app repair deployed | Custom chart domain is healthy |
 
-## Data And Persistence
+## Newsletter Production Evidence
 
-- The configured market providers return all five headline indices and seven
-  futures rows through the fallback chain.
-- The linked Supabase project exposes `newsletter_chart_library`,
-  `stock_why_moving_reviews`, `newsletter_drafts`, and
-  `newsletter_draft_events`.
-- It also exposes durable daily and mid-morning automation runs, newsletter
-  notifications, and Beehiiv delivery lifecycle state.
-- Approved catalyst reviews create one idempotent newsletter draft, attach
-  saved charts automatically, and persist Beehiiv publication metadata.
-- The morning scheduler is trading-day aware, starts up to three hours before
-  the configured ready-by time, and retries bounded stages until noon ET.
-- The mid-morning scheduler runs from 10:15 AM to noon ET and persists a fresh
-  20-candidate WIIM comparison plus original top-five summaries.
-- Beehiiv reconciliation maps draft, scheduled, published, and archived states
-  back into Fin Quote every 15 minutes.
-- Newsletter Operations resumes the recorded failed stage instead of resetting
-  a run, and its mutations are restricted to the configured automation owner.
-- The `newsletter-charts` storage bucket exists.
-- Migration `20260730143000` is applied in production, and the daily,
-  mid-morning, and Beehiiv cron jobs are active.
-- Remote migration history is divergent and must be repaired or baselined
-  deliberately; do not infer missing schema from ledger entries alone.
+The August 6 morning run completed without an operator driving its stages and
+produced 40 ready issues out of 40. The one-subscriber canary then exercised:
 
-## Production Verification
+1. Beehiiv OAuth publication selection.
+2. Remote draft creation.
+3. An unchanged resync without a duplicate post.
+4. Preview on desktop and mobile.
+5. Schedule and publish.
+6. Provider send and delivery.
+7. Gmail receipt with SPF, DKIM, and DMARC passing.
+8. Lifecycle reconciliation back into Fin Quote without duplicate events.
 
-- Vercel production deployment completed successfully on July 30, 2026 and is
-  aliased to `www.theintraday.com`.
-- `/newsletter/morning-review` returns `200`, renders the five recommendations
-  and issue lifecycles, and has no desktop or mobile overflow.
-- `/dashboard/mid-morning-brief` returns `200` and renders the completed live
-  run, including the change from LII to EME.
-- The July 30 mid-morning run completed 20/20 Finviz refreshes and 5/5 fresh
-  summaries.
-- Daily, mid-morning, and Beehiiv cron endpoints all return `401` without the
-  configured bearer secret.
-- TypeScript, 359 Vitest tests, and the local and remote production builds pass.
+This proves generation, synchronization, publication, transport, and
+authentication. It does not prove general inbox placement: the canary first
+appeared in Spam. Google Postmaster is now verified so the warm-up can be
+measured, and volume should grow gradually with engaged recipients.
 
-## Pending Local Dashboard Improvements
+## Charting Platform Evidence
 
-The August 3 working tree replaces the Market Overview's Chart of the Day iframe
-with a native, theme-aware SVG presentation. It also compacts the market tape,
-unifies catalysts, makes cross-asset data notable-first, adds an editable local
-watchlist, remembers dashboard disclosure choices, and collapses secondary
-lower-page detail. These changes are locally verified but are not yet part of
-the production baseline above.
+Charting Platform PR #2 fixed the narrow-workspace toolbar collision,
+viewport-unsafe menus, mobile Fundamentals overlap, missing accessible names,
+and stale Tesla media request. The change is merged and deployed. DNS and the
+Vercel custom-domain attachment for `charts.theintraday.com` were repaired, and
+the public health route returns `200`.
 
-- TypeScript and all 387 Vitest tests pass.
-- An isolated Next.js production build passes. Isolation was necessary because
-  another local dev process was using the repository's `.next` directory.
-- `/dashboard` was verified at 1280-pixel desktop width and 390-pixel mobile
-  width, with no error overlay, runtime errors, or horizontal overflow.
-- Browser reload checks confirm the mover session and section expansion choices
-  persist through the versioned local preference store.
-- The native chart produces no requests to the external chart workspace, and
-  the full workspace remains available through the “Open chart” link.
-- A local browser reload reached the load event in 736 ms; provider and network
-  conditions will still affect total dashboard response time.
+## Pending Fin Quote Release Package
 
-## Remaining Release Hygiene
+The branch contains, but production does not yet run, these additions:
 
-1. Review and commit the integrated worktree.
-2. Verify signed-in mutation controls against the production auth session.
-3. Observe the next fully unattended trading-day scheduler cycle.
-4. Baseline the older divergent Supabase migration history before another
-   schema change.
+- atomic Beehiiv sync claims and leases;
+- durable create/update/recovery states and an ambiguous-create fail-safe;
+- lease-fenced lifecycle side effects and idempotent event recording;
+- Beehiiv post statistics that do not block lifecycle reconciliation when
+  analytics are unavailable;
+- a signed-in **Reconcile now** operator control;
+- date-scoped delivery counts, lifetime totals, latency/freshness indicators,
+  and webhook-outbox health;
+- a signed transactional webhook outbox with bounded retry; and
+- the converged Supabase migration history plus the genuinely missing schema
+  and cache-policy changes.
 
-## Known Cross-Repository Issues
+The convergence package has replayed successfully on a clean local Supabase
+database. Production application remains a release gate. Apply migrations
+before app code, verify the live objects and cron jobs, then require a second
+dry run with no pending migrations.
 
-The external charting application at `charts.theintraday.com` owns these issues:
+## Notification And Webhook Contract
 
-- toolbar controls collide or clip around a 500-pixel viewport;
-- eight embedded form controls do not have accessible names;
-- an interactive Tesla workspace surface still requests a missing media file
-  (the native dashboard chart no longer loads that surface); and
-- the stock chart's mobile lookback control clips.
+In-app notifications are the durable source of truth. A repeated dedupe key can
+refresh the operator-facing severity, copy, and metadata while preserving its
+read and delivery timestamps. The corresponding outbox event is different: its
+event ID is the receiver idempotency key, so the serialized payload is frozen
+when first enqueued and remains byte-stable across retries.
 
-These defects do not create document-level overflow in Fin Quote, but they are
-the next user-facing quality priority after release access is restored.
+Authenticated browser users may mark their own notification read, once; they
+cannot rewrite ownership, content, dedupe, or delivery fields, and a read item
+cannot be made unread. The delivery worker leases a small due batch, signs the
+exact raw payload, and records success or retry state independently from the
+morning pipeline.
 
-## Operating Sequence
+Production has no external webhook URL configured. That is a configuration
+gap, not a newsletter-generation blocker: in-app notifications continue to
+work and the outbox safely avoids network calls until both a real URL and a
+dedicated signing secret exist.
+
+## Security And Dependency Evidence
+
+The stale automated Fin Quote security PR was closed because its proposed
+baseline no longer described the repository. The reviewed versions are
+Next.js 15.5.22 and React 19.2.1, and `npm audit --omit=dev` reports zero
+production vulnerabilities. This does not replace the final branch test,
+type-check, build, and deployment gates.
+
+## Release Sequence
+
+1. Review the migration convergence runbook and production backup.
+2. Repair/adopt the historical migration ledger exactly as documented.
+3. Dry-run the push and confirm that only the intended migrations remain.
+4. Apply database migrations before the dependent app code.
+5. Verify tables, policies, RPCs, cron jobs, and an empty second dry run.
+6. Run the final Fin Quote test, type-check, build, and diff checks.
+7. Deploy the Fin Quote application.
+8. Smoke-test protected cron calls, manual Beehiiv reconciliation, statistics,
+   and operations/outbox health.
+9. After choosing an alert receiver, configure the URL and signing secret and
+   send the admin webhook canary.
+
+## Remaining Risks
+
+- Inbox placement is still warming even though authentication and provider
+  delivery passed.
+- The Fin launch-hardening behavior is not live until its migrations and app
+  deployment complete.
+- The production migration ledger is not converged until the reviewed sequence
+  is applied and a second dry run is empty.
+- External alerts cannot leave the durable outbox until a real destination is
+  configured.
+
+## Operating Sequence After Release
 
 1. Let the morning cron build the report before the configured ready-by time.
-2. Review the five recommended issues in `/newsletter/morning-review`.
-3. Create or synchronize Beehiiv drafts from each selected report card.
-4. Schedule and publish inside Beehiiv; Fin Quote reconciles the lifecycle.
-5. Review `/dashboard/mid-morning-brief` after 10:15 AM for the opening delta.
-6. Investigate any durable notification or external alert before noon recovery
-   ends.
-
-## Next Work Decision
-
-After the first unattended scheduler cycle is observed, add operational run
-telemetry and Beehiiv delivery analytics. The charting application toolbar and
-accessibility defects remain the next cross-repository UI priority.
+2. Review the recommended issues in `/newsletter/morning-review`.
+3. Create or synchronize selected Beehiiv drafts.
+4. Schedule and publish in Beehiiv; use **Reconcile now** when an immediate
+   lifecycle refresh is needed.
+5. Review delivery statistics and outbox health in
+   `/newsletter/operations`.
+6. Review `/dashboard/mid-morning-brief` after 10:15 AM for the opening delta.
+7. Use Google Postmaster and Beehiiv metrics to grow sending volume only as
+   reputation supports it.

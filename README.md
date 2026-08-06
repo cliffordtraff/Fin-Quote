@@ -31,7 +31,7 @@ Main product areas:
 ## Stack
 
 - Next.js 15 App Router
-- React 19 RC
+- React 19.2.1
 - TypeScript
 - Tailwind CSS
 - Supabase for database, auth, and storage-backed workflows
@@ -221,6 +221,7 @@ NEWSLETTER_PUBLIC_CHARTING_URL=https://charts.theintraday.com
 NEWSLETTER_RENDER_API_KEY=shared-render-service-secret
 CRON_SECRET=scheduler-bearer-secret
 NEWSLETTER_ALERT_WEBHOOK_URL=https://optional-alert-destination.example
+NEWSLETTER_ALERT_WEBHOOK_SECRET=dedicated-hmac-signing-secret
 BEEHIIV_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
 BEEHIIV_PUBLICATION_ID=pub_optional-when-account-has-multiple-publications
 NEXT_PUBLIC_COOKIE_DOMAIN=.theintraday.com
@@ -239,8 +240,12 @@ Notes:
   authenticates server-rendered newsletter charts and enables the trusted
   batch-render allowance.
 - `CRON_SECRET` protects the daily newsletter scheduler endpoint in production.
-- `NEWSLETTER_ALERT_WEBHOOK_URL` is optional. When set, durable in-app
-  completion, late, and failure notifications are also posted to that endpoint.
+- `NEWSLETTER_ALERT_WEBHOOK_URL` and `NEWSLETTER_ALERT_WEBHOOK_SECRET` are an
+  optional pair. When both are set, completion, late, and failure notifications
+  enter a durable retry outbox and are posted with a stable idempotency key plus
+  an HMAC-SHA256 signature. Generate a dedicated signing key with
+  `openssl rand -hex 32`; do not reuse `CRON_SECRET`. No external destination
+  is configured in production as of the August 6 audit.
 - `BEEHIIV_TOKEN_ENCRYPTION_KEY` encrypts Beehiiv OAuth tokens before they are
   stored. Generate a dedicated 32-byte key with `openssl rand -base64 32`.
 - `MASSIVE_API_KEY` is required for real-time streaming and for `DATA_PROVIDER=massive`.
@@ -290,6 +295,14 @@ Start here:
 
 - `supabase/migrations/README.md`
 - `data/MIGRATIONS.md`
+- `docs/migration-ledger-convergence.md`
+
+The August 6 convergence package restores remote-only history, adopts live
+tables that predated the local ledger, and isolates the migrations that truly
+still need to run. It has replayed on a clean local Supabase database, but it
+has not yet been applied to production. Follow the convergence runbook and
+apply database changes before deploying application code that depends on the
+new Beehiiv and webhook RPCs.
 
 ## Scripts
 
@@ -342,14 +355,26 @@ Generated -> Ready -> Beehiiv Draft -> Scheduled -> Published
 
 Signed-in users can create, open, and synchronize a Beehiiv draft directly from
 each report card. Scheduling and publishing remain explicit actions in Beehiiv;
-the reconciliation job mirrors those states back into Fin Quote every 15
-minutes and records publication metadata automatically.
+small leased reconciliation batches mirror those states back into Fin Quote
+throughout the weekday operating window and target lifecycle freshness within
+15 minutes. The reconciler also loads Beehiiv email/web statistics when they
+are available; a statistics failure never blocks the authoritative lifecycle
+update.
 
 The signed-in operator surface at `/newsletter/operations` combines morning and
 mid-morning stage progress, provider counts, issue retries, Beehiiv lifecycle
-state, notification history, and recent run durations. `Run now` advances one
-leased stage immediately. A failed run exposes `Retry stage`, which resumes the
-recorded failed stage without repeating completed collection work.
+state, date-scoped and lifetime delivery counts, delivery statistics,
+notification history, webhook-outbox health, and recent run durations. `Run
+now` advances one leased stage immediately. A failed run exposes `Retry stage`,
+which resumes the recorded failed stage without repeating completed collection
+work. `Reconcile now` claims the due Beehiiv queue through the same lease-fenced
+path as cron rather than creating a second reconciliation implementation.
+
+Beehiiv synchronization is also leased. A durable operation key and atomic
+claim prevent concurrent requests from creating duplicate posts, while
+create/update recovery markers keep a timed-out remote call from being treated
+as a clean retry. Exact publication selection fails closed when an account has
+more than one possible publication.
 
 Production reports:
 
@@ -390,6 +415,24 @@ generation, then final quality checks. Clean drafts are marked Ready
 automatically. The Vault secret named `newsletter_daily_cron_secret` must match
 the Vercel `CRON_SECRET`.
 
+External operational alerts use a separate durable outbox. Supabase Cron calls
+`/api/cron/newsletter-webhook` every five minutes; each call leases at most five
+due events. Failed requests retain their attempt count and error and retry with
+exponential backoff capped at six hours. Receivers should deduplicate on
+`Idempotency-Key` and verify `X-The-Intraday-Signature` by computing
+HMAC-SHA256 over `<event-id>.<timestamp>.<raw-body>` with
+`NEWSLETTER_ALERT_WEBHOOK_SECRET`. An authenticated administrator can send one
+durable canary through `POST /api/newsletter/webhook/test` after a real
+destination is configured.
+
+The in-app notification and webhook event have deliberately different update
+semantics. A repeated notification dedupe key may refresh the current
+operator-facing severity and copy while preserving read/delivery timestamps.
+The outbox payload is frozen when first enqueued because its stable event ID is
+also the receiver's idempotency key; every retry signs and sends that same raw
+body. Authenticated browser users may only mark their own notification read,
+and cannot mutate its content, ownership, delivery, or dedupe fields.
+
 Configure exactly one production recipient with
 `NEWSLETTER_AUTOMATION_OWNER_ID` (preferred) or
 `NEWSLETTER_AUTOMATION_SESSION_ID`. During the weekday morning window, `/`
@@ -407,6 +450,22 @@ npm run newsletter:verify-daily -- \
 The verifier checks counters, statuses, uniqueness, current source evidence,
 directional consistency, complete copy, provenance, chart linkage, distinct
 PNG files, minimum dimensions, and nonblank image content.
+
+### August 6 production checkpoint
+
+The unattended morning runner produced 40 ready issues out of 40. A
+one-subscriber Beehiiv canary then created and reused one remote post, was
+scheduled and published, and was reported sent and delivered. Gmail showed
+SPF, DKIM, and DMARC passing. The message initially landed in Spam, so this is
+proof of generation, transport, and authentication—not proof of broad inbox
+placement. `theintraday.com` is verified in Google Postmaster Tools and should
+be warmed with a small, engaged audience before volume increases.
+
+The companion Charting Platform mobile/accessibility repair is merged and
+deployed, and `https://charts.theintraday.com/health` returns `200` after its
+DNS/custom-domain repair. The Fin Quote Beehiiv/outbox/operations hardening in
+this checkout still requires final validation, production migrations, and app
+deployment before it should be treated as live behavior.
 
 ## Testing
 
@@ -460,3 +519,9 @@ This README is intentionally high-level. The repo is active and contains both pr
 - `app/stock/[symbol]/page.tsx`
 - `app/api/ask/route.ts`
 - `app/actions/chart-metrics.ts`
+
+At the August 6 audit, the repository resolves to Next.js 15.5.22 and React
+19.2.1, and `npm audit --omit=dev` reports zero production vulnerabilities. A
+stale automated security PR that targeted an older dependency state was closed.
+Those facts describe the dependency baseline; the current launch-hardening
+branch still needs its final full validation and deployment gates.

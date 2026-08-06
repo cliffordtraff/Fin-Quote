@@ -19,6 +19,39 @@ export type BeehiivLifecycleStatus =
   | 'archived'
   | 'unknown'
 
+export type BeehiivSyncOperationKind = 'create' | 'update'
+
+export type BeehiivSyncState =
+  | 'claimed'
+  | 'creating'
+  | 'updating'
+  | 'remote_recorded'
+  | 'completed'
+  | 'failed'
+  | 'ambiguous'
+
+export interface BeehiivSyncOperationRecord {
+  draftId: string
+  ownerId: string
+  publicationId: string
+  operationKind: BeehiivSyncOperationKind
+  operationKey: string
+  contentHash: string
+  title: string
+  syncState: BeehiivSyncState
+  remotePostId: string | null
+  remotePreviewUrl: string | null
+  remoteEditorUrl: string | null
+  leaseToken: string | null
+  leaseExpiresAt: string | null
+  attemptCount: number
+  lastError: string | null
+  startedAt: string
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface BeehiivDeliveryRecord {
   id: string
   draftId: string
@@ -31,6 +64,8 @@ export interface BeehiivDeliveryRecord {
   webUrl: string | null
   contentHash: string
   lifecycleStatus: BeehiivLifecycleStatus
+  lifecycleAppliedStatus: BeehiivLifecycleStatus | null
+  lifecycleAppliedAt: string | null
   beehiivStatus: string | null
   scheduledAt: string | null
   publishedAt: string | null
@@ -47,7 +82,7 @@ export interface BeehiivPostState {
   status: string | null
   publishDate: string | null
   webUrl: string | null
-  stats: Record<string, unknown>
+  stats: Record<string, unknown> | null
 }
 
 export type BeehiivDeliveryMode = 'created' | 'updated' | 'unchanged'

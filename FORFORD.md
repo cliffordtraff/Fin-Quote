@@ -380,7 +380,7 @@ Commit `52dff9b Add quarterly data support and TTM calculations` was weeks of wo
 | Layer | Choice | Why |
 |-------|--------|-----|
 | **Framework** | Next.js 15 | App router + Server Actions = less infrastructure |
-| **React** | React 19 RC | Living on the edge, but no major issues |
+| **React** | React 19.2.1 | Current stable React 19 behavior without an RC dependency |
 | **Database** | Supabase (PostgreSQL) | Free tier is generous, pgvector for embeddings |
 | **Auth** | Supabase Auth | Google OAuth out of the box |
 | **LLM** | OpenAI (gpt-5-nano) | Cheap, fast, good enough for routing |
@@ -785,7 +785,6 @@ That's the difference between a demo and a product.
 ---
 
 *Last updated: August 2026*
-*201 commits and counting*
 
 ---
 
@@ -1213,6 +1212,29 @@ severity, title, message, and metadata while preserving delivery and read
 timestamps. Idempotency means "one evolving event," not "the first write wins
 even after reality changes."
 
+An in-app notification and a delivered alert are now two separate promises.
+The database writes each new undelivered notification into a transactional
+outbox. The operator-facing notification may later evolve under the same dedupe
+key, but its already-enqueued webhook payload does not. That snapshot is
+immutable because its stable event ID is also the receiver's idempotency key;
+every retry must mean the same thing. A five-minute worker leases only a small
+due batch, signs the exact raw body with a dedicated HMAC-SHA256 secret, and
+sends that event ID as the idempotency key. Success atomically records both the
+attempt and the notification's delivery time; failure records the error and
+schedules exponential retry, capped at six hours.
+
+This is the postal-service lesson of reliable integrations: first put the
+letter in a durable mailbag, then let a separate courier retry the road. Never
+make the morning report itself wait for a flaky destination. An admin-only test
+route puts a real canary through the same mailbag and courier, so it exercises
+signing, persistence, and transport rather than a misleading one-off `fetch`.
+
+There is a second boundary inside the database. An authenticated browser may
+mark its own notification read, once. It may not edit the recipient, content,
+dedupe key, or delivery record, and it may not turn a read notification back
+into an unread one. Service code owns operational truth; the browser owns only
+the acknowledgement that a person saw it.
+
 Fresh database previews caught a different kind of time-travel bug. An imported
 remote-schema migration tried to remove a legacy table that production once
 had, but a clean database quite reasonably did not. The migration now guards
@@ -1221,17 +1243,183 @@ the legacy table follow the old path, while new previews continue to the
 recreation migration. A migration history is executable software, not a scrapbook:
 every supported starting point must be able to walk through it safely.
 
-### How We Know This Pass Holds Together
+---
 
-The verification strategy matched the risk instead of relying on one happy
-path:
+## August 6, 2026: The Newsletter Finally Left The Building
+
+For a long time, the newsletter pipeline could make excellent issues without
+answering the most ordinary customer question: **did the email actually
+arrive?**
+
+On August 6, the unattended morning automation produced forty ready issues out
+of forty. Each issue had current evidence, finished copy, and its own public
+chart. That is a meaningful milestone, but it proves only that the kitchen
+prepared forty plates. It does not prove a waiter picked one up, the dining
+room received it, or the guest enjoyed it.
+
+So we sent a one-subscriber canary through the real path. Fin Quote created a
+Beehiiv draft, an unchanged resync reused the same remote post, Beehiiv
+scheduled and published it, and the provider reported one message sent and one
+delivered. Gmail received it with SPF, DKIM, and DMARC all passing. Lifecycle
+reconciliation brought the published state back into Fin Quote, and running
+that reconciliation again did not duplicate the publication history.
+
+That sequence matters because every arrow crosses a different trust boundary:
+
+```text
+Fin Quote draft
+  -> Beehiiv post
+  -> scheduled publication
+  -> provider delivery
+  -> receiving mail server
+  -> mailbox placement
+  -> reader engagement
+```
+
+The final arrows are not implied by the earlier ones. Our first canary
+initially landed in Spam. Authentication was correct and transport succeeded,
+but the sending identity had almost no reputation history. That is not a code
+failure to paper over with another green badge. It is a reputation problem to
+manage with a small engaged audience, consistent cadence, careful list
+hygiene, and time. We verified `theintraday.com` in Google Postmaster Tools so
+spam rate and domain reputation can become observable signals rather than
+folklore.
+
+**The lesson:** an email system needs separate receipts for generation,
+publication, delivery, authentication, placement, and engagement. Calling all
+of them “sent” is how teams congratulate themselves while customers stare at
+an empty inbox.
+
+### Beehiiv Synchronization Needed A Checkout Counter
+
+The happy-path version of “Send to Beehiiv” is deceptively simple:
+
+```text
+look for an existing post -> create one if missing -> save its ID
+```
+
+Now imagine two requests arrive together. Both look before either has saved an
+ID. Both conclude that no post exists. Both create one. This is the database
+equivalent of two cashiers selling the last concert ticket because each looked
+at the seat map before the other marked it sold.
+
+The hardened path makes the claim atomic and leased. One worker obtains the
+right to perform a particular sync operation; another sees that claim instead
+of racing it. Completion is fenced by the lease token, so a slow worker whose
+lease expired cannot wake up later and overwrite the result of its successor.
+The operation records whether it is creating or updating and leaves recovery
+markers when the remote outcome is ambiguous.
+
+That last case is the uncomfortable one. A network timeout does not tell us
+whether Beehiiv rejected the request or created the post and lost the response.
+Blindly retrying can produce a duplicate. Pretending success can lose the
+post. The safe state is explicit uncertainty: stop automatic creation, surface
+the recovery context, and require evidence before another remote mutation.
+
+Publication selection follows the same fail-closed rule. When Beehiiv exposes
+exactly one intended publication, the system can proceed. When several are
+possible and configuration does not identify one exactly, guessing would send
+content to the wrong audience. A useful automation should be brave about
+retrying known-safe work and stubborn about ambiguous irreversible work.
+
+### Reconciliation Is Bookkeeping With Leases
+
+Beehiiv owns the external truth about whether a post is a draft, scheduled, or
+published. Fin Quote owns the editorial record and operator experience. The
+reconciler is the accountant keeping those two books aligned.
+
+The branch now claims reconciliation work in small leased batches. Lifecycle
+updates, publication metadata, and events are applied only by the worker that
+still owns the lease. Side effects are idempotent, so observing the same
+published post twice does not append the same milestone twice. Recently
+published posts stay eligible for periodic statistics refreshes, while failed
+analytics calls do not block the more important lifecycle update.
+
+The operations page turns that bookkeeping into something a human can inspect:
+
+- counts for the selected market date, separate from lifetime totals;
+- time from generation to sync, schedule, and publication;
+- reconciliation freshness and errors;
+- Beehiiv sent, delivered, open, click, bounce, unsubscribe, spam, and web-view
+  figures when the provider supplies them;
+- webhook-outbox health and configuration validity; and
+- a **Reconcile now** action that uses the same lease-fenced queue as cron.
+
+That final point avoids a common operations mistake. A manual button should not
+be a secret second implementation with different rules. It should safely ask
+the production machinery to do its normal work now.
+
+### The Migration Ledger Was A Map With Two Legends
+
+The Supabase project and the repository had both continued evolving, but their
+migration ledgers no longer told the same story. Some migrations existed only
+remotely. Many local files had no remote ledger row. A handful of tables were
+already live without a migration that a fresh database could replay. Two
+retired tables existed in history but should not be resurrected.
+
+Running a blind `supabase db push` in that situation is like renovating a
+building from an old floor plan: the drawing may tell you to build a wall where
+people are already walking.
+
+The convergence package restores remote history byte-for-byte where possible,
+adopts live tables without recreating them, codifies intentional retirements,
+and separates historical ledger repair from schema changes that are genuinely
+missing in production. A clean local Supabase instance has replayed the whole
+history successfully. That proves the map is internally navigable.
+
+It does **not** mean production has been changed. At the time this chapter was
+written, production application was still a release gate. The safe order is:
+backup, repair the historical ledger, inspect a dry run, apply only the
+expected migrations, verify the live objects, and demand an empty second dry
+run. Database migrations go before app code that calls their new functions.
+
+**The lesson:** migration history is not paperwork. It is executable recovery
+infrastructure. A database you cannot recreate is a database you only partly
+understand.
+
+### A Healthy Chart Needs Both Code And An Address
+
+The companion Charting Platform had two independent problems. Its narrow
+workspace controls collided and clipped, several fields lacked accessible
+names, and an old Tesla media request still haunted an interactive surface.
+Separately, `charts.theintraday.com` pointed through broken DNS/custom-domain
+routing even though the direct Vercel deployment was healthy.
+
+Charting Platform PR #2 fixed the mobile and accessibility defects and removed
+the stale request. The PR is merged and deployed. The custom-domain attachment
+and DNS were repaired, and `https://charts.theintraday.com/health` now returns
+`200`.
+
+This is a useful reminder that “the service is up” has layers too. A healthy
+deployment behind a broken public hostname is still down for customers. Code,
+DNS, TLS, domain attachment, and the application health route all need to agree.
+
+### Security Maintenance Should Follow Reality
+
+An old automated Fin Quote security PR was still proposing a dependency change
+for a repository state that no longer existed. The actual dependency baseline
+is Next.js 15.5.22 with React 19.2.1, and the production dependency audit
+reports no known vulnerabilities. The stale PR was closed instead of merging a
+conflicting historical patch for appearances.
+
+The engineering habit here is simple: automation raises a question; it does
+not get to replace inspection. Check the resolved dependency graph, current
+advisories, and actual audit result. Then either repair the current system or
+close the obsolete work with evidence.
+
+The Fin Quote launch-hardening branch was still awaiting its final complete
+validation, production migrations, and app deployment when this section was
+written. Keeping that sentence is part of the engineering work. Documentation
+should not promote code merely because the code exists.
+
+### How We Verify A Pass
+
+Verification should match the risk instead of relying on one happy path:
 
 - focused Vitest regressions cover admin gates, traversal rejection, safe
   process invocation, AI route limits, chatbot flag/auth limits, Why Moving
   fan-out, market-calendar/early-close behavior, FMP daylight-saving parsing,
   zero-vs-missing rendering, and iframe READY/retry behavior;
-- the complete repository suite finishes with 104 test files and 500 passing
-  tests, with no failures or skips in this snapshot;
 - the chatbot boundary alone has fourteen focused tests across its pure policy,
   streaming route, and legacy Server Action;
 - TypeScript runs with `npx tsc --noEmit` rather than depending on a production
@@ -1242,6 +1430,12 @@ path:
 - browser checks exercise the dashboard, stock page, and local chart
   integration rather than assuming unit tests can see layout and iframe timing;
 - `git diff --check` protects the handoff from malformed patches.
+
+Exact suite counts are deliberately omitted here because they become stale as
+soon as another test is added. The release record should capture the final
+commands and results after the branch completes validation. As of the August 6
+checkpoint above, that final Fin Quote release validation and deployment were
+still pending.
 
 The most reusable lesson from this pass is simple: **make invalid states
 representable but unmistakable, and make expensive states reachable only

@@ -36,6 +36,12 @@ function truncate(value: string, maxLength: number): string {
   return `${(lastSpace > 0 ? candidate.slice(0, lastSpace) : candidate).trim()}...`
 }
 
+function sentence(value: string): string {
+  const normalized = value.trim()
+  if (!normalized || /[.!?…]$/.test(normalized)) return normalized
+  return `${normalized}.`
+}
+
 function formatMarketDate(value: string): string {
   const parsed = new Date(`${value}T12:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return value
@@ -199,7 +205,7 @@ export function buildDailyNewsletterDraft(
     : ''
   const body = [
     `<p><strong>What happened:</strong> ${escapeHtml(summary)}</p>`,
-    `<p><strong>Why it matters:</strong> ${escapeHtml(candidate.headline)} The stock is ${escapeHtml(move)} in the current session, putting this catalyst near the top of today's WIIM ranking.</p>`,
+    `<p><strong>Why it matters:</strong> ${escapeHtml(sentence(candidate.headline))} The stock is ${escapeHtml(move)} in the current session, putting this catalyst near the top of today's WIIM ranking.</p>`,
     keyFact,
     `<p><strong>What to watch:</strong> ${escapeHtml(watchText(candidate.reasonType, ticker))}</p>`,
   ].filter(Boolean).join('')
