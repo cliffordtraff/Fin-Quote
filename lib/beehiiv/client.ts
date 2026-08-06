@@ -11,11 +11,30 @@ import {
 import type { BeehiivPostState, BeehiivPublication } from './types'
 
 const BEEHIIV_MCP_URL = new URL('https://mcp.beehiiv.com/mcp')
+const BEEHIIV_MCP_REQUEST_TIMEOUT_MS = 15_000
+
+const BEEHIIV_MCP_REQUEST_OPTIONS = {
+  timeout: BEEHIIV_MCP_REQUEST_TIMEOUT_MS,
+  maxTotalTimeout: BEEHIIV_MCP_REQUEST_TIMEOUT_MS,
+} as const
 
 export class BeehiivReconnectRequiredError extends Error {
   constructor() {
     super('Beehiiv needs to be reconnected before this draft can be synced.')
     this.name = 'BeehiivReconnectRequiredError'
+  }
+}
+
+/**
+ * A completed MCP response that definitively rejected the requested action.
+ * Unlike a transport timeout, this is safe to retry after the caller fixes the
+ * authentication, publication, or payload problem because the remote tool said
+ * it did not accept the operation.
+ */
+export class BeehiivToolRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BeehiivToolRejectedError'
   }
 }
 
@@ -73,7 +92,20 @@ function toolResultValues(result: ToolResultLike): unknown[] {
 function assertToolResult(result: ToolResultLike, action: string): void {
   if (!result.isError) return
   const detail = resultText(result).trim()
-  throw new Error(detail || `Beehiiv could not ${action}`)
+  throw new BeehiivToolRejectedError(
+    detail || `Beehiiv could not ${action}`,
+  )
+}
+
+async function callBeehiivTool(
+  client: Client,
+  input: Parameters<Client['callTool']>[0],
+): Promise<CallToolResult> {
+  return (await client.callTool(
+    input,
+    undefined,
+    BEEHIIV_MCP_REQUEST_OPTIONS,
+  )) as CallToolResult
 }
 
 function walkValues(value: unknown, visit: (entry: unknown) => boolean): boolean {
@@ -187,10 +219,6 @@ function parseBeehiivPostState(
   if (!post) {
     throw new Error('Beehiiv did not return the requested post state.')
   }
-  const nestedStats =
-    post.stats && typeof post.stats === 'object' && !Array.isArray(post.stats)
-      ? (post.stats as Record<string, unknown>)
-      : {}
   return {
     postId,
     status: stringField(post, ['status', 'post_status', 'postStatus']),
@@ -207,8 +235,99 @@ function parseBeehiivPostState(
       'canonical_url',
       'canonicalUrl',
     ]),
-    stats: nestedStats,
+    stats: null,
   }
+}
+
+const EMAIL_STATS_FIELDS = new Set([
+  'recipients',
+  'delivered',
+  'opens',
+  'unique_opens',
+  'open_rate',
+  'clicks',
+  'unique_clicks',
+  'click_rate',
+  'unsubscribes',
+  'spam_reports',
+])
+
+const WEB_STATS_FIELDS = new Set(['views', 'clicks'])
+
+function isStatsSection(
+  value: unknown,
+  fields: ReadonlySet<string>,
+): value is Record<string, unknown> {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value).some((key) => fields.has(key)),
+  )
+}
+
+function parseBeehiivPostStats(
+  result: ToolResultLike,
+): Record<string, unknown> {
+  const values = toolResultValues(result)
+  let found: Record<string, unknown> | null = null
+
+  for (const root of values) {
+    walkValues(root, (entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return false
+      }
+      const record = entry as Record<string, unknown>
+      if (
+        isStatsSection(record.email, EMAIL_STATS_FIELDS) ||
+        isStatsSection(record.web, WEB_STATS_FIELDS)
+      ) {
+        found = record
+        return true
+      }
+      return false
+    })
+    if (found) return found
+  }
+
+  throw new Error('Beehiiv did not return delivery statistics for the post.')
+}
+
+async function loadBeehiivPostState(
+  client: Client,
+  publicationId: string,
+  postId: string,
+): Promise<BeehiivPostState> {
+  const postResult = await callBeehiivTool(client, {
+    name: 'get_post',
+    arguments: {
+      publication_id: publicationId,
+      post_id: postId,
+      telemetry: {
+        intent:
+          'Reconcile a Fin Quote newsletter with its Beehiiv delivery state.',
+      },
+    },
+  })
+  assertToolResult(postResult, 'load the newsletter post')
+  const state = parseBeehiivPostState(postResult, postId)
+
+  // Delivery analytics are useful but never authoritative for lifecycle.
+  // Beehiiv exposes them through a separate tool, so reuse this connection
+  // and preserve the last persisted snapshot when the optional call fails.
+  let stats: Record<string, unknown> | null = null
+  try {
+    const statsResult = await callBeehiivTool(client, {
+      name: 'get_post_stats',
+      arguments: { post_id: postId },
+    })
+    assertToolResult(statsResult, 'load the newsletter delivery statistics')
+    stats = parseBeehiivPostStats(statsResult)
+  } catch {
+    stats = null
+  }
+
+  return { ...state, stats }
 }
 
 function collectPublicationCandidates(
@@ -278,7 +397,7 @@ async function withBeehiivClient<T>(
   })
 
   try {
-    await client.connect(transport)
+    await client.connect(transport, BEEHIIV_MCP_REQUEST_OPTIONS)
     return await operation(client)
   } catch (error) {
     if (
@@ -298,14 +417,14 @@ export async function listBeehiivPublications(
   ownerId: string,
 ): Promise<BeehiivPublication[]> {
   return withBeehiivClient(ownerId, async (client) => {
-    const result = (await client.callTool({
+    const result = await callBeehiivTool(client, {
       name: 'list_publications',
       arguments: {
         telemetry: {
           intent: 'Configure the Fin Quote newsletter delivery destination.',
         },
       },
-    })) as CallToolResult
+    })
     assertToolResult(result, 'list publications')
 
     const publications: BeehiivPublication[] = []
@@ -321,7 +440,7 @@ export async function createBeehiivPostDraft(
   input: BeehiivPostDraftInput,
 ): Promise<BeehiivPostDraftResult> {
   return withBeehiivClient(ownerId, async (client) => {
-    const result = (await client.callTool({
+    const result = await callBeehiivTool(client, {
       name: 'save_post',
       arguments: {
         publication_id: input.publicationId,
@@ -338,7 +457,7 @@ export async function createBeehiivPostDraft(
           intent: 'Create an editable Beehiiv draft from a reviewed Fin Quote issue.',
         },
       },
-    })) as CallToolResult
+    })
     assertToolResult(result, 'create the newsletter draft')
     return parsePostResult(result)
   })
@@ -350,7 +469,7 @@ export async function updateBeehiivPostDraft(
   input: BeehiivPostDraftInput,
 ): Promise<void> {
   return withBeehiivClient(ownerId, async (client) => {
-    const metadataResult = (await client.callTool({
+    const metadataResult = await callBeehiivTool(client, {
       name: 'edit_post',
       arguments: {
         publication_id: input.publicationId,
@@ -367,10 +486,10 @@ export async function updateBeehiivPostDraft(
           intent: 'Keep an existing Beehiiv draft aligned with the reviewed Fin Quote issue.',
         },
       },
-    })) as CallToolResult
+    })
     assertToolResult(metadataResult, 'update the newsletter settings')
 
-    const contentResult = (await client.callTool({
+    const contentResult = await callBeehiivTool(client, {
       name: 'edit_post_content',
       arguments: {
         publication_id: input.publicationId,
@@ -386,7 +505,7 @@ export async function updateBeehiivPostDraft(
           intent: 'Replace the Beehiiv draft body with the latest reviewed Fin Quote issue.',
         },
       },
-    })) as CallToolResult
+    })
     assertToolResult(contentResult, 'update the newsletter body')
   })
 }
@@ -396,23 +515,13 @@ export async function getBeehiivPostState(
   publicationId: string,
   postId: string,
 ): Promise<BeehiivPostState> {
-  return withBeehiivClient(ownerId, async (client) => {
-    const result = (await client.callTool({
-      name: 'get_post',
-      arguments: {
-        publication_id: publicationId,
-        post_id: postId,
-        telemetry: {
-          intent:
-            'Reconcile a Fin Quote newsletter with its Beehiiv delivery state.',
-        },
-      },
-    })) as CallToolResult
-    assertToolResult(result, 'load the newsletter post')
-    return parseBeehiivPostState(result, postId)
-  })
+  return withBeehiivClient(ownerId, (client) =>
+    loadBeehiivPostState(client, publicationId, postId),
+  )
 }
 
 export const __testOnly = {
+  loadBeehiivPostState,
   parseBeehiivPostState,
+  parseBeehiivPostStats,
 }

@@ -4,7 +4,10 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { BeehiivReconnectRequiredError } from '@/lib/beehiiv/client'
 import { getBeehiivDelivery } from '@/lib/beehiiv/store'
-import { deliverNewsletterDraftToBeehiiv } from '@/lib/newsletter/beehiiv-delivery'
+import {
+  BeehiivDeliveryConflictError,
+  deliverNewsletterDraftToBeehiiv,
+} from '@/lib/newsletter/beehiiv-delivery'
 import {
   NewsletterDraftAuthError,
   NewsletterDraftNotFoundError,
@@ -26,6 +29,12 @@ function errorResponse(error: unknown): NextResponse {
     return NextResponse.json(
       { error: error.message, reconnectRequired: true },
       { status: 409 },
+    )
+  }
+  if (error instanceof BeehiivDeliveryConflictError) {
+    return NextResponse.json(
+      { error: error.message, conflictCode: error.code },
+      { status: error.code === 'busy' ? 423 : 422 },
     )
   }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { __testOnly, NewsletterOperatorAccessError } from '../operations'
+import type { BeehiivDeliveryRecord } from '@/lib/beehiiv/types'
 import type { NewsletterDailyAutomationRun } from '../daily-automation'
 import type { NewsletterMidMorningRun } from '../mid-morning-automation'
 
@@ -124,5 +125,138 @@ describe('newsletter operations', () => {
       total: 5,
       successful: 5,
     })
+  })
+
+  it('normalizes and aggregates Beehiiv delivery performance', () => {
+    const first = {
+      stats: {
+        email: {
+          recipients: 10,
+          delivered: 9,
+          opens: 5,
+          unique_opens: 4,
+          clicks: 2,
+          unique_clicks: 1,
+          unsubscribes: 1,
+          spam_reports: 0,
+        },
+        web: { views: 3, clicks: 1 },
+      },
+    } as unknown as BeehiivDeliveryRecord
+    const second = {
+      stats: {
+        email: {
+          recipients: 5,
+          delivered: 5,
+          opens: 2,
+          unique_opens: 2,
+          clicks: 1,
+          unique_clicks: 1,
+          unsubscribes: 0,
+          spam_reports: 1,
+        },
+        web: { views: 2, clicks: 0 },
+      },
+    } as unknown as BeehiivDeliveryRecord
+
+    expect(__testOnly.normalizeBeehiivStats(first.stats)).toMatchObject({
+      sent: 10,
+      delivered: 9,
+      openRate: 4 / 9,
+      clickRate: 1 / 9,
+      bounces: 1,
+      webViews: 3,
+    })
+    expect(__testOnly.aggregateBeehiivStats([first, second])).toMatchObject({
+      sent: 15,
+      delivered: 14,
+      uniqueOpens: 6,
+      openRate: 6 / 14,
+      uniqueClicks: 2,
+      bounces: 1,
+      unsubscribes: 1,
+      spamReports: 1,
+      webViews: 5,
+    })
+  })
+
+  it('normalizes the post-stats payload returned by Beehiiv', () => {
+    const stats = {
+      email: {
+        total_sent: 1,
+        total_delivered: 1,
+        total_opened: 2,
+        total_unique_opened: 1,
+        total_email_clicked_raw: 3,
+        total_unique_email_clicked_raw: 2,
+        total_email_clicked_verified: 1,
+        total_unique_email_clicked_verified: 1,
+        total_hard_bounced: 0,
+        total_soft_bounced: 0,
+        total_unsubscribes: 0,
+        total_spam_reported: 0,
+        open_rate: 100,
+        click_rate: 50,
+      },
+      web: {
+        total_web_viewed: 4,
+        total_web_clicked: 2,
+        total_unique_web_clicked: 1,
+      },
+    }
+
+    expect(__testOnly.normalizeBeehiivStats(stats)).toEqual({
+      sent: 1,
+      delivered: 1,
+      opens: 2,
+      uniqueOpens: 1,
+      openRate: 100,
+      clicks: 1,
+      uniqueClicks: 1,
+      clickRate: 50,
+      bounces: 0,
+      unsubscribes: 0,
+      spamReports: 0,
+      webViews: 4,
+      webClicks: 2,
+    })
+  })
+
+  it('reports lifecycle freshness and average delivery latency', () => {
+    const delivery = {
+      lifecycleStatus: 'published',
+      syncedAt: '2026-08-06T12:00:00.000Z',
+      lastReconciledAt: '2026-08-06T12:05:00.000Z',
+      publishedAt: '2026-08-06T12:10:00.000Z',
+    } as unknown as BeehiivDeliveryRecord
+
+    expect(
+      __testOnly.summarizeBeehiivLifecycle(
+        [delivery],
+        new Date('2026-08-06T12:20:00.000Z'),
+      ),
+    ).toEqual({
+      latestReconciledAt: '2026-08-06T12:05:00.000Z',
+      freshnessMs: 15 * 60_000,
+      oldestActiveCheckAt: null,
+      averagePublishLatencyMs: 10 * 60_000,
+    })
+  })
+
+  it('uses explicit draft market dates before Eastern timestamp fallback', () => {
+    expect(
+      __testOnly.draftMarketDate(
+        {
+          source: {
+            type: 'daily_batch',
+            dailyBatch: { marketDate: '2026-08-05' },
+          },
+        },
+        '2026-08-06T02:00:00.000Z',
+      ),
+    ).toBe('2026-08-05')
+    expect(
+      __testOnly.draftMarketDate({}, '2026-08-06T02:00:00.000Z'),
+    ).toBe('2026-08-05')
   })
 })

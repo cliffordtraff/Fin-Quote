@@ -1,4 +1,5 @@
 import type {
+  BeehiivDeliveryRecord,
   BeehiivIntegrationStatus,
   BeehiivLifecycleStatus,
 } from '@/lib/beehiiv/types'
@@ -6,6 +7,8 @@ import {
   getBeehiivIntegrationStatus,
   listBeehiivDeliveries,
 } from '@/lib/beehiiv/store'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
+import { reconcileBeehiivDeliveryQueue } from './beehiiv-lifecycle'
 import type { NewsletterDraftScope } from './drafts'
 import {
   advanceNewsletterDailyAutomation,
@@ -18,6 +21,7 @@ import {
 } from './daily-automation'
 import {
   getConfiguredNewsletterAutomationScope,
+  getNewsletterDailyScopeKey,
   getLatestNewsletterDailyRun,
   getNewsletterDailySettings,
 } from './daily-runs'
@@ -35,9 +39,27 @@ import {
   type NewsletterMidMorningRun,
 } from './mid-morning-automation'
 import { listNewsletterNotifications } from './notifications'
+import { getNewsletterWebhookConfiguration } from './webhook-outbox'
 
 export type NewsletterOperationsPipeline = 'morning' | 'mid_morning'
-export type NewsletterOperationsAction = 'run_now' | 'retry_failed'
+export type NewsletterOperationsPipelineAction = 'run_now' | 'retry_failed'
+export type NewsletterOperationsAction =
+  | NewsletterOperationsPipelineAction
+  | 'reconcile_beehiiv'
+
+export type NewsletterOperationsActionInput =
+  | {
+      pipeline: NewsletterOperationsPipeline
+      action: NewsletterOperationsPipelineAction
+      marketDate: string
+    }
+  | { action: 'reconcile_beehiiv' }
+
+export interface NewsletterOperationsReconciliationResult {
+  attempted: number
+  updated: number
+  failed: Array<{ draftId: string; error: string }>
+}
 
 export interface NewsletterOperationsMetric {
   id: string
@@ -104,6 +126,44 @@ export interface NewsletterOperationsDelivery {
   syncedAt: string
   lastReconciledAt: string | null
   lastReconcileError: string | null
+  stats: NewsletterOperationsDeliveryStats
+}
+
+export interface NewsletterOperationsDeliveryStats {
+  sent: number | null
+  delivered: number | null
+  opens: number | null
+  uniqueOpens: number | null
+  openRate: number | null
+  clicks: number | null
+  uniqueClicks: number | null
+  clickRate: number | null
+  bounces: number | null
+  unsubscribes: number | null
+  spamReports: number | null
+  webViews: number | null
+  webClicks: number | null
+}
+
+export interface NewsletterOperationsLifecycleHealth {
+  latestReconciledAt: string | null
+  freshnessMs: number | null
+  oldestActiveCheckAt: string | null
+  averagePublishLatencyMs: number | null
+}
+
+export interface NewsletterOperationsWebhookHealth {
+  configured: boolean
+  configurationError: string | null
+  missing: string[]
+  pending: number
+  delivering: number
+  delivered: number
+  errors: number
+  oldestDueAt: string | null
+  lastError: string | null
+  lastErrorAt: string | null
+  queryError: string | null
 }
 
 export interface NewsletterOperationsSnapshot {
@@ -116,15 +176,20 @@ export interface NewsletterOperationsSnapshot {
   }
   settings: NewsletterDailySettings
   webhookConfigured: boolean
+  webhook: NewsletterOperationsWebhookHealth
   morning: NewsletterOperationsPipelineRun | null
   midMorning: NewsletterOperationsPipelineRun | null
   dailyRun: NewsletterOperationsDailyRun | null
   notifications: NewsletterNotification[]
   beehiiv: {
     integration: BeehiivIntegrationStatus
-    counts: Record<BeehiivLifecycleStatus, number>
+    marketDateCounts: Record<BeehiivLifecycleStatus, number>
+    overallCounts: Record<BeehiivLifecycleStatus, number>
+    overallTotal: number
     reconcileErrors: number
     staleCount: number
+    lifecycle: NewsletterOperationsLifecycleHealth
+    stats: NewsletterOperationsDeliveryStats
     deliveries: NewsletterOperationsDelivery[]
   }
   history: NewsletterOperationsPipelineRun[]
@@ -146,6 +211,243 @@ export class NewsletterOperationsActionError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (isRecord(error) && typeof error.message === 'string') {
+    return error.message
+  }
+  return String(error)
+}
+
+function emptyLifecycleCounts(): Record<BeehiivLifecycleStatus, number> {
+  return {
+    draft: 0,
+    scheduled: 0,
+    published: 0,
+    archived: 0,
+    unknown: 0,
+  }
+}
+
+function countDeliveryLifecycle(
+  deliveries: BeehiivDeliveryRecord[],
+): Record<BeehiivLifecycleStatus, number> {
+  const counts = emptyLifecycleCounts()
+  for (const delivery of deliveries) counts[delivery.lifecycleStatus] += 1
+  return counts
+}
+
+function numericField(
+  record: Record<string, unknown>,
+  keys: string[],
+): number | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number.parseFloat(value.replace('%', ''))
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return null
+}
+
+function normalizeBeehiivStats(
+  stats: Record<string, unknown>,
+): NewsletterOperationsDeliveryStats {
+  const email = isRecord(stats.email) ? stats.email : {}
+  const web = isRecord(stats.web) ? stats.web : {}
+  const sent = numericField(email, ['total_sent', 'recipients', 'sent'])
+  const delivered = numericField(email, ['total_delivered', 'delivered'])
+  const uniqueOpens = numericField(email, [
+    'total_unique_opened',
+    'unique_opens',
+    'uniqueOpens',
+  ])
+  const uniqueClicks = numericField(email, [
+    'total_unique_email_clicked_verified',
+    'total_unique_email_clicked_raw',
+    'unique_clicks',
+    'uniqueClicks',
+  ])
+  const reportedBounces = numericField(email, [
+    'bounces',
+    'bounced',
+    'total_bounces',
+  ])
+  const hardBounces = numericField(email, ['total_hard_bounced'])
+  const softBounces = numericField(email, ['total_soft_bounced'])
+  const providerBounces =
+    hardBounces !== null || softBounces !== null
+      ? (hardBounces ?? 0) + (softBounces ?? 0)
+      : null
+
+  return {
+    sent,
+    delivered,
+    opens: numericField(email, ['total_opened', 'opens']),
+    uniqueOpens,
+    openRate:
+      numericField(email, ['open_rate', 'openRate']) ??
+      (delivered && uniqueOpens !== null ? uniqueOpens / delivered : null),
+    clicks: numericField(email, [
+      'total_email_clicked_verified',
+      'total_email_clicked_raw',
+      'clicks',
+    ]),
+    uniqueClicks,
+    clickRate:
+      numericField(email, ['click_rate', 'clickRate']) ??
+      (delivered && uniqueClicks !== null ? uniqueClicks / delivered : null),
+    bounces:
+      reportedBounces ??
+      providerBounces ??
+      (sent !== null && delivered !== null
+        ? Math.max(0, sent - delivered)
+        : null),
+    unsubscribes: numericField(email, [
+      'total_unsubscribes',
+      'unsubscribes',
+    ]),
+    spamReports: numericField(email, [
+      'total_spam_reported',
+      'spam_reports',
+      'spamReports',
+    ]),
+    webViews: numericField(web, ['total_web_viewed', 'views']),
+    webClicks: numericField(web, ['total_web_clicked', 'clicks']),
+  }
+}
+
+const DELIVERY_STATS_FIELDS: Array<keyof NewsletterOperationsDeliveryStats> = [
+  'sent',
+  'delivered',
+  'opens',
+  'uniqueOpens',
+  'clicks',
+  'uniqueClicks',
+  'bounces',
+  'unsubscribes',
+  'spamReports',
+  'webViews',
+  'webClicks',
+]
+
+function aggregateBeehiivStats(
+  deliveries: BeehiivDeliveryRecord[],
+): NewsletterOperationsDeliveryStats {
+  const normalized = deliveries.map((delivery) =>
+    normalizeBeehiivStats(delivery.stats),
+  )
+  const aggregate = normalizeBeehiivStats({})
+  for (const field of DELIVERY_STATS_FIELDS) {
+    const values = normalized.flatMap((stats) => {
+      const value = stats[field]
+      return typeof value === 'number' ? [value] : []
+    })
+    aggregate[field] = values.length
+      ? values.reduce((total, value) => total + value, 0)
+      : null
+  }
+  const delivered = aggregate.delivered
+  aggregate.openRate =
+    delivered && aggregate.uniqueOpens !== null
+      ? aggregate.uniqueOpens / delivered
+      : null
+  aggregate.clickRate =
+    delivered && aggregate.uniqueClicks !== null
+      ? aggregate.uniqueClicks / delivered
+      : null
+  return aggregate
+}
+
+function averageDuration(values: number[]): number | null {
+  return values.length
+    ? values.reduce((total, value) => total + value, 0) / values.length
+    : null
+}
+
+function validTimestamp(value: string | null): number | null {
+  if (!value) return null
+  const parsed = new Date(value).getTime()
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function summarizeBeehiivLifecycle(
+  deliveries: BeehiivDeliveryRecord[],
+  now = new Date(),
+): NewsletterOperationsLifecycleHealth {
+  const reconciled = deliveries.flatMap((delivery) => {
+    const value = validTimestamp(delivery.lastReconciledAt)
+    return value === null ? [] : [value]
+  })
+  const activeChecks = deliveries.flatMap((delivery) => {
+    if (!['draft', 'scheduled', 'unknown'].includes(delivery.lifecycleStatus)) {
+      return []
+    }
+    const value =
+      validTimestamp(delivery.lastReconciledAt) ??
+      validTimestamp(delivery.syncedAt)
+    return value === null ? [] : [value]
+  })
+  const publishLatencies = deliveries.flatMap((delivery) => {
+    const synced = validTimestamp(delivery.syncedAt)
+    const published = validTimestamp(delivery.publishedAt)
+    return synced === null || published === null
+      ? []
+      : [Math.max(0, published - synced)]
+  })
+  const latest = reconciled.length ? Math.max(...reconciled) : null
+
+  return {
+    latestReconciledAt: latest === null ? null : new Date(latest).toISOString(),
+    freshnessMs: latest === null ? null : Math.max(0, now.getTime() - latest),
+    oldestActiveCheckAt: activeChecks.length
+      ? new Date(Math.min(...activeChecks)).toISOString()
+      : null,
+    averagePublishLatencyMs: averageDuration(publishLatencies),
+  }
+}
+
+function easternMarketDate(value: string): string | null {
+  const parsed = new Date(value)
+  if (!Number.isFinite(parsed.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsed)
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value
+  const year = get('year')
+  const month = get('month')
+  const day = get('day')
+  return year && month && day ? `${year}-${month}-${day}` : null
+}
+
+function draftMarketDate(draftJson: unknown, createdAt: string): string | null {
+  if (isRecord(draftJson)) {
+    const source = isRecord(draftJson.source) ? draftJson.source : null
+    const detail = source
+      ? isRecord(source.dailyBatch)
+        ? source.dailyBatch
+        : isRecord(source.catalyst)
+          ? source.catalyst
+          : null
+      : null
+    const sourceDate = detail?.marketDate
+    if (typeof sourceDate === 'string' && validMarketDate(sourceDate)) {
+      return sourceDate
+    }
+    if (typeof draftJson.generatedAt === 'string') {
+      const generatedDate = draftJson.generatedAt.slice(0, 10)
+      if (validMarketDate(generatedDate)) return generatedDate
+    }
+  }
+  return easternMarketDate(createdAt)
 }
 
 function numericValues(value: unknown): number[] {
@@ -287,6 +589,126 @@ function validMarketDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
+async function loadDeliveryMarketDates(
+  deliveries: BeehiivDeliveryRecord[],
+): Promise<Map<string, string>> {
+  const marketDates = new Map<string, string>()
+  for (const delivery of deliveries) {
+    const fallback = easternMarketDate(delivery.syncedAt)
+    if (fallback) marketDates.set(delivery.draftId, fallback)
+  }
+  const draftIds = Array.from(
+    new Set(deliveries.map((delivery) => delivery.draftId)),
+  )
+  if (!draftIds.length) return marketDates
+
+  const supabase = createServiceRoleClient()
+  const chunks = Array.from(
+    { length: Math.ceil(draftIds.length / 100) },
+    (_, index) => draftIds.slice(index * 100, index * 100 + 100),
+  )
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabase
+        .from('newsletter_drafts')
+        .select('id,draft_json,created_at')
+        .in('id', ids),
+    ),
+  )
+  for (const result of results) {
+    if (result.error) continue
+    for (const row of result.data ?? []) {
+      const marketDate = draftMarketDate(row.draft_json, row.created_at)
+      if (marketDate) marketDates.set(row.id, marketDate)
+    }
+  }
+  return marketDates
+}
+
+async function getNewsletterWebhookOutboxHealth(
+  scope: NewsletterDraftScope,
+  now = new Date(),
+): Promise<NewsletterOperationsWebhookHealth> {
+  const configuration = getNewsletterWebhookConfiguration()
+  const base = {
+    configured: configuration.configured,
+    configurationError: configuration.configured
+      ? null
+      : configuration.error,
+    missing: configuration.configured ? [] : configuration.missing,
+    pending: 0,
+    delivering: 0,
+    delivered: 0,
+    errors: 0,
+    oldestDueAt: null,
+    lastError: null,
+    lastErrorAt: null,
+    queryError: null,
+  } satisfies NewsletterOperationsWebhookHealth
+  const scopeKey = getNewsletterDailyScopeKey(scope)
+  const supabase = createServiceRoleClient()
+
+  async function countRows(input: {
+    status?: 'pending' | 'delivering' | 'delivered'
+    withErrors?: boolean
+  }): Promise<number> {
+    let query = supabase
+      .from('newsletter_webhook_outbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('scope_key', scopeKey)
+    if (input.status) query = query.eq('status', input.status)
+    if (input.withErrors) query = query.not('last_error', 'is', null)
+    const result = await query
+    if (result.error) throw result.error
+    return result.count ?? 0
+  }
+
+  try {
+    const [pending, delivering, delivered, errors, oldestDue, latestError] =
+      await Promise.all([
+        countRows({ status: 'pending' }),
+        countRows({ status: 'delivering' }),
+        countRows({ status: 'delivered' }),
+        countRows({ withErrors: true }),
+        supabase
+          .from('newsletter_webhook_outbox')
+          .select('next_attempt_at')
+          .eq('scope_key', scopeKey)
+          .is('delivered_at', null)
+          .lte('next_attempt_at', now.toISOString())
+          .order('next_attempt_at', { ascending: true })
+          .limit(1),
+        supabase
+          .from('newsletter_webhook_outbox')
+          .select('last_error,last_attempt_at,updated_at')
+          .eq('scope_key', scopeKey)
+          .not('last_error', 'is', null)
+          .order('updated_at', { ascending: false })
+          .limit(1),
+      ])
+    if (oldestDue.error) throw oldestDue.error
+    if (latestError.error) throw latestError.error
+    const errorRow = latestError.data?.[0]
+    return {
+      ...base,
+      pending,
+      delivering,
+      delivered,
+      errors,
+      oldestDueAt: oldestDue.data?.[0]?.next_attempt_at ?? null,
+      lastError: errorRow?.last_error ?? null,
+      lastErrorAt: errorRow
+        ? errorRow.last_attempt_at ?? errorRow.updated_at
+        : null,
+    }
+  } catch (error) {
+    return {
+      ...base,
+      queryError: errorMessage(error),
+    }
+  }
+}
+
 export async function getNewsletterOperationsSnapshot(
   userId: string,
 ): Promise<NewsletterOperationsSnapshot> {
@@ -304,6 +726,7 @@ export async function getNewsletterOperationsSnapshot(
     midMorningHistory,
     integration,
     allDeliveries,
+    webhook,
   ] = await Promise.all([
     getNewsletterDailySettings(scope),
     getNewsletterDailyAutomationRun(marketDate),
@@ -318,20 +741,18 @@ export async function getNewsletterOperationsSnapshot(
     scope.ownerId
       ? listBeehiivDeliveries(scope.ownerId)
       : Promise.resolve([]),
+    getNewsletterWebhookOutboxHealth(scope),
   ])
 
-  const counts: Record<BeehiivLifecycleStatus, number> = {
-    draft: 0,
-    scheduled: 0,
-    published: 0,
-    archived: 0,
-    unknown: 0,
-  }
-  for (const delivery of allDeliveries) {
-    counts[delivery.lifecycleStatus] += 1
-  }
-  const staleBefore = Date.now() - 20 * 60_000
-  const staleCount = allDeliveries.filter((delivery) => {
+  const generatedAt = new Date()
+  const deliveryMarketDates = await loadDeliveryMarketDates(allDeliveries)
+  const marketDateDeliveries = allDeliveries.filter(
+    (delivery) => deliveryMarketDates.get(delivery.draftId) === marketDate,
+  )
+  const marketDateCounts = countDeliveryLifecycle(marketDateDeliveries)
+  const overallCounts = countDeliveryLifecycle(allDeliveries)
+  const staleBefore = generatedAt.getTime() - 20 * 60_000
+  const staleCount = marketDateDeliveries.filter((delivery) => {
     if (
       !['draft', 'scheduled', 'unknown'].includes(delivery.lifecycleStatus)
     ) {
@@ -359,7 +780,7 @@ export async function getNewsletterOperationsSnapshot(
       })) ?? []
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: generatedAt.toISOString(),
     marketDate,
     clock,
     windows: {
@@ -369,9 +790,8 @@ export async function getNewsletterOperationsSnapshot(
       midMorning: getMidMorningAutomationWindow(clock),
     },
     settings,
-    webhookConfigured: Boolean(
-      process.env.NEWSLETTER_ALERT_WEBHOOK_URL?.trim(),
-    ),
+    webhookConfigured: webhook.configured,
+    webhook,
     morning: morning ? mapMorningRun(morning) : null,
     midMorning: midMorning ? mapMidMorningRun(midMorning) : null,
     dailyRun: dailyRun
@@ -392,12 +812,19 @@ export async function getNewsletterOperationsSnapshot(
     notifications,
     beehiiv: {
       integration,
-      counts,
-      reconcileErrors: allDeliveries.filter(
+      marketDateCounts,
+      overallCounts,
+      overallTotal: allDeliveries.length,
+      reconcileErrors: marketDateDeliveries.filter(
         (delivery) => Boolean(delivery.lastReconcileError),
       ).length,
       staleCount,
-      deliveries: allDeliveries.slice(0, 20).map((delivery) => ({
+      lifecycle: summarizeBeehiivLifecycle(
+        marketDateDeliveries,
+        generatedAt,
+      ),
+      stats: aggregateBeehiivStats(marketDateDeliveries),
+      deliveries: marketDateDeliveries.slice(0, 20).map((delivery) => ({
         id: delivery.id,
         draftId: delivery.draftId,
         title: delivery.title,
@@ -410,6 +837,7 @@ export async function getNewsletterOperationsSnapshot(
         syncedAt: delivery.syncedAt,
         lastReconciledAt: delivery.lastReconciledAt,
         lastReconcileError: delivery.lastReconcileError,
+        stats: normalizeBeehiivStats(delivery.stats),
       })),
     },
     history: [
@@ -423,13 +851,14 @@ export async function getNewsletterOperationsSnapshot(
 
 export async function executeNewsletterOperationsAction(
   userId: string,
-  input: {
-    pipeline: NewsletterOperationsPipeline
-    action: NewsletterOperationsAction
-    marketDate: string
-  },
+  input: NewsletterOperationsActionInput,
 ) {
   resolveOperatorScope(userId)
+  if (input.action === 'reconcile_beehiiv') {
+    const result: NewsletterOperationsReconciliationResult =
+      await reconcileBeehiivDeliveryQueue(50, 6)
+    return result
+  }
   if (!validMarketDate(input.marketDate)) {
     throw new NewsletterOperationsActionError('Invalid market date.')
   }
@@ -460,8 +889,13 @@ export async function executeNewsletterOperationsAction(
 }
 
 export const __testOnly = {
+  aggregateBeehiivStats,
+  countDeliveryLifecycle,
+  draftMarketDate,
   mapMorningRun,
   mapMidMorningRun,
+  normalizeBeehiivStats,
   retryDetails,
   resolveOperatorScope,
+  summarizeBeehiivLifecycle,
 }

@@ -48,8 +48,9 @@ async function resolveImageToPublicUrl(imageUrl: string): Promise<string> {
       : null
 
   if (!localPath) {
-    console.warn(`Newsletter chart image not found locally: ${outputPath}`)
-    return imageUrl
+    throw new Error(
+      `Newsletter chart image is not durable or available locally: ${imageUrl}`,
+    )
   }
   return publishLocalImage(localPath)
 }
@@ -58,6 +59,7 @@ export interface NewsletterBeehiivExport {
   html: string
   record: NewsletterDraftRecord
   draft: NewsletterDraftDocument
+  resolvedImageUrls: string[]
 }
 
 export async function buildNewsletterDraftBeehiivExport(
@@ -87,5 +89,10 @@ export async function buildNewsletterDraftBeehiivExport(
     html = html.replaceAll(`src="${localUrl}"`, `src="${publicUrl}"`)
   }
 
-  return { html, record, draft }
+  return {
+    html,
+    record,
+    draft,
+    resolvedImageUrls: imageUrls.map((imageUrl) => urlMap[imageUrl] ?? imageUrl),
+  }
 }

@@ -24,14 +24,19 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type {
-  NewsletterOperationsAction,
   NewsletterOperationsPipeline,
+  NewsletterOperationsPipelineAction,
   NewsletterOperationsPipelineRun,
+  NewsletterOperationsReconciliationResult,
   NewsletterOperationsSnapshot,
 } from '@/lib/newsletter/operations'
 
 interface ErrorResponse {
   error?: string
+}
+
+interface ReconciliationResponse extends ErrorResponse {
+  result?: NewsletterOperationsReconciliationResult
 }
 
 function isOperationsSnapshot(
@@ -90,6 +95,30 @@ function formatDuration(start: string | null, end: string | null): string {
   const seconds = Math.max(0, Math.round((endTime - startTime) / 1000))
   const minutes = Math.floor(seconds / 60)
   return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`
+}
+
+function formatElapsed(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'Not available'
+  const seconds = Math.max(0, Math.round(value / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m`
+}
+
+function formatMetric(value: number | null): string {
+  return value === null
+    ? '—'
+    : new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value)
+}
+
+function formatRate(value: number | null): string {
+  if (value === null) return '—'
+  const normalized = Math.abs(value) <= 1 ? value * 100 : value
+  return `${new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 1,
+  }).format(normalized)}%`
 }
 
 function displayStatus(status: string | undefined): string {
@@ -218,7 +247,7 @@ function PipelinePanel({
   busy: boolean
   onAction: (
     pipeline: NewsletterOperationsPipeline,
-    action: NewsletterOperationsAction,
+    action: NewsletterOperationsPipelineAction,
   ) => void
 }) {
   const title = pipeline === 'morning' ? 'Morning' : 'Mid-morning'
@@ -477,22 +506,90 @@ function ProviderHealth({
 
 function DeliverySection({
   snapshot,
+  busy,
+  onReconcile,
 }: {
   snapshot: NewsletterOperationsSnapshot
+  busy: boolean
+  onReconcile: () => void
 }) {
+  const marketDateTotal = Object.values(
+    snapshot.beehiiv.marketDateCounts,
+  ).reduce((total, count) => total + count, 0)
+  const stats = snapshot.beehiiv.stats
+  const performance = [
+    {
+      label: 'Sent',
+      value: formatMetric(stats.sent),
+      detail: 'Email recipients',
+    },
+    {
+      label: 'Delivered',
+      value: formatMetric(stats.delivered),
+      detail:
+        stats.sent === null
+          ? 'Accepted by inboxes'
+          : `${formatMetric(stats.bounces)} bounced`,
+    },
+    {
+      label: 'Unique opens',
+      value: formatMetric(stats.uniqueOpens),
+      detail: `${formatRate(stats.openRate)} · ${formatMetric(stats.opens)} total`,
+    },
+    {
+      label: 'Unique clicks',
+      value: formatMetric(stats.uniqueClicks),
+      detail: `${formatRate(stats.clickRate)} · ${formatMetric(stats.clicks)} total`,
+    },
+    {
+      label: 'Bounces',
+      value: formatMetric(stats.bounces),
+      detail: 'Sent minus delivered',
+    },
+    {
+      label: 'Unsubscribes',
+      value: formatMetric(stats.unsubscribes),
+      detail: 'Attributed to these posts',
+    },
+    {
+      label: 'Spam reports',
+      value: formatMetric(stats.spamReports),
+      detail: 'Attributed to these posts',
+    },
+    {
+      label: 'Web',
+      value:
+        stats.webViews === null
+          ? '—'
+          : `${formatMetric(stats.webViews)} views`,
+      detail: `${formatMetric(stats.webClicks)} clicks`,
+    },
+  ]
+
   return (
     <section className="min-w-0 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
         <MailCheck className="h-4 w-4 text-gray-500" aria-hidden />
         <h2 className="text-sm font-semibold text-gray-950 dark:text-white">
           Beehiiv delivery
         </h2>
-        {snapshot.webhookConfigured ? (
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-gray-500">
-            <Webhook className="h-3.5 w-3.5" aria-hidden />
-            Alerts active
-          </span>
-        ) : null}
+        <span className="text-[11px] text-gray-500">
+          {marketDateTotal} this market date · {snapshot.beehiiv.overallTotal}{' '}
+          overall
+        </span>
+        <button
+          type="button"
+          onClick={onReconcile}
+          disabled={busy || !snapshot.beehiiv.integration.connected}
+          className="ml-auto inline-flex h-8 items-center gap-1.5 rounded border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-800"
+          title="Refresh lifecycle state and Beehiiv delivery statistics"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`}
+            aria-hidden
+          />
+          Reconcile now
+        </button>
       </div>
       <div className="grid grid-cols-5 border-b border-gray-100 dark:border-gray-800">
         {(['draft', 'scheduled', 'published', 'archived', 'unknown'] as const).map(
@@ -502,23 +599,81 @@ function DeliverySection({
               className="min-w-0 border-r border-gray-100 px-2 py-3 text-center last:border-r-0 dark:border-gray-800"
             >
               <p className="text-lg font-semibold tabular-nums text-gray-950 dark:text-white">
-                {snapshot.beehiiv.counts[status]}
+                {snapshot.beehiiv.marketDateCounts[status]}
               </p>
               <p className="truncate text-[9px] font-semibold uppercase text-gray-500 sm:text-[10px]">
                 {status === 'scheduled' ? 'Sched.' : status}
+              </p>
+              <p className="mt-0.5 truncate text-[9px] tabular-nums text-gray-400">
+                {snapshot.beehiiv.overallCounts[status]} overall
               </p>
             </div>
           ),
         )}
       </div>
+      <dl className="grid grid-cols-2 border-b border-gray-100 text-xs dark:border-gray-800 lg:grid-cols-4">
+        <div className="border-b border-r border-gray-100 px-4 py-3 dark:border-gray-800 lg:border-b-0">
+          <dt className="text-gray-500">Last remote check</dt>
+          <dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">
+            {formatDateTime(snapshot.beehiiv.lifecycle.latestReconciledAt)}
+          </dd>
+        </div>
+        <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800 lg:border-b-0 lg:border-r">
+          <dt className="text-gray-500">Reconcile freshness</dt>
+          <dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">
+            {formatElapsed(snapshot.beehiiv.lifecycle.freshnessMs)}
+          </dd>
+        </div>
+        <div className="border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+          <dt className="text-gray-500">Oldest active check</dt>
+          <dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">
+            {formatDateTime(snapshot.beehiiv.lifecycle.oldestActiveCheckAt)}
+          </dd>
+          <dd className="mt-0.5 text-[10px] text-gray-500">
+            {snapshot.beehiiv.staleCount} stale beyond 20m
+          </dd>
+        </div>
+        <div className="px-4 py-3">
+          <dt className="text-gray-500">Average time to publish</dt>
+          <dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">
+            {formatElapsed(snapshot.beehiiv.lifecycle.averagePublishLatencyMs)}
+          </dd>
+        </div>
+      </dl>
+      <div className="grid grid-cols-2 border-b border-gray-100 dark:border-gray-800 sm:grid-cols-4 xl:grid-cols-8">
+        {performance.map((metric) => (
+          <div
+            key={metric.label}
+            className="min-w-0 border-b border-r border-gray-100 px-3 py-3 dark:border-gray-800 xl:border-b-0"
+          >
+            <p className="truncate text-[9px] font-semibold uppercase text-gray-500">
+              {metric.label}
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold tabular-nums text-gray-950 dark:text-white">
+              {metric.value}
+            </p>
+            <p
+              className="mt-0.5 truncate text-[10px] text-gray-500"
+              title={metric.detail}
+            >
+              {metric.detail}
+            </p>
+          </div>
+        ))}
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] text-left text-xs">
+        <table className="w-full min-w-[900px] text-left text-xs">
           <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 dark:bg-gray-950/50">
             <tr>
               <th className="px-4 py-2 font-semibold">Issue</th>
               <th className="px-4 py-2 font-semibold">Lifecycle</th>
               <th className="px-4 py-2 font-semibold">Reconciled</th>
-              <th className="px-4 py-2 font-semibold">Delivery</th>
+              <th className="px-4 py-2 text-right font-semibold">
+                Delivered / sent
+              </th>
+              <th className="px-4 py-2 text-right font-semibold">Opens</th>
+              <th className="px-4 py-2 text-right font-semibold">Click</th>
+              <th className="px-4 py-2 font-semibold">Health</th>
               <th className="px-4 py-2 text-right font-semibold">Open</th>
             </tr>
           </thead>
@@ -533,6 +688,22 @@ function DeliverySection({
                 </td>
                 <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                   {formatDateTime(delivery.lastReconciledAt)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                  {formatMetric(delivery.stats.delivered)} /{' '}
+                  {formatMetric(delivery.stats.sent)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                  {formatMetric(delivery.stats.uniqueOpens)}{' '}
+                  <span className="text-[10px] text-gray-400">
+                    {formatRate(delivery.stats.openRate)}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                  {formatMetric(delivery.stats.uniqueClicks)}{' '}
+                  <span className="text-[10px] text-gray-400">
+                    {formatRate(delivery.stats.clickRate)}
+                  </span>
                 </td>
                 <td className="max-w-[200px] px-4 py-3">
                   {delivery.lastReconcileError ? (
@@ -564,14 +735,104 @@ function DeliverySection({
             ))}
             {snapshot.beehiiv.deliveries.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                  No Beehiiv deliveries
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  No Beehiiv deliveries for this market date
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
+    </section>
+  )
+}
+
+function WebhookHealthSection({
+  snapshot,
+}: {
+  snapshot: NewsletterOperationsSnapshot
+}) {
+  const webhook = snapshot.webhook
+  const unhealthy = Boolean(webhook.queryError || webhook.errors)
+  const status = !webhook.configured
+    ? 'not configured'
+    : unhealthy
+      ? 'failed'
+      : webhook.pending || webhook.delivering
+        ? 'running'
+        : 'completed'
+  const configurationDetail = webhook.configurationError
+    ? webhook.configurationError
+    : webhook.missing.length
+      ? `Missing ${webhook.missing.join(' and ')}`
+      : null
+
+  return (
+    <section className="min-w-0 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+        <Webhook className="h-4 w-4 text-gray-500" aria-hidden />
+        <h2 className="text-sm font-semibold text-gray-950 dark:text-white">
+          Webhook outbox
+        </h2>
+        <div className="ml-auto">
+          <StatusPill status={status} />
+        </div>
+      </div>
+      <div className="grid grid-cols-4 border-b border-gray-100 dark:border-gray-800">
+        {[
+          ['Pending', webhook.pending],
+          ['Delivering', webhook.delivering],
+          ['Delivered', webhook.delivered],
+          ['Errors', webhook.errors],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="min-w-0 border-r border-gray-100 px-2 py-3 text-center last:border-r-0 dark:border-gray-800"
+          >
+            <p className="text-lg font-semibold tabular-nums text-gray-950 dark:text-white">
+              {value}
+            </p>
+            <p className="truncate text-[9px] font-semibold uppercase text-gray-500">
+              {label}
+            </p>
+          </div>
+        ))}
+      </div>
+      <dl className="grid grid-cols-2 text-xs">
+        <div className="border-r border-gray-100 px-4 py-3 dark:border-gray-800">
+          <dt className="text-gray-500">Oldest due</dt>
+          <dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">
+            {webhook.oldestDueAt
+              ? formatDateTime(webhook.oldestDueAt)
+              : 'No overdue events'}
+          </dd>
+        </div>
+        <div className="px-4 py-3">
+          <dt className="text-gray-500">Last delivery error</dt>
+          <dd
+            className={`mt-1 truncate font-medium ${
+              webhook.lastError
+                ? 'text-red-700 dark:text-red-400'
+                : 'text-gray-800 dark:text-gray-200'
+            }`}
+            title={webhook.lastError ?? undefined}
+          >
+            {webhook.lastError ?? 'None'}
+          </dd>
+          {webhook.lastErrorAt ? (
+            <dd className="mt-0.5 text-[10px] text-gray-500">
+              {formatDateTime(webhook.lastErrorAt)}
+            </dd>
+          ) : null}
+        </div>
+      </dl>
+      {configurationDetail || webhook.queryError ? (
+        <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          {webhook.queryError
+            ? `Outbox health unavailable: ${webhook.queryError}`
+            : configurationDetail}
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -788,7 +1049,7 @@ export default function NewsletterOperations() {
   const runAction = useCallback(
     async (
       pipeline: NewsletterOperationsPipeline,
-      action: NewsletterOperationsAction,
+      action: NewsletterOperationsPipelineAction,
     ) => {
       if (!snapshot) return
       setBusyKey(`${pipeline}:${action}`)
@@ -827,6 +1088,39 @@ export default function NewsletterOperations() {
     },
     [load, snapshot],
   )
+
+  const reconcileBeehiiv = useCallback(async () => {
+    setBusyKey('beehiiv:reconcile')
+    setNotice(null)
+    setError(null)
+    try {
+      const response = await fetch('/api/newsletter/operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reconcile_beehiiv' }),
+      })
+      const body = (await response.json()) as ReconciliationResponse
+      if (!response.ok || !body.result) {
+        throw new Error(body.error ?? 'Beehiiv reconciliation failed.')
+      }
+      const { attempted, updated, failed } = body.result
+      const report = `${attempted} attempted, ${updated} updated, ${failed.length} failed.`
+      if (failed.length) {
+        setError(`${report} ${failed[0].error}`)
+      } else {
+        setNotice(`Beehiiv reconciliation complete: ${report}`)
+      }
+      await load(true)
+    } catch (reconcileError) {
+      setError(
+        reconcileError instanceof Error
+          ? reconcileError.message
+          : 'Beehiiv reconciliation failed.',
+      )
+    } finally {
+      setBusyKey(null)
+    }
+  }, [load])
 
   const markAllRead = useCallback(async () => {
     if (!snapshot) return
@@ -915,7 +1209,9 @@ export default function NewsletterOperations() {
     )
   }
 
-  const deliveryCount = Object.values(snapshot.beehiiv.counts).reduce(
+  const deliveryCount = Object.values(
+    snapshot.beehiiv.marketDateCounts,
+  ).reduce(
     (total, count) => total + count,
     0,
   )
@@ -1010,12 +1306,13 @@ export default function NewsletterOperations() {
           label="Beehiiv"
           value={
             snapshot.beehiiv.integration.connected
-              ? `${deliveryCount} deliveries`
+              ? `${deliveryCount} today`
               : 'Disconnected'
           }
           detail={
-            snapshot.beehiiv.integration.publication?.name ??
-            `${snapshot.beehiiv.staleCount} awaiting reconciliation`
+            snapshot.beehiiv.integration.publication
+              ? `${snapshot.beehiiv.integration.publication.name} · ${snapshot.beehiiv.overallTotal} overall`
+              : `${snapshot.beehiiv.staleCount} awaiting reconciliation`
           }
           tone={
             snapshot.beehiiv.reconcileErrors
@@ -1030,11 +1327,17 @@ export default function NewsletterOperations() {
           label="Alerts"
           value={`${unreadCount} unread`}
           detail={
-            snapshot.webhookConfigured
-              ? 'External webhook active'
-              : 'In-app delivery only'
+            snapshot.webhook.configured
+              ? `${snapshot.webhook.pending} pending · ${snapshot.webhook.delivered} delivered`
+              : 'In-app only · webhook incomplete'
           }
-          tone={unreadCount ? 'warning' : 'good'}
+          tone={
+            snapshot.webhook.queryError || snapshot.webhook.errors
+              ? 'bad'
+              : unreadCount || !snapshot.webhook.configured
+                ? 'warning'
+                : 'good'
+          }
         />
       </section>
 
@@ -1099,12 +1402,19 @@ export default function NewsletterOperations() {
       ) : null}
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-        <DeliverySection snapshot={snapshot} />
-        <NotificationSection
+        <DeliverySection
           snapshot={snapshot}
-          busy={busyKey === 'notifications'}
-          onMarkAllRead={() => void markAllRead()}
+          busy={busyKey === 'beehiiv:reconcile'}
+          onReconcile={() => void reconcileBeehiiv()}
         />
+        <div className="grid content-start gap-4">
+          <WebhookHealthSection snapshot={snapshot} />
+          <NotificationSection
+            snapshot={snapshot}
+            busy={busyKey === 'notifications'}
+            onMarkAllRead={() => void markAllRead()}
+          />
+        </div>
       </div>
 
       <RecentRuns snapshot={snapshot} />
