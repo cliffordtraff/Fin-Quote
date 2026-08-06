@@ -100,6 +100,24 @@ function normalizeSummaryText(value: unknown): string | null {
   return `${truncated}...`
 }
 
+function resolveEntityAnchoredSummary(input: {
+  value: unknown
+  symbol: string
+  companyName: string
+  sourceMatchesEntity: boolean
+}): string | null {
+  const summary = normalizeSummaryText(input.value)
+  if (!summary || !input.sourceMatchesEntity) return null
+
+  return isNewsletterSourceEntityMatch({
+    ticker: input.symbol,
+    companyName: input.companyName,
+    text: summary,
+  })
+    ? summary
+    : null
+}
+
 function extractJsonCandidate(text: string): string {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
   const match = trimmed.match(/\{[\s\S]*\}/)
@@ -428,6 +446,7 @@ Rules:
 - If the price move is small and the news is generic, set summary to null and no_summary_reason to "quiet_tape".
 - When summary is not null, source_index is required and must be the 1-based n field of the single news item that best supports it.
 - Never select a source about a similarly named product or another company. The source must identify ${input.name} or ${input.symbol}.
+- When summary is not null, explicitly identify ${input.name} or ${input.symbol} in the summary. Do not shorten the company name to a generic word.
 - When summary is null, set source_index to null.
 
 Symbol: ${input.symbol}
@@ -559,8 +578,12 @@ export async function generateStockWhyMovingSummary(input: {
       }),
   )
   const proposedSummaryText = normalizeSummaryText(parsed.summary)
-  const summaryText =
-    proposedSummaryText && sourceMatchesEntity ? proposedSummaryText : null
+  const summaryText = resolveEntityAnchoredSummary({
+    value: proposedSummaryText,
+    symbol,
+    companyName: name,
+    sourceMatchesEntity,
+  })
   const noSummaryReason = summaryText
     ? null
     : proposedSummaryText
@@ -688,4 +711,5 @@ export const __testOnly = {
   selectSecFilingDocument,
   secNewsTitle,
   mergeSummaryNews,
+  resolveEntityAnchoredSummary,
 }

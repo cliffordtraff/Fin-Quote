@@ -87,6 +87,7 @@ describe('daily newsletter run targets', () => {
       __testOnly.isDailyItemSourceEntityValid({
         ticker: 'MTCH',
         headline: 'Huya launches Triple Match 3D mobile game worldwide',
+        summaryText: 'Match Group reported second-quarter results.',
         candidateMetadata: { companyName: 'Match Group, Inc.' },
       }),
     ).toBe(false)
@@ -94,6 +95,15 @@ describe('daily newsletter run targets', () => {
       __testOnly.isDailyItemSourceEntityValid({
         ticker: 'MTCH',
         headline: 'Match Group reports second-quarter results',
+        summaryText: 'Match reported revenue in line with expectations.',
+        candidateMetadata: { companyName: 'Match Group, Inc.' },
+      }),
+    ).toBe(false)
+    expect(
+      __testOnly.isDailyItemSourceEntityValid({
+        ticker: 'MTCH',
+        headline: 'Match Group reports second-quarter results',
+        summaryText: 'Match Group reported revenue in line with expectations.',
         candidateMetadata: { companyName: 'Match Group, Inc.' },
       }),
     ).toBe(true)

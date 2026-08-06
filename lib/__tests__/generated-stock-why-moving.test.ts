@@ -72,6 +72,40 @@ describe('generated stock why moving JSON parsing', () => {
     expect(summary?.length).toBeLessThanOrEqual(WIIM_SUMMARY_MAX_CHARACTERS)
     expect(summary).toMatch(/complete\.\.\.$/)
   })
+
+  it('requires generated summaries to identify the selected company', () => {
+    const input = {
+      symbol: 'MTCH',
+      companyName: 'Match Group, Inc.',
+      sourceMatchesEntity: true,
+    }
+
+    expect(
+      __testOnly.resolveEntityAnchoredSummary({
+        ...input,
+        value: 'Match reported Q2 revenue in line with expectations.',
+      }),
+    ).toBeNull()
+    expect(
+      __testOnly.resolveEntityAnchoredSummary({
+        ...input,
+        value: 'Match Group reported Q2 revenue in line with expectations.',
+      }),
+    ).toBe('Match Group reported Q2 revenue in line with expectations.')
+    expect(
+      __testOnly.resolveEntityAnchoredSummary({
+        ...input,
+        value: 'MTCH reported Q2 revenue in line with expectations.',
+      }),
+    ).toBe('MTCH reported Q2 revenue in line with expectations.')
+    expect(
+      __testOnly.resolveEntityAnchoredSummary({
+        ...input,
+        sourceMatchesEntity: false,
+        value: 'Match Group reported Q2 revenue in line with expectations.',
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('generated stock why moving news window', () => {

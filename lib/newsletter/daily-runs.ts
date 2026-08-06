@@ -643,16 +643,18 @@ function candidateItemPayload(
 function isDailyItemSourceEntityValid(
   item: Pick<
     NewsletterDailyRunItem,
-    'ticker' | 'headline' | 'candidateMetadata'
+    'ticker' | 'headline' | 'summaryText' | 'candidateMetadata'
   >,
 ): boolean {
   const companyName = getSP500Constituent(item.ticker)?.name
   if (!companyName) return false
-  return isNewsletterSourceEntityMatch({
-    ticker: item.ticker,
-    companyName,
-    text: item.headline,
-  })
+  return [item.headline, item.summaryText].every((text) =>
+    isNewsletterSourceEntityMatch({
+      ticker: item.ticker,
+      companyName,
+      text,
+    }),
+  )
 }
 
 function shouldRebuildDailyDraft(
