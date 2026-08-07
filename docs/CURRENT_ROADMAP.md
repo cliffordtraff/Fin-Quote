@@ -146,6 +146,40 @@ error log. These checks prove the intended live boundary; they do not prove
 that the historically broader boundary was ever exploited, and no such claim
 is being made.
 
+## August 6 Whole-Product UI Audit — Completed
+
+All thirteen primary navigation destinations were reviewed at desktop and
+narrow-phone widths. The resulting remediation addressed the highest-impact
+shared problem and the weakest individual surface:
+
+- the global header now groups destinations into Briefings, Markets, Company,
+  and Newsletter, keeps Pulse prominent, preserves ticker context, and uses a
+  purpose-built mobile Browse panel;
+- navigation, timezone, and account menus now expose state, close predictably,
+  return focus, and use one shared utilities island;
+- Pulse Today has a clearer live hierarchy, honest stale/loading/error states,
+  a mobile-safe live-detail chart, two purposeful replay views, responsive
+  canvases, stable accessible controls, and reduced-motion behavior;
+- replay now uses the actual historical previous close, defaults to the latest
+  completed session and selected mover, uses an available Massive key for
+  second-level candles without changing the app-wide data provider, avoids
+  permanently caching empty history, supports correlation-
+  aware retry (with incomplete responses left uncached), batches
+  playback through 100x, and suspends live resources
+  while replay owns the screen;
+- Insiders uses mobile cards without sacrificing the semantic desktop table,
+  and its tabs, request races, loading, failure, and retry states are explicit;
+- Financial Statements has responsive controls, contained table scrolling,
+  complete year discovery, real tabs/tab panels, keyboard navigation, captions,
+  and row/column headers;
+- the stock price header remains visible below the two-row responsive nav; and
+- Profile no longer presents sign-out as fake account deletion.
+
+“Completed” here describes this audit and its remediation scope. It does not
+mean every product surface is permanently perfect, that FMP can provide true
+second-level replay, that a full account-erasure workflow exists, or that one
+delivered email proves inbox placement at scale.
+
 ## Next Priorities
 
 ### P0: Establish Sending Reputation
@@ -158,7 +192,22 @@ is being made.
 - Keep subject lines, cadence, and audience quality consistent while the domain
   warms.
 
-### P1: Finish External Alerting
+### P1: Scale The Newsletter Archive And Editor
+
+- Add search, status/date/ticker filters, pagination or virtualization, and
+  useful empty states before the growing issue archive becomes a long wall of
+  cards.
+- Make draft freshness, unsaved changes, save conflicts, and publication state
+  visible in the editor without relying on operator memory.
+- Add archive-safe bulk actions only where each selected issue's side effects
+  remain explicit and recoverable.
+- Keep image-plus-scene provenance intact so an old issue can reopen the exact
+  chart it published instead of reconstructing one from mutable defaults.
+- Test the workflow with hundreds of issues and slow/failing chart assets; the
+  current successful daily batch and canary prove the pipeline, not long-term
+  editorial ergonomics.
+
+### P2: Finish External Alerting
 
 - Choose the actual operational receiver.
 - Configure `NEWSLETTER_ALERT_WEBHOOK_URL` and a dedicated
@@ -167,21 +216,33 @@ is being made.
   outbox records delivery.
 - Define who responds to late, failed, and stuck-delivery alerts.
 
-### P2: Editorial Throughput
+### P3: Editorial Throughput
 
 - Add queue aging and stale-catalyst indicators.
 - Add shortlist overrides so editorial decisions can improve future ranking.
 - Add safe bulk review actions for high-volume catalyst sessions.
 
-### P3: Research Depth
+### P4: Research Depth And Surface Consolidation
 
 - Decide whether the browser-local Market Overview watchlist should sync into
   Pulse Today for signed-in users without creating a second watchlist model.
 - Add earnings and calendar context beside reviewed catalysts.
 - Consolidate experimental chart routes after their useful behavior is
   absorbed into the primary surfaces.
+- Continue the same desktop/mobile audit on secondary admin and experimental
+  routes before promoting any of them into primary navigation.
+- Decide whether replay should remain an explicitly Massive-only capability or
+  gain a clearly labeled lower-resolution fallback for FMP.
 
-### P4: Restore Market Internals With Real Data
+### P5: Complete The Account Lifecycle If The Product Needs It
+
+- If users need self-service deletion, build a server-owned erasure workflow
+  with recent authentication, explicit scope, retention rules, confirmation,
+  idempotency, and a durable receipt.
+- Until that contract exists, keep the honest sign-out language and do not
+  imply that authentication data or saved research was deleted.
+
+### P6: Restore Market Internals With Real Data
 
 - Choose a licensed, reproducible source for advance/decline and breadth
   history.

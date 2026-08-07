@@ -285,6 +285,16 @@ html.dark .stock-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   animation: lod-blink-pulse 1.8s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pulse-today-root .animate-ping,
+  .pulse-today-root .pulse-today-flash-green,
+  .pulse-today-root .pulse-today-flash-red,
+  .pulse-today-root .lod-blink-line,
+  .pulse-today-root .lod-blink-label {
+    animation: none !important;
+  }
+}
+
 @keyframes pulse-testing-shake {
   0%, 100% { transform: translate3d(0, 0, 0); }
   20% { transform: translate3d(-1px, 0, 0); }

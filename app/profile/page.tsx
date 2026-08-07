@@ -15,7 +15,6 @@ export default function ProfilePage() {
 
   // Form state
   const [displayName, setDisplayName] = useState('')
-  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
@@ -79,7 +78,6 @@ export default function ProfilePage() {
       })
       if (error) throw error
       setMessage('Password updated successfully!')
-      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err: any) {
@@ -89,25 +87,20 @@ export default function ProfilePage() {
     }
   }
 
-  const handleDeleteAccount = async () => {
-    const confirmed = window.confirm(
-      'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.'
-    )
-    if (!confirmed) return
-
-    const doubleConfirmed = window.confirm(
-      'This is your final warning. Your conversations and all associated data will be permanently deleted. Continue?'
-    )
-    if (!doubleConfirmed) return
+  const handleSignOut = async () => {
+    setSaving(true)
+    setError('')
+    setMessage('')
 
     try {
-      // Sign out first
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
       router.push('/')
-      // Note: Full account deletion requires a server action with service role
-      // For now, we just sign them out. Full deletion can be added later.
+      router.refresh()
     } catch (err: any) {
-      setError(err.message || 'Failed to delete account')
+      setError(err.message || 'Failed to sign out')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -164,12 +157,12 @@ export default function ProfilePage() {
 
         {/* Messages */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+          <div role="alert" className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
             {error}
           </div>
         )}
         {message && (
-          <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
+          <div role="status" className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
             {message}
           </div>
         )}
@@ -307,19 +300,21 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Danger Zone */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800">
-          <h2 className="text-xl font-semibold text-red-600 dark:text-red-400 mb-4">Danger Zone</h2>
+        {/* Session */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-cream-300 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Your Session</h2>
 
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Once you delete your account, there is no going back. Please be certain.
+            Sign out of this browser. This does not delete your account, conversations, or saved data.
           </p>
 
           <button
-            onClick={handleDeleteAccount}
-            className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 font-medium transition-colors"
+            type="button"
+            onClick={handleSignOut}
+            disabled={saving}
+            className="border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
-            Delete Account
+            {saving ? 'Signing out...' : 'Sign Out'}
           </button>
         </div>
       </div>

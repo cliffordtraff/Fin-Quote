@@ -6,18 +6,17 @@ import { Liveline } from 'liveline'
 import type { CandlePoint } from 'liveline'
 import { useTheme } from '@/components/ThemeProvider'
 import { useMultiStream } from '@/lib/hooks/use-multi-stream'
-import type { LiveStreamState } from '@/lib/hooks/use-live-stream'
+import type { LiveStreamState, StreamCandle } from '@/lib/hooks/use-live-stream'
 import { useReplay } from '@/lib/hooks/use-replay'
 import type { ReplayConfig, ReplaySpeed } from '@/lib/hooks/use-replay'
 import MarketMoversTable from '@/components/MarketMoversTable'
 import type { MoverData } from '@/app/actions/market-movers'
-import { getSessionLabel, type MarketSession } from '@/lib/market-hours'
+import { getMarketStatus, getSessionLabel, getTradingDate, type MarketSession } from '@/lib/market-hours'
+import { isUsMarketEarlyClose } from '@/lib/market-calendar'
 import {
   buildPulseTodayCockpitSnapshot,
 } from '@/lib/pulse-today-utils'
 import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
-
-const SYMBOLS = ['GOOGL'] as const
 
 type ThemeMode = 'light' | 'dark'
 
@@ -26,14 +25,6 @@ export function formatPrice(v: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-}
-
-function formatTime(t: number) {
-  const d = new Date(t * 1000)
-  const h = d.getHours()
-  const m = String(d.getMinutes()).padStart(2, '0')
-  const s = String(d.getSeconds()).padStart(2, '0')
-  return `${h}:${m}:${s}`
 }
 
 /* ───────── Liveline chart data hook ───────── */
@@ -45,9 +36,9 @@ interface ChartData {
   lineValue: number | undefined
 }
 
-function useChartData(stream: LiveStreamState): ChartData | null {
+function useChartData(stream: LiveStreamState, enabled = true): ChartData | null {
   return useMemo(() => {
-    if (stream.candles.length === 0) return null
+    if (!enabled || stream.candles.length === 0) return null
 
     const allCandles: CandlePoint[] = stream.candles.map((c) => ({
       time: c.time,
@@ -76,7 +67,7 @@ function useChartData(stream: LiveStreamState): ChartData | null {
       (lineData.length > 0 ? lineData[lineData.length - 1].value : undefined)
 
     return { candles: committed, liveCandle, lineData, lineValue }
-  }, [stream.candles, stream.liveCandle])
+  }, [enabled, stream.candles, stream.liveCandle])
 }
 
 /* ───────── Degen scale for exaggerated mini chart ───────── */
@@ -166,20 +157,37 @@ function sortCandles(candles: DayCandle[]) {
   return [...candles].sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
+interface DayCandlesState {
+  data: Record<string, DayCandleData>
+  loading: boolean
+  error: string | null
+  retry: () => void
+}
+
+export function useDayCandlesState(symbols: readonly string[]): DayCandlesState {
   const [data, setData] = useState<Record<string, DayCandleData>>({})
-  const normalizedSymbols = Array.from(new Set(symbols.map((symbol) => symbol.toUpperCase()))).sort()
-  const symbolsKey = normalizedSymbols.join(',')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const symbolsKey = Array.from(new Set(symbols.map((symbol) => symbol.toUpperCase()))).sort().join(',')
 
   useEffect(() => {
     let cancelled = false
-    const activeSymbols = normalizedSymbols
+    const activeSymbols = symbolsKey ? symbolsKey.split(',') : []
+
+    if (activeSymbols.length === 0) {
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     async function fetchAll() {
+      setLoading(true)
+      setError(null)
       const results = await Promise.allSettled(
         activeSymbols.map(async (sym) => {
           const res = await fetch(`/api/stock-intraday/${sym}?interval=1`)
-          if (!res.ok) return null
+          if (!res.ok) throw new Error(`Chart request failed with status ${res.status}`)
           return { sym, json: await res.json() }
         })
       )
@@ -200,15 +208,28 @@ export function useDayCandles(symbols: readonly string[]): Record<string, DayCan
           next[sym] = { candles, previousClose, changePct }
         }
       }
-      setData(next)
+
+      if (Object.keys(next).length > 0) {
+        setData((current) => ({ ...current, ...next }))
+        setError(null)
+      } else {
+        setError('Intraday chart data is temporarily unavailable.')
+      }
+      setLoading(false)
     }
 
-    fetchAll()
+    void fetchAll()
     const id = setInterval(fetchAll, 60_000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [symbolsKey])
+  }, [symbolsKey, refreshKey])
 
-  return data
+  const retry = useCallback(() => setRefreshKey((current) => current + 1), [])
+
+  return { data, loading, error, retry }
+}
+
+export function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
+  return useDayCandlesState(symbols).data
 }
 
 /* ───────── Candle time parsing helpers ───────── */
@@ -216,6 +237,7 @@ export function useDayCandles(symbols: readonly string[]): Record<string, DayCan
 export const MARKET_OPEN_MINUTES = 9 * 60 + 30 // 9:30 AM
 const PREMARKET_START_MINUTES = 4 * 60
 const CASH_END_MINUTES = 16 * 60
+const EARLY_CASH_END_MINUTES = 13 * 60
 const AFTERHOURS_END_MINUTES = 20 * 60
 
 type IntradaySession = 'premarket' | 'cash' | 'afterhours'
@@ -281,15 +303,57 @@ function getCandleTotalMinutes(candle: { date: string }): number {
   return hour * 60 + minute
 }
 
+function getCandleDate(candle: { date: string }): string | null {
+  const date = candle.date.split(' ')[0]
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null
+}
+
+function getSessionWindowForDate(session: IntradaySession, date: string | null): SessionWindow {
+  if (!date || !isUsMarketEarlyClose(date)) return SESSION_WINDOWS[session]
+
+  if (session === 'cash') {
+    return {
+      ...SESSION_WINDOWS.cash,
+      endMinutes: EARLY_CASH_END_MINUTES,
+      hourLabels: [
+        { hour: 10, label: '10AM' },
+        { hour: 11, label: '11AM' },
+        { hour: 12, label: '12PM' },
+      ],
+    }
+  }
+
+  if (session === 'afterhours') {
+    return {
+      ...SESSION_WINDOWS.afterhours,
+      startMinutes: EARLY_CASH_END_MINUTES,
+      hourLabels: [
+        { hour: 14, label: '2PM' },
+        { hour: 15, label: '3PM' },
+        { hour: 16, label: '4PM' },
+        { hour: 17, label: '5PM' },
+        { hour: 18, label: '6PM' },
+        { hour: 19, label: '7PM' },
+      ],
+    }
+  }
+
+  return SESSION_WINDOWS.premarket
+}
+
 export function getSessionWindowForCandles(candles: { date: string }[]): SessionWindow {
   const latest = candles[candles.length - 1]
   if (!latest) return SESSION_WINDOWS.cash
 
+  const date = getCandleDate(latest)
+  const cashEndMinutes = date && isUsMarketEarlyClose(date)
+    ? EARLY_CASH_END_MINUTES
+    : CASH_END_MINUTES
   const totalMinutes = getCandleTotalMinutes(latest)
-  if (totalMinutes >= CASH_END_MINUTES) return SESSION_WINDOWS.afterhours
-  if (totalMinutes >= MARKET_OPEN_MINUTES) return SESSION_WINDOWS.cash
-  if (totalMinutes >= PREMARKET_START_MINUTES) return SESSION_WINDOWS.premarket
-  return SESSION_WINDOWS.cash
+  if (totalMinutes >= cashEndMinutes) return getSessionWindowForDate('afterhours', date)
+  if (totalMinutes >= MARKET_OPEN_MINUTES) return getSessionWindowForDate('cash', date)
+  if (totalMinutes >= PREMARKET_START_MINUTES) return getSessionWindowForDate('premarket', date)
+  return getSessionWindowForDate('cash', date)
 }
 
 export function getSessionExtremesForCandles(
@@ -341,7 +405,10 @@ function getExtremesForSession(
   candles: Array<{ date: string; high: number; low: number }>,
   session: IntradaySession,
 ): { dayHigh: number | null; dayLow: number | null } {
-  const sessionWindow = SESSION_WINDOWS[session]
+  const sessionWindow = getSessionWindowForDate(
+    session,
+    candles.length > 0 ? getCandleDate(candles[candles.length - 1]) : null,
+  )
   let dayHigh = Number.NEGATIVE_INFINITY
   let dayLow = Number.POSITIVE_INFINITY
 
@@ -434,6 +501,11 @@ export interface FullDayCanvasProps {
   morphProgress?: number
   /** The 1min candles to morph into */
   morphTargetCandles?: DayCandle[]
+  accessibleLabel?: string
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
+  emptyMessage?: string
 }
 
 interface CrosshairData {
@@ -458,11 +530,34 @@ export function FullDayCanvas({
   xAxisMaxSlots = null,
   morphProgress = 0,
   morphTargetCandles,
+  accessibleLabel = 'Intraday price chart',
+  loading = false,
+  error = null,
+  onRetry,
+  emptyMessage = 'No intraday candles are available for this session.',
 }: FullDayCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [crosshair, setCrosshair] = useState<CrosshairData | null>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
   const rafRef = useRef<number>(0)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const updateWidth = () => setContainerWidth(container.clientWidth)
+    updateWidth()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth)
+      return () => window.removeEventListener('resize', updateWidth)
+    }
+
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   const sessionWindow = useMemo(() => getSessionWindowForCandles(rawCandles), [rawCandles])
   const resolvedLevelLines = useMemo(() => {
@@ -564,8 +659,27 @@ export function FullDayCanvas({
 
   // Price range — only expands, never contracts, to keep HOD/LOD lines stable
   const stableRangeRef = useRef<{ yMin: number; yMax: number } | null>(null)
+  const stableRangeContextRef = useRef<string | null>(null)
+  const stableRangeCandleCountRef = useRef(0)
+  const latestSessionDate = rawCandles.length > 0
+    ? getCandleDate(rawCandles[rawCandles.length - 1])
+    : null
+  const stableRangeContext = `${latestSessionDate ?? 'empty'}:${sessionWindow.session}`
+  if (
+    stableRangeContextRef.current !== stableRangeContext ||
+    candles.length < stableRangeCandleCountRef.current
+  ) {
+    stableRangeContextRef.current = stableRangeContext
+    stableRangeRef.current = null
+  }
+  stableRangeCandleCountRef.current = candles.length
   const { yMin, yMax } = useMemo(() => {
-    if (candles.length === 0) return { yMin: 0, yMax: 1 }
+    if (candles.length === 0) {
+      // Reset means a new replay pass should establish its scale from the
+      // opening bars again, not inherit the completed session's extremes.
+      stableRangeRef.current = null
+      return { yMin: 0, yMax: 1 }
+    }
     const allPrices: number[] = []
     for (const c of candles) {
       if (c.high > 0) allPrices.push(c.high)
@@ -620,7 +734,7 @@ export function FullDayCanvas({
     if (!ctx) return
 
     const dpr = window.devicePixelRatio || 1
-    const width = container.clientWidth
+    const width = containerWidth || container.clientWidth
     const height = chartHeight
 
     canvas.width = width * dpr
@@ -631,6 +745,10 @@ export function FullDayCanvas({
     ctx.clearRect(0, 0, width, height)
 
     const isDark = theme === 'dark'
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const motionPhase = prefersReducedMotion
+      ? 0.5
+      : Math.sin(Date.now() / 600) * 0.5 + 0.5
 
     const chartTop = padding.top
     const chartBottom = height - padding.bottom
@@ -683,8 +801,11 @@ export function FullDayCanvas({
       const visibleMins = isMorphing
         ? maxSlot // already in minute-slots
         : (maxSlot * intervalSecs) / 60
-      // Choose label spacing in seconds — granular for short durations
-      const labelStepSecs = aggregation === '1s'
+      // Choose label spacing in seconds, then widen it when the currently
+      // revealed span occupies only a small part of a narrow canvas. This
+      // avoids painting several timestamp strings on top of one another at
+      // the start of an adaptive replay.
+      const preferredLabelStepSecs = aggregation === '1s'
         ? visibleMins <= 0.5 ? 5
           : visibleMins <= 2 ? 10
           : visibleMins <= 5 ? 30
@@ -708,6 +829,16 @@ export function FullDayCanvas({
           : visibleMins <= 120 ? 1800
           : visibleMins <= 240 ? 3600
           : 7200
+      const renderedVisibleWidth = renderTotalSlots > 0
+        ? (maxSlot / renderTotalSlots) * drawW
+        : 0
+      const maxReadableLabels = Math.max(1, Math.floor(renderedVisibleWidth / 72))
+      const minimumReadableStepSecs = maxSlot > 0
+        ? (maxSlot * labelIntervalSecs) / maxReadableLabels
+        : preferredLabelStepSecs
+      const niceLabelSteps = [5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200]
+      const desiredLabelStepSecs = Math.max(preferredLabelStepSecs, minimumReadableStepSecs)
+      const labelStepSecs = niceLabelSteps.find((step) => step >= desiredLabelStepSecs) ?? 7200
       const labelStepSlots = Math.max(1, Math.floor(labelStepSecs / labelIntervalSecs))
 
       for (let slot = labelStepSlots; slot <= maxSlot; slot += labelStepSlots) {
@@ -805,7 +936,7 @@ export function FullDayCanvas({
       ctx.setLineDash(isSecondary ? [6, 4] : [3, 3])
 
       if (nearLowLevel) {
-        const pulse = Math.sin(Date.now() / 600) * 0.5 + 0.5
+        const pulse = motionPhase
         const alpha = 0.35 + pulse * 0.65
         ctx.strokeStyle = `rgba(239,68,68,${alpha})`
         ctx.lineWidth = 1 + pulse * 1.5
@@ -830,7 +961,7 @@ export function FullDayCanvas({
       ctx.restore()
 
       const baseLabelAlpha = nearLowLevel
-        ? 0.5 + (Math.sin(Date.now() / 600) * 0.5 + 0.5) * 0.5
+        ? 0.5 + motionPhase * 0.5
         : isSecondary
           ? (isDark ? 0.52 : 0.44)
           : (isDark ? 0.7 : 0.6)
@@ -1059,7 +1190,7 @@ export function FullDayCanvas({
       ctx.textAlign = 'center'
       ctx.fillText(priceLabel, crosshair.x, labelY + 13)
     }
-  }, [candles, slotMap, previousClose, lastPrice, resolvedLevelLines, lineMode, aggregation, theme, chartHeight, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, xAxisMaxSlots, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots, sessionWindow])
+  }, [candles, slotMap, previousClose, lastPrice, resolvedLevelLines, lineMode, aggregation, theme, chartHeight, containerWidth, crosshair, yMin, yMax, totalSlots, labelInterval, dynamicXAxis, xAxisMaxSlots, padding.top, padding.right, padding.bottom, padding.left, morphProgress, morphTargetCandles, isMorphing, effectiveTotalSlots, targetSlotMap, targetTotalSlots, sessionWindow, intervalSecs])
 
   // Mouse handlers
   const handleMouseMove = useCallback(
@@ -1126,10 +1257,27 @@ export function FullDayCanvas({
     return (
       <div
         ref={containerRef}
-        className="w-full flex items-center justify-center text-gray-400 text-sm"
+        role={error ? 'alert' : 'status'}
+        aria-live="polite"
+        className="flex w-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-gray-500 dark:text-gray-400"
         style={{ height: chartHeight }}
       >
-        Loading chart data...
+        <p>
+          {error
+            ? error
+            : loading
+              ? 'Loading chart data…'
+              : emptyMessage}
+        </p>
+        {error && onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-9 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:border-sage-400 hover:text-sage-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+          >
+            Retry chart
+          </button>
+        ) : null}
       </div>
     )
   }
@@ -1138,193 +1286,16 @@ export function FullDayCanvas({
     <div ref={containerRef} className="w-full" style={{ height: chartHeight }}>
       <canvas
         ref={canvasRef}
+        role="img"
+        aria-label={accessibleLabel}
         className="w-full h-full"
         style={{ display: 'block', cursor: 'crosshair' }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-      />
+      >
+        {accessibleLabel}
+      </canvas>
     </div>
-  )
-}
-
-/* ───────── PIP HOD/LOD overlay ───────── */
-
-const PIP_PROXIMITY = 0.01 // 1% of price
-
-function PipPriceOverlay({
-  dayHigh,
-  dayLow,
-  lastPrice,
-  candles,
-  liveCandle,
-  windowSecs,
-  padding,
-  chartHeight,
-}: {
-  dayHigh: number | null
-  dayLow: number | null
-  lastPrice: number | null
-  candles: { time: number; high: number; low: number; close: number }[]
-  liveCandle: { high: number; low: number; close: number } | undefined
-  windowSecs: number
-  padding: { top: number; right: number; bottom: number; left: number }
-  chartHeight: number
-}) {
-  const overlay = useMemo(() => {
-    if (dayHigh === null || dayLow === null || lastPrice === null || lastPrice === 0) return null
-    if (candles.length === 0) return null
-
-    const now = candles[candles.length - 1].time
-    const windowStart = now - windowSecs
-    let visMin = Infinity
-    let visMax = -Infinity
-    for (const c of candles) {
-      if (c.time >= windowStart) {
-        if (c.high > visMax) visMax = c.high
-        if (c.low < visMin) visMin = c.low
-      }
-    }
-    if (liveCandle) {
-      if (liveCandle.high > visMax) visMax = liveCandle.high
-      if (liveCandle.low < visMin) visMin = liveCandle.low
-    }
-
-    if (!isFinite(visMin) || !isFinite(visMax) || visMin === visMax) return null
-
-    const range = visMax - visMin
-    const buffer = range * 0.05
-    const bufferedMin = visMin - buffer
-    const bufferedMax = visMax + buffer
-    const bufferedRange = bufferedMax - bufferedMin
-    const chartAreaHeight = chartHeight - padding.top - padding.bottom
-
-    const priceToY = (price: number) =>
-      padding.top + (1 - (price - bufferedMin) / bufferedRange) * chartAreaHeight
-
-    const chartTop = padding.top
-    const chartBottom = chartHeight - padding.bottom
-
-    type LineInfo = { price: number; y: number; label: string; color: string; blink?: boolean }
-    type EdgeInfo = { side: 'top' | 'bottom'; label: string; color: string; bgColor: string; opacity: number }
-
-    const lines: LineInfo[] = []
-    const edges: EdgeInfo[] = []
-
-    // HOD
-    const hodY = priceToY(dayHigh)
-    const hodDistPct = (dayHigh - lastPrice) / lastPrice
-    const hodInRange = hodY >= chartTop - 10 && hodY <= chartBottom + 10
-
-    if (hodInRange) {
-      lines.push({ price: dayHigh, y: hodY, label: `HOD`, color: 'rgba(34, 197, 94, 0.6)' })
-    } else if (hodDistPct > 0 && hodDistPct <= PIP_PROXIMITY) {
-      const intensity = 1 - hodDistPct / PIP_PROXIMITY
-      edges.push({
-        side: 'top',
-        label: 'HOD',
-        color: 'rgb(34, 197, 94)',
-        bgColor: 'rgba(34, 197, 94, 0.12)',
-        opacity: 0.4 + intensity * 0.6,
-      })
-    }
-
-    // LOD
-    const lodY = priceToY(dayLow)
-    const lodDistPct = (lastPrice - dayLow) / lastPrice
-    const lodInRange = lodY >= chartTop - 10 && lodY <= chartBottom + 10
-
-    const nearLOD = lodDistPct >= 0 && lodDistPct <= 0.005
-
-    if (lodInRange) {
-      lines.push({ price: dayLow, y: lodY, label: `LOD`, color: 'rgba(239, 68, 68, 0.6)', blink: nearLOD })
-    } else if (lodDistPct > 0 && lodDistPct <= PIP_PROXIMITY) {
-      const intensity = 1 - lodDistPct / PIP_PROXIMITY
-      edges.push({
-        side: 'bottom',
-        label: 'LOD',
-        color: 'rgb(239, 68, 68)',
-        bgColor: 'rgba(239, 68, 68, 0.12)',
-        opacity: 0.4 + intensity * 0.6,
-      })
-    }
-
-    if (lines.length === 0 && edges.length === 0) return null
-    return { lines, edges }
-  }, [dayHigh, dayLow, lastPrice, candles, liveCandle, windowSecs, padding, chartHeight])
-
-  if (!overlay) return null
-
-  return (
-    <>
-      {overlay.lines.map((line) => (
-        <div
-          key={line.label}
-          className={line.blink ? 'lod-blink-line' : ''}
-          style={{
-            position: 'absolute',
-            top: line.y,
-            left: padding.left,
-            right: padding.right,
-            height: 0,
-            borderTop: line.blink ? '2px dashed rgba(239, 68, 68, 0.9)' : `1px dashed ${line.color}`,
-            pointerEvents: 'none',
-            zIndex: 10,
-          }}
-        >
-          <span
-            className={line.blink ? 'lod-blink-label' : ''}
-            style={{
-              position: 'absolute',
-              left: 2,
-              top: -12,
-              fontSize: 8,
-              fontWeight: 600,
-              color: line.color,
-              whiteSpace: 'nowrap',
-              userSelect: 'none',
-            }}
-          >
-            {line.label}
-          </span>
-        </div>
-      ))}
-
-      {overlay.edges.map((edge) => (
-        <div
-          key={edge.label}
-          style={{
-            position: 'absolute',
-            [edge.side === 'top' ? 'top' : 'bottom']: edge.side === 'top' ? padding.top : padding.bottom,
-            left: padding.left,
-            right: padding.right,
-            display: 'flex',
-            justifyContent: 'center',
-            pointerEvents: 'none',
-            zIndex: 10,
-            opacity: edge.opacity,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              padding: '1px 5px',
-              borderRadius: 3,
-              backgroundColor: edge.bgColor,
-              fontSize: 8,
-              fontWeight: 600,
-              color: edge.color,
-              whiteSpace: 'nowrap',
-              userSelect: 'none',
-            }}
-          >
-            <span>{edge.side === 'top' ? '\u2191' : '\u2193'}</span>
-            <span>{edge.label}</span>
-          </div>
-        </div>
-      ))}
-    </>
   )
 }
 
@@ -1333,6 +1304,12 @@ function PipPriceOverlay({
 interface PulseTodayCardProps {
   symbol: string
   dayData: DayCandleData | undefined
+  dayDataLoading?: boolean
+  dayDataError?: string | null
+  onRetryDayData?: () => void
+  emptyMessage?: string
+  enableLiveDetail?: boolean
+  mergeStreamIntoDayData?: boolean
   stream1s: LiveStreamState
   stream10s: LiveStreamState
   theme: ThemeMode
@@ -1347,8 +1324,9 @@ interface PulseTodayCardProps {
 }
 
 type PipTimeframe = '1s' | '10s'
+type PipDock = 'top-right' | 'top-left' | 'bottom-right'
 
-const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s, stream10s, theme, chartHeight = 420, dynamicXAxis = false, forceAggregation, morphProgress = 0, morphTargetCandles }: PulseTodayCardProps) {
+export const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, dayDataLoading = false, dayDataError = null, onRetryDayData, emptyMessage, enableLiveDetail = true, mergeStreamIntoDayData = true, stream1s, stream10s, theme, chartHeight = 420, dynamicXAxis = false, forceAggregation, morphProgress = 0, morphTargetCandles }: PulseTodayCardProps) {
   const [lineMode, setLineMode] = useState(false)
   const [internalAgg, setInternalAgg] = useState<'1min' | '5min'>('1min')
   const aggregation = forceAggregation ?? internalAgg
@@ -1357,12 +1335,30 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const [pipLineMode, setPipLineMode] = useState(true)
   const [pipZoom, setPipZoom] = useState<number>(2)
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
+  const [pipDock, setPipDock] = useState<PipDock>('top-right')
   const [gradientMode, setGradientMode] = useState(true)
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    origX: number
+    origY: number
+    maxX: number
+    maxY: number
+  } | null>(null)
   const pipContainerRef = useRef<HTMLDivElement>(null)
+  const pipPanelRef = useRef<HTMLDivElement>(null)
+  const pipDockButtonRef = useRef<HTMLButtonElement>(null)
+  const hidePipButtonRef = useRef<HTMLButtonElement>(null)
+  const showPipButtonRef = useRef<HTMLButtonElement>(null)
+  const focusShowPipRef = useRef(false)
+  const focusPipControlsRef = useRef(false)
 
-  // Drag handlers for PIP
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
+  // The detail chart can be repositioned with any pointer on larger screens.
+  // On phones it stays in normal document flow so it can never be clipped.
+  const handleDragStart = useCallback((e: React.PointerEvent) => {
+    if (!window.matchMedia('(min-width: 640px)').matches) return
+    if ((e.target as HTMLElement).closest('button, select')) return
     e.preventDefault()
     const pipEl = (e.currentTarget as HTMLElement).parentElement
     const container = pipContainerRef.current
@@ -1376,41 +1372,98 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
     const currentY = pipRect.top - containerRect.top
 
     dragRef.current = {
+      pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       origX: currentX,
       origY: currentY,
+      maxX: Math.max(0, containerRect.width - pipRect.width),
+      maxY: Math.max(0, containerRect.height - pipRect.height),
     }
-
-    const handleMove = (ev: MouseEvent) => {
-      if (!dragRef.current || !container) return
-      const dx = ev.clientX - dragRef.current.startX
-      const dy = ev.clientY - dragRef.current.startY
-      const containerRect = container.getBoundingClientRect()
-
-      // Clamp within container bounds (match PIP dimensions)
-      const maxX = containerRect.width - 300
-      const maxY = containerRect.height - 180
-      const newX = Math.max(0, Math.min(maxX, dragRef.current.origX + dx))
-      const newY = Math.max(0, Math.min(maxY, dragRef.current.origY + dy))
-
-      setPipPos({ x: newX, y: newY })
-    }
-
-    const handleUp = () => {
-      dragRef.current = null
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
+    e.currentTarget.setPointerCapture(e.pointerId)
   }, [])
+
+  const handleDragMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+
+    const newX = Math.max(0, Math.min(drag.maxX, drag.origX + e.clientX - drag.startX))
+    const newY = Math.max(0, Math.min(drag.maxY, drag.origY + e.clientY - drag.startY))
+    setPipPos({ x: newX, y: newY })
+  }, [])
+
+  const handleDragEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== e.pointerId) return
+    dragRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
+  const cyclePipDock = useCallback(() => {
+    setPipPos(null)
+    setPipDock((current) => current === 'top-right'
+      ? 'top-left'
+      : current === 'top-left'
+        ? 'bottom-right'
+        : 'top-right')
+  }, [])
+
+  const hidePip = useCallback(() => {
+    focusShowPipRef.current = true
+    setPipVisible(false)
+  }, [])
+
+  const showPip = useCallback(() => {
+    focusPipControlsRef.current = true
+    setPipVisible(true)
+  }, [])
+
+  useEffect(() => {
+    if (!pipVisible && focusShowPipRef.current) {
+      focusShowPipRef.current = false
+      showPipButtonRef.current?.focus()
+    } else if (pipVisible && focusPipControlsRef.current) {
+      focusPipControlsRef.current = false
+      if (window.matchMedia('(min-width: 640px)').matches) pipDockButtonRef.current?.focus()
+      else hidePipButtonRef.current?.focus()
+    }
+  }, [pipVisible])
+
+  useEffect(() => {
+    if (!pipVisible) return
+    const container = pipContainerRef.current
+    const panel = pipPanelRef.current
+    if (!container || !panel) return
+
+    const clampPosition = () => {
+      if (!window.matchMedia('(min-width: 640px)').matches) return
+      const containerRect = container.getBoundingClientRect()
+      const panelRect = panel.getBoundingClientRect()
+      setPipPos((current) => {
+        if (!current) return current
+        const next = {
+          x: Math.max(0, Math.min(Math.max(0, containerRect.width - panelRect.width), current.x)),
+          y: Math.max(0, Math.min(Math.max(0, containerRect.height - panelRect.height), current.y)),
+        }
+        return next.x === current.x && next.y === current.y ? current : next
+      })
+    }
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampPosition)
+      return () => window.removeEventListener('resize', clampPosition)
+    }
+
+    const observer = new ResizeObserver(clampPosition)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [pipVisible])
 
   // Use 1s stream for card-level price/change (freshest)
   const stream = stream1s
   const pipStream = pipTimeframe === '1s' ? stream1s : stream10s
-  const chartData = useChartData(pipStream)
+  const chartData = useChartData(pipStream, enableLiveDetail)
   const mainChartStream = useMemo(() => {
     const stream10sCount = stream10s.candles.length + (stream10s.liveCandle ? 1 : 0)
     if (stream10sCount > 0) return stream10s
@@ -1421,6 +1474,8 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
     return null
   }, [stream10s, stream1s])
   const mainDayData = useMemo<DayCandleData | undefined>(() => {
+    if (!mergeStreamIntoDayData) return dayData
+
     const mergedCandles = mergeLatestDayCandlesWithStream(
       dayData?.candles ?? [],
       mainChartStream?.candles ?? [],
@@ -1438,6 +1493,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
     }
   }, [
     dayData,
+    mergeStreamIntoDayData,
     mainChartStream?.candles,
     mainChartStream?.liveCandle,
     mainChartStream?.previousClose,
@@ -1475,11 +1531,12 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
   const displayDayLow = primaryLowLine?.value ?? null
   const degenOpts = useDegenScale(stream.lastPrice, displayDayHigh, displayDayLow)
 
-  const price = stream.lastPrice ?? (mainDayData?.candles.length ? mainDayData.candles[mainDayData.candles.length - 1].close : 0)
-  const change = stream.lastChange ?? 0
+  const price = stream.lastPrice ?? (mainDayData?.candles.length ? mainDayData.candles[mainDayData.candles.length - 1].close : null)
+  const change = stream.lastChange
   // Prefer real-time stream changePct so it stays consistent with change
-  const changePct = stream.lastChangePct ?? mainDayData?.changePct ?? 0
-  const isPositive = changePct >= 0
+  const changePct = stream.lastChangePct ?? mainDayData?.changePct ?? null
+  const directionValue = changePct ?? change
+  const isPositive = directionValue !== null && directionValue >= 0
 
   const pipBaseWindow = pipTimeframe === '1s' ? 30 : 300
   const pipWindowSecs = pipBaseWindow * pipZoom
@@ -1522,6 +1579,10 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
 
   useEffect(() => {
     if (!isNearLOD) { setLodBlinkRed(false); return }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setLodBlinkRed(true)
+      return
+    }
     const id = setInterval(() => setLodBlinkRed((v) => !v), 800)
     return () => clearInterval(id)
   }, [isNearLOD])
@@ -1563,7 +1624,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
     return () => clearTimeout(timer)
   }, [flashColor])
 
-  const pipColor = isPositive ? '#22c55e' : '#ef4444'
+  const pipColor = directionValue === null ? '#64748b' : isPositive ? '#22c55e' : '#ef4444'
 
   const flashClass = flashColor === 'green'
     ? 'pulse-today-flash-green'
@@ -1572,6 +1633,8 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       : ''
 
   const isDark = theme === 'dark'
+  const visibleDataError = dayDataError ?? stream.error
+  const showingStaleData = Boolean(visibleDataError && mainDayData?.candles.length)
 
   return (
     <div className={`relative rounded-xl border overflow-hidden ${flashClass} ${
@@ -1584,7 +1647,7 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
         <>
           <div
             className="pointer-events-none absolute inset-x-6 top-6 z-10 h-24 rounded-full blur-3xl"
-            style={{ background: GOOGL_GRADIENT.glow, opacity: isDark ? 0.5 : 0.24 }}
+            style={{ background: PULSE_GRADIENT_GLOW, opacity: isDark ? 0.5 : 0.24 }}
           />
           <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_22%,transparent_72%,rgba(15,23,42,0.12))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_24%,transparent_74%,rgba(2,6,23,0.42))]" />
         </>
@@ -1593,8 +1656,8 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
       {/* Content */}
       <div className={gradientMode ? 'relative z-20' : ''}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-1 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-sm font-bold ${
             gradientMode
               ? 'bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm'
@@ -1615,18 +1678,20 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
               {isPositive ? '+' : ''}{changePct.toFixed(2)}%
             </span>
           )}
-          <span className={`text-xs font-semibold tabular-nums ${
-            gradientMode
-              ? (isPositive ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300')
-              : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')
-          }`}>
-            {isPositive ? '+' : ''}{change.toFixed(2)}
-          </span>
+          {change !== null ? (
+            <span className={`text-xs font-semibold tabular-nums ${
+              gradientMode
+                ? (isPositive ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300')
+                : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')
+            }`}>
+              {isPositive ? '+' : ''}{change.toFixed(2)}
+            </span>
+          ) : null}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {/* Aggregation: forced badge (with morph indicator) or interactive toggle */}
           {forceAggregation ? (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+            <span className="inline-flex min-h-8 items-center rounded bg-purple-100 px-2 text-xs font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
               {morphProgress > 0 && morphProgress < 1
                 ? '10s \u2192 1m'
                 : forceAggregation === '10s' ? '10s' : forceAggregation === '1min' ? '1m' : '5m'}
@@ -1640,8 +1705,10 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
               {(['1min', '5min'] as const).map((agg) => (
                 <button
                   key={agg}
+                  type="button"
                   onClick={() => setInternalAgg(agg)}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                  aria-pressed={aggregation === agg}
+                  className={`min-h-8 px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sage-500 ${
                     gradientMode
                       ? (aggregation === agg
                           ? 'bg-white/30 dark:bg-white/20 text-gray-900 dark:text-white'
@@ -1658,19 +1725,24 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
           )}
           {/* Line / Candle toggle */}
           <button
+            type="button"
             onClick={() => setLineMode((prev) => !prev)}
-            className={`px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+            aria-pressed={lineMode}
+            aria-label="Display the main chart as a line"
+            className={`min-h-8 rounded border px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 ${
               gradientMode
                 ? 'border-white/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-white/10 backdrop-blur-sm'
                 : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
             }`}
           >
-            {lineMode ? 'Candles' : 'Line'}
+            Line
           </button>
           {/* Gradient toggle */}
           <button
+            type="button"
             onClick={() => setGradientMode((prev) => !prev)}
-            className={`px-1.5 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+            aria-pressed={gradientMode}
+            className={`min-h-8 rounded border px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 ${
               gradientMode
                 ? 'bg-white/30 dark:bg-white/20 border-white/20 dark:border-white/10 text-gray-900 dark:text-white backdrop-blur-sm'
                 : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -1681,10 +1753,25 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
         </div>
       </div>
 
+      {showingStaleData ? (
+        <div role="status" className="mx-3 mt-2 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          <p>Live updates are delayed. Showing the last successful chart data.</p>
+          {dayDataError && onRetryDayData ? (
+            <button
+              type="button"
+              onClick={onRetryDayData}
+              className="min-h-8 shrink-0 rounded-md border border-amber-300 bg-white px-2.5 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-800 dark:bg-amber-950"
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Price */}
       <div className="px-3 pb-2">
         <span className="text-xl font-semibold text-gray-900 dark:text-white tabular-nums">
-          ${formatPrice(price)}
+          {price === null ? '—' : `$${formatPrice(price)}`}
         </span>
       </div>
 
@@ -1705,150 +1792,121 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
           dynamicXAxis={dynamicXAxis}
           morphProgress={morphProgress}
           morphTargetCandles={morphTargetCandles}
+          accessibleLabel={`${symbol} intraday price chart with ${mainDayData?.candles.length ?? 0} candles. ${price === null ? 'Waiting for price data.' : `Last price $${formatPrice(price)}.`}`}
+          loading={dayDataLoading}
+          error={dayDataError ?? stream.error}
+          onRetry={onRetryDayData}
+          emptyMessage={emptyMessage}
         />
 
-        {/* Picture-in-picture: exaggerated 1s Liveline */}
-        {pipVisible && (
+        {/* Detail chart: stacked on phones, draggable picture-in-picture on larger screens. */}
+        {enableLiveDetail && pipVisible && (
           <div
+            ref={pipPanelRef}
             style={{
-              position: 'absolute',
-              ...(pipPos
-                ? { left: pipPos.x, top: pipPos.y }
-                : { top: 8, right: 68 }),
-              width: 300,
-              height: 180,
-              borderRadius: 8,
-              overflow: 'hidden',
-              border: theme === 'dark' ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
-              boxShadow: theme === 'dark'
-                ? '0 4px 12px rgba(0,0,0,0.4)'
-                : '0 4px 12px rgba(0,0,0,0.1)',
-              zIndex: 20,
-              background: theme === 'dark' ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.92)',
-              backdropFilter: 'blur(4px)',
-            }}
+              '--pip-x': pipPos ? `${pipPos.x}px` : undefined,
+              '--pip-y': pipPos ? `${pipPos.y}px` : undefined,
+            } as React.CSSProperties}
+            className={`relative mx-2 mb-2 mt-2 h-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white/95 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-800/95 sm:absolute sm:m-0 sm:h-[180px] sm:w-[320px] sm:z-20 ${
+              pipPos
+                ? 'sm:left-[var(--pip-x)] sm:top-[var(--pip-y)]'
+                : pipDock === 'top-left'
+                  ? 'sm:left-[68px] sm:top-2'
+                  : pipDock === 'bottom-right'
+                    ? 'sm:bottom-2 sm:right-[68px]'
+                    : 'sm:right-[68px] sm:top-2'
+            }`}
           >
-            {/* PIP header — draggable thumb */}
             <div
-              onMouseDown={handleDragStart}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '3px 6px',
-                borderBottom: theme === 'dark' ? '1px solid rgba(75,85,99,0.4)' : '1px solid rgba(229,231,235,0.8)',
-                cursor: 'grab',
-                userSelect: 'none',
-              }}
+              onPointerDown={handleDragStart}
+              onPointerMove={handleDragMove}
+              onPointerUp={handleDragEnd}
+              onPointerCancel={handleDragEnd}
+              className="flex min-h-11 select-none items-center gap-1 border-b border-gray-200 px-2 dark:border-gray-700 sm:cursor-grab sm:touch-none"
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {/* Drag handle dots */}
-                <svg width="8" height="10" viewBox="0 0 8 10" style={{ opacity: 0.4 }}>
-                  <circle cx="2" cy="2" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                  <circle cx="6" cy="2" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                  <circle cx="2" cy="5" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                  <circle cx="6" cy="5" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                  <circle cx="2" cy="8" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                  <circle cx="6" cy="8" r="1" fill={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                </svg>
-                {/* 1s / 10s toggle */}
-                <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: theme === 'dark' ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
-                  {(['1s', '10s'] as const).map((tf) => (
-                    <button
-                      key={tf}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setPipTimeframe(tf) }}
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 600,
-                        padding: '1px 5px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: pipTimeframe === tf
-                          ? (theme === 'dark' ? '#4b5563' : '#d1d5db')
-                          : 'transparent',
-                        color: pipTimeframe === tf
-                          ? (theme === 'dark' ? '#f3f4f6' : '#111827')
-                          : (theme === 'dark' ? '#9ca3af' : '#6b7280'),
-                      }}
-                    >
-                      {tf}
-                    </button>
-                  ))}
-                </div>
-                <span style={{
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: theme === 'dark' ? '#d1d5db' : '#374151',
-                }}>
-                  Live
+              <div className="mr-auto flex min-w-0 items-center gap-1.5">
+                <button
+                  ref={pipDockButtonRef}
+                  type="button"
+                  onClick={cyclePipDock}
+                  className="hidden h-8 w-7 shrink-0 items-center justify-center rounded text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:hover:bg-gray-700 dark:hover:text-gray-100 sm:flex"
+                  aria-label={`Move detail chart from ${pipDock.replace('-', ' ')} to ${pipDock === 'top-right' ? 'top left' : pipDock === 'top-left' ? 'bottom right' : 'top right'}`}
+                >
+                  <svg className="h-4 w-3" viewBox="0 0 8 12" aria-hidden="true">
+                    {[2, 6].flatMap((cx) => [2, 6, 10].map((cy) => (
+                      <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1" fill="currentColor" />
+                    )))}
+                  </svg>
+                </button>
+                <span className="truncate text-[11px] font-bold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                  Detail
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                {/* Zoom toggle */}
-                <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: theme === 'dark' ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
-                  {([1, 2, 4, 8, 16] as const).map((z) => (
-                    <button
-                      key={z}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setPipZoom(z) }}
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 600,
-                        padding: '1px 4px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: pipZoom === z
-                          ? (theme === 'dark' ? '#4b5563' : '#d1d5db')
-                          : 'transparent',
-                        color: pipZoom === z
-                          ? (theme === 'dark' ? '#f3f4f6' : '#111827')
-                          : (theme === 'dark' ? '#9ca3af' : '#6b7280'),
-                      }}
-                    >
-                      {z}x
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); setPipLineMode((prev) => !prev) }}
-                  style={{
-                    fontSize: 8,
-                    fontWeight: 600,
-                    padding: '1px 5px',
-                    borderRadius: 3,
-                    border: theme === 'dark' ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    color: theme === 'dark' ? '#9ca3af' : '#6b7280',
-                  }}
-                >
-                  {pipLineMode ? 'Candles' : 'Line'}
-                </button>
-              <button
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setPipVisible(false) }}
-                style={{
-                  fontSize: 8,
-                  fontWeight: 600,
-                  padding: '1px 5px',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  border: theme === 'dark' ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
-                  background: 'transparent',
-                  color: theme === 'dark' ? '#9ca3af' : '#6b7280',
-                }}
+
+              <div
+                className="flex h-8 shrink-0 overflow-hidden rounded-md border border-gray-300 dark:border-gray-600"
+                role="group"
+                aria-label="Detail chart timeframe"
               >
-                Collapse
-              </button>
+                {(['1s', '10s'] as const).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    aria-pressed={pipTimeframe === tf}
+                    onClick={() => setPipTimeframe(tf)}
+                    className={`min-w-9 px-2 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sage-500 ${
+                      pipTimeframe === tf
+                        ? 'bg-gray-200 text-gray-950 dark:bg-gray-600 dark:text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
               </div>
+
+              <select
+                aria-label="Detail chart window"
+                value={pipZoom}
+                onChange={(event) => setPipZoom(Number(event.target.value))}
+                className="h-8 w-[3.4rem] shrink-0 rounded-md border border-gray-300 bg-white px-1 text-[11px] font-semibold text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              >
+                {[1, 2, 4, 8, 16].map((zoom) => (
+                  <option key={zoom} value={zoom}>{zoom}x</option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                aria-pressed={pipLineMode}
+                aria-label="Display the detail chart as a line"
+                onClick={() => setPipLineMode((current) => !current)}
+                className="h-8 min-w-12 rounded-md border border-gray-300 px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Line
+              </button>
+
+              <button
+                ref={hidePipButtonRef}
+                type="button"
+                onClick={hidePip}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                aria-label="Hide detail chart"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </button>
             </div>
-            {/* PIP Liveline chart with HOD/LOD overlay */}
-            <div style={{ height: 156, position: 'relative' }}>
+
+            <div
+              role="img"
+              aria-label={`${symbol} detail chart using ${pipTimeframe} candles and a ${pipZoom} times window`}
+              className="relative h-[176px] sm:h-[136px]"
+            >
               <Liveline
                 data={chartData?.lineData ?? []}
-                value={chartData?.lineValue ?? price}
+                value={chartData?.lineValue ?? price ?? 0}
                 {...(pipLineMode
                   ? {}
                   : {
@@ -1884,26 +1942,14 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
         )}
 
         {/* Toggle to re-show PIP if hidden */}
-        {!pipVisible && (
+        {enableLiveDetail && !pipVisible && (
           <button
-            onClick={() => setPipVisible(true)}
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 68,
-              zIndex: 20,
-              fontSize: 9,
-              fontWeight: 600,
-              padding: '3px 8px',
-              borderRadius: 4,
-              cursor: 'pointer',
-              border: theme === 'dark' ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
-              background: theme === 'dark' ? 'rgba(31,41,55,0.9)' : 'rgba(255,255,255,0.9)',
-              color: theme === 'dark' ? '#d1d5db' : '#374151',
-              backdropFilter: 'blur(4px)',
-            }}
+            ref={showPipButtonRef}
+            type="button"
+            onClick={showPip}
+            className="absolute right-[68px] top-2 z-20 min-h-9 rounded-lg border border-gray-300 bg-white/90 px-3 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur transition hover:border-sage-400 hover:text-sage-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-200"
           >
-            PIP
+            Show detail chart
           </button>
         )}
       </div>
@@ -1921,23 +1967,61 @@ const PulseTodayCard = memo(function PulseTodayCard({ symbol, dayData, stream1s,
     prev.morphProgress === next.morphProgress &&
     prev.morphTargetCandles === next.morphTargetCandles &&
     prev.dayData === next.dayData &&
+    prev.dayDataLoading === next.dayDataLoading &&
+    prev.dayDataError === next.dayDataError &&
+    prev.onRetryDayData === next.onRetryDayData &&
+    prev.emptyMessage === next.emptyMessage &&
+    prev.enableLiveDetail === next.enableLiveDetail &&
+    prev.mergeStreamIntoDayData === next.mergeStreamIntoDayData &&
     prev.stream1s.candles === next.stream1s.candles &&
     prev.stream1s.liveCandle === next.stream1s.liveCandle &&
     prev.stream1s.lastPrice === next.stream1s.lastPrice &&
     prev.stream1s.dayHigh === next.stream1s.dayHigh &&
     prev.stream1s.dayLow === next.stream1s.dayLow &&
     prev.stream1s.connected === next.stream1s.connected &&
+    prev.stream1s.error === next.stream1s.error &&
     prev.stream10s.candles === next.stream10s.candles &&
     prev.stream10s.liveCandle === next.stream10s.liveCandle &&
     prev.stream10s.lastPrice === next.stream10s.lastPrice &&
     prev.stream10s.dayHigh === next.stream10s.dayHigh &&
-    prev.stream10s.dayLow === next.stream10s.dayLow
+    prev.stream10s.dayLow === next.stream10s.dayLow &&
+    prev.stream10s.error === next.stream10s.error
   )
 })
 
 /* ───────── Replay stream adapter ───────── */
 
-const SPEED_OPTIONS: ReplaySpeed[] = [1, 2, 5, 10]
+const SPEED_OPTIONS: ReplaySpeed[] = [1, 5, 10, 25, 100]
+const REPLAY_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+})
+
+function formatReplayTime(timestamp: number | null): string | null {
+  return timestamp === null ? null : REPLAY_TIME_FORMATTER.format(new Date(timestamp * 1000))
+}
+
+export function buildPulseReplayConfig(
+  symbol: string,
+  referenceDate: Date = new Date(),
+): ReplayConfig {
+  const marketStatus = getMarketStatus(referenceDate)
+  const latestCompletedSessionDate = marketStatus.session === 'premarket' || marketStatus.session === 'cash'
+    ? getTradingDate(new Date(referenceDate.getTime() - 24 * 60 * 60 * 1000))
+    : getTradingDate(referenceDate)
+
+  return {
+    symbol: symbol.trim().toUpperCase(),
+    date: latestCompletedSessionDate,
+    from: '09:30',
+    to: isUsMarketEarlyClose(latestCompletedSessionDate) ? '13:00' : '16:00',
+    timeframe: '1s',
+    autoPlay: false,
+  }
+}
 
 const EMPTY_STREAM: LiveStreamState = {
   candles: [],
@@ -1952,568 +2036,47 @@ const EMPTY_STREAM: LiveStreamState = {
   error: null,
 }
 
-/* ───────── Gradient meta for GOOGL (from PulseTextDashboard SYMBOL_META) ───────── */
+const PULSE_GRADIENT_GLOW = 'rgba(37, 99, 235, 0.28)'
 
-const GOOGL_GRADIENT = {
-  accent: '#2563eb',
-  glow: 'rgba(37, 99, 235, 0.28)',
-  gradient: 'linear-gradient(135deg, rgba(15,25,60,0.92), rgba(10,22,50,0.85) 45%, rgba(8,18,42,0.80))',
-}
-
-/* ───────── GradientPulseTodayCard ───────── */
-
-interface GradientPulseTodayCardProps {
-  symbol: string
-  dayData: DayCandleData | undefined
-  stream1s: LiveStreamState
-  stream10s: LiveStreamState
-  theme: ThemeMode
-  chartHeight?: number
-}
-
-const GradientPulseTodayCard = memo(function GradientPulseTodayCard({
-  symbol,
-  dayData,
-  stream1s,
-  stream10s,
-  theme,
-  chartHeight = 420,
-}: GradientPulseTodayCardProps) {
-  const [lineMode, setLineMode] = useState(false)
-  const [aggregation, setAggregation] = useState<'1min' | '5min'>('1min')
-  const [pipVisible, setPipVisible] = useState(true)
-  const [pipTimeframe, setPipTimeframe] = useState<'1s' | '10s'>('10s')
-  const [pipLineMode, setPipLineMode] = useState(true)
-  const [pipZoom, setPipZoom] = useState<number>(2)
-  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
-  const pipContainerRef = useRef<HTMLDivElement>(null)
-
-  // Drag handlers for PIP
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const pipEl = (e.currentTarget as HTMLElement).parentElement
-    const container = pipContainerRef.current
-    if (!pipEl || !container) return
-
-    const containerRect = container.getBoundingClientRect()
-    const pipRect = pipEl.getBoundingClientRect()
-    const currentX = pipRect.left - containerRect.left
-    const currentY = pipRect.top - containerRect.top
-
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: currentX, origY: currentY }
-
-    const handleMove = (ev: MouseEvent) => {
-      if (!dragRef.current || !container) return
-      const dx = ev.clientX - dragRef.current.startX
-      const dy = ev.clientY - dragRef.current.startY
-      const cr = container.getBoundingClientRect()
-      const maxX = cr.width - 300
-      const maxY = cr.height - 180
-      setPipPos({
-        x: Math.max(0, Math.min(maxX, dragRef.current.origX + dx)),
-        y: Math.max(0, Math.min(maxY, dragRef.current.origY + dy)),
-      })
-    }
-
-    const handleUp = () => {
-      dragRef.current = null
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-  }, [])
-
-  const stream = stream1s
-  const pipStream = pipTimeframe === '1s' ? stream1s : stream10s
-  const chartData = useChartData(pipStream)
-  const sessionExtremes = useMemo(() => {
-    const candleExtremes = getSessionExtremesForCandles(dayData?.candles ?? [])
-    return {
-      dayHigh: candleExtremes.dayHigh ?? stream.dayHigh,
-      dayLow: candleExtremes.dayLow ?? stream.dayLow,
-    }
-  }, [dayData?.candles, stream.dayHigh, stream.dayLow])
-  const displayDayHigh = sessionExtremes.dayHigh
-  const displayDayLow = sessionExtremes.dayLow
-  const degenOpts = useDegenScale(stream.lastPrice, displayDayHigh, displayDayLow)
-
-  const price = stream.lastPrice ?? (dayData?.candles.length ? dayData.candles[dayData.candles.length - 1].close : 0)
-  const change = stream.lastChange ?? 0
-  const changePct = stream.lastChangePct ?? dayData?.changePct ?? 0
-  const isPositive = changePct >= 0
-  const isDark = theme === 'dark'
-
-  const pipBaseWindow = pipTimeframe === '1s' ? 30 : 300
-  const pipWindowSecs = pipBaseWindow * pipZoom
-
-  // Reference line (HOD/LOD) for PIP
-  const pipRefLine = useMemo(() => {
-    const lp = stream.lastPrice
-    const hod = displayDayHigh
-    const lod = displayDayLow
-    if (lp === null || (hod === null && lod === null)) return undefined
-    const threshold = 0.01
-    const distToHod = hod !== null ? Math.abs(lp - hod) / lp : Infinity
-    const distToLod = lod !== null ? Math.abs(lp - lod) / lp : Infinity
-    if (distToLod <= distToHod && distToLod <= threshold && lod !== null) {
-      return { value: lod, label: `LOD $${formatPrice(lod)}` }
-    }
-    if (distToHod < distToLod && distToHod <= threshold && hod !== null) {
-      return { value: hod, label: `HOD $${formatPrice(hod)}` }
-    }
-    return undefined
-  }, [stream.lastPrice, displayDayHigh, displayDayLow])
-
-  // LOD blink
-  const isNearLOD = useMemo(() => {
-    const lp = stream.lastPrice
-    const lod = displayDayLow
-    if (lp === null || lod === null || lod === 0) return false
-    return Math.abs(lp - lod) / lod < 0.005
-  }, [stream.lastPrice, displayDayLow])
-
-  const [lodBlinkRed, setLodBlinkRed] = useState(false)
-  useEffect(() => {
-    if (!isNearLOD) { setLodBlinkRed(false); return }
-    const id = setInterval(() => setLodBlinkRed((v) => !v), 800)
-    return () => clearInterval(id)
-  }, [isNearLOD])
-
-  const coloredRefLine = useMemo(() => {
-    if (!pipRefLine) return undefined
-    if (isNearLOD && pipRefLine.value === displayDayLow && lodBlinkRed) {
-      return { ...pipRefLine, color: 'rgba(239, 68, 68, 0.9)' }
-    }
-    return pipRefLine
-  }, [pipRefLine, isNearLOD, lodBlinkRed, displayDayLow])
-
-  const pipColor = isPositive ? '#22c55e' : '#ef4444'
-
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-gray-200/80 bg-white dark:border-gray-700 dark:bg-gray-900">
-      {/* Glow */}
-      <div
-        className="pointer-events-none absolute inset-x-6 top-6 z-10 h-24 rounded-full blur-3xl"
-        style={{ background: GOOGL_GRADIENT.glow, opacity: isDark ? 0.5 : 0.24 }}
-      />
-      {/* Scrim overlay */}
-      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_22%,transparent_72%,rgba(15,23,42,0.12))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_24%,transparent_74%,rgba(2,6,23,0.42))]" />
-
-      {/* Content (above overlays) */}
-      <div className="relative z-20">
-        {/* Header */}
-        <div className="px-3 pt-3 pb-1 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-sm font-bold bg-white/20 dark:bg-white/10 text-gray-900 dark:text-white backdrop-blur-sm">
-              {symbol}
-            </span>
-            {changePct !== null && (
-              <span className={`text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded backdrop-blur-sm ${
-                isPositive
-                  ? 'bg-green-500/20 text-green-800 dark:text-green-300'
-                  : 'bg-red-500/20 text-red-800 dark:text-red-300'
-              }`}>
-                {isPositive ? '+' : ''}{changePct.toFixed(2)}%
-              </span>
-            )}
-            <span className={`text-xs font-semibold tabular-nums ${
-              isPositive
-                ? 'text-green-700 dark:text-green-300'
-                : 'text-red-700 dark:text-red-300'
-            }`}>
-              {isPositive ? '+' : ''}{change.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="flex rounded border border-white/20 dark:border-white/10 overflow-hidden backdrop-blur-sm">
-              {(['1min', '5min'] as const).map((agg) => (
-                <button
-                  key={agg}
-                  onClick={() => setAggregation(agg)}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
-                    aggregation === agg
-                      ? 'bg-white/30 dark:bg-white/20 text-gray-900 dark:text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  {agg === '1min' ? '1m' : '5m'}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setLineMode((prev) => !prev)}
-              className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-white/20 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-white/10 transition-colors backdrop-blur-sm"
-            >
-              {lineMode ? 'Candles' : 'Line'}
-            </button>
-          </div>
-        </div>
-
-        {/* Price */}
-        <div className="px-3 pb-2">
-          <span className="text-xl font-semibold text-gray-900 dark:text-white tabular-nums">
-            ${formatPrice(price)}
-          </span>
-        </div>
-
-        {/* Chart area with PIP overlay */}
-        <div ref={pipContainerRef} style={{ position: 'relative' }}>
-          <FullDayCanvas
-            candles={dayData?.candles ?? []}
-            previousClose={dayData?.previousClose ?? null}
-            lastPrice={stream.lastPrice}
-            dayHigh={displayDayHigh}
-            dayLow={displayDayLow}
-            lineMode={lineMode}
-            aggregation={aggregation}
-            theme={theme}
-            chartHeight={chartHeight}
-          />
-
-          {/* Picture-in-picture: exaggerated Liveline */}
-          {pipVisible && (
-            <div
-              style={{
-                position: 'absolute',
-                ...(pipPos
-                  ? { left: pipPos.x, top: pipPos.y }
-                  : { top: 8, right: 68 }),
-                width: 300,
-                height: 180,
-                borderRadius: 8,
-                overflow: 'hidden',
-                border: isDark ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
-                boxShadow: isDark
-                  ? '0 4px 12px rgba(0,0,0,0.4)'
-                  : '0 4px 12px rgba(0,0,0,0.1)',
-                zIndex: 20,
-                background: isDark ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.92)',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              {/* PIP header — draggable thumb */}
-              <div
-                onMouseDown={handleDragStart}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '3px 6px',
-                  borderBottom: isDark ? '1px solid rgba(75,85,99,0.4)' : '1px solid rgba(229,231,235,0.8)',
-                  cursor: 'grab',
-                  userSelect: 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <svg width="8" height="10" viewBox="0 0 8 10" style={{ opacity: 0.4 }}>
-                    <circle cx="2" cy="2" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                    <circle cx="6" cy="2" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                    <circle cx="2" cy="5" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                    <circle cx="6" cy="5" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                    <circle cx="2" cy="8" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                    <circle cx="6" cy="8" r="1" fill={isDark ? '#9ca3af' : '#6b7280'} />
-                  </svg>
-                  <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
-                    {(['1s', '10s'] as const).map((tf) => (
-                      <button
-                        key={tf}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setPipTimeframe(tf) }}
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 600,
-                          padding: '1px 5px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          background: pipTimeframe === tf
-                            ? (isDark ? '#4b5563' : '#d1d5db')
-                            : 'transparent',
-                          color: pipTimeframe === tf
-                            ? (isDark ? '#f3f4f6' : '#111827')
-                            : (isDark ? '#9ca3af' : '#6b7280'),
-                        }}
-                      >
-                        {tf}
-                      </button>
-                    ))}
-                  </div>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
-                    Live
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <div style={{ display: 'flex', borderRadius: 3, overflow: 'hidden', border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)' }}>
-                    {([1, 2, 4, 8, 16] as const).map((z) => (
-                      <button
-                        key={z}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setPipZoom(z) }}
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 600,
-                          padding: '1px 4px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          background: pipZoom === z
-                            ? (isDark ? '#4b5563' : '#d1d5db')
-                            : 'transparent',
-                          color: pipZoom === z
-                            ? (isDark ? '#f3f4f6' : '#111827')
-                            : (isDark ? '#9ca3af' : '#6b7280'),
-                        }}
-                      >
-                        {z}x
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setPipLineMode((prev) => !prev) }}
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 600,
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      color: isDark ? '#9ca3af' : '#6b7280',
-                    }}
-                  >
-                    {pipLineMode ? 'Candles' : 'Line'}
-                  </button>
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setPipVisible(false) }}
-                    style={{
-                      fontSize: 8,
-                      fontWeight: 600,
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      cursor: 'pointer',
-                      border: isDark ? '1px solid rgba(75,85,99,0.5)' : '1px solid rgba(209,213,219,0.7)',
-                      background: 'transparent',
-                      color: isDark ? '#9ca3af' : '#6b7280',
-                    }}
-                  >
-                    Collapse
-                  </button>
-                </div>
-              </div>
-              {/* PIP Liveline chart */}
-              <div style={{ height: 156, position: 'relative' }}>
-                <Liveline
-                  data={chartData?.lineData ?? []}
-                  value={chartData?.lineValue ?? price}
-                  {...(pipLineMode
-                    ? {}
-                    : {
-                        mode: 'candle' as const,
-                        candles: chartData?.candles ?? [],
-                        liveCandle: chartData?.liveCandle,
-                        candleWidth: pipTimeframe === '1s' ? 1 : 10,
-                        lineMode: pipLineMode,
-                        lineData: chartData?.lineData ?? [],
-                        lineValue: chartData?.lineValue,
-                        onModeChange: () => setPipLineMode((prev) => !prev),
-                      }
-                  )}
-                  loading={!chartData}
-                  window={pipWindowSecs}
-                  theme={theme}
-                  color={pipColor}
-                  grid={true}
-                  badge={true}
-                  scrub={true}
-                  fill={true}
-                  pulse={true}
-                  momentum={true}
-                  degen={degenOpts}
-                  exaggerate={false}
-                  referenceLine={coloredRefLine}
-                  padding={{ top: 6, right: 56, bottom: 20, left: 6 }}
-                  formatValue={formatPrice}
-                  formatTime={() => ''}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Toggle to re-show PIP if hidden */}
-          {!pipVisible && (
-            <button
-              onClick={() => setPipVisible(true)}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 68,
-                zIndex: 20,
-                fontSize: 9,
-                fontWeight: 600,
-                padding: '3px 8px',
-                borderRadius: 4,
-                cursor: 'pointer',
-                border: isDark ? '1px solid rgba(75,85,99,0.6)' : '1px solid rgba(209,213,219,0.8)',
-                background: isDark ? 'rgba(31,41,55,0.9)' : 'rgba(255,255,255,0.9)',
-                color: isDark ? '#d1d5db' : '#374151',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              PIP
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}, (prev, next) => {
-  return (
-    prev.symbol === next.symbol &&
-    prev.theme === next.theme &&
-    prev.chartHeight === next.chartHeight &&
-    prev.dayData === next.dayData &&
-    prev.stream1s.candles === next.stream1s.candles &&
-    prev.stream1s.liveCandle === next.stream1s.liveCandle &&
-    prev.stream1s.lastPrice === next.stream1s.lastPrice &&
-    prev.stream1s.dayHigh === next.stream1s.dayHigh &&
-    prev.stream1s.dayLow === next.stream1s.dayLow &&
-    prev.stream1s.connected === next.stream1s.connected &&
-    prev.stream10s.candles === next.stream10s.candles &&
-    prev.stream10s.liveCandle === next.stream10s.liveCandle &&
-    prev.stream10s.lastPrice === next.stream10s.lastPrice &&
-    prev.stream10s.dayHigh === next.stream10s.dayHigh &&
-    prev.stream10s.dayLow === next.stream10s.dayLow
-  )
-})
-
-/**
- * Converts ReplayState output into a LiveStreamState-compatible object.
- * - Time-shifts candles so the latest maps to "now" (Liveline anchors to wall-clock)
- * - Computes dayHigh/dayLow from all revealed candles
- */
+/** Converts replay output into the small LiveStreamState subset used by the card. */
 function useReplayStream(replay: ReturnType<typeof useReplay>): LiveStreamState {
   return useMemo(() => {
-    if (replay.candles.length === 0 && !replay.liveCandle) {
-      return {
-        ...EMPTY_STREAM,
-        lastPrice: replay.lastPrice,
-        lastChange: replay.lastChange,
-        lastChangePct: replay.lastChangePct,
-        previousClose: replay.previousClose,
-        error: replay.error,
-      }
-    }
-
-    // Time-shift: latest revealed candle → "now"
-    const latestOriginal = replay.liveCandle?.time
-      ?? (replay.candles.length > 0 ? replay.candles[replay.candles.length - 1].time : 0)
-    const nowSecs = Math.floor(Date.now() / 1000)
-    const timeShift = nowSecs - latestOriginal
-
-    const shiftedCandles = replay.candles.map((c) => ({
-      time: c.time + timeShift,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }))
-
-    const shiftedLive = replay.liveCandle
-      ? {
-          time: replay.liveCandle.time + timeShift,
-          open: replay.liveCandle.open,
-          high: replay.liveCandle.high,
-          low: replay.liveCandle.low,
-          close: replay.liveCandle.close,
-        }
-      : undefined
-
-    // Compute dayHigh/dayLow from all revealed candles
-    let dayHigh = -Infinity
-    let dayLow = Infinity
-    for (const c of replay.candles) {
-      if (c.high > dayHigh) dayHigh = c.high
-      if (c.low < dayLow) dayLow = c.low
-    }
-    if (replay.liveCandle) {
-      if (replay.liveCandle.high > dayHigh) dayHigh = replay.liveCandle.high
-      if (replay.liveCandle.low < dayLow) dayLow = replay.liveCandle.low
-    }
-
     return {
-      candles: shiftedCandles,
-      liveCandle: shiftedLive,
+      candles: replay.candles,
+      liveCandle: replay.liveCandle,
       lastPrice: replay.lastPrice,
       lastChange: replay.lastChange,
       lastChangePct: replay.lastChangePct,
       previousClose: replay.previousClose,
-      dayHigh: isFinite(dayHigh) ? dayHigh : null,
-      dayLow: isFinite(dayLow) ? dayLow : null,
+      // Replay cards derive their session levels from their aggregated day
+      // data, so scanning the growing tick array for these on every clock tick
+      // would be wasted work.
+      dayHigh: null,
+      dayLow: null,
       connected: false,
       error: replay.error,
     }
   }, [replay.candles, replay.liveCandle, replay.lastPrice, replay.lastChange, replay.lastChangePct, replay.previousClose, replay.error])
 }
 
-/* ───────── Replay 1s → 1min aggregated candles (live growing) ───────── */
-
-function useReplayAggregatedCandles(replay: ReturnType<typeof useReplay>): DayCandleData | undefined {
-  return useMemo(() => {
-    const revealed = [...replay.candles]
-    if (replay.liveCandle) revealed.push(replay.liveCandle)
-    if (revealed.length === 0) return undefined
-
-    // Bucket by minute — floor unix seconds to 60s boundary.
-    // ET offset is whole hours, so UTC minute boundaries = ET minute boundaries.
-    const buckets = new Map<number, { open: number; high: number; low: number; close: number }>()
-    const bucketOrder: number[] = []
-
-    for (const c of revealed) {
-      const key = Math.floor(c.time / 60) * 60
-      const existing = buckets.get(key)
-      if (existing) {
-        if (c.high > existing.high) existing.high = c.high
-        if (c.low < existing.low) existing.low = c.low
-        existing.close = c.close
-      } else {
-        buckets.set(key, { open: c.open, high: c.high, low: c.low, close: c.close })
-        bucketOrder.push(key)
-      }
-    }
-
-    // Convert to DayCandle[] — formatToParts only once per bucket (~390 max)
-    const etFmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-
-    const candles: DayCandle[] = bucketOrder.map((key) => {
-      const ohlc = buckets.get(key)!
-      const parts = etFmt.formatToParts(new Date(key * 1000))
-      const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
-      return {
-        date: `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:00`,
-        ...ohlc,
-      }
-    })
-
-    return {
-      candles,
-      previousClose: replay.previousClose,
-      changePct: replay.lastChangePct,
-    }
-  }, [replay.candles, replay.liveCandle, replay.previousClose, replay.lastChangePct])
-}
-
 /* ───────── Replay 1s → adaptive 10s/1min candles ───────── */
+
+const REPLAY_ET_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
+function formatReplayBucketDate(timestamp: number, etFmt = REPLAY_ET_FORMATTER): string {
+  const parts = etFmt.formatToParts(new Date(timestamp * 1000))
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '00'
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`
+}
 
 export function bucketCandles(
   revealed: { time: number; open: number; high: number; low: number; close: number }[],
@@ -2538,10 +2101,8 @@ export function bucketCandles(
 
   return bucketOrder.map((key) => {
     const ohlc = buckets.get(key)!
-    const parts = etFmt.formatToParts(new Date(key * 1000))
-    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
     return {
-      date: `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`,
+      date: formatReplayBucketDate(key, etFmt),
       ...ohlc,
     }
   })
@@ -2589,38 +2150,154 @@ export function mergeLatestDayCandlesWithStream(
   return sortCandles(Array.from(merged.values()))
 }
 
+interface PreparedReplayBucketSeries {
+  /** Final OHLC for every observed bucket. Future buckets are never exposed directly. */
+  buckets: DayCandle[]
+  /** Bucket containing each source candle. */
+  bucketIndexes: Uint32Array
+  /** Prefix-safe values for the active bucket at each source candle. */
+  partialHighs: Float64Array
+  partialLows: Float64Array
+  partialCloses: Float64Array
+}
+
+interface ReplayBucketBuilder extends PreparedReplayBucketSeries {
+  bucketSize: number
+  currentKey: number | null
+}
+
+interface PreparedReplayAggregations {
+  candleCount: number
+  candleTimes: Float64Array
+  tenSecond: PreparedReplayBucketSeries
+  oneMinute: PreparedReplayBucketSeries
+}
+
+function createReplayBucketBuilder(bucketSize: number, candleCount: number): ReplayBucketBuilder {
+  return {
+    bucketSize,
+    currentKey: null,
+    buckets: [],
+    bucketIndexes: new Uint32Array(candleCount),
+    partialHighs: new Float64Array(candleCount),
+    partialLows: new Float64Array(candleCount),
+    partialCloses: new Float64Array(candleCount),
+  }
+}
+
+function indexReplayCandle(
+  builder: ReplayBucketBuilder,
+  candle: StreamCandle,
+  timestamp: number,
+  sourceIndex: number,
+) {
+  const key = Math.floor(timestamp / builder.bucketSize) * builder.bucketSize
+  let bucketIndex = builder.buckets.length - 1
+
+  if (key !== builder.currentKey) {
+    builder.currentKey = key
+    bucketIndex += 1
+    builder.buckets.push({
+      date: formatReplayBucketDate(key),
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+    })
+  } else {
+    const bucket = builder.buckets[bucketIndex]
+    if (candle.high > bucket.high) bucket.high = candle.high
+    if (candle.low < bucket.low) bucket.low = candle.low
+    bucket.close = candle.close
+  }
+
+  const bucket = builder.buckets[bucketIndex]
+  builder.bucketIndexes[sourceIndex] = bucketIndex
+  builder.partialHighs[sourceIndex] = bucket.high
+  builder.partialLows[sourceIndex] = bucket.low
+  builder.partialCloses[sourceIndex] = bucket.close
+}
+
+/**
+ * Builds both replay resolutions in one pass over the immutable fetched set.
+ * Playback renders then become prefix lookups instead of repeated full-history
+ * scans. Per-candle partial OHLC values keep future ticks from leaking into the
+ * currently active bucket when users play, skip, seek, or rewind.
+ */
+function prepareReplayAggregations(candles: StreamCandle[]): PreparedReplayAggregations {
+  const candleTimes = new Float64Array(candles.length)
+  const tenSecond = createReplayBucketBuilder(10, candles.length)
+  const oneMinute = createReplayBucketBuilder(60, candles.length)
+
+  for (let index = 0; index < candles.length; index += 1) {
+    const candle = candles[index]
+    const timestamp = candle.time
+    candleTimes[index] = timestamp
+    indexReplayCandle(tenSecond, candle, timestamp, index)
+    indexReplayCandle(oneMinute, candle, timestamp, index)
+  }
+
+  return {
+    candleCount: candles.length,
+    candleTimes,
+    tenSecond,
+    oneMinute,
+  }
+}
+
+function revealPreparedBuckets(
+  prepared: PreparedReplayBucketSeries,
+  revealedCount: number,
+): DayCandle[] {
+  if (revealedCount === 0) return []
+
+  const sourceIndex = revealedCount - 1
+  const activeBucketIndex = prepared.bucketIndexes[sourceIndex]
+  const activeBucket = prepared.buckets[activeBucketIndex]
+  const candles = prepared.buckets.slice(0, activeBucketIndex)
+
+  // The stored bucket contains its eventual final OHLC. Only its identity,
+  // date, and open are safe to reuse; the active values come from the prefix
+  // snapshot at the latest revealed source candle.
+  candles.push({
+    date: activeBucket.date,
+    open: activeBucket.open,
+    high: prepared.partialHighs[sourceIndex],
+    low: prepared.partialLows[sourceIndex],
+    close: prepared.partialCloses[sourceIndex],
+  })
+
+  return candles
+}
+
 export function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): {
   dayData10s: DayCandleData | undefined
   dayData1min: DayCandleData | undefined
   mode: '10s' | '1min'
 } {
+  const prepared = useMemo(
+    () => prepareReplayAggregations(replay.allCandles),
+    [replay.allCandles],
+  )
+
   return useMemo(() => {
-    const revealed = [...replay.candles]
-    if (replay.liveCandle) revealed.push(replay.liveCandle)
-    if (revealed.length === 0) return { dayData10s: undefined, dayData1min: undefined, mode: '10s' as const }
+    const revealedCount = Math.min(
+      prepared.candleCount,
+      Math.max(0, Math.floor(replay.revealedCount)),
+    )
+    if (revealedCount === 0) {
+      return { dayData10s: undefined, dayData1min: undefined, mode: '10s' as const }
+    }
 
     // Determine elapsed time
-    const firstTime = revealed[0].time
-    const lastTime = revealed[revealed.length - 1].time
+    const firstTime = prepared.candleTimes[0]
+    const lastTime = prepared.candleTimes[revealedCount - 1]
     const elapsed = lastTime - firstTime
 
     // Threshold: 15 minutes (900s)
     const mode = elapsed < 900 ? '10s' as const : '1min' as const
-
-    const etFmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    })
-
-    // Always bucket into both 10s and 1min simultaneously
-    const candles10s = bucketCandles(revealed, 10, etFmt)
-    const candles1min = bucketCandles(revealed, 60, etFmt)
+    const candles10s = revealPreparedBuckets(prepared.tenSecond, revealedCount)
+    const candles1min = revealPreparedBuckets(prepared.oneMinute, revealedCount)
 
     const shared = {
       previousClose: replay.previousClose,
@@ -2632,7 +2309,7 @@ export function useReplayAdaptiveCandles(replay: ReturnType<typeof useReplay>): 
       dayData1min: { candles: candles1min, ...shared },
       mode,
     }
-  }, [replay.candles, replay.liveCandle, replay.previousClose, replay.lastChangePct])
+  }, [prepared, replay.revealedCount, replay.previousClose, replay.lastChangePct])
 }
 
 /* ───────── PulseTodayDashboard ───────── */
@@ -2661,7 +2338,12 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
   const [activeSymbol, setActiveSymbol] = useState(
     () => cockpit.topGainer?.symbol ?? cockpit.topLoser?.symbol ?? 'GOOGL',
   )
-  const liveSymbols = useMemo(() => [activeSymbol], [activeSymbol])
+  const [replayConfig, setReplayConfig] = useState<ReplayConfig | null>(null)
+  const isReplay = !!replayConfig
+  const liveSymbols = useMemo(() => isReplay ? [] : [activeSymbol], [activeSymbol, isReplay])
+  const replayButtonRef = useRef<HTMLButtonElement>(null)
+  const exitReplayButtonRef = useRef<HTMLButtonElement>(null)
+  const wasReplayRef = useRef(false)
   const [whyMoving, setWhyMoving] = useState<StockWhyMovingResult | null>(null)
   const [whyMovingLoading, setWhyMovingLoading] = useState(true)
 
@@ -2702,12 +2384,23 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
   }, [activeSymbol])
 
   // Replay state
-  const [replayConfig, setReplayConfig] = useState<ReplayConfig | null>(null)
-  const isReplay = !!replayConfig
   const replay = useReplay(replayConfig)
   const replayStream = useReplayStream(replay)
-  const aggregatedDayData = useReplayAggregatedCandles(replay)
   const { dayData10s: adaptiveData10s, dayData1min: adaptiveData1min, mode: adaptiveMode } = useReplayAdaptiveCandles(replay)
+  // Session context and the adaptive chart share the exact same prepared
+  // one-minute series instead of independently aggregating the replay prefix.
+  const aggregatedDayData = adaptiveData1min
+
+  useEffect(() => {
+    if (wasReplayRef.current === isReplay) return
+    wasReplayRef.current = isReplay
+
+    const frame = requestAnimationFrame(() => {
+      if (isReplay) exitReplayButtonRef.current?.focus()
+      else replayButtonRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [isReplay])
 
   // Morph animation: 10s → 1min transition
   const prevAdaptiveModeRef = useRef(adaptiveMode)
@@ -2715,6 +2408,11 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
 
   useEffect(() => {
     if (prevAdaptiveModeRef.current === '10s' && adaptiveMode === '1min') {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setMorphProgress(1)
+        prevAdaptiveModeRef.current = adaptiveMode
+        return
+      }
       // Start animation
       const start = performance.now()
       const duration = 1000
@@ -2740,119 +2438,104 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
   const streams10s = useMultiStream(liveSymbols, '10s')
 
   // Day candles
-  const dayCandles = useDayCandles(liveSymbols)
+  const {
+    data: dayCandles,
+    loading: dayCandlesLoading,
+    error: dayCandlesError,
+    retry: retryDayCandles,
+  } = useDayCandlesState(liveSymbols)
 
   const startReplay = useCallback(() => {
-    setReplayConfig({
-      symbol: 'GOOGL',
-      date: '2026-03-13',
-      from: '09:30',
-      to: '16:00',
-      timeframe: '1s',
-    })
-  }, [])
+    setReplayConfig(buildPulseReplayConfig(activeSymbol))
+  }, [activeSymbol])
 
   const exitReplay = useCallback(() => {
     setReplayConfig(null)
   }, [])
 
-  // Progress percentage
-  const progressPct = replay.totalCandles > 0
-    ? Math.round((replay.revealedCount / replay.totalCandles) * 100)
-    : 0
+  const retryReplay = useCallback(() => {
+    setReplayConfig((current) => current
+      ? { ...current, requestId: Date.now(), autoPlay: false }
+      : current)
+  }, [])
 
-  // In replay mode, reveal dayData candles proportionally to the scrubber position.
-  // Filter to regular market hours only (9:30–16:00) so pre-market candles don't
-  // consume fraction without being visible on the chart.
-  const replayDayData = useMemo<DayCandleData | undefined>(() => {
-    if (!isReplay) return undefined
-    const base = dayCandles['GOOGL']
-    if (!base || base.candles.length === 0) return base
-    if (replay.totalCandles === 0) return { ...base, candles: [] }
+  const replaySymbol = replayConfig?.symbol ?? activeSymbol
 
-    const marketOnly = [...base.candles]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .filter((c) => {
-        const parts = c.date.split(' ')
-        const timeParts = (parts[1] ?? '00:00:00').split(':')
-        const totalMins = parseInt(timeParts[0] ?? '0', 10) * 60 + parseInt(timeParts[1] ?? '0', 10)
-        return totalMins >= 570 && totalMins <= 960 // 9:30 AM – 4:00 PM
-      })
-
-    const fraction = replay.revealedCount / replay.totalCandles
-    const visibleCount = Math.round(fraction * marketOnly.length)
-    return { ...base, candles: marketOnly.slice(0, visibleCount) }
-  }, [isReplay, dayCandles, replay.totalCandles, replay.revealedCount])
-
-  // Scrubber drag state
-  const scrubBarRef = useRef<HTMLDivElement>(null)
-  const wasPlayingRef = useRef(false)
-
-  const seekFromPointer = useCallback((clientX: number) => {
-    const bar = scrubBarRef.current
-    if (!bar || replay.totalCandles === 0) return
-    const rect = bar.getBoundingClientRect()
-    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const index = Math.round(fraction * replay.totalCandles)
-    replay.seek(index)
-  }, [replay.totalCandles, replay.seek])
-
-  const handleScrubStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    wasPlayingRef.current = replay.status === 'playing'
-    if (replay.status === 'playing') replay.pause()
-    seekFromPointer(e.clientX)
-
-    const handleMove = (ev: MouseEvent) => seekFromPointer(ev.clientX)
-    const handleUp = () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-      if (wasPlayingRef.current) replay.play()
-    }
-
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-  }, [replay.status, replay.pause, replay.play, seekFromPointer])
+  // Progress and scrubbing follow elapsed market time, not trade count. Some
+  // second-level feeds omit quiet seconds, so array position is not a clock.
+  const progressPct = Math.round(replay.replayProgress * 100)
+  const replayRangeStart = replay.replayStartTime ?? 0
+  const replayRangeEnd = replay.replayEndTime !== null && replay.replayEndTime > replayRangeStart
+    ? replay.replayEndTime
+    : replayRangeStart + 1
+  const replayRangeValue = Math.floor(Math.max(
+    replayRangeStart,
+    Math.min(replayRangeEnd, replay.replayCurrentTime ?? replayRangeStart),
+  ))
+  const replayClockLabel = formatReplayTime(replay.replayCurrentTime)
 
   const activeMover =
     cockpit.gainers.find((mover) => mover.symbol === activeSymbol) ??
     cockpit.losers.find((mover) => mover.symbol === activeSymbol) ??
     null
   const sessionLabel = getSessionLabel(cockpit.session)
+  const activeStream = streams1s[activeSymbol] ?? EMPTY_STREAM
+  const liveDataIssue = dayCandlesError ?? activeStream.error
+  const hasSnapshotData = Boolean(dayCandles[activeSymbol]?.candles.length)
+  const liveStatusLabel = liveDataIssue
+    ? 'Data delayed'
+    : cockpit.session === 'closed'
+      ? 'Closing snapshot'
+      : activeStream.connected
+        ? 'Live'
+        : hasSnapshotData
+          ? 'Snapshot'
+          : 'Connecting'
+  const liveStatusClass = liveDataIssue
+    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'
+    : cockpit.session === 'closed'
+      ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+      : activeStream.connected
+        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+        : hasSnapshotData
+          ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
+    <div className="pulse-today-root">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Pulse Today</h1>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             {sessionLabel} · {cockpit.reviewSymbols.length} catalyst candidates
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {!isReplay ? (
             <>
               <button
+                ref={replayButtonRef}
+                type="button"
                 onClick={startReplay}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors cursor-pointer"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-purple-100 px-3 text-xs font-semibold text-purple-800 transition-colors hover:bg-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
               >
                 Replay
               </button>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                {cockpit.session !== 'closed' ? (
+              <span role="status" aria-live="polite" className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold ${liveStatusClass}`}>
+                {activeStream.connected && !liveDataIssue && cockpit.session !== 'closed' ? (
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600" />
                   </span>
                 ) : null}
-                {cockpit.session === 'closed' ? 'Closing snapshot' : 'Live'}
+                {liveStatusLabel}
               </span>
             </>
           ) : (
             <>
               {/* Replay badge */}
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                REPLAY GOOGL
+              <span className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-purple-100 px-3 text-xs font-bold text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                REPLAY {replaySymbol}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                 {replayConfig?.date} {replayConfig?.from}–{replayConfig?.to}
@@ -2861,8 +2544,10 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
                 {progressPct}%
               </span>
               <button
+                ref={exitReplayButtonRef}
+                type="button"
                 onClick={exitReplay}
-                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                className="inline-flex min-h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               >
                 Exit
               </button>
@@ -2912,17 +2597,14 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
                   : 'No data'}
               </p>
             </button>
-            <Link
-              href="/admin/why-moved"
-              className="px-4 py-3 transition hover:bg-cream-50 dark:hover:bg-gray-700/40"
-            >
+            <div className="px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
-                Editorial
+                Active chart
               </p>
-              <p className="mt-1 text-sm font-semibold text-sage-700 dark:text-sage-300">
-                Review catalyst queue
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
+                {activeSymbol}
               </p>
-            </Link>
+            </div>
           </section>
 
           <section className="mb-4 rounded-lg border border-cream-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
@@ -2986,143 +2668,179 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
 
       {/* Replay playback controls — sticky so they stay visible when scrolling to lower charts */}
       {isReplay && (
-        <div className="sticky top-0 z-30 flex items-center gap-3 mb-4 px-3 py-2 rounded-lg bg-purple-50/95 dark:bg-purple-900/80 border border-purple-200 dark:border-purple-800/30 backdrop-blur-sm">
-          {/* Play / Pause */}
-          <button
-            onClick={() => replay.status === 'playing' ? replay.pause() : replay.play()}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-          >
-            {replay.status === 'playing' ? (
-              <svg width="10" height="12" viewBox="0 0 10 12"><rect x="1" y="1" width="3" height="10" fill="currentColor" /><rect x="6" y="1" width="3" height="10" fill="currentColor" /></svg>
-            ) : (
-              <svg width="10" height="12" viewBox="0 0 10 12"><polygon points="1,0 10,6 1,12" fill="currentColor" /></svg>
-            )}
-          </button>
+        <section
+          aria-label="Replay controls"
+          className="sticky top-[6.625rem] z-30 mb-4 space-y-3 rounded-xl border border-purple-200 bg-purple-50/95 p-3 shadow-sm backdrop-blur-sm dark:border-purple-800/50 dark:bg-purple-950/90 lg:top-[6.375rem]"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-label={replay.status === 'playing' ? 'Pause replay' : 'Play replay'}
+              onClick={() => replay.status === 'playing' ? replay.pause() : replay.play()}
+              disabled={replay.status === 'loading' || replay.status === 'error' || replay.totalCandles === 0}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white transition-colors hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:ring-offset-gray-950"
+            >
+              {replay.status === 'playing' ? (
+                <svg width="12" height="14" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="1" width="3" height="10" fill="currentColor" /><rect x="6" y="1" width="3" height="10" fill="currentColor" /></svg>
+              ) : (
+                <svg width="12" height="14" viewBox="0 0 10 12" aria-hidden="true"><polygon points="1,0 10,6 1,12" fill="currentColor" /></svg>
+              )}
+            </button>
 
-          {/* Reset */}
-          <button
-            onClick={replay.reset}
-            className="text-xs font-medium text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 transition-colors"
-          >
-            Reset
-          </button>
+            <button
+              type="button"
+              onClick={replay.reset}
+              disabled={replay.totalCandles === 0}
+              className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-purple-700 transition hover:bg-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 dark:text-purple-300 dark:hover:bg-purple-900/40"
+            >
+              Reset
+            </button>
 
-          {/* Divider */}
-          <div className="w-px h-5 bg-purple-200 dark:bg-purple-800/40" />
+            <div className="h-6 w-px bg-purple-200 dark:bg-purple-800/60" aria-hidden="true" />
 
-          {/* Skip controls */}
-          <button
-            onClick={() => replay.skip(-5)}
-            className="text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors tabular-nums"
-          >
-            -5s
-          </button>
-          <button
-            onClick={() => replay.skip(5)}
-            className="text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors tabular-nums"
-          >
-            +5s
-          </button>
+            <button
+              type="button"
+              aria-label="Skip backward 1 minute"
+              onClick={() => replay.skip(-60)}
+              disabled={replay.totalCandles === 0}
+              className="min-h-9 rounded-lg px-2.5 text-xs font-semibold tabular-nums text-gray-700 transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-purple-900/40"
+            >
+              −1m
+            </button>
+            <button
+              type="button"
+              aria-label="Skip forward 1 minute"
+              onClick={() => replay.skip(60)}
+              disabled={replay.totalCandles === 0}
+              className="min-h-9 rounded-lg px-2.5 text-xs font-semibold tabular-nums text-gray-700 transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-purple-900/40"
+            >
+              +1m
+            </button>
 
-          {/* Divider */}
-          <div className="w-px h-5 bg-purple-200 dark:bg-purple-800/40" />
-
-          {/* Speed pills */}
-          <div className="flex rounded border border-purple-300 dark:border-purple-700 overflow-hidden">
-            {SPEED_OPTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => replay.setSpeed(s)}
-                className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                  replay.speed === s
-                    ? 'bg-purple-600 text-white'
-                    : 'text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30'
-                }`}
-              >
-                {s}x
-              </button>
-            ))}
-          </div>
-
-          {/* Status */}
-          <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 capitalize">
-            {replay.status}
-          </span>
-
-          {/* Scrubber */}
-          <div
-            ref={scrubBarRef}
-            onMouseDown={handleScrubStart}
-            className="flex-1 h-4 flex items-center cursor-pointer group"
-          >
-            <div className="relative w-full h-1.5 bg-purple-200 dark:bg-purple-800/30 rounded-full">
-              <div
-                className="h-full bg-purple-500 rounded-full"
-                style={{ width: `${progressPct}%` }}
-              />
-              {/* Thumb */}
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-purple-600 border-2 border-white dark:border-gray-800 shadow-sm group-hover:scale-125 transition-transform"
-                style={{ left: `calc(${progressPct}% - 6px)` }}
-              />
+            <div
+              className="flex h-9 overflow-hidden rounded-lg border border-purple-300 dark:border-purple-700"
+              role="group"
+              aria-label="Replay speed"
+            >
+              {SPEED_OPTIONS.map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  aria-pressed={replay.speed === speed}
+                  onClick={() => replay.setSpeed(speed)}
+                  className={`min-w-9 px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-purple-500 ${
+                    replay.speed === speed
+                      ? 'bg-purple-600 text-white'
+                      : 'text-purple-700 hover:bg-purple-100 dark:text-purple-300 dark:hover:bg-purple-900/40'
+                  }`}
+                >
+                  {speed}x
+                </button>
+              ))}
             </div>
+
+            <span role="status" aria-live="polite" className="ml-auto rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold capitalize text-gray-600 dark:bg-purple-900/40 dark:text-gray-300">
+              {replay.status}
+            </span>
           </div>
-        </div>
+
+          <div className="flex items-center gap-3">
+            <span className="w-8 text-right text-xs font-semibold tabular-nums text-purple-700 dark:text-purple-300">
+              {progressPct}%
+            </span>
+            <input
+              type="range"
+              min={replayRangeStart}
+              max={replayRangeEnd}
+              step={1}
+              value={replayRangeValue}
+              disabled={replay.totalCandles === 0}
+              onChange={(event) => replay.seekTime(Number(event.currentTarget.value))}
+              aria-label="Replay position"
+              aria-valuetext={`${progressPct}% complete${replayClockLabel ? `, ${replayClockLabel} Eastern` : ''}`}
+              className="h-8 min-w-0 flex-1 cursor-pointer accent-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <span className="hidden min-w-36 text-right text-xs tabular-nums text-gray-500 sm:block dark:text-gray-400">
+              {replayClockLabel ? `${replayClockLabel} ET · ` : ''}{replay.revealedCount.toLocaleString()} / {replay.totalCandles.toLocaleString()}
+            </span>
+          </div>
+        </section>
       )}
 
-      {/* GOOGL cards — two side-by-side in replay for comparison, single otherwise */}
-      {isReplay && (
-        <div className="grid grid-cols-2 gap-4">
-          <PulseTodayCard
-            symbol="GOOGL"
-            dayData={replayDayData}
-            stream1s={replayStream}
-            stream10s={replayStream}
-            theme={theme}
-            chartHeight={340}
-          />
-          <PulseTodayCard
-            symbol="GOOGL"
-            dayData={replayDayData}
-            stream1s={replayStream}
-            stream10s={replayStream}
-            theme={theme}
-            chartHeight={340}
-            dynamicXAxis
-          />
+      {isReplay && replay.error ? (
+        <div role="alert" className="mb-4 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+          <p>{replay.error}</p>
+          <button type="button" onClick={retryReplay} className="min-h-9 shrink-0 rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+            Retry replay
+          </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Third chart: live growing candlesticks (replay only) */}
-      {isReplay && (
-        <div className="mt-4">
-          <PulseTodayCard
-            symbol="GOOGL"
-            dayData={aggregatedDayData}
-            stream1s={replayStream}
-            stream10s={replayStream}
-            theme={theme}
-            chartHeight={420}
-            dynamicXAxis
-          />
+      {isReplay && !replay.error && replay.status !== 'loading' && replay.totalCandles === 0 ? (
+        <div role="status" className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          <p>No one-second candles were available for {replaySymbol} on {replayConfig?.date}. This can be a temporary provider delay.</p>
+          <button
+            type="button"
+            onClick={retryReplay}
+            className="min-h-9 shrink-0 rounded-lg border border-amber-300 bg-white px-3 text-xs font-semibold text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+          >
+            Retry replay
+          </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Fourth chart: adaptive 10s→1min growing candles with morph animation (replay only) */}
-      {isReplay && (
-        <div className="mt-4">
-          <PulseTodayCard
-            symbol="GOOGL"
-            dayData={morphProgress < 1 ? adaptiveData10s : adaptiveData1min}
-            stream1s={replayStream}
-            stream10s={replayStream}
-            theme={theme}
-            chartHeight={420}
-            dynamicXAxis
-            forceAggregation={morphProgress < 1 ? '10s' : '1min'}
-            morphProgress={morphProgress}
-            morphTargetCandles={morphProgress < 1 ? adaptiveData1min?.candles : undefined}
-          />
+      {/* Two purposeful replay views replace the former four-chart prototype wall. */}
+      {isReplay && !replay.error && (replay.totalCandles > 0 || replay.status === 'loading') && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <section aria-labelledby="replay-session-view">
+            <div className="mb-2 px-1">
+              <h2 id="replay-session-view" className="text-sm font-bold text-gray-900 dark:text-white">Session context</h2>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">The full session fills in as playback advances.</p>
+            </div>
+            <PulseTodayCard
+              symbol={replaySymbol}
+              dayData={aggregatedDayData}
+              dayDataLoading={replay.status === 'loading'}
+              dayDataError={replay.error}
+              onRetryDayData={retryReplay}
+              emptyMessage={replay.status === 'ready'
+                ? 'Replay ready — press play to reveal the first candle.'
+                : 'Playback is starting…'}
+              enableLiveDetail={false}
+              mergeStreamIntoDayData={false}
+              stream1s={replayStream}
+              stream10s={replayStream}
+              theme={theme}
+              chartHeight={360}
+            />
+          </section>
+
+          <section aria-labelledby="replay-adaptive-view">
+            <div className="mb-2 px-1">
+              <h2 id="replay-adaptive-view" className="text-sm font-bold text-gray-900 dark:text-white">Adaptive tape</h2>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">A readable window that expands from seconds into minutes.</p>
+            </div>
+            <PulseTodayCard
+              symbol={replaySymbol}
+              dayData={morphProgress < 1 ? adaptiveData10s : adaptiveData1min}
+              dayDataLoading={replay.status === 'loading'}
+              dayDataError={replay.error}
+              onRetryDayData={retryReplay}
+              emptyMessage={replay.status === 'ready'
+                ? 'Replay ready — press play to reveal the first candle.'
+                : 'Playback is starting…'}
+              enableLiveDetail={false}
+              mergeStreamIntoDayData={false}
+              stream1s={replayStream}
+              stream10s={replayStream}
+              theme={theme}
+              chartHeight={360}
+              dynamicXAxis
+              forceAggregation={morphProgress < 1 ? '10s' : '1min'}
+              morphProgress={morphProgress}
+              morphTargetCandles={morphProgress < 1 ? adaptiveData1min?.candles : undefined}
+            />
+          </section>
         </div>
       )}
 
@@ -3132,6 +2850,9 @@ export default function PulseTodayDashboard({ gainersData, losersData }: PulseTo
             <PulseTodayCard
               symbol={activeSymbol}
               dayData={dayCandles[activeSymbol]}
+              dayDataLoading={dayCandlesLoading}
+              dayDataError={dayCandlesError}
+              onRetryDayData={retryDayCandles}
               stream1s={streams1s[activeSymbol] ?? EMPTY_STREAM}
               stream10s={streams10s[activeSymbol] ?? EMPTY_STREAM}
               theme={theme}

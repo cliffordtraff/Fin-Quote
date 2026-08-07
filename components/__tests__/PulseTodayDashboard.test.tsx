@@ -1,10 +1,180 @@
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildPulseReplayConfig,
   buildPulseSessionLevels,
   getSessionExtremesForCandles,
   getSessionWindowForCandles,
   mergeLatestDayCandlesWithStream,
+  PulseTodayCard,
+  useReplayAdaptiveCandles,
 } from '@/components/PulseTodayDashboard'
+import type { LiveStreamState, StreamCandle } from '@/lib/hooks/use-live-stream'
+import type { ReplayState } from '@/lib/hooks/use-replay'
+
+vi.mock('liveline', () => ({
+  Liveline: () => null,
+}))
+
+const emptyStream: LiveStreamState = {
+  candles: [],
+  liveCandle: undefined,
+  lastPrice: null,
+  lastChange: null,
+  lastChangePct: null,
+  previousClose: null,
+  dayHigh: null,
+  dayLow: null,
+  connected: false,
+  error: null,
+}
+
+function replayStateAt(allCandles: StreamCandle[], revealedCount: number): ReplayState {
+  const liveCandle = revealedCount > 0 ? allCandles[revealedCount - 1] : undefined
+  const lastPrice = liveCandle?.close ?? null
+
+  return {
+    allCandles,
+    candles: allCandles.slice(0, Math.max(0, revealedCount - 1)),
+    liveCandle,
+    lastPrice,
+    lastChange: lastPrice === null ? null : lastPrice - 100,
+    lastChangePct: lastPrice === null ? null : lastPrice - 100,
+    previousClose: 100,
+    connected: false,
+    error: null,
+    mode: 'animated',
+    status: 'paused',
+    speed: 100,
+    totalCandles: allCandles.length,
+    revealedCount,
+    replayStartTime: null,
+    replayEndTime: null,
+    replayCurrentTime: null,
+    replayProgress: 0,
+    play: () => {},
+    pause: () => {},
+    reset: () => {},
+    skip: () => {},
+    seek: () => {},
+    seekTime: () => {},
+    setSpeed: () => {},
+    setMode: () => {},
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('PulseTodayCard detail chart', () => {
+  it('moves focus to the restored Hide control after showing the chart on mobile', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+
+    render(
+      <PulseTodayCard
+        symbol="AAPL"
+        dayData={undefined}
+        stream1s={emptyStream}
+        stream10s={emptyStream}
+        theme="light"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide detail chart' }))
+
+    const showButton = screen.getByRole('button', { name: 'Show detail chart' })
+    expect(showButton).toHaveFocus()
+    fireEvent.click(showButton)
+
+    expect(screen.getByRole('button', { name: 'Hide detail chart' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Display the detail chart as a line' })).not.toHaveFocus()
+  })
+})
+
+describe('buildPulseReplayConfig', () => {
+  it('replays the selected symbol on the latest completed trading day without auto-playing', () => {
+    expect(buildPulseReplayConfig(' clro ', new Date('2026-03-27T21:00:00Z'))).toEqual({
+      symbol: 'CLRO',
+      date: '2026-03-27',
+      from: '09:30',
+      to: '16:00',
+      timeframe: '1s',
+      autoPlay: false,
+    })
+  })
+
+  it('uses the prior completed session while the cash market is still open', () => {
+    expect(buildPulseReplayConfig('AAPL', new Date('2026-03-27T15:00:00Z')).date).toBe('2026-03-26')
+  })
+
+  it('rolls weekend replay requests back to the latest trading day', () => {
+    expect(buildPulseReplayConfig('AAPL', new Date('2026-03-29T15:00:00Z')).date).toBe('2026-03-27')
+  })
+
+  it('ends replay at 1pm on a completed early-close session', () => {
+    expect(buildPulseReplayConfig('AAPL', new Date('2026-11-27T19:00:00Z'))).toMatchObject({
+      date: '2026-11-27',
+      from: '09:30',
+      to: '13:00',
+    })
+  })
+})
+
+describe('useReplayAdaptiveCandles', () => {
+  it('indexes a near-full session once and reveals completion without rescanning historical ticks', () => {
+    const totalCandles = 6.5 * 60 * 60
+    const sessionStart = Date.UTC(2026, 6, 10, 13, 30) / 1000
+    let timestampReads = 0
+    const allCandles: StreamCandle[] = Array.from({ length: totalCandles }, (_, index) => {
+      const timestamp = sessionStart + index
+      const isFinalCandle = index === totalCandles - 1
+      const open = 100 + index / 100_000
+
+      return {
+        get time() {
+          timestampReads += 1
+          return timestamp
+        },
+        open,
+        high: isFinalCandle ? 999 : open + 0.02,
+        low: isFinalCandle ? 1 : open - 0.02,
+        close: isFinalCandle ? 321 : open + 0.01,
+      }
+    })
+    const nearCompleteReplay = replayStateAt(allCandles, totalCandles - 1)
+    const { result, rerender } = renderHook(
+      ({ replay }) => useReplayAdaptiveCandles(replay),
+      { initialProps: { replay: nearCompleteReplay } },
+    )
+
+    expect(result.current.mode).toBe('1min')
+    expect(result.current.dayData10s?.candles).toHaveLength(2_340)
+    expect(result.current.dayData1min?.candles).toHaveLength(390)
+    expect(result.current.dayData1min?.candles.at(-1)).not.toMatchObject({
+      high: 999,
+      low: 1,
+      close: 321,
+    })
+
+    const completedReplay = replayStateAt(allCandles, totalCandles)
+    timestampReads = 0
+    rerender({ replay: completedReplay })
+
+    expect(timestampReads).toBe(0)
+    expect(result.current.dayData10s?.candles).toHaveLength(2_340)
+    expect(result.current.dayData1min?.candles).toHaveLength(390)
+    expect(result.current.dayData1min?.candles.at(-1)).toMatchObject({
+      high: 999,
+      low: 1,
+      close: 321,
+    })
+  })
+})
 
 describe('getSessionWindowForCandles', () => {
   it('selects the premarket session before the open', () => {
@@ -35,6 +205,18 @@ describe('getSessionWindowForCandles', () => {
     expect(session.session).toBe('afterhours')
     expect(session.startMinutes).toBe(960)
     expect(session.endMinutes).toBe(1200)
+  })
+
+  it('fills a shortened cash-session chart and starts afterhours at 1pm on an early close', () => {
+    const cashSession = getSessionWindowForCandles([
+      { date: '2026-11-27 12:59:59' },
+    ])
+    const afterhoursSession = getSessionWindowForCandles([
+      { date: '2026-11-27 13:00:00' },
+    ])
+
+    expect(cashSession).toMatchObject({ session: 'cash', startMinutes: 570, endMinutes: 780 })
+    expect(afterhoursSession).toMatchObject({ session: 'afterhours', startMinutes: 780, endMinutes: 1200 })
   })
 })
 

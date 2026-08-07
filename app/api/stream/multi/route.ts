@@ -16,10 +16,10 @@ export const dynamic = 'force-dynamic'
 
 import { getBroker } from '@/lib/ws/massive-broker'
 import type { BrokerEvent } from '@/lib/ws/massive-broker'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
 
 const HEARTBEAT_INTERVAL_MS = 15_000
 const MAX_SYMBOLS = 30
-const SYMBOL_RE = /^[A-Z]{1,5}(=[A-Z])?$/
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const symbolsParam = url.searchParams.get('symbols') ?? ''
   const symbols = symbolsParam
     .split(',')
-    .map((s) => s.trim().toUpperCase())
+    .map(normalizeMarketSymbol)
     .filter(Boolean)
 
   if (symbols.length === 0) {
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
   // Validate each symbol
   for (const sym of symbols) {
-    if (!SYMBOL_RE.test(sym)) {
+    if (!isValidMarketSymbol(sym)) {
       return new Response(`Invalid symbol: ${sym}`, { status: 400 })
     }
   }

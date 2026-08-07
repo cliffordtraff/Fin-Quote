@@ -1968,3 +1968,232 @@ different investigations.
 boring agreement between grants, policies, functions, credentials, routes, and
 tests—and the discipline to remove a beautiful chart when its numbers are not
 real.
+
+---
+
+## August 6, 2026: The UI Audit Followed The User's Eyes
+
+After the data, newsletter, and authorization work, the next question sounded
+simple: **what should we build next?** The useful answer did not come from a
+feature brainstorm. It came from opening the product as a customer would.
+
+We walked every primary destination in the navigation—thirteen routes in
+all—at both a desktop width and a narrow phone width. We checked hierarchy,
+overflow, loading and failure states, keyboard behavior, focus return, control
+size, and whether each label described what the software really did. This was
+not a screenshot beauty contest. A financial interface can look polished while
+showing the wrong baseline, hiding a failed request behind zeroes, or offering
+a destructive-looking button that performs a different operation.
+
+The broad finding was that the product did not need another top-level tab. It
+needed a clearer map and a stronger primary cockpit.
+
+### The Navigation Was An Address Book, Not A Map
+
+The old header exposed too many destinations as peers. A market dashboard,
+company fundamentals, newsletter operations, and an experimental view all
+competed for the same strip of space. On a phone, that inventory became a
+horizontal puzzle.
+
+The new desktop navigation groups work by intent:
+
+- **Pulse** remains one direct, high-priority destination;
+- **Briefings** contains the time-based market reports;
+- **Markets** contains broad-market research surfaces;
+- **Company** keeps price, fundamentals, financials, and news together while
+  preserving the active ticker; and
+- **Newsletter** contains the publishing surfaces an editor expects.
+
+On mobile, those groups become a real **Browse** panel rather than a compressed
+copy of the desktop row. The panel names the current context, uses touch-sized
+controls, and scrolls without pushing the page wider than the viewport.
+Newsletter Operations moved into the signed-in user menu because an operator
+console is not a public product destination.
+
+The interaction contract matters as much as the grouping. Menus expose their
+expanded state, close on outside interaction or Escape, and return focus to the
+control that opened them. The timezone and account menus follow the same
+rules. There is only one utilities island, avoiding duplicate authentication
+subscriptions masquerading as responsive markup.
+
+Think of navigation like signs in an airport. A wall containing every possible
+gate number is technically complete and practically useless. Good wayfinding
+first tells you whether you need Departures, Arrivals, or Baggage; only then
+does it show the exact gate.
+
+### Pulse Today Became A Cockpit Instead Of A Chart Wall
+
+Pulse Today needed the most work. The page had several technically interesting
+charts, tiny controls, an always-floating detail panel, and replay behavior
+whose defaults could tell a subtly false story. The result felt like four
+prototypes sharing a page rather than one place for understanding the session.
+
+The revised surface gives the selected mover one clear hierarchy. Live mode
+has an honest status—live, delayed, closing snapshot, snapshot, or connecting—
+instead of implying that any successful render is real time. Failed refreshes
+can keep the last good candles visible, but the page says they are stale and
+offers a real retry. Missing price or change data renders as missing, not as a
+confident `$0.00` or `+0.00%`.
+
+The live-detail chart is now stacked and full-width on a phone, where dragging
+a floating window is a poor interaction. On larger screens it can still behave
+like picture-in-picture, with pointer-safe dragging, predictable docking,
+larger controls, and a clear way to hide and restore it. The former four-chart
+replay wall became two named views: **Session context** and **Adaptive tape**.
+That is enough comparison to be useful without making the reader decide which
+of four nearly related pictures deserves attention.
+
+Canvas charts now redraw when their container changes size, expose a useful
+accessible name, and distinguish loading, empty, stale, and error states. The
+line, timeframe, speed, and display controls use stable labels and pressed
+states that make sense to keyboards and assistive technology. Motion-heavy
+flashes, level pulses, and chart morphing honor the user's reduced-motion
+preference.
+
+### Historical Replay Must Use Historical Truth
+
+Replay uncovered the most important correctness bug in the visual audit. A
+historical session was calculating its move from a *current* quote's previous
+close. The arithmetic was valid and the baseline was from the wrong day. That
+is more dangerous than an obvious exception because the result looks
+professional.
+
+The replay endpoint now loads daily history beside the second candles and
+selects the last real close before the replay date. If that history is absent,
+the baseline remains absent; a live quote is never smuggled into the past as a
+fallback. Replay defaults to the latest completed trading session and the
+currently selected mover instead of a hard-coded company.
+
+Session boundaries are treated as market rules, not decorative timestamps.
+The fetch window is half-open, so the first `16:00:00` after-hours aggregate
+cannot sneak into a regular-session replay and make the canvas discard the
+entire cash day. NYSE early-close dates end at 1:00 PM, and the canvas shortens
+its cash and after-hours scales to the same calendar. One boundary candle used
+to be capable of changing the meaning of thousands of correct candles; this is
+why boundary tests deserve disproportionate respect.
+
+Provider capability is explicit too. Massive supports second-level candles;
+the FMP implementation does not. The old generic call could fall through to a
+daily endpoint and return an empty-looking replay. The route now fails with a
+clear capability error when its Massive credential is absent. When that key is
+available, replay uses Massive directly without forcing the dashboard and
+other market-data surfaces away from their configured FMP provider. A feature
+being unavailable is honest. A feature quietly asking the wrong endpoint is
+not.
+
+Caching and retry follow the data's clock:
+
+- a current-session replay has a short cache lifetime because provider candles
+  may still fill in;
+- a non-empty completed historical window can be cached indefinitely in the
+  warm process;
+- an empty response is never fossilized as permanent history; and
+- Retry carries a request nonce so the client starts a fresh request. Incomplete
+  responses are never cached, while complete responses remain cacheable so a
+  public query parameter cannot force repeated paid-provider calls.
+
+The player now reaches 100x without scheduling one React render for every
+single candle. A bounded timer measures elapsed time, accumulates the amount of
+market time that should have passed, and reveals several candles in one update
+when necessary. At ordinary speeds it remains smooth; at high speed it batches
+work instead of turning the browser into a metronome with ten thousand tiny
+jobs. The chart views share one memoized 10-second/1-minute aggregation index,
+so revealing the final candle in a 23,400-candle session does not rescan the
+other 23,399 timestamps.
+
+That clock follows timestamps rather than array positions. Real second-level
+feeds are sparse: forty-five quiet seconds may contain no aggregate at all, so
+“advance sixty array items” does not mean “advance one minute.” Progress,
+scrubbing, skipping, early quiet time, and trailing quiet time now use the exact
+requested session bounds. A candle's completed OHLC becomes visible only after
+its bucket has ended, avoiding the tiny but consequential look-ahead leak of
+showing a second's high, low, and close at the start of that second.
+
+Resources also follow the active mode. Entering replay removes the live symbol
+subscriptions instead of keeping hidden SSE and websocket work alive. Pausing,
+resetting, changing sessions, and unmounting clear playback timers; superseded
+evidence requests are aborted. Good client performance often comes from
+stopping work that no longer has a reader, not merely making every loop faster.
+
+### Responsive Does Not Mean Squeezing A Table
+
+The Insiders page showed why phone design sometimes needs a different
+representation. A wide transaction table is excellent on a desktop because
+rows and columns support rapid comparison. Shrinking those columns until every
+value becomes an abbreviation is not responsiveness; it is concealment.
+
+Insider transactions now remain a semantic table on desktop and become
+two-column cards on mobile. The cards retain the full transaction labels,
+important amounts, dates, and people without horizontal overflow. The four
+filters form a keyboard-operable two-by-two tab grid on narrow screens, with
+explicit loading, retry, error, and live announcements. Request races are
+guarded so an older response cannot replace the result of a newer tab choice.
+Sorting happens before pagination, because sorting fifty-row slices is not the
+same thing as ranking the result set.
+
+Financial statements keep the table because year-over-year comparison is the
+job, but the table now owns its horizontal scroll instead of widening the whole
+page. Income Statement, Balance Sheet, and Cash Flow are real tabs with
+Arrow-key, Home, and End navigation, associated tab panels, captions, and
+proper row and column headers. The available year columns come from all three
+statement sources rather than whichever dataset happened to be inspected
+first. Mobile controls wrap cleanly while the financial grid remains
+deliberately scrollable.
+
+The sticky stock-price header received a smaller but important repair. Its top
+offset now accounts for the two-row responsive navigation, so the company and
+price context remains visible *below* the header instead of disappearing
+behind it. Sticky elements are a little like people standing in a doorway:
+each can be correctly positioned alone and still block the others when they
+share the room.
+
+### A Red Button Is A Promise
+
+The Profile page had a trust defect hiding in plain sight. It offered a red
+**Delete Account** action, but the implementation only signed the user out.
+That mismatch is unacceptable in either direction: a fake delete misleads the
+person who expects erasure, while a mislabeled real delete would be dangerous.
+
+The page now calls the operation what it is: **Sign out**. It explains that the
+account and saved data remain, reports authentication failures, and redirects
+only after Supabase confirms success. If true account deletion becomes a
+product requirement, it needs its own server-owned workflow, reauthentication,
+scope explanation, confirmation, deletion or retention policy, and receipt.
+Changing the button copy is not a substitute for that system.
+
+One final release lesson came from the tooling itself. The standalone lint
+script used to write a file at `.next/cache/eslint`, while `next build` expects
+that same path to be a directory. Running lint and then build made Next skip
+its internal lint phase with an `EEXIST` warning. Pointing the standalone cache
+at `.next/cache/eslint/.cache` lets both commands share the parent safely. A
+green command is useful evidence; a green command that quietly skipped one of
+its own checks is not.
+
+### What Strong Engineers Do During A UI Pass
+
+The memorable lesson is that UI quality is not the last coat of paint. It is a
+cross-section of the whole system.
+
+Strong engineers follow the interaction until it reaches truth:
+
+- When a chart says “replay,” they ask which day's close defines the change.
+- When a Retry button exists, they prove it can escape the cache that served
+  the failure.
+- When a speed control says 100x, they inspect how much rendering work that
+  promise creates.
+- When desktop markup is hidden on mobile, they ask whether its subscriptions
+  and listeners are hidden too.
+- When a table overflows, they decide whether comparison requires scrolling or
+  whether the information needs a different mobile form.
+- When a destructive label appears, they trace the action all the way to the
+  database instead of trusting the color red.
+- When a menu works with a mouse, they still test Escape, arrows, focus return,
+  touch width, and reduced motion.
+
+The audit and remediation are complete, but that is deliberately not a claim
+that every interface is now perfect forever. The growing newsletter archive
+and editor still need a scalability pass, FMP still cannot supply true
+second-level replay, a real account-deletion workflow does not yet exist, and
+email placement still depends on reputation evidence outside this UI. Honest
+roadmaps preserve those edges. “Done” should mean the named contract was
+verified—not that the product has run out of things worth improving.

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Navigation from '@/components/Navigation'
 
@@ -36,44 +36,86 @@ vi.mock('@/components/TimezoneSelector', () => ({
   default: () => <div>Timezone</div>,
 }))
 
+function getDesktopNavigation() {
+  return within(screen.getByTestId('desktop-navigation'))
+}
+
+function openDesktopGroup(name: string | RegExp) {
+  fireEvent.click(getDesktopNavigation().getByRole('button', { name }))
+}
+
 describe('Navigation', () => {
   beforeEach(() => {
     mockUsePathname.mockReturnValue('/stock/msft')
     window.history.replaceState({}, '', '/stock/msft')
     process.env.NEXT_PUBLIC_ENABLE_CHAT = 'false'
+    process.env.NEXT_PUBLIC_SHOW_STOCK_V1 = 'false'
   })
 
-  it('renders workspace links and passes the current pathname into stock search', () => {
+  it('organizes every public destination into understandable groups', () => {
     render(<Navigation />)
+    const desktopNavigation = getDesktopNavigation()
 
-    expect(screen.getByRole('link', { name: 'Pulse Today' })).toHaveAttribute(
+    expect(desktopNavigation.getByRole('link', { name: 'Pulse' })).toHaveAttribute(
       'href',
       '/dashboard/pulse-today',
     )
-    expect(screen.getByRole('link', { name: 'Morning Brief' })).toHaveAttribute(
+
+    openDesktopGroup('Briefings')
+    expect(desktopNavigation.getByRole('link', { name: /Morning Brief/ })).toHaveAttribute(
       'href',
       '/dashboard/morning-brief',
     )
-    expect(screen.getByRole('link', { name: 'Mid-Morning Brief' })).toHaveAttribute(
+    expect(desktopNavigation.getByRole('link', { name: /Mid-Morning Update/ })).toHaveAttribute(
       'href',
       '/dashboard/mid-morning-brief',
     )
-    expect(screen.getByRole('link', { name: 'Newsletter Ops' })).toHaveAttribute(
-      'href',
-      '/newsletter/operations',
-    )
-    expect(screen.getByRole('link', { name: 'Market Overview' })).toHaveAttribute(
+
+    openDesktopGroup('Markets')
+    expect(desktopNavigation.getByRole('link', { name: /Market Dashboard/ })).toHaveAttribute(
       'href',
       '/dashboard',
     )
-    expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=MSFT')
-    expect(screen.getByRole('link', { name: 'Fundamentals' })).toHaveAttribute('href', '/workspace/fundamentals?symbol=MSFT')
-    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/workspace/overview?symbol=MSFT')
+    expect(desktopNavigation.getByRole('link', { name: /Pre-Market Sheet/ })).toHaveAttribute(
+      'href',
+      '/dashboard/premarket',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Global Sessions/ })).toHaveAttribute(
+      'href',
+      '/calendar',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Insider Activity/ })).toHaveAttribute(
+      'href',
+      '/insiders',
+    )
+
+    openDesktopGroup('MSFT Research')
+    expect(desktopNavigation.getByRole('link', { name: /Price Chart/ })).toHaveAttribute(
+      'href',
+      '/workspace/chart?symbol=MSFT',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Fundamentals Chart/ })).toHaveAttribute(
+      'href',
+      '/workspace/fundamentals?symbol=MSFT',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Company Overview/ })).toHaveAttribute(
+      'href',
+      '/workspace/overview?symbol=MSFT',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Financial Statements/ })).toHaveAttribute(
+      'href',
+      '/stock/MSFT',
+    )
+
+    openDesktopGroup('Newsletter')
+    expect(
+      desktopNavigation.getByRole('link', { name: /Morning Production Report/ }),
+    ).toHaveAttribute('href', '/newsletter/morning-review')
+    expect(
+      desktopNavigation.queryByRole('link', { name: 'Newsletter Operations' }),
+    ).not.toBeInTheDocument()
     expect(screen.getByTestId('stock-search')).toHaveAttribute('data-pathname', '/stock/msft')
     expect(screen.queryByRole('link', { name: 'Market Internals' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Charting (Beta)' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Fundamentals Charting' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Charting (Old)' })).not.toBeInTheDocument()
   })
 
   it('preserves workspace symbols from the query string', async () => {
@@ -81,56 +123,67 @@ describe('Navigation', () => {
     window.history.replaceState({}, '', '/workspace/overview?symbol=nvda')
 
     render(<Navigation />)
+    const desktopNavigation = getDesktopNavigation()
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Chart' })).toHaveAttribute('href', '/workspace/chart?symbol=NVDA')
-      expect(screen.getByRole('link', { name: 'Financials' })).toHaveAttribute('href', '/stock/NVDA')
+      expect(desktopNavigation.getByRole('button', { name: 'NVDA Research' })).toBeInTheDocument()
     })
+
+    openDesktopGroup('NVDA Research')
+    expect(desktopNavigation.getByRole('link', { name: /Price Chart/ })).toHaveAttribute(
+      'href',
+      '/workspace/chart?symbol=NVDA',
+    )
+    expect(desktopNavigation.getByRole('link', { name: /Financial Statements/ })).toHaveAttribute(
+      'href',
+      '/stock/NVDA',
+    )
   })
 
-  it('marks the Morning Brief tab as the current page', () => {
+  it('marks the active briefing and its group without selecting a sibling', () => {
     mockUsePathname.mockReturnValue('/dashboard/morning-brief')
     window.history.replaceState({}, '', '/dashboard/morning-brief')
 
     render(<Navigation />)
+    const desktopNavigation = getDesktopNavigation()
+    openDesktopGroup('Briefings')
 
-    expect(screen.getByRole('link', { name: 'Morning Brief' })).toHaveAttribute(
+    expect(desktopNavigation.getByRole('link', { name: /Morning Brief/ })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: 'Market Overview' })).not.toHaveAttribute(
+    expect(desktopNavigation.getByRole('link', { name: /Mid-Morning Update/ })).not.toHaveAttribute(
       'aria-current',
     )
   })
 
-  it('marks the Mid-Morning Brief tab as the current page', () => {
-    mockUsePathname.mockReturnValue('/dashboard/mid-morning-brief')
-    window.history.replaceState({}, '', '/dashboard/mid-morning-brief')
-
+  it('makes the complete mobile navigation discoverable and Escape-dismissable', () => {
     render(<Navigation />)
 
-    expect(screen.getByRole('link', { name: 'Mid-Morning Brief' })).toHaveAttribute(
-      'aria-current',
-      'page',
+    const browseButton = screen.getByRole('button', { name: 'Browse' })
+    fireEvent.click(browseButton)
+
+    expect(browseButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('link', { name: 'Morning' })).toHaveAttribute(
+      'href',
+      '/dashboard/morning-brief',
     )
-    expect(screen.getByRole('link', { name: 'Morning Brief' })).not.toHaveAttribute(
-      'aria-current',
-    )
+    expect(screen.getByRole('link', { name: 'Global' })).toHaveAttribute('href', '/calendar')
+    expect(screen.getByRole('link', { name: 'Financials' })).toHaveAttribute('href', '/stock/MSFT')
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(browseButton).toHaveAttribute('aria-expanded', 'false')
+    expect(browseButton).toHaveFocus()
   })
 
-  it('marks Newsletter Ops without also selecting Morning Report', () => {
+  it('keeps operator tooling out of public navigation while identifying its context', () => {
     mockUsePathname.mockReturnValue('/newsletter/operations')
     window.history.replaceState({}, '', '/newsletter/operations')
 
     render(<Navigation />)
 
-    expect(screen.getByRole('link', { name: 'Newsletter Ops' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
-    expect(screen.getByRole('link', { name: 'Morning Report' })).not.toHaveAttribute(
-      'aria-current',
-    )
+    expect(screen.getByText('Newsletter Operations')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Newsletter Operations' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Newsletter' }).className).toContain('border-sage-600')
   })
-
 })

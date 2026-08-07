@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
@@ -8,10 +8,13 @@ import type { User } from '@supabase/supabase-js'
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   // Fetch user on mount
   useEffect(() => {
@@ -29,45 +32,55 @@ export default function UserMenu() {
     return () => subscription.unsubscribe()
   }, [supabase.auth])
 
-  // Close menu when clicking outside
+  // Close the disclosure from pointer, keyboard, or route-level interactions.
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    function handlePointerOutside(event: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
     }
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setIsOpen(false)
+      menuButtonRef.current?.focus()
+    }
+
+    if (!isOpen) return
+
+    document.addEventListener('pointerdown', handlePointerOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerOutside)
+      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [isOpen])
 
   const handleLogout = async () => {
     setLoading(true)
+    setError('')
     try {
-      await supabase.auth.signOut()
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
       // Page will auto-update via onAuthStateChange listener
+      setIsOpen(false)
     } catch (error) {
       console.error('Logout error:', error)
+      setError(error instanceof Error ? error.message : 'Failed to sign out')
     } finally {
       setLoading(false)
-      setIsOpen(false)
     }
-  }
-
-  // Get user's initials for avatar
-  const getInitials = (email: string) => {
-    return email.substring(0, 2).toUpperCase()
   }
 
   // If no user, show a clickable icon that goes to login
   if (!user) {
     return (
       <button
+        type="button"
         onClick={() => router.push('/auth')}
         className="w-10 h-10 rounded-lg text-gray-400 dark:text-gray-500 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
         title="Sign in"
+        aria-label="Sign in"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -95,11 +108,18 @@ export default function UserMenu() {
     <div className="relative" ref={menuRef}>
       {/* User button */}
       <button
+        ref={menuButtonRef}
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        className="flex max-w-28 items-center gap-1 rounded-lg px-2 py-2 text-gray-700 transition-colors hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 sm:max-w-40 sm:gap-2 sm:px-3"
+        aria-label={`Open account menu for ${displayName}`}
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+        aria-haspopup="true"
+        title={displayName}
       >
-        <span className="text-sm font-medium">Hi, {firstName}</span>
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className="min-w-0 truncate text-sm font-medium">Hi, {firstName}</span>
+        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -111,10 +131,13 @@ export default function UserMenu() {
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+        <div
+          id={menuId}
+          className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        >
           {/* User info */}
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.email}</p>
+            <p className="break-all text-sm font-medium text-gray-900 dark:text-gray-100">{user.email}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {user.email_confirmed_at ? 'Verified account' : 'Email not verified'}
             </p>
@@ -124,6 +147,7 @@ export default function UserMenu() {
           <div className="py-1">
             {/* Profile */}
             <button
+              type="button"
               onClick={() => {
                 setIsOpen(false)
                 router.push('/profile')
@@ -140,11 +164,36 @@ export default function UserMenu() {
               </svg>
               Profile & Settings
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false)
+                router.push('/newsletter/operations')
+              }}
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h10"
+                />
+              </svg>
+              Newsletter Operations
+            </button>
           </div>
 
           {/* Logout */}
           <div className="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
+            {error && (
+              <p role="alert" className="px-4 py-2 text-xs text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
             <button
+              type="button"
               onClick={handleLogout}
               disabled={loading}
               className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50"
