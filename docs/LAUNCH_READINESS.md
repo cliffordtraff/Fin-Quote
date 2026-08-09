@@ -25,13 +25,16 @@ database-fenced automation leases, durable terminal-notification receipts,
 immutable chart assets, stricter delivery validation, cron heartbeats, an
 off-site watchdog workflow, and independent Beehiiv statistics health.
 
-The next **durable workstation package is locally release-ready but not yet
-deployed**. Its exact frozen tree passed 250 Vitest files / 1,644 tests,
-TypeScript, ESLint with zero errors, a 49-unit production build, 114 server
-trace checks, and 10 pgTAP files / 369 assertions. The linked ledger correctly
-shows nine pending migrations from `20260807090000` through
-`20260809100000`; those must be applied and verified before the matching
-application is promoted.
+The **durable workstation package is now deployed**. PR #16 merged as
+`fc27eca`; all nine migrations from `20260807090000` through
+`20260809100000` were applied in chronological order before the application
+promotion. A follow-up migration, `20260809120000`, made a disconnected
+Beehiiv integration ineligible for reconciliation without deleting its two
+historical delivery records. The linked ledger is aligned through that version
+and a second push dry run is empty. The final application head, `7faff05`, is
+READY in Vercel deployment `dpl_ATwcqNHpYRUQRSjz5vQ1RGrZJrXH`; the public root
+and newsletter health endpoint return `200`, health is `healthy`, and the
+settled deployment window contains no error-level or 5xx logs.
 
 ## Readiness At A Glance
 
@@ -48,15 +51,15 @@ application is promoted.
 | Chart mobile/a11y repair | Deployed | Charting Platform PR #2 is merged and deployed |
 | Fin dependency posture | Verified release | Next.js 15.5.22, React 19.2.1, zero full or production audit vulnerabilities |
 | Original Fin launch-hardening package | Deployed | Full validation, promotion, protected-route smoke, and reconciliation checks passed |
-| Supabase baseline convergence | Complete | All local and remote versions through `20260806142000` align; the second push dry run was empty |
+| Supabase baseline convergence | Complete | All linked package migrations through `20260809120000` align; the second push dry run was empty |
 | Newsletter reliability follow-up | Deployed and smoke-tested | Four migrations, production application deployment, protected cron probes, and live health checks passed |
-| Durable workstation package | Local release gates passed; promotion pending | 250 files / 1,644 tests, 10 pgTAP files / 369 assertions, 49 build units, and 114 verified traces; nine linked migrations remain pending in migration-first order |
+| Durable workstation package | Deployed and verified | PRs #16–#19 merged; ten linked migrations are aligned; final hosted gates passed 250 files / 1,646 tests, 11 pgTAP files / 372 assertions, 49 build units, and 114 verified traces |
 | Source/entity integrity | Verified in production | MTCH was rebuilt from Match Group's SEC filing; the active draft contains no Huya or “Triple Match 3D” text |
 | Automation lease fencing | Deployed | Writes require the current token and an unexpired database lease; pgTAP expiry/takeover regressions pass 56/56 |
 | Terminal notification receipts | Verified in production | Daily and mid-morning terminal notifications each have a durable applied receipt with no last error |
 | Immutable images and delivery gates | Deployed | Content-addressed PNGs plus subject, preheader, link, image, alt-text, and HTML-size validation are active |
 | Cron heartbeat health | Healthy in production | `/api/health/newsletter` returned `200`; all four cron routes recorded fresh `succeeded` rows |
-| Off-site watchdog | Manual hosted path verified; automatic schedule proof still pending | Manual run [31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699) passed against merged `main`; GitHub now reports all systems operational, but no `event=schedule` run is visible, and Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` remains live |
+| Off-site watchdog | Automatic schedule path verified | Real `event=schedule` run [31319998523](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31319998523) passed on exact deployed head `7faff05`; manual `workflow_dispatch` run 31125987699 remains only separate path evidence, and Vercel 5xx alert rule `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c` remains live |
 | Beehiiv statistics health | Verified in production | Latest published canary stats reconciled without lifecycle or statistics errors |
 | Optional webhook delivery | Intentionally not configured | Missing `NEWSLETTER_ALERT_WEBHOOK_URL` is a warning; durable in-app notifications and core health remain healthy |
 
@@ -189,17 +192,21 @@ runs are missing, stale, failed, or observability itself is unavailable.
 
 The off-site GitHub Actions watchdog is configured to call that endpoint every
 ten minutes and fails on an unreachable deployment, non-200 response, or
-unhealthy body. That solves the “the monitor died with the app” blind spot. It
-does not, by itself, prove a person will be paged. A
+unhealthy body. That solves the “the monitor died with the app” blind spot. A
 [critical Actions incident](https://www.githubstatus.com/incidents/qcvjkzcs7j74)
-prevented the first scheduled proof, while a later manual run on merged `main`,
-[31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699),
-received a hosted runner and passed the production health assertion. GitHub
-reported all systems operational on August 9, but no `event=schedule` watchdog
-run was visible yet. A manual `workflow_dispatch` remains path evidence, not
-automatic scheduling evidence. Separately verify that an intentionally failing
-check reaches the chosen on-call destination. The matching Vercel newsletter
-5xx rule is live and its checked-in artifact matches alert
+delayed the original proof, and real scheduled run
+[31318198085](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31318198085)
+then correctly failed while disconnected Beehiiv history still made health
+unhealthy. After the repository-owned reconciliation fix, real
+`event=schedule` run
+[31319998523](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31319998523)
+passed on exact deployed head `7faff05`. The earlier manual
+`workflow_dispatch` run
+[31125987699](https://github.com/cliffordtraff/Fin-Quote/actions/runs/31125987699)
+is not counted as scheduled proof. The remaining gap is human, not mechanical:
+an intentionally failing run has not yet proved that a person receives and
+responds to the chosen notification. The matching Vercel newsletter 5xx rule
+is live and its checked-in artifact matches alert
 `ar_019fd7b2-6c0f-73ff-966a-119be7286e6c`.
 
 ## Security And Dependency Evidence
@@ -218,6 +225,13 @@ production deployment, and live smoke checks. The full hosted CI jobs did not
 execute because the platform never assigned their runners during its outage;
 they were cancelled from the queue without test output. The separate hosted
 production-watchdog run succeeded.
+
+The durable workstation release subsequently passed the complete hosted gates
+on final head `7faff05`: TypeScript, ESLint with zero errors (166 non-blocking
+warnings), 250 Vitest files / 1,646 tests, 11 pgTAP files / 372 assertions, a
+49-unit production build, and all 114 guarded server traces. Each release
+commit also passed the pinned staged-tree Gitleaks scan. Production verification
+covered the exact Vercel deployment rather than a moving alias.
 
 ## Previously Completed Baseline Release Sequence
 
@@ -274,18 +288,50 @@ Steps 1–8 describe the earlier baseline release.
 10. Left the optional external webhook receiver unconfigured, recorded its
     expected warning, and confirmed core health remains green.
 
+## Completed Durable Workstation Release Sequence
+
+1. Merged the archive/editor/delivery/chart-admission package in PR #16 as
+   `fc27eca`, after its frozen local tree passed the focused, full application,
+   TypeScript, lint, production-build, build-trace, database, pgTAP, and secret
+   gates. No newsletter canary was sent.
+2. Applied the nine package migrations from `20260807090000` through
+   `20260809100000` to linked project `hccwmbmnmbmhuslmbymq` in chronological
+   order, then verified local/remote migration alignment and an empty push dry
+   run.
+3. Diagnosed the first production `503` as two historical deliveries owned by
+   an explicitly disconnected Beehiiv integration. PR #17 (`b2cd84b`) added
+   and applied `20260809120000_skip_disconnected_beehiiv_reconciliation.sql`.
+   The rows remain preserved and become eligible again after a human reconnects
+   Beehiiv.
+4. Invoked the reconciliation heartbeat safely with zero configured
+   integrations. It returned HTTP `200` with `attempted: 0`, `updated: 0`, and
+   no failures, proving health recovery without syncing, publishing, or sending
+   a newsletter.
+5. Closed two blocking catalyst-feed production errors in PR #18 (`2a53efc`)
+   and PR #19 (`7faff05`): the global feed's valid volume exceeded the old
+   5,000-row bound, and valid irrelevant international symbols had to be
+   filtered before the strict local S&P symbol contract was enforced.
+6. Verified Vercel deployment `dpl_ATwcqNHpYRUQRSjz5vQ1RGrZJrXH`—public URL
+   `theintraday-krnvfrpq9-fords-projects-b7da7491.vercel.app`—as READY, then
+   observed the root and `/api/health/newsletter` return `200`, a `healthy`
+   body, and no error-level or 5xx entries in the settled deployment window.
+7. Observed real `event=schedule` watchdog run 31319998523 succeed on exact
+   deployed head `7faff05`. No `workflow_dispatch` run was substituted for
+   this proof.
+
 ## Remaining Risks
 
 - Inbox placement is still warming even though authentication and provider
   delivery passed.
-- The watchdog's hosted healthy path passed, but a scheduled tick has not yet
-  appeared even after GitHub returned to all-systems-operational status, and
-  human notification from an intentionally failing run remains unproved. The
-  live Vercel 5xx rule provides an independent application-error path in the
-  meantime.
+- The automatic watchdog schedule is proven, but human notification and
+  operator response from an intentionally failing run remain unproved. The
+  live Vercel 5xx rule provides an independent application-error path.
 - External webhook alerts cannot leave the durable outbox until a real
   destination is configured, but that does not block in-app notifications or
   core cron health.
+- Beehiiv is explicitly disconnected. A human OAuth reconnect is required
+  before real remote synchronization, scheduling, publication, or delivery;
+  the release deliberately performed none of those operations.
 - Beehiiv statistics may become stale while lifecycle reconciliation remains
   healthy; operators must read the independent freshness and error fields.
 
