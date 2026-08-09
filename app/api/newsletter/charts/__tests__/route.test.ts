@@ -1,6 +1,17 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { OPTIONS } from '@/app/api/newsletter/charts/route'
+import { vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  captureChart: vi.fn(),
+}))
+
+vi.mock('@/lib/newsletter/capture', () => ({
+  captureChart: mocks.captureChart,
+}))
+
+import { OPTIONS, POST } from '@/app/api/newsletter/charts/route'
+import { newsletterChartPostAdmissionTestOnly } from '@/lib/newsletter/chart-post-admission'
 import {
   isAllowedNewsletterChartOrigin,
   resolveNewsletterChartBaseUrl,
@@ -19,6 +30,8 @@ function buildRequest(origin?: string): NextRequest {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  newsletterChartPostAdmissionTestOnly.reset()
   process.env.NEXT_PUBLIC_CHARTING_URL = 'https://charts.example'
   process.env.NEWSLETTER_PUBLIC_CHARTING_URL = 'https://charts-public.example'
 })
@@ -87,5 +100,37 @@ describe('newsletter chart API origin checks', () => {
         'https://user:password@charts.example',
       ),
     ).toThrow('configured charting origin')
+  })
+
+  it('rejects an absolute-path symbol before chart capture', async () => {
+    const request = new NextRequest(
+      'https://finquote.example/api/newsletter/charts',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'route-test-traversal',
+          Cookie: 'newsletter_draft_session=existing-session',
+          origin: 'https://finquote.example',
+        },
+        body: JSON.stringify({
+          title: 'Traversal attempt',
+          chartExportSpec: {
+            symbol: '/private/tmp/newsletter-chart-escape',
+            range: '1m',
+            interval: 'D',
+            chartType: 'candles',
+          },
+        }),
+      },
+    )
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining('letters, numbers, dots, and hyphens'),
+    })
+    expect(mocks.captureChart).not.toHaveBeenCalled()
   })
 })

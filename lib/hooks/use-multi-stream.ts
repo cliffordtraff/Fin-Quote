@@ -1,302 +1,488 @@
 /**
  * Client hook for multiplexed real-time streaming via a single SSE connection.
  *
- * Opens one EventSource to /api/stream/multi?symbols=... and routes incoming
- * events by symbol to per-symbol state. Fetches backfill for each symbol
- * in parallel on mount.
- *
- * Returns Record<string, LiveStreamState> keyed by symbol.
+ * Live transport starts independently of historical backfill. Backfill is a
+ * bounded enhancement: it may fail or time out without holding the live tape
+ * hostage, and a late response is merged behind any newer SSE candles.
  */
 
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { StreamCandle, LiveStreamState } from './use-live-stream'
+import {
+  fetchLiveStreamBackfill,
+  toLiveStreamBackfillIssue,
+  type LiveStreamBackfillIssue,
+} from './live-stream-backfill'
+import {
+  mergePulseStreamCandles,
+  parsePulseStreamEvent,
+  type PulseStreamCandle,
+} from '@/lib/pulse-market-data-contract'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
 
-const MAX_CANDLES = 500
+const MAX_CLIENT_SYMBOLS = 30
+export const MULTI_STREAM_BACKFILL_DEADLINE_MS = 8_000
+const VISIBILITY_FOCUS_DEDUPE_MS = 250
 const BACKFILL_LOOKBACK: Record<string, number> = {
   '1s': 300,
   '10s': 1800,
 }
 
-/**
- * Stable key for a sorted set of symbols — avoids reconnects when
- * the array reference changes but the contents are the same.
- */
-function symbolsKey(symbols: string[]): string {
-  return [...symbols].sort().join(',')
+interface MultiStreamEntry {
+  candles: StreamCandle[]
+  liveCandle: StreamCandle | undefined
+  previousClose: number | null
+  dayHigh: number | null
+  dayLow: number | null
+  connected: boolean
+  error: string | null
+  backfillIssue: LiveStreamBackfillIssue | null
+}
+
+function emptyEntry(): MultiStreamEntry {
+  return {
+    candles: [],
+    liveCandle: undefined,
+    previousClose: null,
+    dayHigh: null,
+    dayLow: null,
+    connected: false,
+    error: null,
+    backfillIssue: null,
+  }
+}
+
+function canonicalSymbols(symbols: readonly string[]): string[] {
+  const unique: string[] = []
+  const seen = new Set<string>()
+  for (const rawSymbol of symbols) {
+    const symbol = normalizeMarketSymbol(rawSymbol)
+    if (!isValidMarketSymbol(symbol) || seen.has(symbol)) continue
+    seen.add(symbol)
+    unique.push(symbol)
+    if (unique.length >= MAX_CLIENT_SYMBOLS) break
+  }
+  return unique
+}
+
+/** Stable key for a canonical sorted set of symbols. */
+function symbolsKey(symbols: readonly string[]): string {
+  return canonicalSymbols(symbols).sort().join(',')
+}
+
+function isPageVisible(): boolean {
+  return typeof document === 'undefined' || document.visibilityState !== 'hidden'
+}
+
+function monotonicNow(): number {
+  return typeof performance === 'undefined' ? Date.now() : performance.now()
+}
+
+function boundedError(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, 240)
+    : fallback
+}
+
+function maxNullable(...values: Array<number | null | undefined>): number | null {
+  const finite = values.filter((value): value is number =>
+    typeof value === 'number' && Number.isFinite(value)
+  )
+  return finite.length > 0 ? Math.max(...finite) : null
+}
+
+function minNullable(...values: Array<number | null | undefined>): number | null {
+  const finite = values.filter((value): value is number =>
+    typeof value === 'number' && Number.isFinite(value)
+  )
+  return finite.length > 0 ? Math.min(...finite) : null
+}
+
+function parseMessageData(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }
 
 export function useMultiStream(
   symbols: string[],
   timeframe: '1s' | '10s',
 ): Record<string, LiveStreamState> {
-  // Memoize the sorted key to detect real changes
   const key = useMemo(() => symbolsKey(symbols), [symbols])
-
-  // Per-symbol state stored in a single object to batch updates
-  const [stateMap, setStateMap] = useState<
-    Record<string, {
-      candles: StreamCandle[]
-      liveCandle: StreamCandle | undefined
-      previousClose: number | null
-      dayHigh: number | null
-      dayLow: number | null
-      connected: boolean
-      error: string | null
-    }>
-  >({})
+  // Preserve first-seen caller order while the logical symbol set is stable.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const uniqueSymbols = useMemo(() => canonicalSymbols(symbols), [key])
+  const [stateMap, setStateMap] = useState<Record<string, MultiStreamEntry>>({})
+  const [active, setActive] = useState(isPageVisible)
+  const [refreshGeneration, setRefreshGeneration] = useState(0)
 
   const eventSourceRef = useRef<EventSource | null>(null)
+  const backfillControllerRef = useRef<AbortController | null>(null)
+  const sessionRef = useRef(0)
+  const activityRef = useRef(active)
+  const configurationRef = useRef<string | null>(null)
+  const sessionCandlesRef = useRef(new Map<string, PulseStreamCandle[]>())
+  const sessionHighRef = useRef(new Map<string, number>())
+  const sessionLowRef = useRef(new Map<string, number>())
+  const suppressFocusUntilRef = useRef(Number.NEGATIVE_INFINITY)
+  const focusRefreshQueuedRef = useRef(false)
 
-  const cleanup = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-    }
+  const cleanup = useCallback((reason = 'Multi-stream session ended.') => {
+    eventSourceRef.current?.close()
+    eventSourceRef.current = null
+    backfillControllerRef.current?.abort(
+      new DOMException(reason, 'AbortError'),
+    )
+    backfillControllerRef.current = null
   }, [])
 
   useEffect(() => {
-    if (symbols.length === 0) {
-      cleanup()
-      setStateMap({})
-      return
+    const handleVisibilityChange = () => {
+      const nextActive = isPageVisible()
+      activityRef.current = nextActive
+      if (!nextActive) {
+        cleanup('The page became hidden.')
+      } else {
+        // A browser commonly emits focus immediately after visibilitychange.
+        // This synchronous generation owns that resume; suppress its paired
+        // focus event so the burst produces one replacement session.
+        suppressFocusUntilRef.current = monotonicNow() + VISIBILITY_FOCUS_DEDUPE_MS
+        setRefreshGeneration((current) => current + 1)
+      }
+      setActive(nextActive)
+    }
+    const handleFocus = () => {
+      if (!isPageVisible()) return
+      activityRef.current = true
+      setActive(true)
+      const now = monotonicNow()
+      if (
+        now < suppressFocusUntilRef.current ||
+        focusRefreshQueuedRef.current
+      ) {
+        return
+      }
+      suppressFocusUntilRef.current = now + VISIBILITY_FOCUS_DEDUPE_MS
+      focusRefreshQueuedRef.current = true
+      queueMicrotask(() => {
+        focusRefreshQueuedRef.current = false
+        if (!activityRef.current) return
+        // Focus while already visible replaces one active session so a stale
+        // or disconnected EventSource is refreshed immediately.
+        setRefreshGeneration((current) => current + 1)
+      })
     }
 
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      activityRef.current = false
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+      cleanup('Multi-stream hook unmounted.')
+    }
+  }, [cleanup])
+
+  useEffect(() => {
+    cleanup()
+    const session = ++sessionRef.current
+    const expectedSymbols = new Set(uniqueSymbols)
+    const configuration = `${key}|${timeframe}`
+    const configurationChanged = configurationRef.current !== configuration
+    configurationRef.current = configuration
+    sessionCandlesRef.current = new Map()
+    sessionHighRef.current = new Map()
+    sessionLowRef.current = new Map()
+
+    setStateMap((previous) => {
+      const next: Record<string, MultiStreamEntry> = {}
+      for (const symbol of uniqueSymbols) {
+        const retained = !configurationChanged ? previous[symbol] : undefined
+        next[symbol] = retained
+          ? {
+              ...retained,
+              liveCandle: undefined,
+              connected: false,
+              error: null,
+            }
+          : emptyEntry()
+      }
+      return next
+    })
+
+    if (!active || uniqueSymbols.length === 0) return
+    activityRef.current = true
     let cancelled = false
 
-    async function init() {
-      // Reset state
-      cleanup()
-      const initial: typeof stateMap = {}
-      for (const sym of symbols) {
-        initial[sym] = {
-          candles: [],
-          liveCandle: undefined,
-          previousClose: null,
-          dayHigh: null,
-          dayLow: null,
-          connected: false,
-          error: null,
-        }
-      }
-      setStateMap(initial)
+    const isCurrent = () =>
+      !cancelled &&
+      activityRef.current &&
+      sessionRef.current === session
 
-      // Step 1: Fetch backfill for all symbols in parallel
-      const lookback = BACKFILL_LOOKBACK[timeframe] ?? 300
-      const backfillResults = await Promise.allSettled(
-        symbols.map(async (sym) => {
-          const res = await fetch(
-            `/api/stream/backfill/${encodeURIComponent(sym)}?timeframe=${timeframe}&lookback=${lookback}`,
-          )
-          if (!res.ok) throw new Error(`Backfill failed: ${res.status}`)
-          return { symbol: sym, data: await res.json() }
-        }),
+    // Open live transport before beginning historical work. A slow or failed
+    // backfill can no longer prevent the page from receiving current prices.
+    const encodedSymbols = uniqueSymbols
+      .map((symbol) => encodeURIComponent(symbol))
+      .join(',')
+    const eventSource = new EventSource(
+      `/api/stream/multi?symbols=${encodedSymbols}&timeframe=${timeframe}`,
+    )
+    eventSourceRef.current = eventSource
+
+    eventSource.onopen = () => {
+      if (!isCurrent()) return
+      setStateMap((previous) => {
+        if (!isCurrent()) return previous
+        const next = { ...previous }
+        for (const symbol of uniqueSymbols) {
+          const entry = next[symbol]
+          if (entry) next[symbol] = { ...entry, connected: true, error: null }
+        }
+        return next
+      })
+    }
+
+    eventSource.addEventListener('candle', (event: MessageEvent) => {
+      if (!isCurrent()) return
+      const parsed = parsePulseStreamEvent(
+        parseMessageData(event.data),
+        expectedSymbols,
+      )
+      if (!parsed) return
+      const { symbol, candle } = parsed
+      const sessionCandles = mergePulseStreamCandles(
+        sessionCandlesRef.current.get(symbol) ?? [],
+        [candle],
+      )
+      sessionCandlesRef.current.set(symbol, sessionCandles)
+      sessionHighRef.current.set(
+        symbol,
+        Math.max(sessionHighRef.current.get(symbol) ?? candle.high, candle.high),
+      )
+      sessionLowRef.current.set(
+        symbol,
+        Math.min(sessionLowRef.current.get(symbol) ?? candle.low, candle.low),
       )
 
-      if (cancelled) return
+      setStateMap((previous) => {
+        if (!isCurrent()) return previous
+        const entry = previous[symbol]
+        if (!entry) return previous
+        return {
+          ...previous,
+          [symbol]: {
+            ...entry,
+            candles: mergePulseStreamCandles(entry.candles, [candle]),
+            liveCandle:
+              entry.liveCandle && entry.liveCandle.time > candle.time
+                ? entry.liveCandle
+                : undefined,
+            dayHigh: maxNullable(entry.dayHigh, candle.high),
+            dayLow: minNullable(entry.dayLow, candle.low),
+          },
+        }
+      })
+    })
 
-      // Apply backfill results
-      setStateMap((prev) => {
-        const next = { ...prev }
-        for (const result of backfillResults) {
-          if (result.status === 'fulfilled') {
-            const { symbol: sym, data } = result.value
-            next[sym] = {
-              ...next[sym],
-              candles: data.candles ?? [],
-              previousClose: data.previousClose || null,
-              dayHigh: data.dayHigh ?? null,
-              dayLow: data.dayLow ?? null,
+    eventSource.addEventListener('aggregate', (event: MessageEvent) => {
+      if (!isCurrent()) return
+      const parsed = parsePulseStreamEvent(
+        parseMessageData(event.data),
+        expectedSymbols,
+      )
+      if (!parsed) return
+      const { symbol, candle } = parsed
+      sessionHighRef.current.set(
+        symbol,
+        Math.max(sessionHighRef.current.get(symbol) ?? candle.high, candle.high),
+      )
+      sessionLowRef.current.set(
+        symbol,
+        Math.min(sessionLowRef.current.get(symbol) ?? candle.low, candle.low),
+      )
+
+      setStateMap((previous) => {
+        if (!isCurrent()) return previous
+        const entry = previous[symbol]
+        const latestCommitted = entry?.candles[entry.candles.length - 1]
+        if (!entry || (latestCommitted && candle.time <= latestCommitted.time)) {
+          return previous
+        }
+        return {
+          ...previous,
+          [symbol]: {
+            ...entry,
+            liveCandle: candle,
+            dayHigh: maxNullable(entry.dayHigh, candle.high),
+            dayLow: minNullable(entry.dayLow, candle.low),
+          },
+        }
+      })
+    })
+
+    const applySymbolError = (event: MessageEvent, fallback: string) => {
+      if (!isCurrent()) return
+      const raw = parseMessageData(event.data)
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
+      const value = raw as Record<string, unknown>
+      const symbol = typeof value.symbol === 'string' ? value.symbol : ''
+      if (!expectedSymbols.has(symbol)) return
+      setStateMap((previous) => {
+        if (!isCurrent()) return previous
+        const entry = previous[symbol]
+        if (!entry) return previous
+        return {
+          ...previous,
+          [symbol]: {
+            ...entry,
+            error: boundedError(value.error, fallback),
+            connected: false,
+          },
+        }
+      })
+    }
+    eventSource.addEventListener('auth_error', (event: MessageEvent) => {
+      applySymbolError(event, 'Authentication failed')
+    })
+    eventSource.addEventListener('subscription_error', (event: MessageEvent) => {
+      applySymbolError(event, 'Live market-data subscription failed.')
+    })
+
+    eventSource.onerror = () => {
+      if (!isCurrent()) return
+      setStateMap((previous) => {
+        if (!isCurrent()) return previous
+        const next = { ...previous }
+        for (const symbol of uniqueSymbols) {
+          const entry = next[symbol]
+          if (entry) {
+            next[symbol] = {
+              ...entry,
+              connected: false,
+              error: 'Stream disconnected',
             }
-          } else {
-            // Backfill failed for this symbol — continue anyway
-            console.error('[useMultiStream] Backfill error:', result.reason)
           }
         }
         return next
       })
-
-      if (cancelled) return
-
-      // Step 2: Open single multiplexed EventSource
-      const encodedSymbols = symbols.map((s) => encodeURIComponent(s)).join(',')
-      const es = new EventSource(
-        `/api/stream/multi?symbols=${encodedSymbols}&timeframe=${timeframe}`,
-      )
-      eventSourceRef.current = es
-
-      es.onopen = () => {
-        if (cancelled) return
-        setStateMap((prev) => {
-          const next = { ...prev }
-          for (const sym of symbols) {
-            if (next[sym]) {
-              next[sym] = { ...next[sym], connected: true, error: null }
-            }
-          }
-          return next
-        })
-      }
-
-      // Committed candle events
-      es.addEventListener('candle', (e: MessageEvent) => {
-        if (cancelled) return
-        try {
-          const { symbol: sym, ...candle } = JSON.parse(e.data) as StreamCandle & { symbol: string }
-
-          setStateMap((prev) => {
-            const entry = prev[sym]
-            if (!entry) return prev
-
-            let nextCandles: StreamCandle[]
-            const last = entry.candles.length > 0 ? entry.candles[entry.candles.length - 1] : null
-            if (last && last.time === candle.time) {
-              nextCandles = [...entry.candles]
-              nextCandles[nextCandles.length - 1] = candle
-            } else {
-              nextCandles = [...entry.candles, candle]
-              if (nextCandles.length > MAX_CANDLES) {
-                nextCandles = nextCandles.slice(nextCandles.length - MAX_CANDLES)
-              }
-            }
-
-            return {
-              ...prev,
-              [sym]: {
-                ...entry,
-                candles: nextCandles,
-                liveCandle: undefined,
-                dayHigh: entry.dayHigh !== null ? Math.max(entry.dayHigh, candle.high) : candle.high,
-                dayLow: entry.dayLow !== null ? Math.min(entry.dayLow, candle.low) : candle.low,
-              },
-            }
-          })
-        } catch {
-          /* ignore parse error */
-        }
-      })
-
-      // In-progress aggregate events
-      es.addEventListener('aggregate', (e: MessageEvent) => {
-        if (cancelled) return
-        try {
-          const { symbol: sym, ...candle } = JSON.parse(e.data) as StreamCandle & { symbol: string }
-
-          setStateMap((prev) => {
-            const entry = prev[sym]
-            if (!entry) return prev
-            return {
-              ...prev,
-              [sym]: {
-                ...entry,
-                liveCandle: candle,
-                dayHigh: entry.dayHigh !== null ? Math.max(entry.dayHigh, candle.high) : candle.high,
-                dayLow: entry.dayLow !== null ? Math.min(entry.dayLow, candle.low) : candle.low,
-              },
-            }
-          })
-        } catch {
-          /* ignore parse error */
-        }
-      })
-
-      // Auth error
-      es.addEventListener('auth_error', (e: MessageEvent) => {
-        if (cancelled) return
-        try {
-          const { symbol: sym, error } = JSON.parse(e.data)
-          setStateMap((prev) => {
-            const entry = prev[sym]
-            if (!entry) return prev
-            return {
-              ...prev,
-              [sym]: {
-                ...entry,
-                error: error ?? 'Authentication failed',
-                connected: false,
-              },
-            }
-          })
-        } catch {
-          /* ignore */
-        }
-      })
-
-      es.onerror = () => {
-        if (cancelled) return
-        setStateMap((prev) => {
-          const next = { ...prev }
-          for (const sym of symbols) {
-            if (next[sym]) {
-              next[sym] = { ...next[sym], connected: false, error: 'Stream disconnected' }
-            }
-          }
-          return next
-        })
-        // EventSource auto-reconnects by default
-      }
+      // EventSource reconnects automatically while this visible session lives.
     }
 
-    init()
+    const backfillController = new AbortController()
+    backfillControllerRef.current = backfillController
+    const deadline = setTimeout(() => {
+      backfillController.abort(new DOMException(
+        'Multi-stream backfill deadline elapsed.',
+        'TimeoutError',
+      ))
+    }, MULTI_STREAM_BACKFILL_DEADLINE_MS)
+    const lookback = BACKFILL_LOOKBACK[timeframe] ?? 300
+
+    const backfillLoads = uniqueSymbols.map(async (symbol) => {
+      try {
+        const data = await fetchLiveStreamBackfill(
+          symbol,
+          timeframe,
+          lookback,
+          backfillController.signal,
+        )
+        if (!isCurrent() || backfillController.signal.aborted) return
+
+        setStateMap((previous) => {
+          if (!isCurrent() || backfillController.signal.aborted) return previous
+          const entry = previous[symbol]
+          if (!entry) return previous
+          const sessionCandles = sessionCandlesRef.current.get(symbol) ?? []
+          return {
+            ...previous,
+            [symbol]: {
+              ...entry,
+              // Session SSE candles are newer and win timestamp collisions.
+              candles: mergePulseStreamCandles(data.candles, sessionCandles),
+              previousClose: data.previousClose,
+              dayHigh: maxNullable(
+                data.dayHigh,
+                sessionHighRef.current.get(symbol),
+              ),
+              dayLow: minNullable(
+                data.dayLow,
+                sessionLowRef.current.get(symbol),
+              ),
+              backfillIssue: null,
+            },
+          }
+        })
+      } catch (error) {
+        if (!isCurrent() || backfillController.signal.aborted) return
+        console.error(`[useMultiStream] Backfill error for ${symbol}:`, error)
+        setStateMap((previous) => {
+          if (!isCurrent() || backfillController.signal.aborted) return previous
+          const entry = previous[symbol]
+          if (!entry) return previous
+          return {
+            ...previous,
+            [symbol]: {
+              ...entry,
+              backfillIssue: toLiveStreamBackfillIssue(error),
+            },
+          }
+        })
+      }
+    })
+
+    void Promise.allSettled(backfillLoads).finally(() => {
+      clearTimeout(deadline)
+      if (backfillControllerRef.current === backfillController) {
+        backfillControllerRef.current = null
+      }
+    })
 
     return () => {
       cancelled = true
+      if (sessionRef.current === session) sessionRef.current += 1
+      clearTimeout(deadline)
       cleanup()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, timeframe, cleanup])
+  }, [active, cleanup, key, refreshGeneration, timeframe, uniqueSymbols])
 
-  // Derive full LiveStreamState for each symbol (add computed fields)
-  const result = useMemo(() => {
-    const out: Record<string, LiveStreamState> = {}
-    for (const sym of symbols) {
-      const entry = stateMap[sym]
+  return useMemo(() => {
+    const result: Record<string, LiveStreamState> = {}
+    for (const symbol of uniqueSymbols) {
+      const entry = stateMap[symbol]
       if (!entry) {
-        out[sym] = {
-          candles: [],
-          liveCandle: undefined,
+        result[symbol] = {
+          ...emptyEntry(),
           lastPrice: null,
           lastChange: null,
           lastChangePct: null,
-          previousClose: null,
-          dayHigh: null,
-          dayLow: null,
-          connected: false,
-          error: null,
         }
         continue
       }
 
-      const lastPrice =
-        entry.liveCandle?.close ??
-        (entry.candles.length > 0
-          ? entry.candles[entry.candles.length - 1].close
-          : null)
-      const lastChange =
-        lastPrice !== null && entry.previousClose !== null
-          ? lastPrice - entry.previousClose
-          : null
+      const lastPrice = entry.liveCandle?.close ??
+        entry.candles[entry.candles.length - 1]?.close ??
+        null
+      const lastChange = lastPrice !== null && entry.previousClose !== null
+        ? lastPrice - entry.previousClose
+        : null
       const lastChangePct =
-        lastChange !== null && entry.previousClose !== null && entry.previousClose !== 0
+        lastChange !== null &&
+        entry.previousClose !== null &&
+        entry.previousClose !== 0
           ? (lastChange / entry.previousClose) * 100
           : null
 
-      out[sym] = {
-        candles: entry.candles,
-        liveCandle: entry.liveCandle,
+      result[symbol] = {
+        ...entry,
         lastPrice,
         lastChange,
         lastChangePct,
-        previousClose: entry.previousClose,
-        dayHigh: entry.dayHigh,
-        dayLow: entry.dayLow,
-        connected: entry.connected,
-        error: entry.error,
       }
     }
-    return out
-  }, [symbols, stateMap])
-
-  return result
+    return result
+  }, [stateMap, uniqueSymbols])
 }

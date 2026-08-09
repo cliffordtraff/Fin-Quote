@@ -1,55 +1,38 @@
 'use server'
 
 import { FMPProvider } from '@/lib/providers/fmp'
+import type { QuoteRequestOptions } from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
+import {
+  FOREX_BOND_PANEL,
+  normalizeCompleteForexBondPanel,
+  type ForexBondPanelRow,
+} from '@/lib/forex-bonds-panel'
 
-export interface ForexBondData {
-  symbol: string
-  name: string
-  price: number
-  change: number
-  changesPercentage: number
-}
+export type ForexBondData = ForexBondPanelRow
 
 export interface ForexBondDataWithYTD extends ForexBondData {
   ytdChangePercent?: number
 }
 
-// Forex pairs and treasury bonds
-const FOREX_BONDS_SYMBOLS = [
-  { symbol: 'EURUSD', name: 'EUR/USD' },
-  { symbol: 'USDJPY', name: 'USD/JPY' },
-  { symbol: 'GBPUSD', name: 'GBP/USD' },
-  { symbol: '^FVX', name: '5-Year Treasury' },
-  { symbol: '^TNX', name: '10-Year Treasury' },
-  { symbol: '^TYX', name: '30-Year Treasury' },
-]
-
-export async function getForexBondsData(): Promise<{ forexBonds: ForexBondData[] } | { error: string }> {
+export async function getForexBondsData(
+  options: QuoteRequestOptions = {},
+): Promise<{ forexBonds: ForexBondData[] } | { error: string }> {
   try {
     // This mixed panel needs FX and treasury-yield quotes together.
     // The Massive provider path does not yet normalize the symbols
     // used here, so keep this widget on FMP until that mapping is implemented.
     const provider = new FMPProvider()
-    const symbols = FOREX_BONDS_SYMBOLS.map(f => f.symbol)
-    const quotes = await provider.getQuotes(symbols)
+    const symbols = FOREX_BOND_PANEL.map(f => f.symbol)
+    const quotes = await provider.getQuotes(symbols, options)
+    const forexBonds = normalizeCompleteForexBondPanel(quotes)
+    if (!forexBonds) {
+      return { error: 'Incomplete forex/bonds data' }
+    }
 
-    const forexBondsData: ForexBondData[] = FOREX_BONDS_SYMBOLS
-      .map(({ symbol, name }) => {
-        const quote = quotes.find(q => q.symbol === symbol)
-        if (!quote) return null
-        return {
-          symbol,
-          name,
-          price: quote.price,
-          change: quote.change,
-          changesPercentage: quote.changesPercentage
-        }
-      })
-      .filter((f): f is ForexBondData => f !== null)
-
-    return { forexBonds: forexBondsData }
+    return { forexBonds }
   } catch (error) {
+    options.signal?.throwIfAborted()
     console.error('Error fetching forex/bonds data:', safeErrorMessage(error))
     return { error: 'Failed to load forex/bonds data' }
   }
@@ -65,11 +48,11 @@ export async function getForexBondsWithYTD(): Promise<{ forexBonds: ForexBondDat
 
   try {
     const provider = new FMPProvider()
-    const symbols = FOREX_BONDS_SYMBOLS.map(f => f.symbol)
+    const symbols = FOREX_BOND_PANEL.map(f => f.symbol)
     const quotes = await provider.getQuotes(symbols)
 
     const forexBondsData = await Promise.all(
-      FOREX_BONDS_SYMBOLS.map(async ({ symbol, name }) => {
+      FOREX_BOND_PANEL.map(async ({ symbol, name }) => {
         const quote = quotes.find(q => q.symbol === symbol)
         if (!quote) return null
 

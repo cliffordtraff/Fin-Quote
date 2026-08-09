@@ -1,55 +1,25 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTheme } from '@/components/ThemeProvider'
 import { useMultiStream } from '@/lib/hooks/use-multi-stream'
 import type { LiveStreamState } from '@/lib/hooks/use-live-stream'
 import { FullDayCanvas } from '@/components/PulseTodayDashboard'
+import { usePulseTextDayCandles } from '@/lib/hooks/use-pulse-text-day-candles'
+import {
+  PULSE_TEXT_SYMBOLS,
+  parsePulseTextContext,
+  type PulseTextContext,
+  type PulseTextSymbol,
+} from '@/lib/pulse-text-context'
+import type { PulseDayCandleData } from '@/lib/pulse-market-data-contract'
 
-const SYMBOLS = ['GOOGL', 'AAPL', 'NVDA', 'TSLA'] as const
-
-type SymbolKey = typeof SYMBOLS[number]
+const SYMBOLS = PULSE_TEXT_SYMBOLS
+type SymbolKey = PulseTextSymbol
 type ThemeMode = 'light' | 'dark'
 type PulseChartAggregation = '1min' | '5min'
 
-interface DayCandle {
-  date: string
-  open: number
-  high: number
-  low: number
-  close: number
-}
-
-interface DayCandleData {
-  candles: DayCandle[]
-  previousClose: number | null
-  changePct: number | null
-}
-
-interface PulseTextNewsItem {
-  title: string
-  publishedDate: string
-  site: string
-  url: string
-}
-
-interface PulseTextProfile {
-  symbol: string
-  companyName: string
-  description: string
-  sector: string | null
-  industry: string | null
-  exchange: string | null
-  fullTimeEmployees: number | null
-  ipoDate: string | null
-  country: string | null
-  city: string | null
-}
-
-interface PulseTextContext {
-  news: PulseTextNewsItem[]
-  profile: PulseTextProfile | null
-}
+type DayCandleData = PulseDayCandleData
 
 interface CopyBlock {
   kicker: string
@@ -195,89 +165,60 @@ function formatNewsTime(value: string | null | undefined) {
   }).format(date)
 }
 
-function sortCandles(candles: DayCandle[]) {
-  return [...candles].sort((a, b) => a.date.localeCompare(b.date))
-}
-
-function useDayCandles(symbols: readonly string[]): Record<string, DayCandleData> {
-  const [data, setData] = useState<Record<string, DayCandleData>>({})
+export function usePulseTextContext(symbol: SymbolKey) {
+  const [contexts, setContexts] = useState<Partial<Record<SymbolKey, PulseTextContext>>>({})
+  const [requestState, setRequestState] = useState({
+    error: false,
+    loading: false,
+    symbol,
+  })
+  const generationRef = useRef(0)
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+    setRequestState({ error: false, loading: true, symbol })
 
-    async function fetchAll() {
-      const results = await Promise.allSettled(
-        symbols.map(async (symbol) => {
-          const res = await fetch(`/api/stock-intraday/${symbol}?interval=1`)
-          if (!res.ok) return null
-          return { symbol, json: await res.json() }
-        }),
-      )
+    void (async () => {
+      try {
+        const response = await fetch(`/api/pulse-text-context/${symbol}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Pulse text context is unavailable.')
+        const rawContext: unknown = await response.json()
+        const parsed = parsePulseTextContext(rawContext, symbol)
+        if (!parsed.ok) throw new Error('Pulse text context was malformed.')
+        if (controller.signal.aborted || generation !== generationRef.current) return
 
-      if (cancelled) return
-
-      const next: Record<string, DayCandleData> = {}
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) {
-          const candles = sortCandles((result.value.json.todayOHLC ?? []) as DayCandle[])
-          const previousClose = result.value.json.previousClose ?? null
-          const lastClose = candles[candles.length - 1]?.close ?? null
-          const changePct = previousClose && lastClose
-            ? ((lastClose - previousClose) / previousClose) * 100
-            : null
-
-          next[result.value.symbol] = {
-            candles,
-            previousClose,
-            changePct,
-          }
-        }
+        setContexts((current) => ({
+          ...current,
+          [symbol]: parsed.value,
+        }))
+      } catch {
+        if (controller.signal.aborted || generation !== generationRef.current) return
+        // Retain a previously completed context only for this same symbol.
+        // A first-time failure remains null and the current symbol's authored
+        // fallback copy is used instead.
+        setRequestState({ error: true, loading: false, symbol })
+        return
       }
 
-      setData(next)
-    }
-
-    fetchAll()
-    const id = window.setInterval(fetchAll, 60_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
-  }, [symbols])
-
-  return data
-}
-
-function usePulseTextContext(symbol: SymbolKey) {
-  const [context, setContext] = useState<PulseTextContext | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-
-    fetch(`/api/pulse-text-context/${symbol}`)
-      .then(async (res) => {
-        if (!res.ok) return null
-        return res.json() as Promise<PulseTextContext>
-      })
-      .then((data) => {
-        if (cancelled) return
-        setContext(data)
-      })
-      .catch(() => {
-        if (!cancelled) setContext(null)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      if (controller.signal.aborted || generation !== generationRef.current) return
+      setRequestState({ error: false, loading: false, symbol })
+    })()
 
     return () => {
-      cancelled = true
+      controller.abort(new DOMException('Pulse text symbol changed.', 'AbortError'))
     }
   }, [symbol])
 
-  return { context, loading }
+  const isCurrentRequest = requestState.symbol === symbol
+  return {
+    context: contexts[symbol] ?? null,
+    error: isCurrentRequest ? requestState.error : false,
+    loading: isCurrentRequest ? requestState.loading : true,
+  }
 }
 
 function cycleStyle(index: number, total: number, duration = 14): CSSProperties {
@@ -285,6 +226,47 @@ function cycleStyle(index: number, total: number, duration = 14): CSSProperties 
   return {
     animationDelay: `${(slice * index).toFixed(2)}s`,
     animationDuration: `${duration}s`,
+  }
+}
+
+export function derivePulseTextMarketValues(
+  dayData: DayCandleData | undefined,
+  stream: LiveStreamState,
+) {
+  const candles = dayData?.candles ?? []
+  const previousClose = dayData?.previousClose ?? stream.previousClose ?? null
+  const lastPrice = stream.lastPrice ?? candles[candles.length - 1]?.close ?? null
+  const open = candles[0]?.open ?? null
+  const candleHigh = candles.length > 0
+    ? Math.max(...candles.map((candle) => candle.high))
+    : null
+  const candleLow = candles.length > 0
+    ? Math.min(...candles.map((candle) => candle.low))
+    : null
+  const dayHigh = stream.dayHigh === null
+    ? candleHigh
+    : candleHigh === null
+      ? stream.dayHigh
+      : Math.max(stream.dayHigh, candleHigh)
+  const dayLow = stream.dayLow === null
+    ? candleLow
+    : candleLow === null
+      ? stream.dayLow
+      : Math.min(stream.dayLow, candleLow)
+  const changePct = lastPrice !== null && previousClose !== null && previousClose !== 0
+    ? ((lastPrice - previousClose) / previousClose) * 100
+    : stream.lastPrice !== null
+      ? stream.lastChangePct
+      : dayData?.changePct ?? stream.lastChangePct
+
+  return {
+    candles,
+    changePct,
+    dayHigh,
+    dayLow,
+    lastPrice,
+    open,
+    previousClose,
   }
 }
 
@@ -296,13 +278,14 @@ function useSymbolNarrative(
 ) {
   return useMemo(() => {
     const meta = SYMBOL_META[symbol]
-    const candles = dayData?.candles ?? []
-    const previousClose = dayData?.previousClose ?? stream.previousClose ?? null
-    const lastPrice = stream.lastPrice ?? candles[candles.length - 1]?.close ?? null
-    const open = candles[0]?.open ?? null
-    const changePct = stream.lastChangePct ?? dayData?.changePct ?? null
-    const dayHigh = stream.dayHigh ?? (candles.length > 0 ? Math.max(...candles.map((c) => c.high)) : null)
-    const dayLow = stream.dayLow ?? (candles.length > 0 ? Math.min(...candles.map((c) => c.low)) : null)
+    const {
+      changePct,
+      dayHigh,
+      dayLow,
+      lastPrice,
+      open,
+      previousClose,
+    } = derivePulseTextMarketValues(dayData, stream)
     const rangePct = previousClose && dayHigh !== null && dayLow !== null
       ? ((dayHigh - dayLow) / previousClose) * 100
       : null
@@ -421,9 +404,6 @@ function useSymbolNarrative(
 }
 
 function ExperimentCardShell({
-  eyebrow,
-  title,
-  body,
   accent,
   children,
   className = '',
@@ -773,8 +753,8 @@ export default function PulseTextDashboard() {
   const [lineMode, setLineMode] = useState(true)
 
   const streams = useMultiStream([...SYMBOLS], '1s')
-  const dayMap = useDayCandles(SYMBOLS)
-  const { context, loading } = usePulseTextContext(selectedSymbol)
+  const dayMap = usePulseTextDayCandles()
+  const { context } = usePulseTextContext(selectedSymbol)
 
   const stream = streams[selectedSymbol] ?? EMPTY_STREAM
   const dayData = dayMap[selectedSymbol]

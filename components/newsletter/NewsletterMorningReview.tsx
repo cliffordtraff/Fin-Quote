@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -28,17 +28,37 @@ import type {
   NewsletterDailySettings,
 } from '@/lib/newsletter/daily-types'
 import type { NewsletterDailyAutomationRun } from '@/lib/newsletter/daily-automation'
-import { selectNewsletterRecommendedIssues } from '@/lib/newsletter/shortlist'
+import {
+  hydratePublicNewsletterMorningAutomation,
+  hydratePublicNewsletterMorningReport,
+  type PublicNewsletterMorningAutomation,
+  type PublicNewsletterMorningReport,
+} from '@/lib/newsletter/public-morning-report'
+import NewsletterEditorialShortlist, {
+  type NewsletterEditorialShortlistDirtyState,
+} from './NewsletterEditorialShortlist'
 
 interface DailyRunResponse {
   run: NewsletterDailyRun | null
   settings?: NewsletterDailySettings
   automation?: NewsletterDailyAutomationRun | null
   reportReadOnly?: boolean
+  automationReadOnly?: boolean
   attempted?: number
   generated?: number
   failed?: number
   error?: string
+}
+
+interface DailyRunWireResponse extends Omit<
+  DailyRunResponse,
+  'run' | 'automation'
+> {
+  run: NewsletterDailyRun | PublicNewsletterMorningReport | null
+  automation?:
+    | NewsletterDailyAutomationRun
+    | PublicNewsletterMorningAutomation
+    | null
 }
 
 interface NotificationResponse {
@@ -57,6 +77,28 @@ interface DeliveryResponse {
   reconnectRequired?: boolean
 }
 
+async function readDailyRunPayload(response: Response): Promise<DailyRunResponse> {
+  const payload = (await response.json().catch(() => ({}))) as DailyRunWireResponse
+  if (!response.ok) {
+    throw new Error(payload.error || 'Newsletter queue request failed')
+  }
+
+  return {
+    ...payload,
+    run:
+      payload.reportReadOnly && payload.run
+        ? hydratePublicNewsletterMorningReport(
+            payload.run as PublicNewsletterMorningReport,
+          )
+        : payload.run as NewsletterDailyRun | null,
+    automation: payload.automationReadOnly
+      ? hydratePublicNewsletterMorningAutomation(
+          payload.automation as PublicNewsletterMorningAutomation | null,
+        )
+      : payload.automation as NewsletterDailyAutomationRun | null | undefined,
+  }
+}
+
 type QueueFilter =
   | 'all'
   | 'generated'
@@ -73,6 +115,20 @@ const FILTERS: Array<{ id: QueueFilter; label: string }> = [
 ]
 
 const TARGET_COUNTS = [30, 40, 50] as const
+const MORNING_REVIEW_PAGE_SIZE = 12
+const ACTIVE_AUTOMATION_POLL_MS = 15_000
+const IDLE_AUTOMATION_POLL_MS = 60_000
+const NOTIFICATION_REQUEST_TIMEOUT_MS = 8_000
+const UNSAVED_SHORTLIST_ROLLOVER_NOTICE =
+  'A newer Morning Report is available. Save or reset the editorial shortlist before loading it.'
+const APPLIED_SHORTLIST_ROLLOVER_NOTICE =
+  'The newer Morning Report was loaded after the editorial shortlist was saved or reset.'
+
+type RunSnapshotSource = 'passive' | 'interactive'
+
+function getRunIdentity(run: NewsletterDailyRun | null): string | null {
+  return run ? `${run.marketDate}:${run.edition}:${run.id}` : null
+}
 
 function statusLabel(status: NewsletterDailyItemStatus): string {
   switch (status) {
@@ -237,20 +293,24 @@ function QueueCard({
   onBeehiivSync: () => void
 }) {
   const source = firstSource(item)
-  const editorPath = item.draftId
+  const editorPath = !readOnly && item.draftId
     ? `/newsletter/editor/${item.draftId}`
     : null
   const editorHref =
-    editorPath && readOnly
-      ? `/auth?redirect=${encodeURIComponent(editorPath)}`
+    readOnly && item.draftId
+      ? '/auth?redirect=%2Fnewsletter%2Fmorning-review'
       : editorPath
   const selectable =
-    item.status === 'generated' ||
-    item.status === 'needs_attention' ||
-    item.status === 'ready'
+    !readOnly &&
+    (item.status === 'generated' ||
+      item.status === 'needs_attention' ||
+      item.status === 'ready')
 
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700">
+    <article
+      className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '620px' }}
+    >
       <div className="flex h-11 items-center gap-2 border-b border-gray-100 px-3 dark:border-gray-800">
         <label className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800">
           <input
@@ -265,9 +325,13 @@ function QueueCard({
         <span className="text-xs font-semibold text-gray-500">
           #{item.rank}
         </span>
-        <span className="text-sm font-bold text-gray-950 dark:text-white">
+        <Link
+          href={`/stock/${encodeURIComponent(item.ticker)}#catalyst-history`}
+          className="text-sm font-bold text-gray-950 hover:text-sage-700 dark:text-white dark:hover:text-sage-300"
+          aria-label={`${item.ticker} catalyst history`}
+        >
           {item.ticker}
-        </span>
+        </Link>
         <span className={`text-xs font-semibold ${moveClass(item.movePercent)}`}>
           {formatMove(item.movePercent)}
         </span>
@@ -286,6 +350,9 @@ function QueueCard({
           <img
             src={item.chartImageUrl}
             alt={`${item.ticker} newsletter chart`}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -377,6 +444,19 @@ function QueueCard({
               </button>
             )
           ) : null}
+          {readOnly &&
+          item.beehiivDelivery?.lifecycleStatus === 'published' &&
+          item.beehiivDelivery.webUrl ? (
+            <a
+              href={item.beehiivDelivery.webUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 transition hover:border-gray-500 hover:text-gray-950 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+              Read published issue
+            </a>
+          ) : null}
           {source?.url ? (
             <a
               href={source.url}
@@ -410,6 +490,9 @@ export default function NewsletterMorningReview() {
     NewsletterNotification[]
   >([])
   const [filter, setFilter] = useState<QueueFilter>('all')
+  const [visibleIssueLimit, setVisibleIssueLimit] = useState(
+    MORNING_REVIEW_PAGE_SIZE,
+  )
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [beehiivBusyIds, setBeehiivBusyIds] = useState<Set<string>>(
     new Set(),
@@ -419,89 +502,407 @@ export default function NewsletterMorningReview() {
   const [finalizing, setFinalizing] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notificationError, setNotificationError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const stopRequested = useRef(false)
   const browserNotifiedIds = useRef<Set<string>>(new Set())
+  const runSnapshotRef = useRef<NewsletterDailyRun | null>(null)
+  const runIdentityRef = useRef<string | null>(null)
+  const shortlistDirtyStateRef =
+    useRef<NewsletterEditorialShortlistDirtyState | null>(null)
+  const pendingRunSnapshotRef = useRef<NewsletterDailyRun | null | undefined>(
+    undefined,
+  )
+  const notificationMarketDateRef = useRef<string | null>(null)
+  const pollDelayRef = useRef(IDLE_AUTOMATION_POLL_MS)
+  const replaceRefreshRef = useRef<() => Promise<void>>(
+    () => Promise.resolve(),
+  )
+  const supersedePassiveReadsRef = useRef<() => void>(() => undefined)
 
-  async function readPayload(response: Response): Promise<DailyRunResponse> {
-    const payload = (await response.json().catch(() => ({}))) as DailyRunResponse
-    if (!response.ok) {
-      throw new Error(payload.error || 'Newsletter queue request failed')
-    }
-    return payload
-  }
+  pollDelayRef.current =
+    automation?.status === 'running'
+      ? ACTIVE_AUTOMATION_POLL_MS
+      : IDLE_AUTOMATION_POLL_MS
 
-  async function loadRun() {
-    const response = await fetch('/api/newsletter/daily-runs', {
-      cache: 'no-store',
-      credentials: 'include',
-    })
-    const payload = await readPayload(response)
-    setRun(payload.run)
-    if (payload.settings) setSettings(payload.settings)
-    setAutomation(payload.automation ?? null)
-    setReportReadOnly(Boolean(payload.reportReadOnly))
-    if (payload.run?.marketDate) {
-      void loadNotifications(payload.run.marketDate)
-    }
-  }
+  const commitRunSnapshot = useCallback((nextRun: NewsletterDailyRun | null) => {
+    const nextIdentity = getRunIdentity(nextRun)
+    const previousIdentity = runIdentityRef.current
+    const identityChanged =
+      previousIdentity !== null && previousIdentity !== nextIdentity
+    runIdentityRef.current = nextIdentity
+    runSnapshotRef.current = nextRun
 
-  async function loadNotifications(marketDate?: string) {
-    const query = marketDate
-      ? `?marketDate=${encodeURIComponent(marketDate)}`
-      : ''
-    const response = await fetch(`/api/newsletter/notifications${query}`, {
-      cache: 'no-store',
-      credentials: 'include',
-    })
-    const payload =
-      (await response.json().catch(() => ({}))) as NotificationResponse
-    if (!response.ok) {
-      throw new Error(payload.error || 'Failed to load notifications')
+    setRun(nextRun)
+    if (identityChanged) {
+      shortlistDirtyStateRef.current = null
+      setSelectedIds(new Set())
+      setBeehiivBusyIds(new Set())
+      setVisibleIssueLimit(MORNING_REVIEW_PAGE_SIZE)
+      notificationMarketDateRef.current = null
+      setNotifications([])
+      return
     }
-    setNotifications(payload.notifications ?? [])
-  }
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        setLoading(true)
-        setError(null)
-        const response = await fetch('/api/newsletter/daily-runs', {
-          cache: 'no-store',
-          credentials: 'include',
-        })
-        const payload = await readPayload(response)
-        if (cancelled) return
-        setRun(payload.run)
-        if (payload.settings) setSettings(payload.settings)
-        setAutomation(payload.automation ?? null)
-        setReportReadOnly(Boolean(payload.reportReadOnly))
-        if (payload.run?.marketDate) {
-          await loadNotifications(payload.run.marketDate)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load queue')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
+    if (nextRun) {
+      const availableIds = new Set(
+        nextRun.items
+          .filter(
+            (item) =>
+              item.status === 'generated' ||
+              item.status === 'needs_attention' ||
+              item.status === 'ready',
+          )
+          .map((item) => item.id),
+      )
+      setSelectedIds((current) => {
+        const next = new Set(
+          Array.from(current).filter((id) => availableIds.has(id)),
+        )
+        return next.size === current.size ? current : next
+      })
     }
   }, [])
 
+  const applyRunSnapshot = useCallback((
+    nextRun: NewsletterDailyRun | null,
+    source: RunSnapshotSource,
+  ) => {
+    const previousIdentity = runIdentityRef.current
+    const nextIdentity = getRunIdentity(nextRun)
+    const identityChanged =
+      previousIdentity !== null && previousIdentity !== nextIdentity
+    const hasUnsavedShortlist = Boolean(
+      identityChanged &&
+      shortlistDirtyStateRef.current?.runIdentity === previousIdentity &&
+      shortlistDirtyStateRef.current.dirty,
+    )
+
+    if (hasUnsavedShortlist) {
+      pendingRunSnapshotRef.current = nextRun
+      if (
+        source === 'passive' ||
+        !window.confirm(
+          'Replace this Morning Report and discard your unsaved editorial shortlist decisions?',
+        )
+      ) {
+        setNotice(UNSAVED_SHORTLIST_ROLLOVER_NOTICE)
+        return false
+      }
+    }
+
+    pendingRunSnapshotRef.current = undefined
+    commitRunSnapshot(nextRun)
+    return true
+  }, [commitRunSnapshot])
+
+  const handleShortlistDirtyStateChange = useCallback((
+    nextState: NewsletterEditorialShortlistDirtyState,
+  ) => {
+    if (nextState.runIdentity !== runIdentityRef.current) return
+    shortlistDirtyStateRef.current = nextState
+    if (nextState.dirty || pendingRunSnapshotRef.current === undefined) return
+
+    const pendingRun = pendingRunSnapshotRef.current
+    pendingRunSnapshotRef.current = undefined
+    commitRunSnapshot(pendingRun)
+    setNotice(APPLIED_SHORTLIST_ROLLOVER_NOTICE)
+  }, [commitRunSnapshot])
+
   useEffect(() => {
-    if (!run) return
-    const timer = window.setInterval(() => {
-      void loadRun()
-    }, automation?.status === 'running' ? 15_000 : 60_000)
-    return () => window.clearInterval(timer)
-  }, [automation?.status, run?.id])
+    type ActiveRefresh = {
+      generation: number
+      controller: AbortController
+      promise: Promise<void>
+    }
+    type ActiveNotificationRefresh = {
+      generation: number
+      controller: AbortController
+    }
+
+    let disposed = false
+    let generation = 0
+    let notificationGeneration = 0
+    let timer: number | null = null
+    let activeRefresh: ActiveRefresh | null = null
+    let activeNotificationRefresh: ActiveNotificationRefresh | null = null
+    let initialLoadPending = true
+
+    function clearTimer() {
+      if (timer == null) return
+      window.clearTimeout(timer)
+      timer = null
+    }
+
+    function cancelActiveRefresh() {
+      generation += 1
+      activeRefresh?.controller.abort()
+      activeRefresh = null
+    }
+
+    function cancelActiveNotificationRefresh() {
+      notificationGeneration += 1
+      activeNotificationRefresh?.controller.abort()
+      activeNotificationRefresh = null
+    }
+
+    function scheduleNextRefresh() {
+      clearTimer()
+      if (disposed || document.hidden) return
+      timer = window.setTimeout(() => {
+        timer = null
+        void startRefresh(false)
+      }, pollDelayRef.current)
+    }
+
+    function isCurrentRefresh(
+      requestGeneration: number,
+      controller: AbortController,
+    ) {
+      return (
+        !disposed &&
+        !controller.signal.aborted &&
+        activeRefresh?.generation === requestGeneration
+      )
+    }
+
+    function isCurrentNotificationRefresh(
+      requestGeneration: number,
+    ) {
+      return (
+        !disposed &&
+        activeNotificationRefresh?.generation === requestGeneration
+      )
+    }
+
+    async function performNotificationRefresh(
+      marketDate: string,
+      requestGeneration: number,
+      controller: AbortController,
+    ) {
+      let timeoutId: number | null = null
+      let handleAbort: (() => void) | null = null
+      const requestBoundary = new Promise<never>((_, reject) => {
+        handleAbort = () => {
+          reject(
+            controller.signal.reason instanceof Error
+              ? controller.signal.reason
+              : new Error('Newsletter notification request was cancelled'),
+          )
+        }
+        controller.signal.addEventListener('abort', handleAbort, { once: true })
+        timeoutId = window.setTimeout(() => {
+          const timeoutError = new Error(
+            'Newsletter notifications took too long to load',
+          )
+          reject(timeoutError)
+          controller.abort(timeoutError)
+        }, NOTIFICATION_REQUEST_TIMEOUT_MS)
+      })
+
+      try {
+        const notificationRequest = (async () => {
+          const response = await fetch(
+            `/api/newsletter/notifications?marketDate=${encodeURIComponent(marketDate)}`,
+            {
+              cache: 'no-store',
+              credentials: 'include',
+              signal: controller.signal,
+            },
+          )
+          const payload =
+            (await response.json().catch(() => ({}))) as NotificationResponse
+          return { response, payload }
+        })()
+        const { response, payload } = await Promise.race([
+          notificationRequest,
+          requestBoundary,
+        ])
+        if (!response.ok) {
+          throw new Error(
+            payload.error || 'Failed to load notifications',
+          )
+        }
+        if (!isCurrentNotificationRefresh(requestGeneration)) return
+        setNotifications(payload.notifications ?? [])
+        setNotificationError(null)
+      } catch (err) {
+        if (!isCurrentNotificationRefresh(requestGeneration)) return
+        setNotificationError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load newsletter notifications',
+        )
+      } finally {
+        if (timeoutId != null) window.clearTimeout(timeoutId)
+        if (handleAbort) {
+          controller.signal.removeEventListener('abort', handleAbort)
+        }
+        if (!isCurrentNotificationRefresh(requestGeneration)) return
+        activeNotificationRefresh = null
+      }
+    }
+
+    function startNotificationRefresh(marketDate: string) {
+      cancelActiveNotificationRefresh()
+      if (disposed || document.hidden) return
+
+      if (notificationMarketDateRef.current !== marketDate) {
+        notificationMarketDateRef.current = marketDate
+        setNotifications([])
+        setNotificationError(null)
+      }
+
+      const controller = new AbortController()
+      const requestGeneration = ++notificationGeneration
+      activeNotificationRefresh = {
+        generation: requestGeneration,
+        controller,
+      }
+      void performNotificationRefresh(
+        marketDate,
+        requestGeneration,
+        controller,
+      )
+    }
+
+    async function performRefresh(
+      requestGeneration: number,
+      controller: AbortController,
+      showLoading: boolean,
+      source: RunSnapshotSource,
+    ) {
+      try {
+        if (showLoading) {
+          setLoading(true)
+          setError(null)
+        }
+        const response = await fetch('/api/newsletter/daily-runs', {
+          cache: 'no-store',
+          credentials: 'include',
+          signal: controller.signal,
+        })
+        const payload = await readDailyRunPayload(response)
+        if (!isCurrentRefresh(requestGeneration, controller)) return
+
+        setError(null)
+        pollDelayRef.current =
+          payload.automation?.status === 'running'
+            ? ACTIVE_AUTOMATION_POLL_MS
+            : IDLE_AUTOMATION_POLL_MS
+        const snapshotApplied = applyRunSnapshot(payload.run, source)
+        if (payload.settings) setSettings(payload.settings)
+        setAutomation(payload.automation ?? null)
+        setReportReadOnly(Boolean(payload.reportReadOnly))
+        if (showLoading) {
+          initialLoadPending = false
+          setLoading(false)
+        }
+
+        const notificationMarketDate = payload.reportReadOnly
+          ? null
+          : (snapshotApplied ? payload.run : runSnapshotRef.current)?.marketDate ?? null
+        if (!notificationMarketDate) {
+          cancelActiveNotificationRefresh()
+          notificationMarketDateRef.current = null
+          setNotifications([])
+          setNotificationError(null)
+          return
+        }
+        startNotificationRefresh(notificationMarketDate)
+      } catch (err) {
+        if (!isCurrentRefresh(requestGeneration, controller)) return
+        setError(err instanceof Error ? err.message : 'Failed to load queue')
+      } finally {
+        if (!isCurrentRefresh(requestGeneration, controller)) return
+        activeRefresh = null
+        if (showLoading) {
+          initialLoadPending = false
+          setLoading(false)
+        }
+        scheduleNextRefresh()
+      }
+    }
+
+    function startRefresh(
+      replaceActive: boolean,
+      source: RunSnapshotSource = 'passive',
+    ): Promise<void> {
+      clearTimer()
+      if (activeRefresh) {
+        if (!replaceActive) return activeRefresh.promise
+        cancelActiveRefresh()
+      }
+      if (disposed || document.hidden) return Promise.resolve()
+
+      const controller = new AbortController()
+      const requestGeneration = ++generation
+      const promise = Promise.resolve().then(() =>
+        performRefresh(
+          requestGeneration,
+          controller,
+          initialLoadPending,
+          source,
+        ),
+      )
+      activeRefresh = {
+        generation: requestGeneration,
+        controller,
+        promise,
+      }
+      return promise
+    }
+
+    replaceRefreshRef.current = () => startRefresh(true, 'interactive')
+    supersedePassiveReadsRef.current = () => {
+      clearTimer()
+      cancelActiveRefresh()
+      cancelActiveNotificationRefresh()
+      scheduleNextRefresh()
+    }
+
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        clearTimer()
+        cancelActiveRefresh()
+        cancelActiveNotificationRefresh()
+        return
+      }
+      void startRefresh(false)
+    }
+
+    function handleFocus() {
+      if (!document.hidden) void startRefresh(false)
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    if (!document.hidden) void startRefresh(false)
+
+    return () => {
+      disposed = true
+      clearTimer()
+      cancelActiveRefresh()
+      cancelActiveNotificationRefresh()
+      replaceRefreshRef.current = () => Promise.resolve()
+      supersedePassiveReadsRef.current = () => undefined
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [applyRunSnapshot])
+
+  const loadRun = useCallback(
+    () => replaceRefreshRef.current(),
+    [],
+  )
+
+  const applyMutationRun = useCallback(
+    (nextRun: NewsletterDailyRun) => {
+      supersedePassiveReadsRef.current()
+      applyRunSnapshot(nextRun, 'interactive')
+    },
+    [applyRunSnapshot],
+  )
 
   useEffect(() => {
     if (
@@ -520,14 +921,11 @@ export default function NewsletterMorningReview() {
     }
   }, [notifications])
 
-  const visibleItems = useMemo(
+  const filteredItems = useMemo(
     () => (run?.items ?? []).filter((item) => matchesFilter(item, filter)),
     [run, filter],
   )
-  const recommendedIssues = useMemo(
-    () => selectNewsletterRecommendedIssues(run?.items ?? []),
-    [run],
-  )
+  const visibleItems = filteredItems.slice(0, visibleIssueLimit)
   const latestUnreadNotification = notifications.find(
     (entry) => !entry.readAt,
   )
@@ -553,17 +951,13 @@ export default function NewsletterMorningReview() {
   const progress = run?.selectedCount
     ? Math.round((run.generatedCount / run.selectedCount) * 100)
     : 0
-  const hasPendingGeneration =
+  const hasQueuedGeneration =
     !run ||
-    run.items.some(
-      (item) =>
-        item.status === 'queued' ||
-        item.status === 'generating' ||
-        item.status === 'failed' ||
-        item.status === 'needs_attention',
-    )
+    run.items.some((item) => item.status === 'queued')
 
   async function saveSettings(next: Partial<NewsletterDailySettings>) {
+    if (reportReadOnly) return
+    supersedePassiveReadsRef.current()
     try {
       setSavingSettings(true)
       setError(null)
@@ -580,6 +974,7 @@ export default function NewsletterMorningReview() {
       if (!response.ok || !payload.settings) {
         throw new Error(payload.error || 'Failed to save settings')
       }
+      supersedePassiveReadsRef.current()
       setSettings(payload.settings)
       setNotice('Automation settings saved.')
     } catch (err) {
@@ -590,6 +985,7 @@ export default function NewsletterMorningReview() {
   }
 
   async function markNotificationRead(notificationId: string) {
+    supersedePassiveReadsRef.current()
     setNotifications((current) =>
       current.map((entry) =>
         entry.id === notificationId
@@ -603,10 +999,12 @@ export default function NewsletterMorningReview() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: [notificationId] }),
     }).catch(() => undefined)
+    supersedePassiveReadsRef.current()
   }
 
   async function syncBeehiiv(item: NewsletterDailyRunItem) {
-    if (!item.draftId || beehiivBusyIds.has(item.id)) return
+    if (reportReadOnly || !item.draftId || beehiivBusyIds.has(item.id)) return
+    supersedePassiveReadsRef.current()
     const beehiivWindow = window.open(
       'about:blank',
       `finquote-beehiiv-${item.draftId}`,
@@ -694,9 +1092,9 @@ export default function NewsletterMorningReview() {
           }),
         },
       )
-      const payload = await readPayload(response)
+      const payload = await readDailyRunPayload(response)
       currentRun = payload.run
-      if (currentRun) setRun(currentRun)
+      if (currentRun) applyMutationRun(currentRun)
       if (!payload.attempted) break
       if (retryFailed) retryBudget -= payload.attempted
     } while (
@@ -710,6 +1108,8 @@ export default function NewsletterMorningReview() {
   }
 
   async function generateToday(retryFailed = false) {
+    if (reportReadOnly) return
+    supersedePassiveReadsRef.current()
     try {
       stopRequested.current = false
       setGenerating(true)
@@ -718,24 +1118,40 @@ export default function NewsletterMorningReview() {
       let runId = run?.id
 
       if (!runId || !retryFailed) {
-        const response = await fetch('/api/newsletter/daily-runs', {
+        const response = await fetch('/api/newsletter/daily-runs/action', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ targetCount: settings.targetCount }),
         })
-        const payload = await readPayload(response)
+        const payload = await readDailyRunPayload(response)
         if (!payload.run) throw new Error('Daily run was not created')
-        setRun(payload.run)
+        applyMutationRun(payload.run)
         runId = payload.run.id
       }
 
       await processBatches(runId, retryFailed)
       await loadRun()
+      const refreshedRun = runSnapshotRef.current
+      const remainingQueuedCount = (refreshedRun?.items ?? []).filter(
+        (item) => item.status === 'queued' || item.status === 'generating',
+      ).length
+      const attentionCount = (refreshedRun?.items ?? []).filter(
+        (item) =>
+          item.status === 'failed' || item.status === 'needs_attention',
+      ).length
       setNotice(
         stopRequested.current
           ? 'Generation stopped after the current batch. Resume when ready.'
-          : 'Today\'s newsletter queue is generated and ready for review.',
+          : remainingQueuedCount > 0
+            ? `Generation paused with ${remainingQueuedCount} ${
+                remainingQueuedCount === 1 ? 'issue' : 'issues'
+              } still in progress or queued.`
+            : attentionCount > 0
+              ? `Generation completed with ${attentionCount} ${
+                  attentionCount === 1 ? 'issue' : 'issues'
+                } needing attention. Retry or review before marking the queue ready.`
+              : 'Today\'s newsletter queue is generated and ready for review.',
       )
     } catch (err) {
       setError(
@@ -748,6 +1164,7 @@ export default function NewsletterMorningReview() {
   }
 
   function selectCleanIssues() {
+    if (reportReadOnly) return
     setSelectedIds(
       new Set(
         (run?.items ?? [])
@@ -758,7 +1175,8 @@ export default function NewsletterMorningReview() {
   }
 
   async function finalizeSelected() {
-    if (!run || selectedIds.size === 0) return
+    if (reportReadOnly || !run || selectedIds.size === 0) return
+    supersedePassiveReadsRef.current()
     try {
       setFinalizing(true)
       setError(null)
@@ -772,8 +1190,8 @@ export default function NewsletterMorningReview() {
           body: JSON.stringify({ itemIds: Array.from(selectedIds) }),
         },
       )
-      const payload = await readPayload(response)
-      if (payload.run) setRun(payload.run)
+      const payload = await readDailyRunPayload(response)
+      if (payload.run) applyMutationRun(payload.run)
       setSelectedIds(new Set())
       setNotice('Clean selected issues are marked Ready.')
     } catch (err) {
@@ -849,7 +1267,7 @@ export default function NewsletterMorningReview() {
               <Square className="h-3.5 w-3.5" aria-hidden />
               Stop after batch
             </button>
-          ) : hasPendingGeneration ? (
+          ) : hasQueuedGeneration ? (
             <button
               type="button"
               onClick={() => generateToday(false)}
@@ -1004,13 +1422,33 @@ export default function NewsletterMorningReview() {
       ) : null}
 
       {error ? (
-        <div className="mt-4 flex items-start gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+        <div
+          role="alert"
+          className="mt-4 flex items-start gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
+        >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{error}</span>
         </div>
       ) : null}
+      {notificationError ? (
+        <div
+          role="alert"
+          className="mt-4 flex items-start gap-2 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            Notification updates are unavailable: {notificationError}. The
+            production queue is still current.
+          </span>
+        </div>
+      ) : null}
       {notice ? (
-        <div className="mt-4 flex items-start gap-2 border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="mt-4 flex items-start gap-2 border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300"
+        >
           <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{notice}</span>
         </div>
@@ -1044,62 +1482,13 @@ export default function NewsletterMorningReview() {
         </div>
       </section>
 
-      {recommendedIssues.length > 0 ? (
-        <section
-          aria-labelledby="recommended-issues-title"
-          className="mt-5 border-y border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-        >
-          <div className="flex items-end justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-            <div>
-              <p className="text-[10px] font-semibold uppercase text-sage-700 dark:text-sage-400">
-                Editorial shortlist
-              </p>
-              <h2
-                id="recommended-issues-title"
-                className="mt-0.5 text-base font-semibold text-gray-950 dark:text-white"
-              >
-                Recommended first
-              </h2>
-            </div>
-            <span className="text-xs text-gray-500">
-              {recommendedIssues.length} issues
-            </span>
-          </div>
-          <ol className="divide-y divide-gray-100 dark:divide-gray-800">
-            {recommendedIssues.map((issue) => (
-              <li
-                key={issue.itemId}
-                className="grid min-w-0 items-center gap-3 px-4 py-3 sm:grid-cols-[2rem_4rem_minmax(0,1fr)_auto]"
-              >
-                <span className="text-sm font-semibold text-gray-400">
-                  {issue.position.toString().padStart(2, '0')}
-                </span>
-                <span className="text-sm font-bold text-gray-950 dark:text-white">
-                  {issue.ticker}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {issue.subjectLine}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-gray-500">
-                    {issue.reason}
-                  </p>
-                </div>
-                <Link
-                  href={
-                    reportReadOnly
-                      ? `/auth?redirect=${encodeURIComponent(`/newsletter/editor/${issue.draftId}`)}`
-                      : `/newsletter/editor/${issue.draftId}`
-                  }
-                  className="inline-flex h-8 items-center gap-1.5 rounded border border-gray-300 px-3 text-xs font-semibold text-gray-700 transition hover:border-gray-500 hover:text-gray-950 dark:border-gray-700 dark:text-gray-300"
-                >
-                  Review
-                  <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </section>
+      {run ? (
+        <NewsletterEditorialShortlist
+          key={getRunIdentity(run)}
+          run={run}
+          readOnly={reportReadOnly}
+          onDirtyStateChange={handleShortlistDirtyStateChange}
+        />
       ) : null}
 
       <section className="mt-4 flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-gray-800 xl:flex-row xl:items-center xl:justify-between">
@@ -1195,7 +1584,10 @@ export default function NewsletterMorningReview() {
                   <button
                     key={entry.id}
                     type="button"
-                    onClick={() => setFilter(entry.id)}
+                    onClick={() => {
+                      setFilter(entry.id)
+                      setVisibleIssueLimit(MORNING_REVIEW_PAGE_SIZE)
+                    }}
                     className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition ${
                       filter === entry.id
                         ? 'border-sage-700 text-gray-950 dark:border-sage-400 dark:text-white'
@@ -1264,6 +1656,27 @@ export default function NewsletterMorningReview() {
               No issues match this filter.
             </div>
           )}
+          {filteredItems.length > visibleItems.length ? (
+            <div className="mt-5 flex flex-col items-center gap-2 border-t border-gray-200 pt-5 dark:border-gray-800">
+              <p className="text-xs text-gray-500">
+                Showing {visibleItems.length} of {filteredItems.length} issues
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleIssueLimit((current) =>
+                    Math.min(
+                      filteredItems.length,
+                      current + MORNING_REVIEW_PAGE_SIZE,
+                    ),
+                  )
+                }
+                className="inline-flex h-9 items-center rounded border border-gray-300 bg-white px-4 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Load more issues
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
         <section className="mt-10 border-y border-gray-200 bg-white py-14 text-center dark:border-gray-800 dark:bg-gray-900">

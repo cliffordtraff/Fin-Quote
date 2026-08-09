@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getProvider } from '@/lib/providers'
+import type { ProviderQuote } from '@/lib/providers/types'
 import { getCurrentMarketSession } from '@/lib/market-utils'
-import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache'
+import { isValidMarketSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
+import {
+  leaseQuoteRouteLoad,
+  QuoteRouteLoadTimeoutError,
+  readQuoteRouteCache,
+} from '@/lib/quote-route-cache'
 
-const TTL_MS = 4_000 // 4-second cache per symbol
-const RESPONSE_CACHE_CONTROL = 'public, max-age=5, s-maxage=30, stale-while-revalidate=60'
+const RESPONSE_CACHE_CONTROL =
+  'public, max-age=0, s-maxage=4, stale-while-revalidate=1'
+const ERROR_HEADERS = { 'Cache-Control': 'no-store' } as const
 
 type QuoteResponse = {
   price: number
@@ -14,11 +21,6 @@ type QuoteResponse = {
   marketStatus: 'open' | 'closed' | 'premarket' | 'afterhours'
 }
 
-const getCachedQuote = createKeyedAsyncTTLCache<string, QuoteResponse>(
-  TTL_MS,
-  500
-)
-
 function getMarketStatus(): QuoteResponse['marketStatus'] {
   const session = getCurrentMarketSession()
   if (session === 'regular') return 'open'
@@ -27,40 +29,129 @@ function getMarketStatus(): QuoteResponse['marketStatus'] {
   return 'closed'
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ symbol: string }> }
-) {
-  const rawSymbol = decodeURIComponent((await params).symbol)
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
 
-  if (!/^[A-Z]{1,10}(?:\.[A-Z]{1,4}|=[A-Z])?$/.test(rawSymbol)) {
-    return NextResponse.json({ error: 'Invalid symbol' }, { status: 400 })
+function isCompleteQuoteForSymbol(
+  value: unknown,
+  symbol: string,
+): value is ProviderQuote {
+  if (!value || typeof value !== 'object') return false
+  const quote = value as Record<string, unknown>
+  return (
+    typeof quote.symbol === 'string' &&
+    normalizeMarketSymbol(quote.symbol) === symbol &&
+    typeof quote.name === 'string' &&
+    isFiniteNumber(quote.price) &&
+    quote.price !== 0 &&
+    isFiniteNumber(quote.change) &&
+    isFiniteNumber(quote.changesPercentage) &&
+    (quote.previousClose === undefined || isFiniteNumber(quote.previousClose))
+  )
+}
+
+function toResponse(quote: ProviderQuote): QuoteResponse {
+  return {
+    price: quote.price,
+    change: quote.change,
+    changesPercentage: quote.changesPercentage,
+    previousClose: quote.previousClose ?? null,
+    marketStatus: getMarketStatus(),
+  }
+}
+
+function errorResponse(error: string, status: 400 | 404 | 502 | 504) {
+  return NextResponse.json({ error }, { status, headers: ERROR_HEADERS })
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('The request was aborted.', 'AbortError')
+}
+
+function waitForSharedLoad<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup()
+      reject(abortReason(signal))
+    }
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (value) => {
+        cleanup()
+        resolve(value)
+      },
+      (error) => {
+        cleanup()
+        reject(error)
+      },
+    )
+  })
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ symbol: string }> },
+) {
+  request.signal.throwIfAborted()
+  let decodedSymbol: string
+  try {
+    decodedSymbol = decodeURIComponent((await params).symbol)
+  } catch {
+    return errorResponse('Invalid symbol', 400)
+  }
+  request.signal.throwIfAborted()
+
+  const symbol = normalizeMarketSymbol(decodedSymbol)
+  if (!isValidMarketSymbol(symbol)) {
+    return errorResponse('Invalid symbol', 400)
+  }
+
+  const cached = readQuoteRouteCache(symbol, Date.now())
+  if (cached) {
+    return NextResponse.json(toResponse(cached), {
+      headers: {
+        'Cache-Control': RESPONSE_CACHE_CONTROL,
+        'X-Cache': 'HIT',
+      },
+    })
+  }
+
+  const lease = leaseQuoteRouteLoad(
+    symbol,
+    (signal) => getProvider().getQuote(symbol, { freshness: 'live', signal }),
+    (quote): quote is ProviderQuote => isCompleteQuoteForSymbol(quote, symbol),
+  )
+  if (lease.status === 'capacity') {
+    return NextResponse.json(
+      { error: 'Quote service is temporarily busy. Please retry.' },
+      {
+        status: 503,
+        headers: { ...ERROR_HEADERS, 'Retry-After': '1' },
+      },
+    )
   }
 
   try {
-    const data = await getCachedQuote(rawSymbol, async () => {
-      const provider = getProvider()
-      const q = await provider.getQuote(rawSymbol)
+    const quote = await waitForSharedLoad(lease.promise, request.signal)
+    if (quote === null) return errorResponse('No quote', 404)
+    if (!isCompleteQuoteForSymbol(quote, symbol)) {
+      return errorResponse('Fetch failed', 502)
+    }
 
-      if (!q) {
-        throw new Error('No quote')
-      }
-
-      return {
-        price: q.price,
-        change: q.change,
-        changesPercentage: q.changesPercentage,
-        previousClose: q.previousClose ?? null,
-        marketStatus: getMarketStatus(),
-      }
-    })
-
-    return NextResponse.json(data, {
-      headers: { 'Cache-Control': RESPONSE_CACHE_CONTROL },
+    return NextResponse.json(toResponse(quote), {
+      headers: {
+        'Cache-Control': RESPONSE_CACHE_CONTROL,
+        'X-Cache': 'MISS',
+      },
     })
   } catch (error) {
-    const status = error instanceof Error && error.message === 'No quote' ? 404 : 502
-    const message = status === 404 ? 'No quote' : 'Fetch failed'
-    return NextResponse.json({ error: message }, { status })
+    if (request.signal.aborted) throw abortReason(request.signal)
+    if (error instanceof QuoteRouteLoadTimeoutError) {
+      return errorResponse('Fetch failed', 504)
+    }
+    return errorResponse('Fetch failed', 502)
   }
 }

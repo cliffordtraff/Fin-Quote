@@ -55,6 +55,22 @@ function resolveChartingProxyBaseUrl() {
 
 const nextConfig = {
   serverExternalPackages: ['ws'],
+  // Defense in depth: never let local operator state or credentials enter a
+  // server-function trace, even if a future module performs a broad fs scan.
+  outputFileTracingExcludes: {
+    '*': [
+      '.local-credentials/**/*',
+      '.claude/**/*',
+      '.mcp.json',
+      '.artifacts/**/*',
+      '.newsletter-output/**/*',
+      '.newsletter-drafts/**/*',
+      '.newsletter-chart-library/**/*',
+      '.why-moved-reviews/**/*',
+      'coverage/**/*',
+      'video_lessons/**/*',
+    ],
+  },
   devIndicators: false,
   poweredByHeader: false,
   async headers() {

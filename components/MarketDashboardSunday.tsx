@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import CatalystTimeline from '@/components/CatalystTimeline'
 import ForexBondsTable from '@/components/ForexBondsTable'
 import FuturesTable from '@/components/FuturesTable'
@@ -16,12 +16,14 @@ import { useDashboardPreferences } from '@/components/useDashboardPreferences'
 import type { MarketTrendsBullet } from '@/app/actions/market-trends-responses'
 import type { AllMarketData } from '@/lib/market-types'
 import type { DashboardChartOfTheDayPresentation } from '@/lib/dashboard/chart-of-the-day-presentation'
-import { safeErrorMessage } from '@/lib/safe-logging'
+import type { DashboardSnapshotCaptureTimes } from '@/lib/dashboard-snapshot-provenance'
+import { useDashboardMarketSnapshots } from '@/lib/hooks/use-dashboard-market-snapshots'
 import { getTimezoneAbbr, useTimezone } from '@/lib/timezone-context'
 import { formatTimeInTimezone } from '@/lib/timezone-utils'
 
 interface MarketDashboardSundayProps {
   initialData: AllMarketData
+  initialCaptureTimes: DashboardSnapshotCaptureTimes
   chartOfDayPresentation: DashboardChartOfTheDayPresentation
   initialRenderedAt: string
 }
@@ -32,16 +34,6 @@ const SESSION_LABELS = {
   afterhours: 'After-hours',
   closed: 'Markets closed',
 } as const
-
-async function fetchMarketPatch(
-  endpoint: '/api/market-snapshot/fast' | '/api/market-snapshot/slow',
-): Promise<Partial<AllMarketData>> {
-  const response = await fetch(endpoint, { cache: 'no-store' })
-  if (!response.ok) {
-    throw new Error(`Market snapshot returned ${response.status}`)
-  }
-  return response.json() as Promise<Partial<AllMarketData>>
-}
 
 function SectionHeading({
   title,
@@ -122,90 +114,27 @@ function extractSummary(summary: string) {
 
 export default function MarketDashboardSunday({
   initialData,
+  initialCaptureTimes,
   chartOfDayPresentation,
   initialRenderedAt,
 }: MarketDashboardSundayProps) {
   const { timezone } = useTimezone()
   const { preferences, setPreference } = useDashboardPreferences()
-  const [data, setData] = useState(initialData)
-  const [lastUpdated, setLastUpdated] = useState(() => new Date(initialRenderedAt))
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const {
+    data,
+    freshness,
+    clockAt,
+    refreshing,
+    refreshError,
+    refreshDashboard,
+  } = useDashboardMarketSnapshots(
+    initialData,
+    initialCaptureTimes,
+    initialRenderedAt,
+  )
   const marketSummary = initialData.marketSummary || ''
   const responsesApiBullets: MarketTrendsBullet[] =
     initialData.marketTrendsBullets || []
-
-  useEffect(() => {
-    let disposed = false
-
-    const refreshFastData = async () => {
-      if (document.visibilityState !== 'visible') return
-
-      try {
-        const patch = await fetchMarketPatch('/api/market-snapshot/fast')
-        if (!disposed) {
-          setData((current) => ({ ...current, ...patch }))
-          setLastUpdated(new Date())
-        }
-      } catch (error) {
-        console.error(
-          'Failed to refresh market snapshot:',
-          safeErrorMessage(error),
-        )
-      }
-    }
-
-    const interval = window.setInterval(() => {
-      void refreshFastData()
-    }, 60_000)
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshFastData()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibility)
-    return () => {
-      disposed = true
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', handleVisibility)
-    }
-  }, [])
-
-  async function refreshDashboard() {
-    setRefreshing(true)
-    setRefreshError(null)
-
-    const [fastResult, slowResult] = await Promise.allSettled([
-      fetchMarketPatch('/api/market-snapshot/fast'),
-      fetchMarketPatch('/api/market-snapshot/slow'),
-    ])
-
-    const patches = [fastResult, slowResult].flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : [],
-    )
-
-    if (patches.length > 0) {
-      setData((current) =>
-        patches.reduce<AllMarketData>(
-          (next, patch) => ({ ...next, ...patch }),
-          current,
-        ),
-      )
-      setLastUpdated(new Date())
-    }
-
-    if (patches.length < 2) {
-      setRefreshError(
-        patches.length === 0
-          ? 'Market data could not be refreshed.'
-          : 'Core prices refreshed; some slower sections remain on their previous snapshot.',
-      )
-    }
-
-    setRefreshing(false)
-  }
 
   const { headline: summaryHeadline, body: summaryBody } = useMemo(
     () => extractSummary(marketSummary),
@@ -230,18 +159,27 @@ export default function MarketDashboardSunday({
     globalFuturesQuotes,
   } = data
 
+  const clockDate = new Date(clockAt)
   const dateLabel = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
     timeZone: timezone,
-  }).format(lastUpdated)
-  const updatedTime = `${formatTimeInTimezone(lastUpdated, timezone, {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: undefined,
-  })} ${getTimezoneAbbr(timezone)}`
+  }).format(clockDate)
+  const formatCapturedTime = (capturedAt: string) =>
+    `${formatTimeInTimezone(new Date(capturedAt), timezone, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: undefined,
+    })} ${getTimezoneAbbr(timezone)}`
+  const fastUpdatedTime = formatCapturedTime(freshness.fastCapturedAt)
+  const slowUpdatedTime = formatCapturedTime(freshness.slowCapturedAt)
+  const globalLoadedTime = formatCapturedTime(freshness.globalLoadedAt)
+  const fastPartialLabel =
+    freshness.fastDegradedSections.length > 0 ? ' · partial' : ''
+  const slowPartialLabel =
+    freshness.slowDegradedSections.length > 0 ? ' · partial' : ''
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
@@ -270,7 +208,7 @@ export default function MarketDashboardSunday({
 
           <div className="flex shrink-0 items-center gap-3">
             <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
-              Updated {updatedTime}
+              Prices {fastUpdatedTime}{fastPartialLabel} · Slow data {slowUpdatedTime}{slowPartialLabel}
             </span>
             <button
               type="button"
@@ -296,7 +234,7 @@ export default function MarketDashboardSunday({
       <section aria-labelledby="market-tape-heading" className="mt-7">
         <SectionHeading
           title="Market Tape"
-          meta={`${sparklineIndices.length} markets · Quotes ${updatedTime}`}
+          meta={`${sparklineIndices.length} markets · Quotes ${fastUpdatedTime}${fastPartialLabel}`}
         />
         <div id="market-tape-heading" className="sr-only">
           Major market charts
@@ -309,7 +247,10 @@ export default function MarketDashboardSunday({
       </section>
 
       <section aria-labelledby="price-action-heading" className="mt-8">
-        <SectionHeading title="Price Action" meta={`Quotes ${updatedTime}`} />
+        <SectionHeading
+          title="Price Action"
+          meta={`Quotes ${fastUpdatedTime}${fastPartialLabel}`}
+        />
         <div id="price-action-heading" className="sr-only">
           Chart and market movers
         </div>
@@ -323,7 +264,10 @@ export default function MarketDashboardSunday({
       </section>
 
       <section aria-labelledby="market-context-heading" className="mt-8">
-        <SectionHeading title="Market Context" meta="AI context · cached for consistency" />
+        <SectionHeading
+          title="Market Context"
+          meta={`AI context cached · Watchlist ${fastUpdatedTime}${fastPartialLabel}`}
+        />
         <div id="market-context-heading" className="sr-only">
           Market context and watchlist
         </div>
@@ -348,7 +292,7 @@ export default function MarketDashboardSunday({
           title="Cross-Asset"
           meta={(
             <div className="flex items-center gap-3">
-              <span>Snapshot {updatedTime}</span>
+              <span>Snapshot {slowUpdatedTime}{slowPartialLabel}</span>
               <SectionControl
                 expanded={preferences.crossAssetExpanded}
                 onClick={() => setPreference('crossAssetExpanded', !preferences.crossAssetExpanded)}
@@ -379,7 +323,10 @@ export default function MarketDashboardSunday({
       </section>
 
       <section aria-labelledby="catalysts-heading" className="mt-8">
-        <SectionHeading title="Catalysts" meta="Calendar and news · rolling feed" />
+        <SectionHeading
+          title="Catalysts"
+          meta={`Calendar and news · ${slowUpdatedTime}${slowPartialLabel}`}
+        />
         <div id="catalysts-heading" className="sr-only">
           Economic calendar, earnings, and headlines
         </div>
@@ -388,7 +335,7 @@ export default function MarketDashboardSunday({
             economicEvents={economicEvents}
             earnings={earnings}
             news={marketNews}
-            referenceTime={lastUpdated.toISOString()}
+            referenceTime={clockAt}
           />
         ) : (
           <DataUnavailable label="Catalyst" />
@@ -400,7 +347,9 @@ export default function MarketDashboardSunday({
           title="Flows and Global Sessions"
           meta={(
             <div className="flex items-center gap-3">
-              <span>Filings and quotes · {updatedTime}</span>
+              <span>
+                Filings {slowUpdatedTime}{slowPartialLabel} · Global quotes loaded {globalLoadedTime}
+              </span>
               <SectionControl
                 expanded={preferences.flowsExpanded}
                 compactLabel="Collapse"

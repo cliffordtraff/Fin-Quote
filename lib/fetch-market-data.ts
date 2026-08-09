@@ -1,21 +1,49 @@
 'use server'
 
 import { unstable_cache } from 'next/cache'
-import { getAaplMarketData, getNasdaqMarketData, getDowMarketData, getRussellMarketData, getESFuturesMarketData } from '@/app/actions/market-data'
-import { getFuturesWithYTDSparkline, getFuturesWithHistory } from '@/app/actions/futures'
-import { getAllSessionMovers } from '@/app/actions/market-movers'
-import { getStocksData } from '@/app/actions/stocks'
+import {
+  getAaplMarketData,
+  getNasdaqMarketData,
+  getDowMarketData,
+  getRussellMarketData,
+  getESFuturesMarketData,
+  getESFuturesMarketDataWithStatus,
+} from '@/app/actions/market-data'
+import {
+  getFuturesWithYTDSparkline,
+  getFuturesWithYTDSparklineWithStatus,
+  getFuturesWithHistory,
+  getFuturesWithHistoryWithStatus,
+} from '@/app/actions/futures'
+import {
+  getAllSessionMovers,
+  getAllSessionMoversWithStatus,
+  type AllSessionMoversResult,
+} from '@/app/actions/market-movers'
+import { getStocksData, getStocksDataWithStatus } from '@/app/actions/stocks'
 import { getSectorPerformance } from '@/app/actions/sectors'
 import { getVIXData } from '@/app/actions/vix'
 import { getEconomicEvents } from '@/app/actions/economic-calendar'
-import { getMarketNews } from '@/app/actions/get-market-news'
-import { getSparklineIndicesData } from '@/app/actions/sparkline-indices'
+import { getMarketNews, getMarketNewsWithStatus } from '@/app/actions/get-market-news'
+import {
+  getSparklineIndicesData,
+  getSparklineIndicesDataWithStatus,
+} from '@/app/actions/sparkline-indices'
 import { getMostActiveData } from '@/app/actions/most-active'
 import { getTrendingStocksData } from '@/app/actions/trending-stocks'
 import { getSP500Gainers, getSP500Losers } from '@/app/actions/sp500-movers'
-import { fetchEarningsCalendar } from '@/app/actions/earnings-calendar'
-import { getSP500GainerSparklines } from '@/app/actions/sp500-gainer-sparklines'
-import { getSP500LoserSparklines } from '@/app/actions/sp500-loser-sparklines'
+import {
+  fetchEarningsCalendar,
+  fetchEarningsCalendarWithStatus,
+} from '@/app/actions/earnings-calendar'
+import {
+  getSP500GainerSparklines,
+  getSP500GainerSparklinesWithStatus,
+} from '@/app/actions/sp500-gainer-sparklines'
+import {
+  getSP500LoserSparklines,
+  getSP500LoserSparklinesWithStatus,
+} from '@/app/actions/sp500-loser-sparklines'
 import { getStockSparkline } from '@/app/actions/stock-sparkline'
 import { getForexBondsData } from '@/app/actions/forex-bonds'
 import { getLargestInsiderTrades } from '@/app/actions/insider-trading'
@@ -23,122 +51,257 @@ import { getGlobalIndexQuotes, getFuturesQuotes } from '@/app/actions/global-ind
 import { getCachedMarketSummary } from '@/app/actions/market-summary'
 import { getCachedMarketTrendsBullets } from '@/app/actions/market-trends-responses'
 import { createAsyncTTLCache } from '@/lib/async-ttl-cache'
+import type { DashboardSnapshotCaptureTimes } from '@/lib/dashboard-snapshot-provenance'
+import {
+  normalizeFastFailedSections,
+  type FastMarketDataPatch,
+  type FastMarketDataSection,
+  type FastMarketDataSnapshot,
+} from '@/lib/fast-snapshot-types'
 import type { AllMarketData, MarketData, FutureDataWithSparkline, FutureMarketData } from './market-types'
+import type {
+  SlowMarketDataSection,
+  SlowMarketDataSnapshot,
+} from './slow-snapshot-types'
 
-const getCachedFastMarketData = createAsyncTTLCache<Partial<AllMarketData>>(15_000)
-const getCachedSlowMarketData = createAsyncTTLCache<Partial<AllMarketData>>(5 * 60_000)
-const getCachedAllMarketData = createAsyncTTLCache<AllMarketData>(60_000)
+const getCachedLiveMoversMarketData = createAsyncTTLCache<LiveMoversMarketData>(15_000)
 
-/**
- * Fetches all market data in parallel.
- * Can be called from:
- * 1. Server component (initial SSR load)
- * 2. Client component (polling for updates)
- *
- * Each section that fails returns null/empty, others continue to display.
- */
-async function loadFastMarketData(): Promise<Partial<AllMarketData>> {
-  const [
-    spxResult,
-    nasdaqResult,
-    dowResult,
-    russellResult,
-    gainersResult,
-    losersResult,
-    stocksResult,
-    vixResult,
-    mostActiveResult,
-    trendingResult,
-    sp500GainersResult,
-    sp500LosersResult,
-    commoditiesResult
-  ] = await Promise.all([
-    getAaplMarketData(),
-    getNasdaqMarketData(),
-    getDowMarketData(),
-    getRussellMarketData(),
+export interface AllMarketDataEnvelope {
+  data: AllMarketData
+  captureTimes: DashboardSnapshotCaptureTimes
+}
+
+const getCachedAllMarketData = createAsyncTTLCache<AllMarketDataEnvelope>(60_000)
+
+export interface LiveMoversMarketData {
+  gainers: AllSessionMoversResult
+  losers: AllSessionMoversResult
+}
+
+async function loadLiveMoversMarketData(): Promise<LiveMoversMarketData> {
+  const [gainers, losers] = await Promise.all([
     getAllSessionMovers('gainers'),
     getAllSessionMovers('losers'),
-    getStocksData(),
-    getVIXData(),
-    getMostActiveData(),
-    getTrendingStocksData(),
-    getSP500Gainers(),
-    getSP500Losers(),
-    getSparklineIndicesData(),
   ])
 
-  return {
-    spx: 'error' in spxResult ? null : spxResult as MarketData,
-    nasdaq: 'error' in nasdaqResult ? null : nasdaqResult as MarketData,
-    dow: 'error' in dowResult ? null : dowResult as MarketData,
-    russell: 'error' in russellResult ? null : russellResult as MarketData,
-    gainers: gainersResult,
-    losers: losersResult,
-    stocks: 'error' in stocksResult ? [] : stocksResult.stocks,
-    vix: 'error' in vixResult || !('vix' in vixResult) ? null : vixResult.vix,
-    mostActive: 'error' in mostActiveResult || !('mostActive' in mostActiveResult) ? [] : mostActiveResult.mostActive || [],
-    trending: 'error' in trendingResult || !('trending' in trendingResult) ? [] : trendingResult.trending || [],
-    sp500Gainers: 'error' in sp500GainersResult || !('gainers' in sp500GainersResult) ? [] : sp500GainersResult.gainers || [],
-    sp500Losers: 'error' in sp500LosersResult || !('losers' in sp500LosersResult) ? [] : sp500LosersResult.losers || [],
-    sparklineIndices: 'error' in commoditiesResult || !('indices' in commoditiesResult) ? [] : commoditiesResult.indices || [],
+  return { gainers, losers }
+}
+
+/**
+ * Minimal snapshot for the live dashboard's mover poll.
+ *
+ * Keep this separate from the broader fast snapshot: the live surface only
+ * consumes gainers and losers, so loading the other fast-dashboard sections
+ * wastes provider calls and response bytes on every poll.
+ */
+export async function fetchLiveMoversMarketData(): Promise<LiveMoversMarketData> {
+  return getCachedLiveMoversMarketData(loadLiveMoversMarketData)
+}
+
+interface FastSectionLoad {
+  data: FastMarketDataPatch
+  failedSections: FastMarketDataSection[]
+}
+
+async function loadFastSection<T>(
+  section: FastMarketDataSection,
+  loader: () => Promise<T>,
+  project: (value: T) => FastMarketDataPatch,
+): Promise<FastSectionLoad> {
+  try {
+    const value = await loader()
+    if (hasExplicitError(value)) {
+      return { data: {}, failedSections: [section] }
+    }
+    return { data: project(value), failedSections: [] }
+  } catch {
+    return { data: {}, failedSections: [section] }
   }
 }
 
-export async function fetchFastMarketData(): Promise<Partial<AllMarketData>> {
-  return getCachedFastMarketData(loadFastMarketData)
-}
-
-async function loadSlowMarketData(): Promise<Partial<AllMarketData>> {
-  const [
-    esFuturesResult,
-    futuresResult,
-    futuresWithHistoryResult,
-    sectorsResult,
-    economicResult,
-    newsResult,
-    earningsResult,
-    sp500GainerSparklinesResult,
-    sp500LoserSparklinesResult,
-    metaSparklineResult,
-    xlbSparklineResult,
-    forexBondsResult,
-    largeInsiderTradesResult,
-  ] = await Promise.all([
-    getESFuturesMarketData(),
-    getFuturesWithYTDSparkline(),
-    getFuturesWithHistory(),
-    getSectorPerformance(),
-    getEconomicEvents(),
-    getMarketNews(6),
-    fetchEarningsCalendar(),
-    getSP500GainerSparklines(),
-    getSP500LoserSparklines(),
-    getStockSparkline('META'),
-    getStockSparkline('XLB'),
-    getForexBondsData(),
-    getLargestInsiderTrades(4, 7, { saleLimit: 4, buyLimit: 3 }),
+/**
+ * Minimal, provenance-aware patch for the market overview's one-minute poll.
+ * Failed fields are absent, while successful values (including empty arrays)
+ * remain explicit and may intentionally replace the prior client value.
+ */
+export async function fetchFastMarketData(
+  signal?: AbortSignal,
+): Promise<FastMarketDataSnapshot> {
+  const sections = await Promise.all([
+    loadFastSection(
+      'gainers',
+      () => getAllSessionMoversWithStatus('gainers', signal),
+      (value) => ({ gainers: value as AllSessionMoversResult }),
+    ),
+    loadFastSection(
+      'losers',
+      () => getAllSessionMoversWithStatus('losers', signal),
+      (value) => ({ losers: value as AllSessionMoversResult }),
+    ),
+    loadFastSection(
+      'stocks',
+      () => getStocksDataWithStatus(signal),
+      (value) => ({ stocks: 'stocks' in value ? value.stocks : [] }),
+    ),
+    loadFastSection(
+      'sparklineIndices',
+      () => getSparklineIndicesDataWithStatus(signal),
+      (value) => ({
+        sparklineIndices: 'indices' in value ? value.indices : [],
+      }),
+    ),
   ])
 
   return {
-    esFutures: 'error' in esFuturesResult ? null : esFuturesResult as MarketData,
-    futures: 'error' in futuresResult ? [] : (futuresResult.futures as FutureDataWithSparkline[]),
-    futuresWithHistory: 'error' in futuresWithHistoryResult ? [] : (futuresWithHistoryResult.futuresWithHistory as FutureMarketData[]),
-    sectors: 'error' in sectorsResult || !('sectors' in sectorsResult) ? [] : sectorsResult.sectors || [],
-    economicEvents: 'error' in economicResult || !('events' in economicResult) ? [] : economicResult.events || [],
-    marketNews: newsResult || [],
-    earnings: earningsResult?.earnings || [],
-    sp500GainerSparklines: 'error' in sp500GainerSparklinesResult || !('sparklines' in sp500GainerSparklinesResult) ? [] : sp500GainerSparklinesResult.sparklines || [],
-    sp500LoserSparklines: 'error' in sp500LoserSparklinesResult || !('sparklines' in sp500LoserSparklinesResult) ? [] : sp500LoserSparklinesResult.sparklines || [],
-    metaSparkline: 'error' in metaSparklineResult || !('sparkline' in metaSparklineResult) ? null : metaSparklineResult.sparkline ?? null,
-    xlbSparkline: 'error' in xlbSparklineResult || !('sparkline' in xlbSparklineResult) ? null : xlbSparklineResult.sparkline ?? null,
-    forexBonds: 'error' in forexBondsResult || !('forexBonds' in forexBondsResult) ? [] : forexBondsResult.forexBonds || [],
-    largeInsiderTrades: 'error' in largeInsiderTradesResult || !('trades' in largeInsiderTradesResult) ? [] : largeInsiderTradesResult.trades,
+    data: Object.assign({}, ...sections.map((section) => section.data)),
+    failedSections: normalizeFastFailedSections(
+      sections.flatMap((section) => section.failedSections),
+    ),
+    capturedAt: new Date().toISOString(),
   }
 }
 
-export async function fetchSlowMarketData(): Promise<Partial<AllMarketData>> {
-  return getCachedSlowMarketData(loadSlowMarketData)
+interface SlowSectionLoad {
+  data: Partial<AllMarketData>
+  failedSections: SlowMarketDataSection[]
+}
+
+function hasExplicitError(value: unknown): boolean {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as { error?: unknown }).error === 'string',
+  )
+}
+
+async function loadSlowSection<T>(
+  sections: readonly SlowMarketDataSection[],
+  loader: () => Promise<T>,
+  project: (value: T) => Partial<AllMarketData>,
+  failureData: Partial<AllMarketData>,
+): Promise<SlowSectionLoad> {
+  try {
+    const value = await loader()
+    if (hasExplicitError(value)) {
+      return { data: failureData, failedSections: [...sections] }
+    }
+    return { data: project(value), failedSections: [] }
+  } catch {
+    return { data: failureData, failedSections: [...sections] }
+  }
+}
+
+async function loadSlowMarketData(): Promise<SlowMarketDataSnapshot> {
+  const sections = await Promise.all([
+    loadSlowSection(
+      ['esFutures'],
+      getESFuturesMarketDataWithStatus,
+      (value) => ({ esFutures: value as MarketData }),
+      { esFutures: null },
+    ),
+    loadSlowSection(
+      ['futures'],
+      getFuturesWithYTDSparklineWithStatus,
+      (value) => ({
+        futures: 'futures' in value
+          ? value.futures as FutureDataWithSparkline[]
+          : [],
+      }),
+      { futures: [] },
+    ),
+    loadSlowSection(
+      ['futuresWithHistory'],
+      getFuturesWithHistoryWithStatus,
+      (value) => ({
+        futuresWithHistory: 'futuresWithHistory' in value
+          ? value.futuresWithHistory as FutureMarketData[]
+          : [],
+      }),
+      { futuresWithHistory: [] },
+    ),
+    loadSlowSection(
+      ['sectors'],
+      getSectorPerformance,
+      (value) => ({
+        sectors: 'sectors' in value ? value.sectors || [] : [],
+      }),
+      { sectors: [] },
+    ),
+    loadSlowSection(
+      ['economicEvents'],
+      getEconomicEvents,
+      (value) => ({
+        economicEvents: 'events' in value ? value.events || [] : [],
+      }),
+      { economicEvents: [] },
+    ),
+    loadSlowSection(
+      ['marketNews'],
+      () => getMarketNewsWithStatus(6),
+      (value) => ({ marketNews: 'news' in value ? value.news : [] }),
+      { marketNews: [] },
+    ),
+    loadSlowSection(
+      ['earnings', 'earningsTotalCount'],
+      fetchEarningsCalendarWithStatus,
+      (value) => ({
+        earnings: 'earnings' in value ? value.earnings || [] : [],
+        earningsTotalCount: 'earnings' in value ? value.totalCount || 0 : 0,
+      }),
+      { earnings: [], earningsTotalCount: 0 },
+    ),
+    loadSlowSection(
+      ['sp500GainerSparklines'],
+      getSP500GainerSparklinesWithStatus,
+      (value) => ({ sp500GainerSparklines: value.sparklines || [] }),
+      { sp500GainerSparklines: [] },
+    ),
+    loadSlowSection(
+      ['sp500LoserSparklines'],
+      getSP500LoserSparklinesWithStatus,
+      (value) => ({ sp500LoserSparklines: value.sparklines || [] }),
+      { sp500LoserSparklines: [] },
+    ),
+    loadSlowSection(
+      ['metaSparkline'],
+      () => getStockSparkline('META'),
+      (value) => ({ metaSparkline: value.sparkline ?? null }),
+      { metaSparkline: null },
+    ),
+    loadSlowSection(
+      ['xlbSparkline'],
+      () => getStockSparkline('XLB'),
+      (value) => ({ xlbSparkline: value.sparkline ?? null }),
+      { xlbSparkline: null },
+    ),
+    loadSlowSection(
+      ['forexBonds'],
+      () => getForexBondsData(),
+      (value) => ({
+        forexBonds: 'forexBonds' in value ? value.forexBonds : [],
+      }),
+      { forexBonds: [] },
+    ),
+    loadSlowSection(
+      ['largeInsiderTrades'],
+      () => getLargestInsiderTrades(4, 7, { saleLimit: 4, buyLimit: 3 }),
+      (value) => ({
+        largeInsiderTrades: 'trades' in value ? value.trades : [],
+      }),
+      { largeInsiderTrades: [] },
+    ),
+  ])
+
+  return {
+    data: Object.assign({}, ...sections.map((section) => section.data)),
+    failedSections: sections.flatMap((section) => section.failedSections),
+    capturedAt: new Date().toISOString(),
+  }
+}
+
+export async function fetchSlowMarketData(): Promise<SlowMarketDataSnapshot> {
+  return loadSlowMarketData()
 }
 
 /**
@@ -250,12 +413,33 @@ async function loadAllMarketData(): Promise<AllMarketData> {
   }
 }
 
+async function loadAllMarketDataEnvelope(): Promise<AllMarketDataEnvelope> {
+  const data = await loadAllMarketData()
+  const capturedAt = new Date().toISOString()
+
+  return {
+    data,
+    captureTimes: {
+      fastCapturedAt: capturedAt,
+      slowCapturedAt: capturedAt,
+      globalLoadedAt: capturedAt,
+    },
+  }
+}
+
 const getPersistedAllMarketData = unstable_cache(
-  loadAllMarketData,
-  ['all-market-data-v1'],
+  loadAllMarketDataEnvelope,
+  ['all-market-data-envelope-v2'],
   { revalidate: 60 }
 )
 
-export async function fetchAllMarketData(): Promise<AllMarketData> {
-  return getCachedAllMarketData(getPersistedAllMarketData)
+export async function fetchAllMarketData(): Promise<AllMarketData>
+export async function fetchAllMarketData(
+  options: { withProvenance: true },
+): Promise<AllMarketDataEnvelope>
+export async function fetchAllMarketData(
+  options?: { withProvenance: true },
+): Promise<AllMarketData | AllMarketDataEnvelope> {
+  const envelope = await getCachedAllMarketData(getPersistedAllMarketData)
+  return options?.withProvenance ? envelope : envelope.data
 }

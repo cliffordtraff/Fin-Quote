@@ -8,6 +8,10 @@ import {
 } from '@/lib/calendar-date'
 import { createPublicClient } from '@/lib/supabase/public'
 import {
+  getMarketSymbolLookupAliases,
+  normalizeMarketSymbol,
+} from '@/lib/market-symbol'
+import {
   normalizeInsiderTradeUnitPrice,
   rankLargeInsiderTrades,
   type LargeInsiderTrade,
@@ -123,7 +127,8 @@ export async function getInsiderTradesBySymbol(
     return { error: 'Symbol is required' }
   }
 
-  const normalizedSymbol = symbol.toUpperCase()
+  const normalizedSymbol = normalizeMarketSymbol(symbol)
+  const lookupSymbols = getMarketSymbolLookupAliases(normalizedSymbol)
   const normalizedLimit = Math.min(Math.max(limit, 1), 200)
   const todayStr = getEasternCalendarDate()
 
@@ -136,7 +141,7 @@ export async function getInsiderTradesBySymbol(
         const { data, error } = await supabase
           .from('insider_transactions')
           .select('*')
-          .eq('symbol', normalizedSymbol)
+          .in('symbol', lookupSymbols)
           .lte('transaction_date', todayStr)
           .in('form_type', INSIDER_TRANSACTION_FORM_TYPES)
           .order('transaction_date', { ascending: false })
@@ -620,13 +625,18 @@ async function fetchLiveFmpLargeTradeCandidates(
       )
 
       if (!response.ok) {
-        console.warn('FMP insider trade fallback failed:', response.status, response.statusText)
-        break
+        throw new Error(
+          `FMP insider trade fallback failed with status ${response.status}`,
+        )
       }
 
       const data: unknown = await response.json()
 
-      if (!Array.isArray(data) || data.length === 0) {
+      if (!Array.isArray(data)) {
+        throw new Error('FMP returned an invalid insider trade payload')
+      }
+
+      if (data.length === 0) {
         break
       }
 
@@ -653,7 +663,7 @@ async function fetchLiveFmpLargeTradeCandidates(
       }
     } catch (error) {
       console.warn('FMP insider trade fallback threw:', formatErrorForLog(error))
-      break
+      throw error
     }
   }
 
@@ -697,7 +707,10 @@ async function loadLargestInsiderTrades(
       console.warn('Largest insider trades live FMP fetch failed:', formatErrorForLog(liveFmpResult.reason))
     }
 
-    if (databaseCandidates.length === 0 && liveFmpCandidates.length === 0) {
+    if (
+      databaseResult.status === 'rejected' ||
+      liveFmpResult.status === 'rejected'
+    ) {
       return { error: 'Failed to load insider trading data' }
     }
 

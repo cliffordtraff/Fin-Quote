@@ -9,6 +9,7 @@ import type {
   PriceNewsletterChartSpec,
 } from './types'
 import { normalizeNewsletterSubject } from './delivery-quality'
+import { isNewsletterChartLibraryEvidenceCurrent } from './chart-provenance'
 
 interface DailyDraftInput {
   runId: string
@@ -212,7 +213,11 @@ export function buildDailyNewsletterDraft(
     keyFact,
     `<p><strong>What to watch:</strong> ${escapeHtml(watchText(candidate.reasonType, ticker))}</p>`,
   ].filter(Boolean).join('')
-  const chartSpec = input.chart?.chartSpec ?? fallbackChartSpec(ticker)
+  const chart =
+    input.chart && isNewsletterChartLibraryEvidenceCurrent(input.chart)
+      ? input.chart
+      : null
+  const chartSpec = chart?.chartSpec ?? fallbackChartSpec(ticker)
 
   return {
     ticker,
@@ -221,9 +226,9 @@ export function buildDailyNewsletterDraft(
     source: {
       type: 'daily_batch',
       dailyBatch: toSource(input),
-      attachedChartIds: input.chart ? [input.chart.id] : [],
+      attachedChartIds: chart ? [chart.id] : [],
       automatedAt: generatedAt,
-      automationStatus: input.chart ? 'complete' : 'needs_chart',
+      automationStatus: chart ? 'complete' : 'needs_chart',
       automationWarning: input.warning?.trim() || undefined,
     },
     generatedAt,
@@ -270,12 +275,25 @@ export function buildDailyNewsletterDraft(
           'Selected from the full WIIM universe using freshness, catalyst strength, move size, novelty, and source depth.',
         heading: truncate(candidate.headline, 150),
         body,
-        chartImageUrl:
-          input.chart?.chartImageUrl ?? fallbackChartImage(ticker),
+        chartImageUrl: chart?.chartImageUrl ?? fallbackChartImage(ticker),
         chartAlt: `${ticker} one-month price chart`,
-        chartExportUrl: input.chart?.chartExportUrl ?? '',
+        chartExportUrl: chart?.chartExportUrl ?? '',
         chartSpec,
-        chartNeedsRegeneration: !input.chart,
+        chartProvenance: chart
+          ? {
+              version: 1,
+              source: 'chart_library',
+              libraryItemId: chart.id,
+              capturedAt: chart.capturedAt,
+              rendererContract: chart.rendererContract,
+              imageUrl: chart.chartImageUrl,
+              imageSha256: chart.imageSha256,
+              interactiveUrl: chart.chartExportUrl,
+              scene: chart.chartSpec,
+              sceneSha256: chart.sceneHash,
+            }
+          : undefined,
+        chartNeedsRegeneration: !chart,
         caption: `${ticker} price action through ${formatMarketDate(input.marketDate)}. Source set: WIIM ranking, market data, and ${source?.kind ?? 'current catalyst'} evidence.`,
         ctaText: source?.url ? 'View cited source' : undefined,
         ctaUrl: source?.url,

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }))
 
-vi.mock('@/lib/newsletter/daily-automation', () => ({
+vi.mock('@/lib/newsletter/automation-clock', () => ({
   getNewsletterAutomationClock: mocks.getClock,
 }))
 
@@ -136,6 +136,42 @@ describe('refresh market context cron route', () => {
       reason: `Dashboard commentary is already complete for ${tradingClock.marketDate}`,
       attempted: [],
       complete: true,
+    })
+  })
+
+  it('returns 503 when any durable commentary component remains incomplete', async () => {
+    mocks.refresh.mockResolvedValue({
+      marketDate: tradingClock.marketDate,
+      attempted: ['marketTrends'],
+      skippedComponents: ['marketSummary', 'calendar'],
+      complete: false,
+      marketSummary: {
+        ready: true,
+        available: true,
+        refreshed: false,
+        error: null,
+      },
+      marketTrends: {
+        ready: false,
+        bulletCount: 3,
+        refreshed: false,
+        error: 'No complete market-trends cache row was persisted',
+      },
+      calendar: {
+        ready: true,
+        economicAvailable: true,
+        earningsAvailable: true,
+        refreshed: false,
+        error: null,
+      },
+    })
+
+    const response = await GET(request({ authorized: true }))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({
+      complete: false,
+      marketTrends: { ready: false },
     })
   })
 

@@ -1,6 +1,7 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import type { ProviderQuote, QuoteRequestOptions } from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface SP500MoverData {
@@ -57,17 +58,30 @@ const SP500_SYMBOLS = [
   'GNRC', 'BIO', 'INCY', 'UHS', 'ETSY', 'FOXA', 'FOX', 'NWL', 'MTCH', 'RL'
 ]
 
-/**
- * Fetch S&P 500 gainers - top performers by percentage change
- */
-export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; error?: string }> {
+function isUsableMoverQuote(quote: ProviderQuote): boolean {
+  return Boolean(quote.symbol) &&
+    Number.isFinite(quote.price) &&
+    quote.price > 0 &&
+    Number.isFinite(quote.change) &&
+    Number.isFinite(quote.changesPercentage)
+}
+
+async function loadSP500Gainers(
+  quoteOptions: QuoteRequestOptions = {},
+): Promise<{ gainers?: SP500MoverData[]; error?: string }> {
   try {
     const provider = getProvider()
-    const allQuotes = await provider.getQuotes(SP500_SYMBOLS)
+    const allQuotes = quoteOptions.failureMode || quoteOptions.freshness || quoteOptions.signal
+      ? await provider.getQuotes(SP500_SYMBOLS, quoteOptions)
+      : await provider.getQuotes(SP500_SYMBOLS)
+    const usableQuotes = allQuotes.filter(isUsableMoverQuote)
+    if (quoteOptions.failureMode === 'throw' && usableQuotes.length === 0) {
+      throw new Error('Provider returned no usable S&P 500 quotes')
+    }
 
     // Sort by percentage change (descending) and take top 15
-    const gainers = allQuotes
-      .filter((q) => q.changesPercentage > 0 && q.price > 0)
+    const gainers = usableQuotes
+      .filter((q) => q.changesPercentage > 0)
       .sort((a, b) => b.changesPercentage - a.changesPercentage)
       .slice(0, 15)
       .map((q) => ({
@@ -85,17 +99,35 @@ export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; e
   }
 }
 
+/** Fetch S&P 500 gainers with the provider's legacy empty fallback. */
+export async function getSP500Gainers(): Promise<{ gainers?: SP500MoverData[]; error?: string }> {
+  return loadSP500Gainers()
+}
+
+/** Fetch S&P 500 gainers while preserving transient provider failures. */
+export async function getSP500GainersWithStatus(): Promise<{ gainers?: SP500MoverData[]; error?: string }> {
+  return loadSP500Gainers({ failureMode: 'throw' })
+}
+
 /**
  * Fetch S&P 500 losers - worst performers by percentage change
  */
-export async function getSP500Losers(): Promise<{ losers?: SP500MoverData[]; error?: string }> {
+async function loadSP500Losers(
+  quoteOptions: QuoteRequestOptions = {},
+): Promise<{ losers?: SP500MoverData[]; error?: string }> {
   try {
     const provider = getProvider()
-    const allQuotes = await provider.getQuotes(SP500_SYMBOLS)
+    const allQuotes = quoteOptions.failureMode || quoteOptions.freshness || quoteOptions.signal
+      ? await provider.getQuotes(SP500_SYMBOLS, quoteOptions)
+      : await provider.getQuotes(SP500_SYMBOLS)
+    const usableQuotes = allQuotes.filter(isUsableMoverQuote)
+    if (quoteOptions.failureMode === 'throw' && usableQuotes.length === 0) {
+      throw new Error('Provider returned no usable S&P 500 quotes')
+    }
 
     // Sort by percentage change (ascending) and take bottom 15
-    const losers = allQuotes
-      .filter((q) => q.changesPercentage < 0 && q.price > 0)
+    const losers = usableQuotes
+      .filter((q) => q.changesPercentage < 0)
       .sort((a, b) => a.changesPercentage - b.changesPercentage)
       .slice(0, 15)
       .map((q) => ({
@@ -111,4 +143,14 @@ export async function getSP500Losers(): Promise<{ losers?: SP500MoverData[]; err
     console.error('Error fetching S&P 500 losers:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 losers' }
   }
+}
+
+/** Fetch S&P 500 losers with the provider's legacy empty fallback. */
+export async function getSP500Losers(): Promise<{ losers?: SP500MoverData[]; error?: string }> {
+  return loadSP500Losers()
+}
+
+/** Fetch S&P 500 losers while preserving transient provider failures. */
+export async function getSP500LosersWithStatus(): Promise<{ losers?: SP500MoverData[]; error?: string }> {
+  return loadSP500Losers({ failureMode: 'throw' })
 }

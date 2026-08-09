@@ -6,6 +6,7 @@ import {
   NewsletterDraftConflictError,
   NewsletterDraftNotFoundError,
   NewsletterPublishedDraftImmutableError,
+  getNewsletterDraft,
   regenerateNewsletterDraft,
 } from '@/lib/newsletter/drafts'
 import {
@@ -69,6 +70,29 @@ export async function POST(
   } catch (error) {
     if (error instanceof Error && error.message === 'expectedUpdatedAt is required') {
       return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    if (
+      error instanceof NewsletterDraftConflictError ||
+      error instanceof NewsletterPublishedDraftImmutableError
+    ) {
+      try {
+        const { id } = await params
+        const { scope } = await resolveNewsletterDraftScope(request)
+        const latest = await getNewsletterDraft(scope, id)
+        return NextResponse.json(
+          {
+            code: 'draft_conflict',
+            error: error.message,
+            latest,
+          },
+          { status: 409 },
+        )
+      } catch {
+        return NextResponse.json(
+          { code: 'draft_conflict', error: error.message },
+          { status: 409 },
+        )
+      }
     }
     return toErrorResponse(error)
   }

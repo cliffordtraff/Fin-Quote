@@ -25,15 +25,29 @@ vi.mock('@/lib/newsletter/publication', async (importOriginal) => {
 })
 
 import { PATCH } from '@/app/api/newsletter/drafts/[id]/publication/route'
-import { NewsletterPublicationReadinessError } from '@/lib/newsletter/publication'
+import {
+  NewsletterManagedPublicationBusyError,
+  NewsletterManagedPublicationVersionError,
+  NewsletterPublicationReadinessError,
+} from '@/lib/newsletter/publication'
+import { NewsletterDraftConflictError } from '@/lib/newsletter/drafts'
 
-function buildRequest(beehiivUrl: string): NextRequest {
+function buildRequest(
+  beehiivUrl: string,
+  options: { includeExpectedUpdatedAt?: boolean } = {},
+): NextRequest {
+  const includeExpectedUpdatedAt = options.includeExpectedUpdatedAt ?? true
   return new NextRequest(
     'https://finquote.example/api/newsletter/drafts/draft-1/publication',
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ beehiivUrl }),
+      body: JSON.stringify({
+        beehiivUrl,
+        ...(includeExpectedUpdatedAt
+          ? { expectedUpdatedAt: '2026-07-29T20:00:00.000Z' }
+          : {}),
+      }),
     },
   )
 }
@@ -48,6 +62,7 @@ function fakeDraft(): NewsletterDraftRecord {
     sourceReviewKey: '2026-07-29:cash:gainer:GRMN',
     beehiivUrl: 'https://theintraday.beehiiv.com/p/grmn',
     publishedAt: '2026-07-29T20:00:00.000Z',
+    archivedAt: null,
     attachedChartCount: 1,
     subjectLine: 'GRMN update',
     previewHtml: '<html></html>',
@@ -89,6 +104,8 @@ describe('newsletter publication API', () => {
       { ownerId: 'user-1', sessionId: 'session-1' },
       'draft-1',
       'https://theintraday.beehiiv.com/p/grmn',
+      expect.any(Date),
+      '2026-07-29T20:00:00.000Z',
     )
     await expect(response.json()).resolves.toMatchObject({
       draft: {
@@ -115,6 +132,67 @@ describe('newsletter publication API', () => {
     expect(response.status).toBe(422)
     await expect(response.json()).resolves.toMatchObject({
       issues: [{ label: 'Capture the final chart.' }],
+    })
+  })
+
+  it('requires the caller to provide the draft version being published', async () => {
+    const response = await PATCH(
+      buildRequest('https://theintraday.beehiiv.com/p/grmn', {
+        includeExpectedUpdatedAt: false,
+      }),
+      { params: Promise.resolve({ id: 'draft-1' }) },
+    )
+
+    expect(response.status).toBe(400)
+    expect(mocks.recordPublication).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toEqual({
+      error: 'expectedUpdatedAt is required',
+    })
+  })
+
+  it('returns a conflict instead of overwriting a newer draft version', async () => {
+    mocks.recordPublication.mockRejectedValue(
+      new NewsletterDraftConflictError('draft-1'),
+    )
+
+    const response = await PATCH(
+      buildRequest('https://theintraday.beehiiv.com/p/grmn'),
+      { params: Promise.resolve({ id: 'draft-1' }) },
+    )
+
+    expect(response.status).toBe(409)
+  })
+
+  it('returns an actionable conflict for a stale managed Beehiiv delivery', async () => {
+    mocks.recordPublication.mockRejectedValue(
+      new NewsletterManagedPublicationVersionError(),
+    )
+
+    const response = await PATCH(
+      buildRequest('https://theintraday.beehiiv.com/p/grmn'),
+      { params: Promise.resolve({ id: 'draft-1' }) },
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'beehiiv_source_mismatch',
+      error: expect.stringContaining('older saved version'),
+    })
+  })
+
+  it('returns a conflict while a managed Beehiiv create needs completion', async () => {
+    mocks.recordPublication.mockRejectedValue(
+      new NewsletterManagedPublicationBusyError(),
+    )
+
+    const response = await PATCH(
+      buildRequest('https://theintraday.beehiiv.com/p/grmn'),
+      { params: Promise.resolve({ id: 'draft-1' }) },
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'beehiiv_sync_in_progress',
     })
   })
 

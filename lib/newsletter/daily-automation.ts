@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
+import { getMarketStatus, type MarketSession } from '@/lib/market-hours'
+import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
 import {
-  getUsMarketHolidayName,
-  isUsMarketTradingDay,
-} from '@/lib/market-calendar'
+  buildWhyMovedReviewKey,
+  ingestWhyMovedEditorialCandidates,
+} from '@/lib/why-moved-review'
+import type {
+  WhyMovedCandidate,
+  WhyMovedEditorialDiscovery,
+} from '@/lib/why-moved-types'
 import {
   fetchWiimCandidates,
   generateDailySummaryBatch,
@@ -14,6 +20,7 @@ import {
   warmSymbol,
   type WarmResult,
 } from '@/lib/wiim'
+import type { RankedWiimCandidate } from '@/lib/wiim/types'
 import {
   ensureNewsletterDailyRun,
   finalizeNewsletterDailyItems,
@@ -36,6 +43,17 @@ import {
   getDailyAutomationFinalStatus,
   getFinvizCoverageState,
 } from './automation-coverage'
+import { getNewsletterAutomationClock } from './automation-clock'
+import { getNewsletterDailyAutomationRun } from './daily-runs-read'
+
+export {
+  getNewsletterAutomationClock,
+  getNewsletterAutomationWindow,
+  type NewsletterAutomationClock,
+  type NewsletterAutomationWindow,
+} from './automation-clock'
+export { hasFinishedNewsletterMorningReport } from './morning-report-readiness'
+export { getNewsletterDailyAutomationRun }
 
 const TABLE = 'newsletter_daily_automation_runs'
 const FINVIZ_BATCH_SIZE = 30
@@ -43,8 +61,6 @@ const SUMMARY_BATCH_SIZE = 4
 const NEWSLETTER_BATCH_SIZE = 3
 const MAX_SOURCE_ATTEMPTS = 2
 const MAX_STAGE_ERRORS = 3
-const DEFAULT_READY_BY_HOUR = 8
-const RECOVERY_END_HOUR = 12
 
 type AutomationRow =
   Database['public']['Tables']['newsletter_daily_automation_runs']['Row']
@@ -99,26 +115,6 @@ export interface NewsletterDailyAutomationRun {
   lastHeartbeatAt: string | null
   createdAt: string
   updatedAt: string
-}
-
-export interface NewsletterAutomationClock {
-  marketDate: string
-  weekday: string
-  hour: number
-  minute: number
-  isWeekday: boolean
-  isTradingDay: boolean
-  holidayName: string | null
-  isCollectionWindow: boolean
-  isMorningReportWindow: boolean
-}
-
-export interface NewsletterAutomationWindow {
-  readyByHour: number
-  startHour: number
-  shouldRun: boolean
-  isLate: boolean
-  hasEnded: boolean
 }
 
 export interface AdvanceNewsletterDailyAutomationResult {
@@ -191,73 +187,6 @@ function mapRow(row: AutomationRow): NewsletterDailyAutomationRun {
   }
 }
 
-export function getNewsletterAutomationClock(
-  now = new Date(),
-): NewsletterAutomationClock {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(now)
-  const read = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? ''
-  const weekday = read('weekday')
-  const hour = Number(read('hour'))
-  const minute = Number(read('minute'))
-  const isWeekday = !['Sat', 'Sun'].includes(weekday)
-  const marketDate = `${read('year')}-${read('month')}-${read('day')}`
-  const holidayName = getUsMarketHolidayName(marketDate)
-  const isTradingDay = isWeekday && isUsMarketTradingDay(marketDate)
-  return {
-    weekday,
-    marketDate,
-    hour,
-    minute,
-    isWeekday,
-    isTradingDay,
-    holidayName,
-    isCollectionWindow: isTradingDay && hour >= 5 && hour < 8,
-    isMorningReportWindow:
-      isTradingDay && hour >= 5 && hour < RECOVERY_END_HOUR,
-  }
-}
-
-export function getNewsletterAutomationWindow(
-  clock: NewsletterAutomationClock,
-  generationHours: number[],
-): NewsletterAutomationWindow {
-  const normalized = generationHours
-    .filter(Number.isFinite)
-    .map((hour) => Math.max(0, Math.min(23, Math.floor(hour))))
-  const readyByHour =
-    normalized.length > 0
-      ? Math.min(...normalized)
-      : DEFAULT_READY_BY_HOUR
-  const startHour = Math.max(0, readyByHour - 3)
-  const minuteOfDay = clock.hour * 60 + clock.minute
-  const startMinute = startHour * 60
-  const deadlineMinute = readyByHour * 60
-  const endMinute = RECOVERY_END_HOUR * 60
-  return {
-    readyByHour,
-    startHour,
-    shouldRun:
-      clock.isTradingDay &&
-      minuteOfDay >= startMinute &&
-      minuteOfDay < endMinute,
-    isLate:
-      clock.isTradingDay &&
-      minuteOfDay >= deadlineMinute &&
-      minuteOfDay < endMinute,
-    hasEnded: minuteOfDay >= endMinute,
-  }
-}
-
 export function getNewsletterAutomationStageLabel(
   stage: NewsletterDailyAutomationStage,
 ): string {
@@ -327,23 +256,6 @@ async function updateRun(
   return mapRow(row as AutomationRow)
 }
 
-export async function getNewsletterDailyAutomationRun(
-  marketDate?: string,
-): Promise<NewsletterDailyAutomationRun | null> {
-  const supabase = getServiceClient()
-  let query = supabase
-    .from(TABLE)
-    .select('*')
-    .order('market_date', { ascending: false })
-    .limit(1)
-  if (marketDate) query = query.eq('market_date', marketDate)
-  const { data, error } = await query.maybeSingle()
-  if (error) {
-    throw new Error(`Failed to load newsletter automation: ${error.message}`)
-  }
-  return data ? mapRow(data as AutomationRow) : null
-}
-
 export async function getPendingNewsletterDailyTerminalNotification(
   beforeMarketDate: string,
 ): Promise<NewsletterDailyAutomationRun | null> {
@@ -382,17 +294,6 @@ export async function listNewsletterDailyAutomationRuns(
     throw new Error(`Failed to list newsletter automation runs: ${error.message}`)
   }
   return ((data ?? []) as AutomationRow[]).map(mapRow)
-}
-
-export async function hasFinishedNewsletterMorningReport(
-  marketDate: string,
-): Promise<boolean> {
-  const run = await getNewsletterDailyAutomationRun(marketDate)
-  return Boolean(
-    run &&
-      (run.status === 'completed' || run.status === 'partial') &&
-      run.newsletterGeneratedCount > 0,
-  )
 }
 
 async function claimRun(marketDate: string, leaseToken: string) {
@@ -643,6 +544,98 @@ async function refreshFinvizBatch(
   }, signal)
 }
 
+function missingWiimCatalyst(
+  symbol: string,
+  generatedAt: string,
+  message = 'No discovery-time Finviz catalyst was available for this mover.',
+): StockWhyMovingResult {
+  return {
+    symbol,
+    status: 'not_found',
+    displayText: null,
+    headline: null,
+    summary: null,
+    bulletPoints: [],
+    sentiment: null,
+    source: null,
+    sourceTimestamp: null,
+    isCatalyst: null,
+    sourceUrl: '',
+    fetchedAt: generatedAt,
+    errorMessage: message,
+  }
+}
+
+function buildWhyMovedDiscoveriesFromWiim(input: {
+  rankedCandidates: RankedWiimCandidate[]
+  marketDate: string
+  session: MarketSession
+  generatedAt: string
+  limitPerDirection?: number
+}): WhyMovedEditorialDiscovery[] {
+  const limit = Math.max(1, Math.min(10, input.limitPerDirection ?? 5))
+  const selected: Array<{
+    ranked: RankedWiimCandidate
+    direction: 'gainer' | 'loser'
+  }> = [
+    ...input.rankedCandidates
+      .filter((candidate) => candidate.metadata.changesPercentage > 0)
+      .slice(0, limit)
+      .map((ranked) => ({ ranked, direction: 'gainer' as const })),
+    ...input.rankedCandidates
+      .filter((candidate) => candidate.metadata.changesPercentage < 0)
+      .slice(0, limit)
+      .map((ranked) => ({ ranked, direction: 'loser' as const })),
+  ]
+  const seen = new Set<string>()
+  const discoveries: WhyMovedEditorialDiscovery[] = []
+
+  for (const { ranked, direction } of selected) {
+    const symbol = (ranked.ticker ?? ranked.metadata.symbol).trim().toUpperCase()
+    if (!symbol || seen.has(symbol)) continue
+    const { name, price, change, changesPercentage } = ranked.metadata
+    if (
+      !name.trim() ||
+      !Number.isFinite(price) ||
+      !Number.isFinite(change) ||
+      !Number.isFinite(changesPercentage)
+    ) {
+      continue
+    }
+    seen.add(symbol)
+    const candidate: WhyMovedCandidate = {
+      reviewKey: buildWhyMovedReviewKey({
+        marketDate: input.marketDate,
+        session: input.session,
+        direction,
+        symbol,
+      }),
+      symbol,
+      name: name.trim(),
+      price,
+      change,
+      changesPercentage,
+      direction,
+      session: input.session,
+      marketDate: input.marketDate,
+    }
+    const captured = ranked.metadata.whyMoving
+    const catalyst =
+      captured?.symbol.trim().toUpperCase() === symbol
+        ? captured
+        : missingWiimCatalyst(
+            symbol,
+            input.generatedAt,
+            captured
+              ? 'The discovery-time catalyst symbol did not match this mover.'
+              : undefined,
+          )
+    discoveries.push({ candidate, catalyst })
+  }
+
+  return discoveries
+}
+
 async function createWiimSnapshot(
   run: NewsletterDailyAutomationRun,
   leaseToken: string,
@@ -658,6 +651,26 @@ async function createWiimSnapshot(
   if (!wiim.runId) {
     throw new Error('The automated WIIM run did not return a persisted run ID')
   }
+  const generatedAt = new Date(wiim.generatedAt)
+  if (Number.isNaN(generatedAt.getTime())) {
+    throw new Error('The automated WIIM run returned an invalid generatedAt')
+  }
+  const observedSession = getMarketStatus(generatedAt).session
+  const editorialSession = observedSession === 'closed' ? 'cash' : observedSession
+  const discoveries = buildWhyMovedDiscoveriesFromWiim({
+    rankedCandidates: wiim.rankedCandidates,
+    marketDate: run.marketDate,
+    session: editorialSession,
+    generatedAt: wiim.generatedAt,
+  })
+  if (discoveries.length === 0) {
+    throw new Error('The automated WIIM run produced no editorial discoveries')
+  }
+  await ingestWhyMovedEditorialCandidates({
+    sourceRunId: `wiim:${wiim.runId}`,
+    seenAt: wiim.generatedAt,
+    discoveries,
+  })
   return updateRun(run.id, leaseToken, {
     stage: 'summaries',
     wiim_run_id: wiim.runId,
@@ -667,6 +680,7 @@ async function createWiimSnapshot(
       wiimGeneratedAt: wiim.generatedAt,
       wiimRankedCandidateCount: wiim.rankedCandidateCount,
       wiimTopCandidate: wiim.topCandidate,
+      whyMovedDiscoveryCount: discoveries.length,
     } as Json,
   }, signal)
 }
@@ -1629,4 +1643,5 @@ export const __testOnly = {
   newsletterRunIds,
   retryableStage,
   loadFinvizCoverage,
+  buildWhyMovedDiscoveriesFromWiim,
 }

@@ -1,6 +1,10 @@
 'use server';
 
 import { createKeyedAsyncTTLCache } from '@/lib/async-ttl-cache';
+import {
+  getMarketSymbolLookupAliases,
+  normalizeMarketSymbol,
+} from '@/lib/market-symbol';
 import { createPublicClient } from '@/lib/supabase/public';
 
 interface FinancialYear {
@@ -130,12 +134,13 @@ const getCachedFinancials = createKeyedAsyncTTLCache<string, AllFinancials>(
 async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
   try {
     const supabase = createPublicClient();
+    const lookupSymbols = getMarketSymbolLookupAliases(symbol);
 
     // Fetch last 8 years of annual financial data from financials_std
     const { data: financialsData, error } = await supabase
       .from('financials_std')
       .select('*')
-      .eq('symbol', symbol)
+      .in('symbol', lookupSymbols)
       .eq('period_type', 'annual')
       .order('year', { ascending: false })
       .limit(8);
@@ -175,7 +180,7 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
     const { data: metricsData, error: metricsError } = await supabase
       .from('financial_metrics')
       .select('year, metric_name, metric_value')
-      .eq('symbol', symbol)
+      .in('symbol', lookupSymbols)
       .eq('period_type', 'annual')
       .in('metric_name', additionalMetrics)
       .order('year', { ascending: false });
@@ -361,7 +366,7 @@ async function loadAllFinancials(symbol: string): Promise<AllFinancials> {
 }
 
 export async function getAllFinancials(symbol: string): Promise<AllFinancials> {
-  const normalizedSymbol = symbol.toUpperCase();
+  const normalizedSymbol = normalizeMarketSymbol(symbol);
   return getCachedFinancials(normalizedSymbol, () =>
     loadAllFinancials(normalizedSymbol)
   );

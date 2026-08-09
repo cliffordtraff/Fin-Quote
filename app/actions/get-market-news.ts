@@ -10,16 +10,22 @@ export interface MarketNewsItem {
   site: string;
 }
 
+export type MarketNewsResult =
+  | { news: MarketNewsItem[] }
+  | { error: string }
+
 /**
  * Get general market news headlines
  * @param limit - Number of news items to fetch (default: 5)
  */
-export async function getMarketNews(limit: number = 5): Promise<MarketNewsItem[]> {
+export async function getMarketNewsWithStatus(
+  limit: number = 5,
+): Promise<MarketNewsResult> {
   const apiKey = process.env.FMP_API_KEY;
 
   if (!apiKey) {
     console.error('FMP_API_KEY is not set');
-    return [];
+    return { error: 'FMP_API_KEY is not set' };
   }
 
   try {
@@ -30,25 +36,32 @@ export async function getMarketNews(limit: number = 5): Promise<MarketNewsItem[]
 
     if (!response.ok) {
       console.error(`FMP General News API error: ${response.status}`);
-      return [];
+      return { error: 'Failed to load market news' };
     }
 
     const data = await response.json();
 
     if (!data || !Array.isArray(data)) {
-      return [];
+      return { error: 'Invalid market news response' };
     }
 
     // Take only the requested limit
-    return data.slice(0, limit).map((item: any) => ({
-      title: item.title || '',
-      text: item.text || '',
-      url: item.url || '',
-      publishedDate: item.publishedDate || '',
-      site: item.site || '',
-    }));
+    return {
+      news: data.slice(0, limit).map((item: any) => ({
+        title: item.title || '',
+        text: item.text || '',
+        url: item.url || '',
+        publishedDate: item.publishedDate || '',
+        site: item.site || '',
+      })),
+    };
   } catch (error) {
     console.error('Error fetching market news:', safeErrorMessage(error));
-    return [];
+    return { error: 'Failed to load market news' };
   }
+}
+
+export async function getMarketNews(limit: number = 5): Promise<MarketNewsItem[]> {
+  const result = await getMarketNewsWithStatus(limit)
+  return 'news' in result ? result.news : []
 }

@@ -5,3 +5,6 @@ video_lessons/
 .newsletter-chart-library/
 .why-moved-reviews/
 coverage/
+.local-credentials/
+.claude/
+.mcp.json

@@ -5,6 +5,11 @@ import {
   asPercentage,
   firstFiniteNumber,
 } from '@/lib/stock-key-stats-normalization';
+import {
+  getMarketSymbolLookupAliases,
+  normalizeMarketSymbol,
+  toFmpMarketSymbol,
+} from '@/lib/market-symbol';
 import { createPublicClient } from '@/lib/supabase/public';
 
 interface StockKeyStats {
@@ -143,6 +148,27 @@ async function readFmpArray(
   }
 }
 
+function selectFmpRecordForSymbol(
+  records: Array<Record<string, unknown>>,
+  canonicalSymbol: string,
+  label: string,
+  requireSymbol = false,
+): Record<string, unknown> {
+  const record = records[0]
+  if (!record) return {}
+
+  const rawSymbol = record.symbol
+  if (
+    (requireSymbol && typeof rawSymbol !== 'string') ||
+    (typeof rawSymbol === 'string' &&
+      normalizeMarketSymbol(rawSymbol) !== canonicalSymbol)
+  ) {
+    throw new Error(`FMP ${label} symbol mismatch for ${canonicalSymbol}`)
+  }
+
+  return record
+}
+
 /**
  * Get key statistics for stock detail page
  * Combines data from financial_metrics table and FMP API
@@ -150,6 +176,8 @@ async function readFmpArray(
  */
 async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
   const apiKey = process.env.FMP_API_KEY;
+  const lookupSymbols = getMarketSymbolLookupAliases(symbol);
+  const requestSymbol = toFmpMarketSymbol(symbol);
 
   if (!apiKey) {
     throw new Error('FMP_API_KEY is not set');
@@ -162,7 +190,7 @@ async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
     const { data: metricsData, error: metricsError } = await supabase
       .from('financial_metrics')
       .select('metric_name, metric_value, year')
-      .eq('symbol', symbol)
+      .in('symbol', lookupSymbols)
       .order('year', { ascending: false })
       .limit(200);
 
@@ -181,15 +209,15 @@ async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
     // Fetch key metrics from FMP API for real-time data
     const [quoteRes, keyMetricsRes, ratiosRes] = await Promise.all([
       fetch(
-        `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${apiKey}`,
+        `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(requestSymbol)}?apikey=${apiKey}`,
         { next: { revalidate: 60 } }
       ),
       fetch(
-        `https://financialmodelingprep.com/api/v3/key-metrics/${symbol}?limit=1&apikey=${apiKey}`,
+        `https://financialmodelingprep.com/api/v3/key-metrics/${encodeURIComponent(requestSymbol)}?limit=1&apikey=${apiKey}`,
         { next: { revalidate: 3600 } }
       ),
       fetch(
-        `https://financialmodelingprep.com/api/v3/ratios/${symbol}?limit=1&apikey=${apiKey}`,
+        `https://financialmodelingprep.com/api/v3/ratios/${encodeURIComponent(requestSymbol)}?limit=1&apikey=${apiKey}`,
         { next: { revalidate: 3600 } }
       ),
     ]);
@@ -200,9 +228,22 @@ async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
       readFmpArray(ratiosRes, 'ratios'),
     ]);
 
-    const quote = quoteData?.[0] || {};
-    const keyMetrics = keyMetricsData?.[0] || {};
-    const ratios = ratiosData?.[0] || {};
+    const quote = selectFmpRecordForSymbol(
+      quoteData,
+      symbol,
+      'quote',
+      true,
+    );
+    const keyMetrics = selectFmpRecordForSymbol(
+      keyMetricsData,
+      symbol,
+      'key metrics',
+    );
+    const ratios = selectFmpRecordForSymbol(
+      ratiosData,
+      symbol,
+      'ratios',
+    );
 
     // These datasets are independent. Loading them concurrently keeps a stock
     // page to one database round-trip window instead of six serial waits.
@@ -217,36 +258,37 @@ async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
       supabase
         .from('financials_std')
         .select('*')
-        .eq('symbol', symbol)
+        .in('symbol', lookupSymbols)
         .order('year', { ascending: false })
         .limit(1),
       supabase
         .from('company_profile')
         .select('*')
-        .eq('symbol', symbol)
-        .single(),
+        .in('symbol', lookupSymbols)
+        .limit(1)
+        .maybeSingle(),
       supabase
         .from('price_performance')
         .select('*')
-        .eq('symbol', symbol)
+        .in('symbol', lookupSymbols)
         .order('as_of_date', { ascending: false })
         .limit(1),
       supabase
         .from('analyst_estimates')
         .select('*')
-        .eq('symbol', symbol)
+        .in('symbol', lookupSymbols)
         .order('period_end', { ascending: false })
         .limit(1),
       supabase
         .from('earnings_history')
         .select('*')
-        .eq('symbol', symbol)
+        .in('symbol', lookupSymbols)
         .order('earnings_date', { ascending: false })
         .limit(1),
       supabase
         .from('technical_indicators')
         .select('*')
-        .eq('symbol', symbol)
+        .in('symbol', lookupSymbols)
         .order('as_of_date', { ascending: false })
         .limit(1),
     ]);
@@ -482,7 +524,7 @@ async function loadStockKeyStats(symbol: string): Promise<StockKeyStats> {
 }
 
 export async function getStockKeyStats(symbol: string): Promise<StockKeyStats> {
-  const normalizedSymbol = symbol.toUpperCase();
+  const normalizedSymbol = normalizeMarketSymbol(symbol);
   return getCachedStockKeyStats(normalizedSymbol, () =>
     loadStockKeyStats(normalizedSymbol)
   );

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createNewsletterNotification: vi.fn(),
   getBeehiivPostState: vi.fn(),
   getNewsletterDraft: vi.fn(),
+  isNewsletterDraftSourceVersionCurrent: vi.fn(),
   markBeehiivLifecycleApplied: vi.fn(),
   recordBeehiivReconciliationError: vi.fn(),
   recordNewsletterPublication: vi.fn(),
@@ -23,6 +24,8 @@ vi.mock('@/lib/beehiiv/client', () => ({
 vi.mock('@/lib/beehiiv/store', () => ({
   claimBeehiivDeliveriesForReconciliation:
     mocks.claimBeehiivDeliveriesForReconciliation,
+  isNewsletterDraftSourceVersionCurrent:
+    mocks.isNewsletterDraftSourceVersionCurrent,
   markBeehiivLifecycleApplied: mocks.markBeehiivLifecycleApplied,
   recordBeehiivReconciliationError:
     mocks.recordBeehiivReconciliationError,
@@ -73,6 +76,7 @@ function deliveryFixture(
     editorUrl: 'https://app.beehiiv.com/posts/post-1',
     webUrl: null,
     contentHash: 'hash',
+    sourceDraftUpdatedAt: '2026-08-06T11:59:00.000Z',
     lifecycleStatus: 'draft',
     lifecycleAppliedStatus: 'draft',
     lifecycleAppliedAt: '2026-08-06T12:00:00.000Z',
@@ -105,7 +109,11 @@ beforeEach(() => {
   builder.select.mockReturnValue(builder)
   builder.eq.mockReturnValue(builder)
   builder.maybeSingle.mockResolvedValue({
-    data: { session_id: 'session-1', status: 'ready' },
+    data: {
+      session_id: 'session-1',
+      status: 'ready',
+      updated_at: '2026-08-06T12:00:00.000Z',
+    },
     error: null,
   })
   mocks.createServiceRoleClient.mockReturnValue({
@@ -118,6 +126,7 @@ beforeEach(() => {
     webUrl: 'https://theintraday.beehiiv.com/p/morning-setup',
     stats: {},
   })
+  mocks.isNewsletterDraftSourceVersionCurrent.mockResolvedValue(true)
   mocks.updateBeehiivDeliveryLifecycle.mockImplementation(async (input) =>
     deliveryFixture({
       lifecycleStatus: input.lifecycleStatus,
@@ -160,6 +169,13 @@ describe('Beehiiv lifecycle orchestration', () => {
     })
 
     expect(result.lifecycleAppliedStatus).toBe('published')
+    expect(mocks.recordNewsletterPublication).toHaveBeenCalledWith(
+      { ownerId: OWNER_ID, sessionId: 'session-1' },
+      '00000000-0000-4000-8000-000000000002',
+      'https://theintraday.beehiiv.com/p/morning-setup',
+      new Date('2026-08-06T13:00:00.000Z'),
+      '2026-08-06T12:00:00.000Z',
+    )
     expect(mocks.appendNewsletterDraftEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.any(String),
@@ -239,6 +255,38 @@ describe('Beehiiv lifecycle orchestration', () => {
     expect(mocks.recordNewsletterPublication).not.toHaveBeenCalled()
     expect(mocks.appendNewsletterDraftEvent).not.toHaveBeenCalled()
     expect(mocks.markBeehiivLifecycleApplied).not.toHaveBeenCalled()
+  })
+
+  it('does not publish a newer local save when the scheduled remote source is older', async () => {
+    const sourceDraftUpdatedAt = '2026-08-06T11:59:00.000Z'
+    mocks.isNewsletterDraftSourceVersionCurrent.mockResolvedValueOnce(false)
+
+    const result = await reconcileBeehiivDelivery(
+      deliveryFixture({
+        sourceDraftUpdatedAt,
+        lifecycleStatus: 'scheduled',
+        lifecycleAppliedStatus: 'scheduled',
+        beehiivStatus: 'scheduled',
+        scheduledAt: '2026-08-06T12:30:00.000Z',
+      }),
+      { leaseToken: LEASE_TOKEN },
+    )
+
+    expect(
+      mocks.isNewsletterDraftSourceVersionCurrent,
+    ).toHaveBeenCalledWith({
+      ownerId: OWNER_ID,
+      draftId: '00000000-0000-4000-8000-000000000002',
+      sourceDraftUpdatedAt,
+    })
+    expect(mocks.recordNewsletterPublication).not.toHaveBeenCalled()
+    expect(mocks.appendNewsletterDraftEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ type: 'beehiiv_published' }),
+    )
+    expect(mocks.markBeehiivLifecycleApplied).toHaveBeenCalledTimes(1)
+    expect(result.lifecycleAppliedStatus).toBe('published')
   })
 
   it('fences every lifecycle mutation with the active lease', async () => {

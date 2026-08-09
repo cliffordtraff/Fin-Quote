@@ -4,13 +4,17 @@ import { randomUUID } from 'crypto'
 import { describe, expect, it } from 'vitest'
 
 import type { NewsletterResult } from '@/lib/newsletter/types'
+import { NewsletterDraftInputValidationError } from '@/lib/newsletter/draft-request'
 import {
   buildNewsletterDraftFromResult,
   createBlankNewsletterDraft,
+  createNewsletterDraftFromDocument,
   deleteNewsletterDraft,
+  forkNewsletterDraft,
   getNewsletterDraft,
   listNewsletterDrafts,
   NewsletterDraftConflictError,
+  NewsletterDraftIdempotencyConflictError,
   NewsletterPublishedDraftImmutableError,
   normalizeNewsletterDraftDocument,
   preserveNewsletterDraftServerMetadata,
@@ -75,6 +79,22 @@ const sampleResult: NewsletterResult = {
 }
 
 describe('newsletter drafts', () => {
+  it('rejects a missing runtime fork idempotency key before reading storage', async () => {
+    const draft = buildNewsletterDraftFromResult(
+      sampleResult,
+      'https://charts.theintraday.com',
+    )
+
+    await expect(
+      forkNewsletterDraft(
+        { ownerId: null, sessionId: `test-session-${randomUUID()}` },
+        randomUUID(),
+        draft,
+        { idempotencyKey: undefined as unknown as string },
+      ),
+    ).rejects.toBeInstanceOf(NewsletterDraftInputValidationError)
+  })
+
   it('keeps catalyst provenance and publication metadata server-owned', () => {
     const existing = {
       ...buildNewsletterDraftFromResult(sampleResult),
@@ -147,6 +167,35 @@ describe('newsletter drafts', () => {
     expect(draft.blocks[0]?.chartImageUrl).toBe('/newsletter-charts/AAPL_revenue_vs_net_income.png')
     expect(draft.blocks[0]?.chartExportUrl).toContain('/tos/AAPL')
     expect(draft.blocks[0]?.chartNeedsRegeneration).toBe(false)
+  })
+
+  it('never re-hashes mismatched chart provenance into a trusted source', () => {
+    const original = buildNewsletterDraftFromResult(
+      sampleResult,
+      'https://charts.theintraday.com',
+    )
+    const originalBlock = original.blocks[0]!
+    const tampered = normalizeNewsletterDraftDocument(
+      {
+        ...original,
+        blocks: [
+          {
+            ...originalBlock,
+            chartSpec: {
+              ...originalBlock.chartSpec,
+              title: 'A different scene that was never captured',
+            },
+          },
+        ],
+      },
+      'https://charts.theintraday.com',
+    )
+
+    expect(tampered.blocks[0]?.chartProvenance).toMatchObject({
+      source: 'legacy',
+      rendererContract: 'legacy-reconstructed-v0',
+    })
+    expect(tampered.blocks[0]?.chartNeedsRegeneration).toBe(true)
   })
 
   it('normalizes generated subjects at the draft boundary', () => {
@@ -524,24 +573,27 @@ describe('newsletter drafts', () => {
         { expectedUpdatedAt: original.updatedAt },
       )
 
-      const protectedResult = await saveNewsletterDraft(
-        scope,
-        original.id,
-        {
-          ...original.draft,
-          subjectLine: 'Stale finalizer copy',
-          publication: {
-            beehiivUrl: 'https://attacker.example/stale-publication',
-            publishedAt: '2000-01-01T00:00:00.000Z',
+      await expect(
+        saveNewsletterDraft(
+          scope,
+          original.id,
+          {
+            ...original.draft,
+            subjectLine: 'Stale finalizer copy',
+            publication: {
+              beehiivUrl: 'https://attacker.example/stale-publication',
+              publishedAt: '2000-01-01T00:00:00.000Z',
+            },
           },
-        },
-        'published',
-        {
-          expectedUpdatedAt: original.updatedAt,
-          protectPublished: true,
-        },
-      )
+          'published',
+          {
+            expectedUpdatedAt: original.updatedAt,
+            protectPublished: true,
+          },
+        ),
+      ).rejects.toBeInstanceOf(NewsletterDraftConflictError)
 
+      const protectedResult = await getNewsletterDraft(scope, original.id)
       expect(protectedResult).toMatchObject({
         status: 'published',
         beehiivUrl: publication.beehiivUrl,
@@ -565,6 +617,112 @@ describe('newsletter drafts', () => {
         status: 'published',
         beehiivUrl: publication.beehiivUrl,
       })
+    } finally {
+      rmSync(sessionDir, { recursive: true, force: true })
+    }
+  })
+
+  it('forks a published issue into an editable copy without losing its exact chart provenance', async () => {
+    const scope = {
+      ownerId: null,
+      sessionId: `test-session-${randomUUID()}`,
+    }
+    const sessionDir = resolve('.newsletter-drafts', scope.sessionId)
+
+    try {
+      const sourceDocument = {
+        ...buildNewsletterDraftFromResult(
+          sampleResult,
+          'https://charts.theintraday.com',
+        ),
+        publication: {
+          beehiivUrl: 'https://theintraday.beehiiv.com/p/apple-snapshot',
+          publishedAt: '2026-08-06T13:00:00.000Z',
+        },
+      }
+      const source = await createNewsletterDraftFromDocument(
+        scope,
+        sourceDocument,
+        {
+          status: 'published',
+          publicChartBaseUrl: 'https://charts.theintraday.com',
+        },
+      )
+      const exactProvenance = source.draft.blocks[0]?.chartProvenance
+      expect(exactProvenance).toBeTruthy()
+
+      const workingDraft = {
+        ...source.draft,
+        subjectLine: 'An unsaved local rewrite',
+        blocks: source.draft.blocks.map((block, index) =>
+          index === 0
+            ? { ...block, body: 'Unsaved commentary kept in the copy.' }
+            : block,
+        ),
+      }
+      const idempotencyKey = 'fork-published-draft-test-001'
+
+      const forked = await forkNewsletterDraft(
+        scope,
+        source.id,
+        workingDraft,
+        {
+          idempotencyKey,
+          publicChartBaseUrl: 'https://charts.theintraday.com',
+        },
+      )
+
+      expect(forked).toMatchObject({
+        status: 'draft',
+        beehiivUrl: null,
+        publishedAt: null,
+        archivedAt: null,
+        subjectLine: 'Copy of An unsaved local rewrite',
+      })
+      expect(forked.id).not.toBe(source.id)
+      expect(forked.draft).toMatchObject({
+        manualDraft: true,
+        source: undefined,
+        publication: undefined,
+      })
+      expect(forked.draft.blocks[0]?.body).toBe(
+        'Unsaved commentary kept in the copy.',
+      )
+      expect(forked.draft.blocks[0]?.chartProvenance).toEqual(exactProvenance)
+      expect(forked.history).toEqual([
+        expect.objectContaining({
+          type: 'created',
+          metadata: expect.objectContaining({
+            forkedFromDraftId: source.id,
+            forkedFromUpdatedAt: source.updatedAt,
+          }),
+        }),
+      ])
+
+      rmSync(resolve(sessionDir, `${source.id}.json`))
+      const replay = await forkNewsletterDraft(
+        scope,
+        source.id,
+        workingDraft,
+        {
+          idempotencyKey,
+          publicChartBaseUrl: 'https://charts.theintraday.com',
+        },
+      )
+      expect(replay.id).toBe(forked.id)
+      expect(replay.history).toHaveLength(1)
+
+      await expect(
+        forkNewsletterDraft(
+          scope,
+          source.id,
+          { ...workingDraft, subjectLine: 'Different local rewrite' },
+          {
+            idempotencyKey,
+            publicChartBaseUrl: 'https://charts.theintraday.com',
+          },
+        ),
+      ).rejects.toBeInstanceOf(NewsletterDraftIdempotencyConflictError)
     } finally {
       rmSync(sessionDir, { recursive: true, force: true })
     }

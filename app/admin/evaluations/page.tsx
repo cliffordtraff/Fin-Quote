@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, forwardRef, useMemo } from 'react'
+import {
+  clearEvaluationAnnotationSaves,
+  mergeEvaluationAnnotationFiles,
+  scheduleEvaluationAnnotationSave,
+  type AnnotationSaveTimer,
+} from '@/lib/evaluation-annotation-save'
 
 type Annotation = {
   question_id: number
@@ -13,6 +19,12 @@ type AnnotationsFile = {
   evaluation_file: string
   timestamp: string
   annotations: Annotation[]
+}
+
+type PendingAnnotationSave = {
+  optimisticFile: AnnotationsFile
+  annotation: Annotation
+  retryAttempt: number
 }
 
 type EvaluationResult = {
@@ -53,15 +65,38 @@ type EvaluationData = {
 export default function EvaluationsPage() {
   const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(null)
   const [annotationsData, setAnnotationsData] = useState<AnnotationsFile | null>(null)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [, setCurrentQuestionIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [evaluationFile, setEvaluationFile] = useState('')
   const [saving, setSaving] = useState(false)
+  const [failedAnnotationQuestionIds, setFailedAnnotationQuestionIds] =
+    useState<Set<number>>(new Set())
   const [claudeAnalyses, setClaudeAnalyses] = useState<Record<number, string>>({})
   const [loadingAnalyses, setLoadingAnalyses] = useState(false)
 
   const questionRefs = useRef<Record<number, HTMLDivElement | null>>({})
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const saveTimeoutsRef = useRef(new Map<number, AnnotationSaveTimer>())
+  const pendingAnnotationSavesRef = useRef(
+    new Map<number, PendingAnnotationSave>(),
+  )
+  const inFlightQuestionCountsRef = useRef(new Map<number, number>())
+  const inFlightSaveCountRef = useRef(0)
+  const activeEvaluationFileRef = useRef('')
+
+  function protectedAnnotationQuestionIds(
+    completedQuestionId: number,
+  ): Set<number> {
+    const protectedIds = new Set(saveTimeoutsRef.current.keys())
+    for (const questionId of pendingAnnotationSavesRef.current.keys()) {
+      protectedIds.add(questionId)
+    }
+    for (const [questionId, count] of inFlightQuestionCountsRef.current) {
+      if (questionId !== completedQuestionId || count > 1) {
+        protectedIds.add(questionId)
+      }
+    }
+    return protectedIds
+  }
 
   // Memoize results before any conditional returns (hooks must be called unconditionally)
   const results: EvaluationResult[] = useMemo(() => {
@@ -79,8 +114,29 @@ export default function EvaluationsPage() {
 
   // Load annotations when evaluation data changes
   useEffect(() => {
-    if (evaluationData && evaluationFile) {
-      loadAnnotations()
+    const pendingSaveTimers = saveTimeoutsRef.current
+    const pendingSaves = pendingAnnotationSavesRef.current
+    activeEvaluationFileRef.current = evaluationFile
+    setFailedAnnotationQuestionIds(new Set())
+    let cancelled = false
+    if (evaluationFile) {
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/annotations?file=${encodeURIComponent(evaluationFile)}`,
+          )
+          if (!response.ok) throw new Error('Failed to load annotations')
+          const data: AnnotationsFile = await response.json()
+          if (!cancelled) setAnnotationsData(data)
+        } catch (error) {
+          if (!cancelled) console.error('Error loading annotations:', error)
+        }
+      })()
+    }
+    return () => {
+      cancelled = true
+      clearEvaluationAnnotationSaves(pendingSaveTimers)
+      pendingSaves.clear()
     }
   }, [evaluationFile])
 
@@ -113,18 +169,6 @@ export default function EvaluationsPage() {
       alert('Failed to load evaluation. Make sure you have run the evaluation script.')
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function loadAnnotations() {
-    if (!evaluationFile) return
-    try {
-      const response = await fetch(`/api/annotations?file=${evaluationFile}`)
-      if (!response.ok) throw new Error('Failed to load annotations')
-      const data: AnnotationsFile = await response.json()
-      setAnnotationsData(data)
-    } catch (error) {
-      console.error('Error loading annotations:', error)
     }
   }
 
@@ -168,23 +212,228 @@ export default function EvaluationsPage() {
     }
   }
 
-  async function saveAnnotations(newAnnotations: AnnotationsFile) {
+  async function saveAnnotation(
+    optimisticFile: AnnotationsFile,
+    annotation: Annotation,
+    retryAttempt = 0,
+  ) {
+    let flushQueuedEdit = false
+    let retryQueuedEdit = false
     try {
+      inFlightSaveCountRef.current += 1
+      inFlightQuestionCountsRef.current.set(
+        annotation.question_id,
+        (inFlightQuestionCountsRef.current.get(annotation.question_id) ?? 0) + 1,
+      )
       setSaving(true)
       const response = await fetch('/api/annotations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAnnotations),
+        body: JSON.stringify({
+          ...optimisticFile,
+          annotations: [annotation],
+        }),
       })
+      // An older evaluation request may finish after the page has loaded a
+      // different file with overlapping question IDs. Never let that response
+      // rebase, clear, or flush the new file's save lane.
+      if (
+        activeEvaluationFileRef.current !== optimisticFile.evaluation_file
+      ) {
+        return
+      }
+      if (response.status === 409) {
+        const conflict = (await response.json()) as {
+          latest?: AnnotationsFile
+        }
+        const queuedTimer = saveTimeoutsRef.current.get(annotation.question_id)
+        if (queuedTimer) clearTimeout(queuedTimer)
+        saveTimeoutsRef.current.delete(annotation.question_id)
+        pendingAnnotationSavesRef.current.delete(annotation.question_id)
+        setFailedAnnotationQuestionIds((current) => {
+          if (!current.has(annotation.question_id)) return current
+          const next = new Set(current)
+          next.delete(annotation.question_id)
+          return next
+        })
+        if (conflict.latest) {
+          const latestAnnotation = conflict.latest.annotations.find(
+            (entry) => entry.question_id === annotation.question_id,
+          )
+          setAnnotationsData((current) => {
+            const merged = mergeEvaluationAnnotationFiles(
+              current,
+              conflict.latest as AnnotationsFile,
+              new Set([
+                ...protectedAnnotationQuestionIds(annotation.question_id),
+                annotation.question_id,
+              ]),
+            )
+            if (!latestAnnotation) return merged
+            return {
+              ...merged,
+              annotations: merged.annotations.map((entry) =>
+                entry.question_id === annotation.question_id
+                  ? { ...entry, updated_at: latestAnnotation.updated_at }
+                  : entry,
+              ),
+            }
+          })
+        }
+        alert(
+          'Another editor changed this annotation. Your text is still shown against the latest saved version; review it before saving again.',
+        )
+        return
+      }
       if (!response.ok) throw new Error('Failed to save annotations')
       const data: AnnotationsFile = await response.json()
-      // Persist the full annotations file shape to state
-      setAnnotationsData(data)
+      const savedAnnotation = data.annotations.find(
+        (entry) => entry.question_id === annotation.question_id,
+      )
+      const queued = pendingAnnotationSavesRef.current.get(
+        annotation.question_id,
+      )
+      if (queued && savedAnnotation) {
+        const rebasedAnnotation = {
+          ...queued.annotation,
+          updated_at: savedAnnotation.updated_at,
+        }
+        pendingAnnotationSavesRef.current.set(annotation.question_id, {
+          annotation: rebasedAnnotation,
+          retryAttempt: queued.retryAttempt,
+          optimisticFile: {
+            ...queued.optimisticFile,
+            timestamp: data.timestamp,
+            annotations: queued.optimisticFile.annotations.map((entry) =>
+              entry.question_id === annotation.question_id
+                ? rebasedAnnotation
+                : entry,
+            ),
+          },
+        })
+      }
+      setAnnotationsData((current) => {
+        const merged = mergeEvaluationAnnotationFiles(
+          current,
+          data,
+          protectedAnnotationQuestionIds(annotation.question_id),
+        )
+        if (!queued || !savedAnnotation) return merged
+        return {
+          ...merged,
+          timestamp: data.timestamp,
+          annotations: merged.annotations.map((entry) =>
+            entry.question_id === annotation.question_id
+              ? { ...entry, updated_at: savedAnnotation.updated_at }
+              : entry,
+          ),
+        }
+      })
+      setFailedAnnotationQuestionIds((current) => {
+        if (!current.has(annotation.question_id)) return current
+        const next = new Set(current)
+        next.delete(annotation.question_id)
+        return next
+      })
+      flushQueuedEdit = true
     } catch (error) {
+      if (
+        activeEvaluationFileRef.current !== optimisticFile.evaluation_file
+      ) {
+        return
+      }
       console.error('Error saving annotations:', error)
+      const queued = pendingAnnotationSavesRef.current.get(
+        annotation.question_id,
+      )
+      if (!queued) {
+        pendingAnnotationSavesRef.current.set(annotation.question_id, {
+          optimisticFile,
+          annotation,
+          retryAttempt: retryAttempt + 1,
+        })
+        retryQueuedEdit = retryAttempt < 1
+      } else {
+        retryQueuedEdit = queued.retryAttempt < 1
+      }
+      setFailedAnnotationQuestionIds((current) => {
+        if (current.has(annotation.question_id)) return current
+        return new Set(current).add(annotation.question_id)
+      })
       alert('Failed to save annotations')
     } finally {
-      setSaving(false)
+      const questionSaveCount =
+        (inFlightQuestionCountsRef.current.get(annotation.question_id) ?? 1) - 1
+      if (questionSaveCount > 0) {
+        inFlightQuestionCountsRef.current.set(
+          annotation.question_id,
+          questionSaveCount,
+        )
+      } else {
+        inFlightQuestionCountsRef.current.delete(annotation.question_id)
+      }
+      inFlightSaveCountRef.current = Math.max(
+        0,
+        inFlightSaveCountRef.current - 1,
+      )
+      setSaving(inFlightSaveCountRef.current > 0)
+      if (
+        (flushQueuedEdit || retryQueuedEdit) &&
+        pendingAnnotationSavesRef.current.has(annotation.question_id)
+      ) {
+        const queuedTimer = saveTimeoutsRef.current.get(annotation.question_id)
+        if (queuedTimer) clearTimeout(queuedTimer)
+        saveTimeoutsRef.current.delete(annotation.question_id)
+        if (flushQueuedEdit) {
+          queueMicrotask(() =>
+            flushPendingAnnotationSave(annotation.question_id),
+          )
+        } else if (retryQueuedEdit) {
+          scheduleEvaluationAnnotationSave(
+            saveTimeoutsRef.current,
+            annotation.question_id,
+            () => flushPendingAnnotationSave(annotation.question_id),
+            1_000,
+          )
+        }
+      }
+    }
+  }
+
+  function flushPendingAnnotationSave(questionId: number) {
+    if ((inFlightQuestionCountsRef.current.get(questionId) ?? 0) > 0) {
+      if (!saveTimeoutsRef.current.has(questionId)) {
+        scheduleEvaluationAnnotationSave(
+          saveTimeoutsRef.current,
+          questionId,
+          () => flushPendingAnnotationSave(questionId),
+          250,
+        )
+      }
+      return
+    }
+    const pending = pendingAnnotationSavesRef.current.get(questionId)
+    if (!pending) return
+    pendingAnnotationSavesRef.current.delete(questionId)
+    void saveAnnotation(
+      pending.optimisticFile,
+      pending.annotation,
+      pending.retryAttempt,
+    )
+  }
+
+  function retryFailedAnnotationSaves() {
+    for (const questionId of failedAnnotationQuestionIds) {
+      const pending = pendingAnnotationSavesRef.current.get(questionId)
+      if (!pending) continue
+      pendingAnnotationSavesRef.current.set(questionId, {
+        ...pending,
+        retryAttempt: 0,
+      })
+      const timer = saveTimeoutsRef.current.get(questionId)
+      if (timer) clearTimeout(timer)
+      saveTimeoutsRef.current.delete(questionId)
+      queueMicrotask(() => flushPendingAnnotationSave(questionId))
     }
   }
 
@@ -198,7 +447,12 @@ export default function EvaluationsPage() {
       question_id: questionId,
       action: action as any,
       comment,
-      updated_at: new Date().toISOString(),
+      // This is a database version token, not a browser timestamp. Preserving
+      // it lets the API perform an exact compare-and-swap without clock skew.
+      updated_at:
+        existingIndex >= 0
+          ? updatedAnnotations[existingIndex].updated_at
+          : annotationsData.timestamp,
     }
 
     if (existingIndex >= 0) {
@@ -216,12 +470,16 @@ export default function EvaluationsPage() {
     setAnnotationsData(updatedData)
 
     // Debounce the save to server (wait 500ms after last change)
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
-    }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveAnnotations(updatedData)
-    }, 500)
+    pendingAnnotationSavesRef.current.set(questionId, {
+      optimisticFile: updatedData,
+      annotation: newAnnotation,
+      retryAttempt: 0,
+    })
+    scheduleEvaluationAnnotationSave(
+      saveTimeoutsRef.current,
+      questionId,
+      () => flushPendingAnnotationSave(questionId),
+    )
   }
 
   function handleDone(questionId: number) {
@@ -316,6 +574,25 @@ export default function EvaluationsPage() {
           {saving && (
             <p className="text-indigo-200 text-sm mt-2">💾 Saving annotations...</p>
           )}
+          {failedAnnotationQuestionIds.size > 0 && (
+            <div
+              role="alert"
+              className="mt-3 flex flex-wrap items-center gap-3 text-sm text-amber-100"
+            >
+              <span>
+                {failedAnnotationQuestionIds.size} annotation
+                {failedAnnotationQuestionIds.size === 1 ? '' : 's'} remain
+                unsaved.
+              </span>
+              <button
+                type="button"
+                onClick={retryFailedAnnotationSaves}
+                className="rounded border border-amber-200 px-3 py-1 font-medium hover:bg-white/10"
+              >
+                Retry unsaved
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -376,20 +653,25 @@ export default function EvaluationsPage() {
               )}
             </div>
             <div className="space-y-4">
-              {failedQuestions.map((question, index) => (
-                <QuestionCard
-                  key={question.question_id}
-                  question={question}
-                  annotation={annotationsData?.annotations.find(
-                    (a) => a.question_id === question.question_id
-                  )}
-                  claudeAnalysis={claudeAnalyses[question.question_id]}
-                  onUpdate={updateAnnotation}
-                  onDone={handleDone}
-                  ref={(el) => { questionRefs.current[question.question_id] = el }}
-                  isFirst={index === 0}
-                />
-              ))}
+              {failedQuestions.map((question, index) => {
+                const annotation = annotationsData?.annotations.find(
+                  (entry) => entry.question_id === question.question_id,
+                )
+                return (
+                  <QuestionCard
+                    key={question.question_id}
+                    question={question}
+                    annotation={annotation}
+                    claudeAnalysis={claudeAnalyses[question.question_id]}
+                    onUpdate={updateAnnotation}
+                    onDone={handleDone}
+                    ref={(element) => {
+                      questionRefs.current[question.question_id] = element
+                    }}
+                    isFirst={index === 0}
+                  />
+                )
+              })}
             </div>
           </div>
         )}
@@ -401,18 +683,20 @@ export default function EvaluationsPage() {
               ✨ Minor Variations ({minorVariations.length})
             </h2>
             <div className="space-y-4">
-              {minorVariations.map((question) => (
-                <QuestionCard
-                  key={question.question_id}
-                  question={question}
-                  annotation={annotationsData?.annotations.find(
-                    (a) => a.question_id === question.question_id
-                  )}
-                  onUpdate={updateAnnotation}
-                  onDone={handleDone}
-                  isMinorVariation
-                />
-              ))}
+              {minorVariations.map((question) => {
+                const annotation = annotationsData?.annotations.find(
+                  (entry) => entry.question_id === question.question_id,
+                )
+                return (
+                  <QuestionCard
+                    key={question.question_id}
+                    question={question}
+                    annotation={annotation}
+                    onUpdate={updateAnnotation}
+                    onDone={handleDone}
+                  />
+                )
+              })}
             </div>
           </div>
         )}
@@ -427,26 +711,25 @@ type QuestionCardProps = {
   claudeAnalysis?: string
   onUpdate: (questionId: number, action: string, comment: string) => void
   onDone: (questionId: number) => void
-  isMinorVariation?: boolean
   isFirst?: boolean
 }
 
 const QuestionCard = forwardRef<HTMLDivElement, QuestionCardProps>(
-  ({ question, annotation, claudeAnalysis: preloadedAnalysis, onUpdate, onDone, isMinorVariation, isFirst }, ref) => {
+  ({ question, annotation, claudeAnalysis: preloadedAnalysis, onUpdate, onDone, isFirst }, ref) => {
     const [action, setAction] = useState(annotation?.action || '')
     const [comment, setComment] = useState(annotation?.comment || '')
     const [claudeAnalysis, setClaudeAnalysis] = useState<string | null>(preloadedAnalysis || null)
-    const [loadingAnalysis, setLoadingAnalysis] = useState(false)
     const [showDisagreement, setShowDisagreement] = useState(false)
     const [disagreementText, setDisagreementText] = useState('')
 
-    // Only sync from prop on initial mount or when question changes
-    // This prevents flickering when parent state updates
+    // Optimistic edits retain the same token. A token change means the first
+    // durable load, a successful save rebase, or explicit conflict recovery.
     useEffect(() => {
       setAction(annotation?.action || '')
       setComment(annotation?.comment || '')
+      // The version token intentionally gates prop-to-local synchronization.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [question.question_id])
+    }, [question.question_id, annotation?.updated_at])
 
     // Update analysis when preloaded analysis becomes available
     useEffect(() => {
@@ -467,32 +750,6 @@ const QuestionCard = forwardRef<HTMLDivElement, QuestionCardProps>(
 
     function handleDoneClick() {
       onDone(question.question_id)
-    }
-
-    async function fetchClaudeAnalysis() {
-      setLoadingAnalysis(true)
-      try {
-        const response = await fetch('/api/evaluations/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: question.question,
-            question_id: question.question_id,
-            expected_tool: question.expected_tool,
-            expected_args: question.expected_args,
-            actual_tool: question.actual_tool,
-            actual_args: question.actual_args,
-            tool_match: question.tool_match,
-          }),
-        })
-        const data = await response.json()
-        setClaudeAnalysis(data.analysis)
-      } catch (error) {
-        console.error('Failed to fetch analysis:', error)
-        setClaudeAnalysis('Failed to load analysis. Please try again.')
-      } finally {
-        setLoadingAnalysis(false)
-      }
     }
 
     function handleAgree() {

@@ -11,6 +11,7 @@ import {
   getNewsletterDraft,
   normalizeNewsletterDraftDocument,
   preserveNewsletterDraftServerMetadata,
+  reconcileNewsletterDraftClientCharts,
   renderNewsletterDraftPreviewHtml,
   saveNewsletterDraft,
 } from '@/lib/newsletter/drafts'
@@ -108,8 +109,14 @@ export async function PATCH(
     const existing = await getNewsletterDraft(scope, id)
     const host = request.headers.get('host')
     const publicChartBaseUrl = getDefaultPublicChartingBaseUrlForHost(host)
-    const normalizedDraft = normalizeNewsletterDraftDocument(
+    const trustedDraft = await reconcileNewsletterDraftClientCharts(
+      scope,
+      existing.draft,
       preserveNewsletterDraftServerMetadata(existing.draft, draft),
+      { signal: request.signal },
+    )
+    const normalizedDraft = normalizeNewsletterDraftDocument(
+      trustedDraft,
       publicChartBaseUrl,
     )
     const normalizedExistingDraft = normalizeNewsletterDraftDocument(
@@ -148,6 +155,26 @@ export async function PATCH(
     const response = NextResponse.json({ draft: saved })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
+    if (error instanceof NewsletterDraftConflictError) {
+      try {
+        const { id } = await params
+        const { scope } = await resolveNewsletterDraftScope(request)
+        const latest = await getNewsletterDraft(scope, id)
+        return NextResponse.json(
+          {
+            code: 'draft_conflict',
+            error: error.message,
+            latest,
+          },
+          { status: 409 },
+        )
+      } catch {
+        return NextResponse.json(
+          { code: 'draft_conflict', error: error.message },
+          { status: 409 },
+        )
+      }
+    }
     if (
       error instanceof Error &&
       (error.message === 'Invalid newsletter draft status' ||

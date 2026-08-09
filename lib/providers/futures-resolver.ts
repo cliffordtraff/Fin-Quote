@@ -8,6 +8,14 @@
  */
 
 import { safeErrorMessage } from '@/lib/safe-logging'
+import type {
+  CandleRequestOptions,
+  QuoteRequestOptions,
+} from './types'
+import {
+  ProviderQuoteSymbolMismatchError,
+  providerQuoteSymbolsMatch,
+} from './quote-errors'
 
 const MASSIVE_BASE = 'https://api.massive.com'
 
@@ -19,6 +27,15 @@ function getApiKey(): string {
 
 function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${getApiKey()}` }
+}
+
+function rethrowAbort(error: unknown, signal?: AbortSignal): void {
+  signal?.throwIfAborted()
+  if (error instanceof Error && error.name === 'AbortError') throw error
+}
+
+function isStrictRequest(options: QuoteRequestOptions): boolean {
+  return options.freshness === 'live' || options.failureMode === 'throw'
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +69,16 @@ interface CacheEntry {
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 const frontMonthCache = new Map<string, CacheEntry>()
 
+function isContractForProduct(ticker: string, productCode: string): boolean {
+  const normalizedTicker = ticker.trim().toUpperCase()
+  const normalizedProduct = productCode.trim().toUpperCase()
+  if (!normalizedTicker.startsWith(normalizedProduct)) return false
+
+  // Standard futures contract suffix: delivery-month code + 1-4 digit year.
+  const contractSuffix = normalizedTicker.slice(normalizedProduct.length)
+  return /^[FGHJKMNQUVXZ]\d{1,4}$/.test(contractSuffix)
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -65,22 +92,36 @@ const frontMonthCache = new Map<string, CacheEntry>()
  * @param productCode  e.g. "ES", "NQ", "CL"
  * @returns The resolved contract ticker (e.g. "ESZ25") or null if lookup fails.
  */
-export async function resolveFrontMonth(productCode: string): Promise<string | null> {
+export async function resolveFrontMonth(
+  productCode: string,
+  options: QuoteRequestOptions = {},
+): Promise<string | null> {
+  options.signal?.throwIfAborted()
+  const strict = isStrictRequest(options)
   const code = PRODUCT_ALIASES[productCode] ?? productCode
 
   // Check cache
   const cached = frontMonthCache.get(code)
   if (cached && cached.expiresAt > Date.now()) {
+    options.signal?.throwIfAborted()
     return cached.ticker
   }
 
   try {
     const url = `${MASSIVE_BASE}/futures/vX/contracts?product_code=${code}&active=true&sort=last_trade_date.asc&limit=1`
 
-    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
+    const res = await fetch(url, {
+      headers: authHeaders(),
+      cache: 'no-store',
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
     if (!res.ok) {
       if (res.status === 404) {
         return null
+      }
+      if (strict) {
+        throw new Error(`Massive futures contract request failed with status ${res.status}`)
       }
       if (res.status === 401 || res.status === 403) {
         console.warn(`[futures-resolver] Contract lookup unavailable for ${code}: ${res.status}`)
@@ -91,7 +132,13 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
     }
 
     const json = await res.json()
-    const results: Array<{ ticker?: string }> = json?.results ?? []
+    options.signal?.throwIfAborted()
+    if (strict && !Array.isArray(json?.results)) {
+      throw new Error('Massive returned an invalid futures contract payload')
+    }
+    const results: Array<{ ticker?: string }> = Array.isArray(json?.results)
+      ? json.results
+      : []
 
     if (results.length === 0 || !results[0].ticker) {
       console.error(`[futures-resolver] No active contract found for ${code}`)
@@ -99,12 +146,24 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
     }
 
     const ticker = results[0].ticker
+    if (!isContractForProduct(ticker, code)) {
+      const mismatch = new ProviderQuoteSymbolMismatchError(
+        'Massive',
+        `${code}<front-month>`,
+        ticker,
+      )
+      if (strict) throw mismatch
+      console.error(`[futures-resolver] ${mismatch.message}`)
+      return null
+    }
 
     // Cache the result
     frontMonthCache.set(code, { ticker, expiresAt: Date.now() + CACHE_TTL_MS })
 
     return ticker
   } catch (err) {
+    rethrowAbort(err, options.signal)
+    if (strict) throw err
     console.error(`[futures-resolver] Error resolving ${code}:`, safeErrorMessage(err))
     return null
   }
@@ -115,7 +174,10 @@ export async function resolveFrontMonth(productCode: string): Promise<string | n
  *
  * @param contractTicker  The resolved contract ticker (e.g. "ESZ25")
  */
-export async function getFuturesSnapshot(contractTicker: string): Promise<{
+export async function getFuturesSnapshot(
+  contractTicker: string,
+  options: QuoteRequestOptions = {},
+): Promise<{
   price: number
   change: number
   changePercent: number
@@ -124,17 +186,45 @@ export async function getFuturesSnapshot(contractTicker: string): Promise<{
   high: number
   low: number
 } | null> {
+  options.signal?.throwIfAborted()
+  const strict = isStrictRequest(options)
   try {
     const url = `${MASSIVE_BASE}/futures/vX/snapshot?ticker=${contractTicker}`
 
-    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
-    if (!res.ok) return null
+    const res = await fetch(url, {
+      headers: authHeaders(),
+      cache: 'no-store',
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (res.status === 404) return null
+      if (strict) {
+        throw new Error(`Massive futures snapshot request failed with status ${res.status}`)
+      }
+      return null
+    }
 
     const json = await res.json()
-    const results: any[] = json?.results ?? []
+    options.signal?.throwIfAborted()
+    if (strict && !Array.isArray(json?.results)) {
+      throw new Error('Massive returned an invalid futures snapshot payload')
+    }
+    const results: any[] = Array.isArray(json?.results) ? json.results : []
     if (results.length === 0) return null
 
     const snap = results[0]
+    if (
+      strict &&
+      typeof snap?.ticker === 'string' &&
+      !providerQuoteSymbolsMatch(snap.ticker, contractTicker)
+    ) {
+      throw new ProviderQuoteSymbolMismatchError(
+        'Massive',
+        contractTicker,
+        snap.ticker,
+      )
+    }
     const session = snap.session ?? {}
     const lastTrade = snap.last_trade ?? {}
 
@@ -154,6 +244,8 @@ export async function getFuturesSnapshot(contractTicker: string): Promise<{
       low: session.l ?? 0,
     }
   } catch (err) {
+    rethrowAbort(err, options.signal)
+    if (strict) throw err
     console.error(`[futures-resolver] Snapshot error for ${contractTicker}:`, safeErrorMessage(err))
     return null
   }
@@ -170,6 +262,7 @@ export async function getFuturesCandles(
   contractTicker: string,
   resolution: string,
   from?: string,
+  options: CandleRequestOptions = {},
 ): Promise<Array<{
   open: number
   high: number
@@ -178,26 +271,75 @@ export async function getFuturesCandles(
   volume: number
   timestampMs: number
 }>> {
+  options.signal?.throwIfAborted()
+  const strict = options.failureMode === 'throw'
+
   try {
     let url = `${MASSIVE_BASE}/futures/vX/aggs/${contractTicker}?resolution=${resolution}&limit=50000`
     if (from) url += `&window_start=${from}`
 
-    const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' })
-    if (!res.ok) return []
+    const res = await fetch(url, {
+      headers: authHeaders(),
+      cache: 'no-store',
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (strict) {
+        throw new Error(`Massive futures candle request failed with status ${res.status}`)
+      }
+      return []
+    }
 
-    const json = await res.json()
-    const results: any[] = json?.results ?? []
+    const json: unknown = await res.json()
+    options.signal?.throwIfAborted()
+    const results = json &&
+      typeof json === 'object' &&
+      !Array.isArray(json) &&
+      Array.isArray((json as { results?: unknown }).results)
+      ? (json as { results: unknown[] }).results
+      : null
+    if (!results) {
+      if (strict) throw new Error('Massive returned an invalid futures candle payload')
+      return []
+    }
 
-    return results.map(r => ({
-      open: r.open ?? 0,
-      high: r.high ?? 0,
-      low: r.low ?? 0,
-      close: r.close ?? 0,
-      volume: r.volume ?? 0,
-      // Futures timestamps are nanoseconds — convert to ms
-      timestampMs: r.window_start ? Math.floor(r.window_start / 1_000_000) : 0,
-    }))
+    const candles = results.map((result) => {
+      if (!result || typeof result !== 'object' || Array.isArray(result)) return null
+      const raw = result as Record<string, unknown>
+      const open = Number(raw.open)
+      const high = Number(raw.high)
+      const low = Number(raw.low)
+      const close = Number(raw.close)
+      const volume = Number(raw.volume ?? 0)
+      const windowStart = Number(raw.window_start)
+      if (
+        !Number.isFinite(open) ||
+        !Number.isFinite(high) ||
+        !Number.isFinite(low) ||
+        !Number.isFinite(close) ||
+        !Number.isFinite(windowStart) ||
+        windowStart <= 0
+      ) {
+        return null
+      }
+      return {
+        open,
+        high,
+        low,
+        close,
+        volume: Number.isFinite(volume) ? volume : 0,
+        // Futures timestamps are nanoseconds — convert to ms
+        timestampMs: Math.floor(windowStart / 1_000_000),
+      }
+    })
+    if (strict && candles.some((candle) => candle === null)) {
+      throw new Error('Massive returned an invalid futures candle payload')
+    }
+    return candles.filter((candle): candle is NonNullable<typeof candle> => candle !== null)
   } catch (err) {
+    rethrowAbort(err, options.signal)
+    if (strict) throw err
     console.error(`[futures-resolver] Candles error for ${contractTicker}:`, safeErrorMessage(err))
     return []
   }

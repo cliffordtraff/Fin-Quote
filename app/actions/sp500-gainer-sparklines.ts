@@ -1,8 +1,12 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import type { CandleRequestOptions } from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
-import { getSP500Gainers } from './sp500-movers'
+import {
+  getSP500Gainers,
+  getSP500GainersWithStatus,
+} from './sp500-movers'
 
 export interface SP500GainerSparklineData {
   symbol: string
@@ -13,13 +17,16 @@ export interface SP500GainerSparklineData {
 /**
  * Fetch intraday price data for top 4 S&P 500 gainers
  */
-export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500GainerSparklineData[]; error?: string }> {
+async function loadSP500GainerSparklines(
+  loadGainers: typeof getSP500Gainers,
+  candleOptions: CandleRequestOptions = {},
+): Promise<{ sparklines?: SP500GainerSparklineData[]; error?: string }> {
   try {
     // Get the S&P 500 gainers (already filtered to S&P 500 stocks)
-    const gainersResult = await getSP500Gainers()
+    const gainersResult = await loadGainers()
 
     if ('error' in gainersResult || !gainersResult.gainers) {
-      return { sparklines: [] }
+      return { error: 'Failed to load S&P 500 gainers' }
     }
 
     // Take top 4 S&P 500 gainers
@@ -35,7 +42,16 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
     const sparklines: SP500GainerSparklineData[] = []
 
     for (const gainer of top4) {
-      const intradayData = await provider.getIntraday(gainer.symbol, 5, 'minute')
+      const intradayData = candleOptions.failureMode || candleOptions.signal
+        ? await provider.getIntraday(
+          gainer.symbol,
+          5,
+          'minute',
+          undefined,
+          undefined,
+          candleOptions,
+        )
+        : await provider.getIntraday(gainer.symbol, 5, 'minute')
 
       if (intradayData.length > 0) {
         // Get the most recent trading day's data
@@ -62,4 +78,15 @@ export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500Ga
     console.error('Error fetching S&P 500 gainer sparklines:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 gainer sparklines' }
   }
+}
+
+export async function getSP500GainerSparklines(): Promise<{ sparklines?: SP500GainerSparklineData[]; error?: string }> {
+  return loadSP500GainerSparklines(getSP500Gainers)
+}
+
+export async function getSP500GainerSparklinesWithStatus(): Promise<{ sparklines?: SP500GainerSparklineData[]; error?: string }> {
+  return loadSP500GainerSparklines(
+    getSP500GainersWithStatus,
+    { failureMode: 'throw' },
+  )
 }

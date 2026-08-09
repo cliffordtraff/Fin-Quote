@@ -80,17 +80,82 @@ const MAX_RECONNECT_DELAY_MS = 30_000
 const BASE_RECONNECT_DELAY_MS = 1_000
 const MAX_AUTH_FAILURES = 3
 
+export const DEFAULT_BROKER_LIMITS = {
+  // Keep a single runtime comfortably below provider subscription and process
+  // resource ceilings while still allowing several full 30-symbol dashboards.
+  maxTickers: 200,
+  maxListenersPerTicker: 100,
+  maxTotalListeners: 500,
+} as const
+
+export type BrokerCapacityCode =
+  | 'BROKER_TICKER_CAPACITY_EXCEEDED'
+  | 'BROKER_LISTENER_CAPACITY_EXCEEDED'
+  | 'BROKER_TOTAL_LISTENER_CAPACITY_EXCEEDED'
+
+export class BrokerCapacityError extends Error {
+  readonly name = 'BrokerCapacityError'
+
+  constructor(
+    readonly code: BrokerCapacityCode,
+    message: string,
+    readonly limit: number,
+  ) {
+    super(message)
+  }
+}
+
+export interface MassiveBrokerLimits {
+  maxTickers: number
+  maxListenersPerTicker: number
+  maxTotalListeners: number
+}
+
+export interface MassiveBrokerOptions {
+  limits?: Partial<MassiveBrokerLimits>
+  gracePeriodMs?: number
+}
+
+function positiveInteger(value: string | number | undefined, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 // ---------------------------------------------------------------------------
 // Broker class
 // ---------------------------------------------------------------------------
 
-class MassiveBroker {
+export class MassiveBroker {
   private tickers = new Map<string, TickerState>()  // keyed by FMP symbol
   private connections = new Map<'stocks' | 'futures', MarketConnection>()
+  private pendingInitializations = new Map<string, Promise<TickerState | null>>()
+  private pendingListenerReservations = new Map<string, number>()
+  private pendingTotalListeners = 0
+  private totalListeners = 0
   private apiKey: string
+  private limits: MassiveBrokerLimits
+  private gracePeriodMs: number
 
-  constructor() {
+  constructor(options: MassiveBrokerOptions = {}) {
     this.apiKey = process.env.MASSIVE_API_KEY ?? ''
+    this.limits = {
+      maxTickers: positiveInteger(
+        options.limits?.maxTickers ?? process.env.MASSIVE_BROKER_MAX_TICKERS,
+        DEFAULT_BROKER_LIMITS.maxTickers,
+      ),
+      maxListenersPerTicker: positiveInteger(
+        options.limits?.maxListenersPerTicker ?? process.env.MASSIVE_BROKER_MAX_LISTENERS_PER_TICKER,
+        DEFAULT_BROKER_LIMITS.maxListenersPerTicker,
+      ),
+      maxTotalListeners: positiveInteger(
+        options.limits?.maxTotalListeners ?? process.env.MASSIVE_BROKER_MAX_TOTAL_LISTENERS,
+        DEFAULT_BROKER_LIMITS.maxTotalListeners,
+      ),
+    }
+    const configuredGracePeriod = options.gracePeriodMs ?? GRACE_PERIOD_MS
+    this.gracePeriodMs = Number.isFinite(configuredGracePeriod)
+      ? Math.max(0, configuredGracePeriod)
+      : GRACE_PERIOD_MS
   }
 
   /**
@@ -106,58 +171,181 @@ class MassiveBroker {
       this.apiKey = process.env.MASSIVE_API_KEY ?? ''
     }
 
-    let state = this.tickers.get(fmpSymbol)
+    let state: TickerState | null | undefined = this.tickers.get(fmpSymbol)
+    let initialization = this.pendingInitializations.get(fmpSymbol)
 
-    if (state) {
-      // Already tracking this ticker — add listener
-      if (state.graceTimer) {
-        clearTimeout(state.graceTimer)
-        state.graceTimer = null
-      }
-      state.listeners.add(callback)
-    } else {
-      // New ticker — resolve and subscribe
-      const market = this.getMarket(fmpSymbol)
-      const polygonTicker = await this.resolvePolygonTicker(fmpSymbol, market)
-      if (!polygonTicker) {
-        console.error(`[broker] Could not resolve polygon ticker for ${fmpSymbol}`)
-        return () => {}
+    if (!state && !initialization) {
+      this.ensureTickerCapacity()
+    }
+
+    this.reserveListener(fmpSymbol, state ?? undefined)
+
+    try {
+      if (!state && !initialization) {
+        initialization = this.initializeTicker(fmpSymbol).finally(() => {
+          this.pendingInitializations.delete(fmpSymbol)
+        })
+        this.pendingInitializations.set(fmpSymbol, initialization)
       }
 
-      state = {
-        fmpSymbol,
-        polygonTicker,
-        market,
-        listeners: new Set([callback]),
-        tenSecBucket: null,
-        tenSecBucketStart: 0,
-        graceTimer: null,
-      }
-      this.tickers.set(fmpSymbol, state)
+      state = state ?? await initialization!
+      if (!state) return () => {}
 
-      // Ensure WS connection for this market exists and subscribe
+      return this.addListener(state, callback)
+    } finally {
+      this.releaseListenerReservation(fmpSymbol)
+    }
+  }
+
+  private async initializeTicker(fmpSymbol: string): Promise<TickerState | null> {
+    const market = this.getMarket(fmpSymbol)
+    const polygonTicker = await this.resolvePolygonTicker(fmpSymbol, market)
+    if (!polygonTicker) {
+      console.error(`[broker] Could not resolve polygon ticker for ${fmpSymbol}`)
+      return null
+    }
+
+    const state: TickerState = {
+      fmpSymbol,
+      polygonTicker,
+      market,
+      listeners: new Set(),
+      tenSecBucket: null,
+      tenSecBucketStart: 0,
+      graceTimer: null,
+    }
+    this.tickers.set(fmpSymbol, state)
+
+    try {
       this.ensureConnection(market)
       this.wsSubscribe(market, polygonTicker)
+      return state
+    } catch (error) {
+      this.wsUnsubscribe(market, polygonTicker)
+      this.tickers.delete(fmpSymbol)
+      this.maybeDisconnect(market)
+      throw error
+    }
+  }
+
+  private ensureTickerCapacity(): void {
+    if (
+      this.tickers.size + this.pendingInitializations.size <
+      this.limits.maxTickers
+    ) {
+      return
     }
 
-    // Return unsubscribe function
-    return () => {
-      const s = this.tickers.get(fmpSymbol)
-      if (!s) return
-      s.listeners.delete(callback)
-
-      if (s.listeners.size === 0) {
-        // Start grace period — wait 30s before actually unsubscribing
-        s.graceTimer = setTimeout(() => {
-          const current = this.tickers.get(fmpSymbol)
-          if (current && current.listeners.size === 0) {
-            this.wsUnsubscribe(current.market, current.polygonTicker)
-            this.tickers.delete(fmpSymbol)
-            this.maybeDisconnect(current.market)
-          }
-        }, GRACE_PERIOD_MS)
+    // Grace-period entries have no active listeners. Evict them first instead
+    // of rejecting useful work merely to preserve a reconnect optimization.
+    for (const [symbol, state] of this.tickers) {
+      if (
+        state.listeners.size > 0 ||
+        (this.pendingListenerReservations.get(symbol) ?? 0) > 0
+      ) {
+        continue
+      }
+      this.removeTickerImmediately(symbol, state)
+      if (
+        this.tickers.size + this.pendingInitializations.size <
+        this.limits.maxTickers
+      ) {
+        return
       }
     }
+
+    throw new BrokerCapacityError(
+      'BROKER_TICKER_CAPACITY_EXCEEDED',
+      'Live market-data ticker capacity is temporarily exhausted.',
+      this.limits.maxTickers,
+    )
+  }
+
+  private reserveListener(fmpSymbol: string, state: TickerState | undefined): void {
+    const pendingForTicker = this.pendingListenerReservations.get(fmpSymbol) ?? 0
+    const committedForTicker = state?.listeners.size ?? 0
+
+    if (
+      committedForTicker + pendingForTicker >=
+      this.limits.maxListenersPerTicker
+    ) {
+      throw new BrokerCapacityError(
+        'BROKER_LISTENER_CAPACITY_EXCEEDED',
+        `Live market-data listener capacity for ${fmpSymbol} is temporarily exhausted.`,
+        this.limits.maxListenersPerTicker,
+      )
+    }
+
+    if (
+      this.totalListeners + this.pendingTotalListeners >=
+      this.limits.maxTotalListeners
+    ) {
+      throw new BrokerCapacityError(
+        'BROKER_TOTAL_LISTENER_CAPACITY_EXCEEDED',
+        'Live market-data listener capacity is temporarily exhausted.',
+        this.limits.maxTotalListeners,
+      )
+    }
+
+    this.pendingListenerReservations.set(fmpSymbol, pendingForTicker + 1)
+    this.pendingTotalListeners++
+  }
+
+  private releaseListenerReservation(fmpSymbol: string): void {
+    const pendingForTicker = this.pendingListenerReservations.get(fmpSymbol) ?? 0
+    if (pendingForTicker <= 1) {
+      this.pendingListenerReservations.delete(fmpSymbol)
+    } else {
+      this.pendingListenerReservations.set(fmpSymbol, pendingForTicker - 1)
+    }
+    this.pendingTotalListeners = Math.max(0, this.pendingTotalListeners - 1)
+  }
+
+  private addListener(state: TickerState, callback: BrokerCallback): () => void {
+    if (state.graceTimer) {
+      clearTimeout(state.graceTimer)
+      state.graceTimer = null
+    }
+
+    const added = !state.listeners.has(callback)
+    if (added) {
+      state.listeners.add(callback)
+      this.totalListeners++
+    }
+
+    let active = added
+    return () => {
+      if (!active) return
+      active = false
+
+      const current = this.tickers.get(state.fmpSymbol)
+      if (!current || !current.listeners.delete(callback)) return
+      this.totalListeners = Math.max(0, this.totalListeners - 1)
+
+      if (current.listeners.size === 0 && !current.graceTimer) {
+        if (this.gracePeriodMs === 0) {
+          this.removeTickerImmediately(state.fmpSymbol, current)
+          return
+        }
+
+        current.graceTimer = setTimeout(() => {
+          const latest = this.tickers.get(state.fmpSymbol)
+          if (latest && latest.listeners.size === 0) {
+            this.removeTickerImmediately(state.fmpSymbol, latest)
+          }
+        }, this.gracePeriodMs)
+      }
+    }
+  }
+
+  private removeTickerImmediately(symbol: string, state: TickerState): void {
+    if (state.graceTimer) {
+      clearTimeout(state.graceTimer)
+      state.graceTimer = null
+    }
+    this.wsUnsubscribe(state.market, state.polygonTicker)
+    this.tickers.delete(symbol)
+    this.maybeDisconnect(state.market)
   }
 
   // -----------------------------------------------------------------------

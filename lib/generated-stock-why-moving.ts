@@ -6,10 +6,17 @@ import { getProvider, type ProviderNews, type ProviderQuote } from '@/lib/provid
 import { getSP500Constituent, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
 import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
 import { isNewsletterSourceEntityMatch } from '@/lib/newsletter/source-integrity'
+import {
+  WIIM_SUMMARY_CONFIG_VERSION,
+  WIIM_SUMMARY_MAX_CHARACTERS,
+  WIIM_SUMMARY_NEWS_LOOKBACK_DAYS,
+} from '@/lib/wiim-summary-config'
 
-export const WIIM_SUMMARY_CONFIG_VERSION = 'fin-quote-daily-v2'
-export const WIIM_SUMMARY_NEWS_LOOKBACK_DAYS = 7
-export const WIIM_SUMMARY_MAX_CHARACTERS = 280
+export {
+  WIIM_SUMMARY_CONFIG_VERSION,
+  WIIM_SUMMARY_MAX_CHARACTERS,
+  WIIM_SUMMARY_NEWS_LOOKBACK_DAYS,
+} from '@/lib/wiim-summary-config'
 
 const SEC_NEWS_FORMS = new Set(['8-K', '10-Q', '10-K', '6-K'])
 

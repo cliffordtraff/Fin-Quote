@@ -1,6 +1,10 @@
 'use server'
 
 import { createServerClient } from '@/lib/supabase/server'
+import {
+  getMarketSymbolLookupAliases,
+  normalizeMarketSymbol,
+} from '@/lib/market-symbol'
 
 export type SegmentType = 'product' | 'geographic'
 export type PeriodType = 'annual' | 'quarterly' | 'all'
@@ -61,6 +65,8 @@ export async function getSegmentData(params: {
   maxYear?: number
 }): Promise<SegmentResult> {
   const { symbol, segmentType, periodType = 'annual', segments, quarters, minYear, maxYear } = params
+  const normalizedSymbol = normalizeMarketSymbol(symbol)
+  const lookupSymbols = getMarketSymbolLookupAliases(normalizedSymbol)
 
   // Validate segment type
   if (segmentType !== 'product' && segmentType !== 'geographic') {
@@ -104,7 +110,7 @@ export async function getSegmentData(params: {
     let query = supabase
       .from('company_metrics')
       .select('year, period, dimension_value, metric_value')
-      .eq('symbol', symbol as never)
+      .in('symbol', lookupSymbols as never)
       .eq('metric_name', 'segment_revenue' as never)
       .eq('dimension_type', segmentType as never)
       .in('dimension_value', requestedSegments as never)
@@ -211,11 +217,12 @@ export async function getQuarterlyDataYearRange(symbol: string): Promise<{
 }> {
   try {
     const supabase = await createServerClient()
+    const lookupSymbols = getMarketSymbolLookupAliases(symbol)
 
     const { data: rawData, error } = await supabase
       .from('company_metrics')
       .select('year')
-      .eq('symbol', symbol as never)
+      .in('symbol', lookupSymbols as never)
       .eq('metric_name', 'segment_revenue' as never)
       .in('period', ['Q1', 'Q2', 'Q3', 'Q4'] as never)
       .order('year', { ascending: true })

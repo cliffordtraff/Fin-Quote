@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 
 const repositoryRoot = process.cwd()
 const isolatedCwd = mkdtempSync(path.join(os.tmpdir(), 'fin-quote-fmp-test-'))
-const tsxCli = path.join(repositoryRoot, 'node_modules/tsx/dist/cli.mjs')
+const tsxLoader = path.join(repositoryRoot, 'node_modules/tsx/dist/loader.mjs')
 const typescriptScripts = [
   'scripts/fetch-aapl-data.ts',
   'scripts/fetch-fmp-metrics.ts',
@@ -21,7 +21,10 @@ const javascriptScripts = [
 
 function runWithoutApiKey(script: string, useTsx: boolean) {
   const args = useTsx
-    ? [tsxCli, path.join(repositoryRoot, script)]
+    // The tsx CLI opens an IPC socket even though these checks only need its
+    // TypeScript register hook. `node --import tsx` runs the same entry point
+    // without making the test depend on Unix-socket permissions.
+    ? ['--import', tsxLoader, path.join(repositoryRoot, script)]
     : [path.join(repositoryRoot, script)]
 
   const isolatedEnvironment = { ...process.env }

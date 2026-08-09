@@ -37,6 +37,7 @@ export interface BeehiivSyncOperationRecord {
   operationKind: BeehiivSyncOperationKind
   operationKey: string
   contentHash: string
+  sourceDraftUpdatedAt: string | null
   title: string
   syncState: BeehiivSyncState
   remotePostId: string | null
@@ -63,6 +64,7 @@ export interface BeehiivDeliveryRecord {
   editorUrl: string
   webUrl: string | null
   contentHash: string
+  sourceDraftUpdatedAt: string | null
   lifecycleStatus: BeehiivLifecycleStatus
   lifecycleAppliedStatus: BeehiivLifecycleStatus | null
   lifecycleAppliedAt: string | null

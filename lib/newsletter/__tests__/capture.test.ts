@@ -13,7 +13,11 @@ vi.mock('fs', async (importOriginal) => {
 })
 
 import { writeFileSync } from 'fs'
-import { captureChart, getChartingPlatformRenderUrl } from '@/lib/newsletter/capture'
+import {
+  captureChart,
+  getChartingPlatformRenderUrl,
+  MAX_RENDER_ERROR_DIAGNOSTIC_BYTES,
+} from '@/lib/newsletter/capture'
 
 describe('newsletter capture', () => {
   beforeEach(() => {
@@ -84,6 +88,78 @@ describe('newsletter capture', () => {
         },
       ),
     ).rejects.toThrow('Chart render failed: render exploded')
+  })
+
+  it('bounds and cancels oversized renderer error diagnostics', async () => {
+    const cancel = vi.fn()
+    const oversizedError = new TextEncoder().encode(
+      JSON.stringify({
+        error: `renderer-secret-${'x'.repeat(
+          MAX_RENDER_ERROR_DIAGNOSTIC_BYTES * 2,
+        )}`,
+      }),
+    )
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(oversizedError)
+          },
+          cancel,
+        }),
+        {
+          status: 500,
+          statusText: 'Renderer Failure',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(() =>
+      captureChart(
+        { stocks: ['MSFT'], metrics: ['free_cash_flow'] },
+        {
+          outputPath: '/tmp/msft-oversized-error.png',
+          chartBaseUrl: 'https://charts.theintraday.com',
+          maxAttempts: 1,
+        },
+      ),
+    ).rejects.toThrow('Chart render failed: 500 Renderer Failure')
+
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
+  it('rejects render responses above the 10 MiB storage limit before writing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Length': String(10 * 1024 * 1024 + 1),
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(() =>
+      captureChart(
+        {
+          stocks: ['AAPL'],
+          metrics: ['revenue'],
+        },
+        {
+          outputPath: '/tmp/oversized-render.png',
+          chartBaseUrl: 'https://charts.theintraday.com',
+          maxAttempts: 1,
+        },
+      ),
+    ).rejects.toThrow('Response exceeded the byte limit')
+
+    expect(writeFileSync).not.toHaveBeenCalledWith(
+      '/tmp/oversized-render.png',
+      expect.anything(),
+    )
   })
 
   it('retries a rate-limited render using Retry-After', async () => {
@@ -345,6 +421,8 @@ describe('newsletter capture', () => {
       {
         outputPath: '/tmp/lii.png',
         chartBaseUrl: 'https://charts.theintraday.com',
+        width: 1200,
+        height: 675,
       },
     )
 

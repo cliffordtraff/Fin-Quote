@@ -5,10 +5,12 @@ import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useRef, type MouseEvent } from 'react'
 
 interface RichTextEditorProps {
+  id: string
   value: string
   onChange: (html: string) => void
+  ariaLabel: string
+  readOnly?: boolean
   className?: string
-  placeholder?: string
   minHeightClassName?: string
 }
 
@@ -30,10 +32,12 @@ function toEditorHtml(value: string): string {
 }
 
 export function RichTextEditor({
+  id,
   value,
   onChange,
+  ariaLabel,
+  readOnly = false,
   className,
-  placeholder,
   minHeightClassName = 'min-h-[320px]',
 }: RichTextEditorProps) {
   const lastEmittedRef = useRef<string | null>(null)
@@ -43,6 +47,8 @@ export function RichTextEditor({
     content: toEditorHtml(value),
     editorProps: {
       attributes: {
+        id,
+        'aria-label': ariaLabel,
         class: [
           'tiptap-newsletter-body px-4 py-2.5 text-sm leading-6 text-gray-900',
           'focus:outline-none',
@@ -58,6 +64,7 @@ export function RichTextEditor({
       onChange(html)
     },
     immediatelyRender: false,
+    editable: !readOnly,
   })
 
   useEffect(() => {
@@ -69,8 +76,27 @@ export function RichTextEditor({
     lastEmittedRef.current = editor.getHTML()
   }, [editor, value])
 
-  function focusEditorFromContainer(event: MouseEvent<HTMLDivElement>) {
+  useEffect(() => {
+    editor?.setEditable(!readOnly)
+  }, [editor, readOnly])
+
+  useEffect(() => {
     if (!editor) return
+    const editorProps = editor.options.editorProps
+    editor.setOptions({
+      editorProps: {
+        ...editorProps,
+        attributes: {
+          ...editorProps.attributes,
+          id,
+          'aria-label': ariaLabel,
+        },
+      },
+    })
+  }, [ariaLabel, editor, id])
+
+  function focusEditorFromContainer(event: MouseEvent<HTMLDivElement>) {
+    if (!editor || readOnly) return
 
     const target = event.target as HTMLElement | null
     if (!target) return
@@ -82,8 +108,11 @@ export function RichTextEditor({
   return (
     <div
       onClick={focusEditorFromContainer}
+      aria-readonly={readOnly}
       className={[
-        'w-full rounded-2xl border border-gray-300 bg-white transition',
+        `w-full rounded-2xl border border-gray-300 transition ${
+          readOnly ? 'bg-gray-50' : 'bg-white'
+        }`,
         'focus-within:border-sage-500 focus-within:ring-2 focus-within:ring-sage-500/20',
         className ?? '',
       ]

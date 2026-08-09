@@ -62,6 +62,8 @@ async function main() {
       scope,
       automated.draft.id,
       'https://theintraday.beehiiv.com/p/catalyst-workflow-verification',
+      new Date(),
+      automated.draft.updatedAt,
     )
 
     if (!automated.created || repeated.created) {

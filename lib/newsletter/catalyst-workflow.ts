@@ -19,6 +19,12 @@ import {
   getDefaultChartingBaseUrl,
   getDefaultPublicChartingBaseUrl,
 } from './charting-platform-export'
+import {
+  hasSameNewsletterDraftChartEvidence,
+  isNewsletterChartCaptureCurrentForMarketDate,
+  isNewsletterChartLibraryEvidenceCurrent,
+  isNewsletterChartProvenanceCurrent,
+} from './chart-provenance'
 import { normalizeNewsletterSubject } from './delivery-quality'
 import type {
   NewsletterDraftBlock,
@@ -178,6 +184,18 @@ function buildCatalystBlocks(
     chartAlt: chart.title,
     chartExportUrl: chart.chartExportUrl,
     chartSpec: chart.chartSpec,
+    chartProvenance: {
+      version: 1,
+      source: 'chart_library',
+      libraryItemId: chart.id,
+      capturedAt: chart.capturedAt,
+      rendererContract: chart.rendererContract,
+      imageUrl: chart.chartImageUrl,
+      imageSha256: chart.imageSha256,
+      interactiveUrl: chart.chartExportUrl,
+      scene: chart.chartSpec,
+      sceneSha256: chart.sceneHash,
+    },
     chartNeedsRegeneration: false,
     caption:
       index === 0
@@ -194,6 +212,169 @@ function buildCatalystBlocks(
   }))
 }
 
+function isCatalystLibraryChartCurrent(
+  chart: NewsletterChartLibraryItem,
+  marketDate: string,
+): boolean {
+  return (
+    isNewsletterChartCaptureCurrentForMarketDate(
+      chart.capturedAt,
+      marketDate,
+    ) && isNewsletterChartLibraryEvidenceCurrent(chart)
+  )
+}
+
+function isCatalystBlockChartCurrent(
+  block: NewsletterDraftBlock,
+  marketDate: string,
+): boolean {
+  return (
+    !block.chartNeedsRegeneration &&
+    block.chartProvenance?.source !== 'legacy' &&
+    isNewsletterChartCaptureCurrentForMarketDate(
+      block.chartProvenance?.capturedAt,
+      marketDate,
+    ) &&
+    isNewsletterChartProvenanceCurrent(block.chartProvenance, {
+      imageUrl: block.chartImageUrl,
+      interactiveUrl: block.chartExportUrl,
+      scene: block.chartSpec,
+    })
+  )
+}
+
+function mergeCatalystChartRepair(
+  editedBlock: NewsletterDraftBlock,
+  repairedBlock: NewsletterDraftBlock,
+): NewsletterDraftBlock {
+  const editedLibraryItemId =
+    editedBlock.chartProvenance?.libraryItemId?.trim() ?? ''
+  const repairedLibraryItemId =
+    repairedBlock.chartProvenance?.libraryItemId?.trim() ?? ''
+  const sameLibraryItem =
+    Boolean(editedLibraryItemId) &&
+    editedLibraryItemId === repairedLibraryItemId
+  const editedHeadingWasCustomized =
+    editedBlock.heading.trim() !== editedBlock.chartAlt.trim()
+
+  return {
+    ...repairedBlock,
+    id: editedBlock.id,
+    heading:
+      sameLibraryItem ||
+      editedBlock.templateId === 'approved_catalyst' ||
+      editedHeadingWasCustomized
+        ? editedBlock.heading
+        : repairedBlock.heading,
+    body: editedBlock.body,
+    caption: sameLibraryItem
+      ? editedBlock.caption ?? repairedBlock.caption
+      : repairedBlock.caption,
+    ctaText: editedBlock.ctaText ?? repairedBlock.ctaText,
+    ctaUrl: editedBlock.ctaUrl ?? repairedBlock.ctaUrl,
+    footer: editedBlock.footer ?? repairedBlock.footer,
+  }
+}
+
+function reconcileCatalystRepairBlocks(
+  existingBlocks: NewsletterDraftBlock[],
+  repairedBlocks: NewsletterDraftBlock[],
+  marketDate: string,
+): NewsletterDraftBlock[] {
+  const repairedByLibraryItemId = new Map<string, number>()
+  repairedBlocks.forEach((block, index) => {
+    const libraryItemId = block.chartProvenance?.libraryItemId?.trim()
+    if (libraryItemId && !repairedByLibraryItemId.has(libraryItemId)) {
+      repairedByLibraryItemId.set(libraryItemId, index)
+    }
+  })
+  const stableRepairIndexes = new Set<number>()
+  const repairAssignments = existingBlocks.map((block) => {
+    const libraryItemId = block.chartProvenance?.libraryItemId?.trim()
+    const repairIndex = libraryItemId
+      ? repairedByLibraryItemId.get(libraryItemId)
+      : undefined
+    if (repairIndex == null || stableRepairIndexes.has(repairIndex)) {
+      return null
+    }
+    stableRepairIndexes.add(repairIndex)
+    return repairIndex
+  })
+  const assignedRepairIndexes = new Set(stableRepairIndexes)
+
+  const assignUniqueSemanticRoles = () => {
+    const unmatchedExistingByTemplate = new Map<string, number[]>()
+    existingBlocks.forEach((block, index) => {
+      if (
+        repairAssignments[index] != null ||
+        isCatalystBlockChartCurrent(block, marketDate)
+      ) {
+        return
+      }
+      const indexes = unmatchedExistingByTemplate.get(block.templateId) ?? []
+      indexes.push(index)
+      unmatchedExistingByTemplate.set(block.templateId, indexes)
+    })
+    const unmatchedRepairsByTemplate = new Map<string, number[]>()
+    repairedBlocks.forEach((block, index) => {
+      if (assignedRepairIndexes.has(index)) return
+      const indexes = unmatchedRepairsByTemplate.get(block.templateId) ?? []
+      indexes.push(index)
+      unmatchedRepairsByTemplate.set(block.templateId, indexes)
+    })
+    for (const [templateId, existingIndexes] of unmatchedExistingByTemplate) {
+      const repairIndexes = unmatchedRepairsByTemplate.get(templateId) ?? []
+      if (existingIndexes.length === 1 && repairIndexes.length === 1) {
+        repairAssignments[existingIndexes[0]] = repairIndexes[0]
+        assignedRepairIndexes.add(repairIndexes[0])
+      }
+    }
+  }
+  assignUniqueSemanticRoles()
+
+  const remainingExistingIndexes = existingBlocks
+    .map((_block, index) => index)
+    .filter(
+      (index) =>
+        repairAssignments[index] == null &&
+        !isCatalystBlockChartCurrent(existingBlocks[index], marketDate),
+    )
+  const remainingRepairIndexes = repairedBlocks
+    .map((_block, index) => index)
+    .filter((index) => !assignedRepairIndexes.has(index))
+  if (
+    remainingExistingIndexes.length === 1 &&
+    remainingRepairIndexes.length === 1
+  ) {
+    repairAssignments[remainingExistingIndexes[0]] = remainingRepairIndexes[0]
+    assignedRepairIndexes.add(remainingRepairIndexes[0])
+  }
+
+  const reconciled = existingBlocks.map((editedBlock, existingIndex) => {
+    const repairIndex = repairAssignments[existingIndex]
+    if (repairIndex != null) {
+      return mergeCatalystChartRepair(
+        editedBlock,
+        repairedBlocks[repairIndex],
+      )
+    }
+
+    if (isCatalystBlockChartCurrent(editedBlock, marketDate)) {
+      return editedBlock
+    }
+
+    return {
+      ...editedBlock,
+      chartNeedsRegeneration: true,
+    }
+  })
+
+  repairedBlocks.forEach((block, index) => {
+    if (!assignedRepairIndexes.has(index)) reconciled.push(block)
+  })
+  return reconciled
+}
+
 export function buildApprovedCatalystNewsletterDraft(
   input: ApprovedCatalystNewsletterInput,
   chartItems: NewsletterChartLibraryItem[],
@@ -206,7 +387,11 @@ export function buildApprovedCatalystNewsletterDraft(
   const now = options.now ?? new Date()
   const headline = catalystHeadline(input)
   const summary = catalystSummary(input)
-  const attachedChartIds = chartItems.map((chart) => chart.id)
+  const currentChartItems = chartItems.filter(
+    (chart) =>
+      isCatalystLibraryChartCurrent(chart, input.candidate.marketDate),
+  )
+  const attachedChartIds = currentChartItems.map((chart) => chart.id)
   const move = `${input.candidate.changesPercentage >= 0 ? '+' : ''}${input.candidate.changesPercentage.toFixed(2)}%`
 
   return {
@@ -232,7 +417,8 @@ export function buildApprovedCatalystNewsletterDraft(
       },
       attachedChartIds,
       automatedAt: now.toISOString(),
-      automationStatus: chartItems.length > 0 ? 'complete' : 'needs_chart',
+      automationStatus:
+        currentChartItems.length > 0 ? 'complete' : 'needs_chart',
       automationWarning: options.warning?.trim() || undefined,
     },
     manualDraft: false,
@@ -265,7 +451,7 @@ export function buildApprovedCatalystNewsletterDraft(
       ],
     },
     autoPickedStock: false,
-    blocks: buildCatalystBlocks(input, chartItems),
+    blocks: buildCatalystBlocks(input, currentChartItems),
   }
 }
 
@@ -311,7 +497,11 @@ async function resolveCatalystCharts(
     dependencies.listCharts ?? listNewsletterChartLibraryItems
   const allCharts = await listCharts(scope)
   const matching = allCharts
-    .filter((chart) => chart.symbol.trim().toUpperCase() === symbol)
+    .filter(
+      (chart) =>
+        chart.symbol.trim().toUpperCase() === symbol &&
+        isCatalystLibraryChartCurrent(chart, input.candidate.marketDate),
+    )
     .slice(0, MAX_AUTOMATIC_CHARTS)
   if (matching.length > 0) {
     return { charts: matching, generatedChart: false, warning: null }
@@ -321,6 +511,19 @@ async function resolveCatalystCharts(
     const createChart =
       dependencies.createChart ?? createDefaultCatalystChart
     const generated = await createChart(scope, input)
+    if (
+      !isCatalystLibraryChartCurrent(
+        generated,
+        input.candidate.marketDate,
+      )
+    ) {
+      return {
+        charts: [],
+        generatedChart: false,
+        warning:
+          'Automatic chart capture returned unverified provenance and must be retried.',
+      }
+    }
     return { charts: [generated], generatedChart: true, warning: null }
   } catch (error) {
     return {
@@ -332,6 +535,20 @@ async function resolveCatalystCharts(
           : 'Automatic chart capture failed.',
     }
   }
+}
+
+function isCompletedCatalystDraftReusable(
+  draft: NewsletterDraftDocument,
+): boolean {
+  const source = draft.source
+  return (
+    source?.type === 'catalyst' &&
+    source.automationStatus === 'complete' &&
+    draft.blocks.length > 0 &&
+    draft.blocks.every((block) =>
+      isCatalystBlockChartCurrent(block, source.catalyst.marketDate),
+    )
+  )
 }
 
 export async function ensureApprovedCatalystNewsletterDraft(
@@ -349,15 +566,15 @@ export async function ensureApprovedCatalystNewsletterDraft(
   )
   if (
     existing &&
-    existing.draft.source?.type === 'catalyst' &&
-    existing.draft.source.automationStatus === 'complete'
+    isCompletedCatalystDraftReusable(existing.draft)
   ) {
     return {
       draft: existing,
       created: false,
-      chartsAttached: existing.draft.source.attachedChartIds.length,
+      chartsAttached:
+        existing.draft.source?.attachedChartIds.length ?? 0,
       generatedChart: false,
-      warning: existing.draft.source.automationWarning ?? null,
+      warning: existing.draft.source?.automationWarning ?? null,
     }
   }
 
@@ -375,31 +592,60 @@ export async function ensureApprovedCatalystNewsletterDraft(
   let draft: NewsletterDraftRecord
   let created = false
   if (existing) {
-    const repairedBlocks = draftDocument.blocks.map((block, index) => {
-      const editedBlock = existing.draft.blocks[index]
-      if (!editedBlock) return block
-      return {
-        ...block,
-        id: editedBlock.id,
-        heading: editedBlock.heading,
-        body: editedBlock.body,
-        caption: editedBlock.caption ?? block.caption,
-        ctaText: editedBlock.ctaText ?? block.ctaText,
-        ctaUrl: editedBlock.ctaUrl ?? block.ctaUrl,
-        footer: editedBlock.footer ?? block.footer,
-      }
-    })
+    const repairedBlocks = reconcileCatalystRepairBlocks(
+      existing.draft.blocks,
+      draftDocument.blocks,
+      input.candidate.marketDate,
+    )
+    const repairedChartsComplete =
+      repairedBlocks.length > 0 &&
+      repairedBlocks.every((block) =>
+        isCatalystBlockChartCurrent(block, input.candidate.marketDate),
+      )
+    const attachedChartIds = Array.from(
+      new Set(
+        repairedBlocks
+          .filter((block) =>
+            isCatalystBlockChartCurrent(block, input.candidate.marketDate),
+          )
+          .map((block) => block.chartProvenance?.libraryItemId?.trim())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    )
+    const source =
+      draftDocument.source?.type === 'catalyst'
+        ? {
+            ...draftDocument.source,
+            attachedChartIds,
+            automationStatus: repairedChartsComplete
+              ? ('complete' as const)
+              : ('needs_chart' as const),
+            automationWarning: repairedChartsComplete
+              ? draftDocument.source.automationWarning
+              : draftDocument.source.automationWarning ??
+                'One or more catalyst charts still require recapture.',
+          }
+        : draftDocument.source
     const repairedDocument: NewsletterDraftDocument = {
       ...existing.draft,
-      source: draftDocument.source,
+      source,
       publication: existing.draft.publication,
       blocks: repairedBlocks,
     }
+    const chartEvidenceChanged =
+      existing.draft.blocks.length !== repairedBlocks.length ||
+      existing.draft.blocks.some(
+        (block, index) =>
+          !repairedBlocks[index] ||
+          !hasSameNewsletterDraftChartEvidence(block, repairedBlocks[index]),
+      )
     draft = await saveNewsletterDraft(
       scope,
       existing.id,
       repairedDocument,
-      existing.status,
+      existing.status === 'ready' && chartEvidenceChanged
+        ? 'review'
+        : existing.status,
       {
         publicChartBaseUrl: dependencies.publicChartBaseUrl,
         expectedUpdatedAt: existing.updatedAt,
@@ -464,4 +710,10 @@ export async function ensureApprovedCatalystNewsletterDraft(
     generatedChart: resolved.generatedChart,
     warning: resolved.warning,
   }
+}
+
+export const __testOnly = {
+  isCompletedCatalystDraftReusable,
+  mergeCatalystChartRepair,
+  reconcileCatalystRepairBlocks,
 }

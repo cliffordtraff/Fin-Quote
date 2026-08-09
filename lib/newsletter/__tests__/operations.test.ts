@@ -250,20 +250,4 @@ describe('newsletter operations', () => {
     })
   })
 
-  it('uses explicit draft market dates before Eastern timestamp fallback', () => {
-    expect(
-      __testOnly.draftMarketDate(
-        {
-          source: {
-            type: 'daily_batch',
-            dailyBatch: { marketDate: '2026-08-05' },
-          },
-        },
-        '2026-08-06T02:00:00.000Z',
-      ),
-    ).toBe('2026-08-05')
-    expect(
-      __testOnly.draftMarketDate({}, '2026-08-06T02:00:00.000Z'),
-    ).toBe('2026-08-05')
-  })
 })

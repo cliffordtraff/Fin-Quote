@@ -157,7 +157,7 @@ describe('NewsletterOperations', () => {
       ).toBeInTheDocument()
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/newsletter/operations',
+      '/api/newsletter/operations/action',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ action: 'reconcile_beehiiv' }),

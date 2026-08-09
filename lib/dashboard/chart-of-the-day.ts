@@ -13,12 +13,12 @@ import {
   type DashboardChartOfTheDayChartSpec,
   type DashboardChartOfTheDaySelection,
 } from './chart-of-the-day-spec'
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync, readdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { toSpecMetricId } from '@/lib/charting-metric-bridge'
 import { isPriceNewsletterChartSpec } from '@/lib/newsletter/chart-spec'
 import {
-  getDefaultPublicChartingBaseUrlForHost,
+  getDefaultChartingBaseUrl,
   resolveChartingPlatformDashboardFundamentalsSurfacePath,
   resolveChartingPlatformNewsletterChart,
 } from '@/lib/newsletter/charting-platform-export'
@@ -60,6 +60,7 @@ export interface DashboardChartOfTheDayFallbackPayload {
 }
 
 const CHARTING_PROXY_BASE_URL = 'https://charting-proxy.theintraday.invalid'
+const MAX_DASHBOARD_CHART_INPUT_PIXELS = 4_000_000
 
 function normalizeTicker(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim().toUpperCase() : ''
@@ -200,7 +201,10 @@ function resolveDashboardChartOfTheDayFromSpec(
     throw new Error('Dashboard chart of the day must resolve to a fundamentals export spec')
   }
 
-  const chartBaseUrl = getDefaultPublicChartingBaseUrlForHost(options.hostHeader)
+  // Backend render destinations are configured by trusted server environment
+  // only. A caller-controlled Host header must never switch this POST to a
+  // loopback service.
+  const chartBaseUrl = getDefaultChartingBaseUrl()
   const resolvedChart = resolveChartingPlatformNewsletterChart(spec, {
     chartBaseUrl,
     width: DASHBOARD_CHART_OF_THE_DAY_RENDER_WIDTH,
@@ -360,16 +364,17 @@ export function resolveDashboardChartOfTheDay(
 
 export async function resolveCurrentDashboardChartOfTheDay(
   options: ResolveDashboardChartOfTheDayOptions = {},
+  setting?: Awaited<ReturnType<typeof getDashboardChartOfTheDaySetting>>,
 ): Promise<ResolvedDashboardChartOfTheDay> {
-  const setting = await getDashboardChartOfTheDaySetting()
-  return resolveDashboardChartOfTheDayFromSpec(options, setting.chartSpec, {
+  const resolvedSetting = setting ?? await getDashboardChartOfTheDaySetting()
+  return resolveDashboardChartOfTheDayFromSpec(options, resolvedSetting.chartSpec, {
     symbol:
-      setting.chartSpec.stocks[0] ??
-      setting.selection?.ticker ??
+      resolvedSetting.chartSpec.stocks[0] ??
+      resolvedSetting.selection?.ticker ??
       DASHBOARD_CHART_OF_THE_DAY_SYMBOL,
     templateId:
-      setting.source === 'template'
-        ? (setting.selection?.templateId ?? DASHBOARD_CHART_OF_THE_DAY_TEMPLATE_ID)
+      resolvedSetting.source === 'template'
+        ? (resolvedSetting.selection?.templateId ?? DASHBOARD_CHART_OF_THE_DAY_TEMPLATE_ID)
         : DASHBOARD_CHART_OF_THE_DAY_CUSTOM_TEMPLATE_ID,
   })
 }
@@ -383,6 +388,7 @@ export function resolveDashboardChartOfTheDayIframeUrls(
   options: Omit<ResolveDashboardChartOfTheDayOptions, 'theme'> = {},
   selection: DashboardChartOfTheDaySelection = DASHBOARD_CHART_OF_THE_DAY_DEFAULT_SELECTION,
 ): DashboardChartOfTheDayIframeUrls {
+  void options
   const spec = getDashboardChartOfTheDaySpec(selection)
 
   if (isPriceNewsletterChartSpec(spec)) {
@@ -405,6 +411,7 @@ export function resolveDashboardChartOfTheDayIframeUrls(
 export async function loadDashboardChartOfTheDayIframeUrls(
   options: Omit<ResolveDashboardChartOfTheDayOptions, 'theme'> = {},
 ): Promise<DashboardChartOfTheDayIframeUrls> {
+  void options
   const setting = await getDashboardChartOfTheDaySetting()
 
   if (isPriceNewsletterChartSpec(setting.chartSpec)) {
@@ -459,9 +466,15 @@ export function findDashboardChartOfTheDayFallbackImageForSelection(
 export async function loadDashboardChartOfTheDayFallbackImage(
   theme: 'light' | 'dark' = 'light',
   selection: DashboardChartOfTheDaySelection = DASHBOARD_CHART_OF_THE_DAY_DEFAULT_SELECTION,
+  maxBytes = Number.POSITIVE_INFINITY,
 ): Promise<DashboardChartOfTheDayFallbackPayload | null> {
   const fallbackImage = findDashboardChartOfTheDayFallbackImageForSelection(selection)
   if (!fallbackImage) return null
+
+  const size = statSync(fallbackImage.absolutePath).size
+  if (size > maxBytes) {
+    throw new Error('Chart fallback exceeded the image size limit')
+  }
 
   const rawBuffer = readFileSync(fallbackImage.absolutePath)
 
@@ -481,7 +494,10 @@ export async function loadDashboardChartOfTheDayFallbackImage(
 export async function transformDashboardChartImageForDarkTheme(input: Buffer): Promise<Buffer> {
   const sharpModule = await import('sharp')
   const sharp = sharpModule.default
-  const { data, info } = await sharp(input)
+  const { data, info } = await sharp(input, {
+    limitInputPixels: MAX_DASHBOARD_CHART_INPUT_PIXELS,
+    sequentialRead: true,
+  })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })

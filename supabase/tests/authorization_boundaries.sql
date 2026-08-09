@@ -40,11 +40,15 @@ VALUES
   ('monthly_ratio_snapshots'),
   ('newsletter_beehiiv_deliveries'),
   ('newsletter_beehiiv_sync_operations'),
+  ('newsletter_chart_library'),
   ('newsletter_cron_runs'),
   ('newsletter_daily_automation_runs'),
   ('newsletter_integrations'),
   ('newsletter_mid_morning_runs'),
   ('newsletter_picks'),
+  ('newsletter_draft_events'),
+  ('newsletter_draft_fork_requests'),
+  ('newsletter_drafts'),
   ('newsletter_webhook_outbox'),
   ('price_performance'),
   ('prompt_versions'),
@@ -88,6 +92,7 @@ VALUES
   ('newsletter_integrations'),
   ('newsletter_mid_morning_runs'),
   ('newsletter_picks'),
+  ('newsletter_draft_fork_requests'),
   ('newsletter_webhook_outbox'),
   ('prompt_versions'),
   ('ranker_config_versions'),
@@ -260,11 +265,7 @@ SELECT table_name, privilege_name
 FROM unnest(ARRAY[
   'conversations',
   'docs',
-  'newsletter_chart_library',
-  'newsletter_daily_run_items',
-  'newsletter_daily_runs',
   'newsletter_daily_settings',
-  'newsletter_drafts',
   'watchlist_items',
   'watchlist_settings',
   'watchlist_tabs',
@@ -277,8 +278,14 @@ FROM unnest(ARRAY['messages']) AS managed(table_name)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'DELETE']) AS wanted(privilege_name)
 UNION ALL
 SELECT table_name, privilege_name
-FROM unnest(ARRAY['newsletter_draft_events']) AS managed(table_name)
-CROSS JOIN unnest(ARRAY['SELECT', 'INSERT']) AS wanted(privilege_name);
+FROM unnest(ARRAY[
+  'newsletter_chart_library',
+  'newsletter_daily_run_items',
+  'newsletter_daily_runs',
+  'newsletter_draft_events',
+  'newsletter_drafts'
+]) AS managed(table_name)
+CROSS JOIN unnest(ARRAY['SELECT']) AS wanted(privilege_name);
 
 SELECT is(
   (
@@ -292,6 +299,24 @@ SELECT is(
   ),
   0::bigint,
   'authenticated receives the intended owner-scoped table privileges'
+);
+
+SELECT ok(
+  NOT has_table_privilege(
+    'authenticated',
+    'public.newsletter_daily_runs',
+    'INSERT'
+  )
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_daily_runs', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_daily_runs', 'DELETE')
+    AND NOT has_table_privilege(
+      'authenticated',
+      'public.newsletter_daily_run_items',
+      'INSERT'
+    )
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_daily_run_items', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_daily_run_items', 'DELETE'),
+  'authenticated daily production records are read-only through the Data API'
 );
 
 SELECT ok(
@@ -364,8 +389,15 @@ SELECT is(
 SELECT ok(
   NOT has_table_privilege('authenticated', 'public.messages', 'UPDATE')
     AND NOT has_any_column_privilege('authenticated', 'public.messages', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_chart_library', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_chart_library', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_chart_library', 'DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_draft_events', 'INSERT')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_draft_events', 'UPDATE')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_draft_events', 'DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_drafts', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_drafts', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_drafts', 'DELETE')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_notifications', 'INSERT')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_notifications', 'DELETE'),
   'authenticated lacks mutations not used by owner-facing workflows'
@@ -568,10 +600,15 @@ SELECT is(
     WHERE namespace.nspname = 'public'
       AND procedure.prokind = 'f'
       AND owner_role.rolname = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger AS trigger
+        WHERE trigger.tgfoid = procedure.oid
+      )
       AND NOT has_function_privilege('service_role', procedure.oid, 'EXECUTE')
   ),
   0::bigint,
-  'service role retains execution privilege on public functions'
+  'service role retains execution privilege on callable public functions'
 );
 
 SELECT ok(

@@ -1,5 +1,14 @@
 'use server'
 
+import {
+  addDaysToDateKey,
+  CATALYST_CALENDAR_ECONOMIC_LIMIT,
+  getCatalystWeek,
+  getCurrentCatalystWeek,
+  newYorkDateKey,
+  parseNewYorkTimestamp,
+} from '@/lib/catalyst-calendar'
+import { readBoundedProviderJson } from '@/lib/catalyst-provider-response'
 import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface EconomicEvent {
@@ -14,81 +23,217 @@ export interface EconomicEvent {
   unit: string
 }
 
-export async function getEconomicEvents() {
-  const apiKey = process.env.FMP_API_KEY
+export interface EconomicCalendarResult {
+  events: EconomicEvent[]
+}
 
-  if (!apiKey) {
-    return { error: 'API configuration error' }
+export type EconomicCalendarLoadResult =
+  | EconomicCalendarResult
+  | { error: string }
+
+export interface CatalystEconomicCalendarResult extends EconomicCalendarResult {
+  totalCount: number
+  truncated: boolean
+}
+
+export type CatalystEconomicCalendarLoadResult =
+  | CatalystEconomicCalendarResult
+  | { error: string }
+
+type InternalEconomicCalendarLoadResult =
+  | { events: EconomicEvent[]; totalCount: number }
+  | { error: string }
+
+const DASHBOARD_ECONOMIC_LIMIT = 12
+const MAX_PROVIDER_ROWS = 5_000
+const MAX_PROVIDER_RESPONSE_BYTES = 2 * 1024 * 1024
+const PROVIDER_TIMEOUT_MS = 6_000
+const MAX_EVENT_LENGTH = 240
+const MAX_DATE_LENGTH = 40
+
+type LoadMode = 'dashboard' | 'calendar'
+type ProviderRow = Record<string, unknown>
+
+function isRecord(value: unknown): value is ProviderRow {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function nullableFiniteNumber(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === '') return null
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function boundedString(value: unknown, maxLength: number, allowEmpty = false): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if ((!allowEmpty && normalized.length === 0) || normalized.length > maxLength) return null
+  return normalized
+}
+
+function parseEligibleRow(row: ProviderRow): EconomicEvent | null {
+  const date = boundedString(row.date, MAX_DATE_LENGTH)
+  const event = boundedString(row.event, MAX_EVENT_LENGTH)
+  const currency = boundedString(row.currency, 12, true)
+  const unit = row.unit === null || row.unit === undefined
+    ? ''
+    : boundedString(row.unit, 24, true)
+  const previous = nullableFiniteNumber(row.previous)
+  const estimate = nullableFiniteNumber(row.estimate)
+  const actual = nullableFiniteNumber(row.actual)
+  const impactValue = typeof row.impact === 'string' ? row.impact.trim().toLowerCase() : ''
+  const impact = impactValue === 'high'
+    ? 'High' as const
+    : impactValue === 'medium'
+      ? 'Medium' as const
+      : null
+
+  if (
+    date === null ||
+    !Number.isFinite(parseNewYorkTimestamp(date)) ||
+    event === null ||
+    currency === null ||
+    unit === null ||
+    previous === undefined ||
+    estimate === undefined ||
+    actual === undefined ||
+    impact === null
+  ) {
+    return null
   }
 
-  try {
-    // Get events for the next 7 days
-    const today = new Date()
-    const nextWeek = new Date(today)
-    nextWeek.setDate(today.getDate() + 7)
+  return {
+    date,
+    country: 'US',
+    event,
+    currency: currency.toUpperCase(),
+    previous,
+    estimate,
+    actual,
+    impact,
+    unit,
+  }
+}
 
-    const formatDate = (date: Date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
+function chronologicalSort(left: EconomicEvent, right: EconomicEvent): number {
+  const timeOrder = parseNewYorkTimestamp(left.date) - parseNewYorkTimestamp(right.date)
+  return timeOrder !== 0
+    ? timeOrder
+    : left.event.localeCompare(right.event, 'en-US')
+}
+
+function parseProviderRows(value: unknown): EconomicEvent[] | null {
+  if (!Array.isArray(value) || value.length > MAX_PROVIDER_ROWS) return null
+
+  const parsed: EconomicEvent[] = []
+  const seen = new Set<string>()
+
+  for (const candidate of value) {
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.country !== 'string' ||
+      typeof candidate.impact !== 'string' ||
+      typeof candidate.event !== 'string'
+    ) {
+      return null
     }
 
-    const from = formatDate(today)
-    const to = formatDate(nextWeek)
+    const country = candidate.country.trim().toUpperCase()
+    const impact = candidate.impact.trim().toLowerCase()
+    if (country !== 'US' || (impact !== 'high' && impact !== 'medium')) continue
 
-    const url = `https://financialmodelingprep.com/api/v3/economic_calendar?from=${from}&to=${to}&apikey=${apiKey}`
-    const response = await fetch(url, {
-      next: { revalidate: 900 } // Cache for 15 minutes (calendar updates every 15 min)
+    const event = parseEligibleRow(candidate)
+    if (!event) return null
+
+    const key = `${event.date}|${event.event}|${event.currency}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    parsed.push(event)
+  }
+
+  return parsed
+}
+
+function selectDashboardEvents(events: EconomicEvent[]): EconomicEvent[] {
+  const high: EconomicEvent[] = []
+  const medium: EconomicEvent[] = []
+
+  for (const event of events) {
+    if (event.impact === 'High') high.push(event)
+    else medium.push(event)
+  }
+
+  high.sort(chronologicalSort)
+  medium.sort(chronologicalSort)
+  const selectedHigh = high.slice(0, DASHBOARD_ECONOMIC_LIMIT)
+
+  return [
+    ...selectedHigh,
+    ...medium.slice(0, DASHBOARD_ECONOMIC_LIMIT - selectedHigh.length),
+  ].sort(chronologicalSort)
+}
+
+async function loadEconomicEvents(
+  mode: LoadMode,
+  referenceTime?: string,
+): Promise<InternalEconomicCalendarLoadResult> {
+  const apiKey = process.env.FMP_API_KEY
+  if (!apiKey) return { error: 'API configuration error' }
+
+  try {
+    const today = newYorkDateKey(Date.now())
+    if (!today) return { error: 'Failed to load economic calendar data' }
+
+    const week = mode === 'calendar'
+      ? getCurrentCatalystWeek(referenceTime ?? '')
+      : getCatalystWeek()
+    if (!week) return { error: 'Failed to load economic calendar data' }
+    const from = mode === 'calendar' ? week.fromDate : today
+    const to = mode === 'calendar' ? week.toDate : addDaysToDateKey(today, 7)
+    const response = await fetch(
+      `https://financialmodelingprep.com/api/v3/economic_calendar?from=${from}&to=${to}&apikey=${apiKey}`,
+      {
+        next: { revalidate: 900 },
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      },
+    )
+
+    if (!response.ok) throw new Error(`Economic calendar request failed (${response.status})`)
+
+    const providerEvents = parseProviderRows(
+      await readBoundedProviderJson(response, MAX_PROVIDER_RESPONSE_BYTES),
+    )
+    if (!providerEvents) throw new Error('Invalid economic calendar payload')
+
+    const events = providerEvents.filter((event) => {
+      const dateKey = newYorkDateKey(parseNewYorkTimestamp(event.date))
+      return dateKey !== null && dateKey >= from && dateKey <= to
     })
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch economic calendar data')
-    }
+    const selected = mode === 'calendar'
+      ? events.sort(chronologicalSort).slice(0, CATALYST_CALENDAR_ECONOMIC_LIMIT)
+      : selectDashboardEvents(events)
 
-    const data = await response.json()
-
-    if (Array.isArray(data) && data.length > 0) {
-      const mapEvent = (event: any) => ({
-        date: event.date,
-        country: event.country,
-        event: event.event,
-        currency: event.currency,
-        previous: event.previous,
-        estimate: event.estimate,
-        actual: event.actual,
-        impact: event.impact,
-        unit: event.unit || ''
-      })
-
-      // Get all High impact US events (these are critical - FOMC, GDP, etc.)
-      const highImpactEvents = data
-        .filter((event: any) => event.country === 'US' && event.impact === 'High')
-        .map(mapEvent)
-        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      // Get Medium impact US events to fill remaining slots
-      const mediumImpactEvents = data
-        .filter((event: any) => event.country === 'US' && event.impact === 'Medium')
-        .map(mapEvent)
-        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      // Take all High impact events (up to 10), then fill with Medium
-      const maxEvents = 12
-      const selectedHigh = highImpactEvents.slice(0, maxEvents)
-      const remainingSlots = maxEvents - selectedHigh.length
-      const selectedMedium = mediumImpactEvents.slice(0, remainingSlots)
-
-      // Combine and sort chronologically
-      const combinedEvents = [...selectedHigh, ...selectedMedium]
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      return { events: combinedEvents }
-    }
-
-    return { events: [] }
+    return { events: selected, totalCount: events.length }
   } catch (error) {
     console.error('Error fetching economic calendar:', safeErrorMessage(error))
     return { error: 'Failed to load economic calendar data' }
+  }
+}
+
+/** Compact, impact-prioritized feed used by the dashboard and briefs. */
+export async function getEconomicEvents(): Promise<EconomicCalendarLoadResult> {
+  const result = await loadEconomicEvents('dashboard')
+  return 'error' in result ? result : { events: result.events }
+}
+
+/** Chronological, bounded week feed used only by the full Catalyst Calendar. */
+export async function getEconomicEventsForCatalystCalendar(
+  referenceTime: string,
+): Promise<CatalystEconomicCalendarLoadResult> {
+  const result = await loadEconomicEvents('calendar', referenceTime)
+  if ('error' in result) return result
+  return {
+    ...result,
+    truncated: result.totalCount > CATALYST_CALENDAR_ECONOMIC_LIMIT,
   }
 }

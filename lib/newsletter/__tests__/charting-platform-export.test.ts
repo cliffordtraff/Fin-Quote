@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChartExportSpec } from '@/types/chart-export'
 import type { PriceNewsletterChartSpec } from '@/lib/newsletter/types'
@@ -23,6 +23,10 @@ function decodeBase64UrlJson<T>(rawValue: string): T {
 }
 
 describe('resolveChartingPlatformNewsletterChart', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('treats localhost app hosts as local charting hosts', () => {
     expect(isLocalChartingHost('localhost:3005')).toBe(true)
     expect(isLocalChartingHost('127.0.0.1:3005')).toBe(true)
@@ -30,7 +34,7 @@ describe('resolveChartingPlatformNewsletterChart', () => {
     expect(isLocalChartingHost('app.theintraday.com')).toBe(false)
   })
 
-  it('uses the local charting app for localhost requests when env overrides are absent', () => {
+  it('keeps rendering local but gives drafts a public HTTPS chart URL when overrides are absent', () => {
     const originalChartUrl = process.env.NEXT_PUBLIC_CHARTING_URL
     const originalPublicUrl = process.env.NEWSLETTER_PUBLIC_CHARTING_URL
 
@@ -42,7 +46,7 @@ describe('resolveChartingPlatformNewsletterChart', () => {
         DEFAULT_LOCAL_CHARTING_BASE_URL,
       )
       expect(getDefaultPublicChartingBaseUrlForHost('localhost:3005')).toBe(
-        DEFAULT_LOCAL_CHARTING_BASE_URL,
+        'https://charts.theintraday.com',
       )
     } finally {
       if (originalChartUrl === undefined) {
@@ -57,6 +61,20 @@ describe('resolveChartingPlatformNewsletterChart', () => {
         process.env.NEWSLETTER_PUBLIC_CHARTING_URL = originalPublicUrl
       }
     }
+  })
+
+  it('never lets a production Host header select the localhost renderer', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_CHARTING_URL', 'https://trusted-charts.example')
+
+    expect(getDefaultChartingBaseUrlForHost('localhost:3005')).toBe(
+      'https://trusted-charts.example',
+    )
+
+    vi.stubEnv('NEXT_PUBLIC_CHARTING_URL', '')
+    expect(getDefaultChartingBaseUrlForHost('127.0.0.1:3005')).toBe(
+      'https://charts.theintraday.com',
+    )
   })
 
   it('keeps local render traffic local while preserving the configured public chart url', () => {

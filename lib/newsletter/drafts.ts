@@ -12,7 +12,10 @@ import { buildNewsletterBlock } from './build-block'
 import {
   captureChart,
 } from './capture'
-import { uploadNewsletterChartImage } from './chart-library'
+import {
+  getNewsletterChartLibraryItem,
+  uploadNewsletterChartImage,
+} from './chart-library'
 import { buildPriceExportEditorBaseSpec } from './chart-editor'
 import {
   getDefaultChartingBaseUrl,
@@ -27,15 +30,36 @@ import {
   normalizeNewsletterPriceInterval,
   normalizeNewsletterPriceRange,
 } from './chart-spec'
+import {
+  buildNewsletterChartProvenance,
+  canonicalNewsletterChartScene,
+  isNewsletterChartProvenanceCurrent,
+  materializeNewsletterChartScene,
+} from './chart-provenance'
+import {
+  normalizeNewsletterCaptureSymbol,
+  resolveNewsletterCaptureOutputPath,
+} from './capture-output-path'
 import { generateNewsletterWithBackend } from './generation'
 import {
   isSafeNewsletterLink,
   normalizeNewsletterSubject,
 } from './delivery-quality'
+import {
+  isNewsletterUuid,
+  NewsletterDraftInputValidationError,
+} from './draft-request'
+import { sha256Hex } from './sha256'
 import type {
   FundamentalsNewsletterChartSpec,
   NewsletterChartSpec,
   NewsletterDraftBlock,
+  NewsletterDraftChartProvenance,
+  NewsletterDraftArchivePage,
+  NewsletterDraftArchiveQuery,
+  NewsletterDraftArchiveAction,
+  NewsletterDraftArchiveMutationItem,
+  NewsletterDraftArchiveMutationResult,
   NewsletterDraftEvent,
   NewsletterDraftEventType,
   NewsletterDraftHeader,
@@ -52,6 +76,7 @@ import type {
 
 const NEWSLETTER_DRAFTS_TABLE = 'newsletter_drafts'
 const NEWSLETTER_DRAFT_EVENTS_TABLE = 'newsletter_draft_events'
+const NEWSLETTER_DRAFT_FORK_REQUESTS_TABLE = 'newsletter_draft_fork_requests'
 const NEWSLETTER_CHART_OUTPUT_DIR = './.newsletter-output'
 const LOCAL_NEWSLETTER_DRAFTS_DIR = './.newsletter-drafts'
 const BLANK_NEWSLETTER_TICKER = 'TBD'
@@ -72,9 +97,16 @@ interface NewsletterDraftRow {
   source_review_key?: string | null
   beehiiv_url?: string | null
   published_at?: string | null
+  archived_at?: string | null
+  format?: NewsletterDraftDocument['format']
+  featured_tickers?: string[]
+  ticker_symbols?: string[]
+  generated_at?: string
+  block_count?: number
+  attached_chart_count?: number
   subject_line: string
   preview_html: string
-  draft_json: NewsletterDraftDocument
+  draft_json?: NewsletterDraftDocument
   history?: NewsletterDraftEvent[]
   created_at: string
   updated_at: string
@@ -119,6 +151,13 @@ export class NewsletterDraftConflictError extends Error {
       `Newsletter draft ${id} changed while it was being saved. Reload the latest version and try again.`,
     )
     this.name = 'NewsletterDraftConflictError'
+  }
+}
+
+export class NewsletterDraftIdempotencyConflictError extends Error {
+  constructor(message = 'Fork idempotency key was reused with a different request.') {
+    super(message)
+    this.name = 'NewsletterDraftIdempotencyConflictError'
   }
 }
 
@@ -237,6 +276,7 @@ function normalizeDraftBlock(
   block: NewsletterDraftBlock,
   ticker: string,
   publicChartBaseUrl: string,
+  draftGeneratedAt?: string,
 ): NewsletterDraftBlock {
   const chartSpec = normalizeChartSpec(block.chartSpec, ticker)
   const blockTicker = isPriceNewsletterChartSpec(chartSpec)
@@ -253,18 +293,50 @@ function normalizeDraftBlock(
       ? existingChartExportUrl
       : resolvedChartExportUrl
 
+  const chartImageUrl = toPublicNewsletterAssetUrl(block.chartImageUrl)
+  const provenanceIsCurrent = isNewsletterChartProvenanceCurrent(
+    block.chartProvenance,
+    {
+      imageUrl: chartImageUrl,
+      interactiveUrl: chartExportUrl,
+      scene: chartSpec,
+    },
+  )
+  const chartProvenance = provenanceIsCurrent
+    ? block.chartProvenance
+    : buildNewsletterChartProvenance({
+        source: 'legacy',
+        ...(block.chartProvenance?.libraryItemId
+          ? { libraryItemId: block.chartProvenance.libraryItemId }
+          : {}),
+        capturedAt:
+          (block.chartProvenance?.capturedAt &&
+          Number.isFinite(Date.parse(block.chartProvenance.capturedAt))
+            ? block.chartProvenance.capturedAt
+            : undefined) ??
+          draftGeneratedAt ??
+          new Date().toISOString(),
+        rendererContract: 'legacy-reconstructed-v0',
+        imageUrl: chartImageUrl,
+        imageSha256: block.chartProvenance?.imageSha256,
+        interactiveUrl: chartExportUrl,
+        scene: chartSpec,
+      })
+
   return {
     ...block,
     heading: block.heading ?? '',
     body: block.body ?? '',
-    chartImageUrl: toPublicNewsletterAssetUrl(block.chartImageUrl),
+    chartImageUrl,
     chartAlt:
       block.chartAlt?.trim() ||
       chartSpec.title?.trim() ||
       `${blockTicker} newsletter chart`,
     chartExportUrl,
     chartSpec,
-    chartNeedsRegeneration: block.chartNeedsRegeneration === true,
+    chartProvenance,
+    chartNeedsRegeneration:
+      block.chartNeedsRegeneration === true || !provenanceIsCurrent,
   }
 }
 
@@ -339,6 +411,124 @@ export function preserveNewsletterDraftServerMetadata(
     ...incoming,
     source: existing.source,
     publication: existing.publication,
+  }
+}
+
+function hasSameNewsletterDraftChartIdentity(
+  existing: NewsletterDraftBlock,
+  incoming: NewsletterDraftBlock,
+): boolean {
+  return (
+    existing.chartImageUrl === incoming.chartImageUrl &&
+    existing.chartExportUrl === incoming.chartExportUrl &&
+    canonicalNewsletterChartScene(existing.chartSpec) ===
+      canonicalNewsletterChartScene(incoming.chartSpec)
+  )
+}
+
+/**
+ * Treat chart provenance as server-owned metadata. Ordinary editor PATCHes may
+ * keep an existing trusted chart or choose a chart-library row in the same
+ * scope; every other chart identity change must be recaptured by the server.
+ */
+export async function reconcileNewsletterDraftClientCharts(
+  scope: NewsletterDraftScope,
+  existing: NewsletterDraftDocument,
+  incoming: NewsletterDraftDocument,
+  options: {
+    signal?: AbortSignal
+    trustedRecaptureBlockId?: string
+  } = {},
+): Promise<NewsletterDraftDocument> {
+  options.signal?.throwIfAborted()
+  const existingBlocks = new Map(
+    (Array.isArray(existing.blocks) ? existing.blocks : []).map((block) => [
+      block.id,
+      block,
+    ]),
+  )
+  const libraryItems = new Map<
+    string,
+    Promise<Awaited<ReturnType<typeof getNewsletterChartLibraryItem>>>
+  >()
+
+  const blocks = await Promise.all(
+    (Array.isArray(incoming.blocks) ? incoming.blocks : []).map(async (block) => {
+      if (block.id === options.trustedRecaptureBlockId) {
+        return {
+          ...block,
+          chartProvenance: undefined,
+          chartNeedsRegeneration: true,
+        }
+      }
+
+      const prior = existingBlocks.get(block.id)
+      if (prior && hasSameNewsletterDraftChartIdentity(prior, block)) {
+        return {
+          ...block,
+          chartProvenance: prior.chartProvenance,
+          chartNeedsRegeneration: prior.chartNeedsRegeneration === true,
+        }
+      }
+
+      const libraryItemId =
+        block.chartProvenance?.source === 'chart_library'
+          ? block.chartProvenance.libraryItemId?.trim()
+          : ''
+      if (libraryItemId) {
+        let itemPromise = libraryItems.get(libraryItemId)
+        if (!itemPromise) {
+          itemPromise = getNewsletterChartLibraryItem(
+            scope,
+            libraryItemId,
+            options.signal,
+          )
+          libraryItems.set(libraryItemId, itemPromise)
+        }
+        const item = await itemPromise
+        if (item) {
+          const chartProvenance: NewsletterDraftChartProvenance = {
+            version: 1,
+            source: 'chart_library',
+            libraryItemId: item.id,
+            capturedAt: item.capturedAt,
+            rendererContract: item.rendererContract,
+            imageUrl: item.chartImageUrl,
+            imageSha256: item.imageSha256,
+            interactiveUrl: item.chartExportUrl,
+            scene: item.chartSpec,
+            sceneSha256: item.sceneHash,
+          }
+          return {
+            ...block,
+            chartImageUrl: item.chartImageUrl,
+            chartExportUrl: item.chartExportUrl,
+            chartSpec: item.chartSpec,
+            chartProvenance,
+            chartNeedsRegeneration: !isNewsletterChartProvenanceCurrent(
+              chartProvenance,
+              {
+                imageUrl: item.chartImageUrl,
+                interactiveUrl: item.chartExportUrl,
+                scene: item.chartSpec,
+              },
+            ),
+          }
+        }
+      }
+
+      return {
+        ...block,
+        chartProvenance: undefined,
+        chartNeedsRegeneration: true,
+      }
+    }),
+  )
+  options.signal?.throwIfAborted()
+
+  return {
+    ...incoming,
+    blocks,
   }
 }
 
@@ -519,21 +709,25 @@ export function normalizeNewsletterDraftDocument(
     statsCard: normalizeDraftStatsCard(draft.statsCard, draft.todayQuote),
     blocks: Array.isArray(draft.blocks)
       ? draft.blocks.map((block) =>
-          normalizeDraftBlock(block, ticker, publicChartBaseUrl),
+          normalizeDraftBlock(block, ticker, publicChartBaseUrl, generatedAt),
         )
       : [],
   }
 }
 
 function mapDraftRow(row: NewsletterDraftRow): NewsletterDraftRecord {
+  if (!row.draft_json) {
+    throw new Error(`Newsletter draft ${row.id} is missing its document`)
+  }
+  const draftJson = row.draft_json
   const sourceType =
-    row.source_type ?? getNewsletterDraftSourceType(row.draft_json)
+    row.source_type ?? getNewsletterDraftSourceType(draftJson)
   const sourceReviewKey =
-    row.source_review_key ?? getNewsletterDraftSourceReviewKey(row.draft_json)
+    row.source_review_key ?? getNewsletterDraftSourceReviewKey(draftJson)
   const beehiivUrl =
-    row.beehiiv_url ?? row.draft_json.publication?.beehiivUrl ?? null
+    row.beehiiv_url ?? draftJson.publication?.beehiivUrl ?? null
   const publishedAt =
-    row.published_at ?? row.draft_json.publication?.publishedAt ?? null
+    row.published_at ?? draftJson.publication?.publishedAt ?? null
 
   return {
     id: row.id,
@@ -544,12 +738,13 @@ function mapDraftRow(row: NewsletterDraftRow): NewsletterDraftRecord {
     sourceReviewKey,
     beehiivUrl,
     publishedAt,
+    archivedAt: row.archived_at ?? null,
     attachedChartCount:
-      row.draft_json.source?.attachedChartIds.length ??
-      row.draft_json.blocks.length,
+      draftJson.source?.attachedChartIds.length ??
+      draftJson.blocks.length,
     subjectLine: row.subject_line,
     previewHtml: row.preview_html,
-    draft: row.draft_json,
+    draft: draftJson,
     history: row.history ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -622,7 +817,17 @@ function listLocalDraftRows(scope: NewsletterDraftScope): NewsletterDraftRow[] {
 
   const rows = readdirSync(sessionDir)
     .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => readLocalDraftRowFromFile(resolve(sessionDir, entry)))
+    .flatMap((entry) => {
+      try {
+        return [readLocalDraftRowFromFile(resolve(sessionDir, entry))]
+      } catch (error) {
+        console.error(
+          `[newsletter-drafts] Skipping unreadable local draft ${entry}:`,
+          error,
+        )
+        return []
+      }
+    })
     .filter((row) => row.session_id === scope.sessionId)
 
   rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -731,6 +936,17 @@ function persistLocalDraftRow(
     source_review_key: getNewsletterDraftSourceReviewKey(normalizedDraft),
     beehiiv_url: normalizedDraft.publication?.beehiivUrl ?? null,
     published_at: normalizedDraft.publication?.publishedAt ?? null,
+    archived_at: existing?.archived_at ?? null,
+    format: normalizedDraft.format,
+    featured_tickers: normalizedDraft.featuredTickers,
+    ticker_symbols: [
+      ...new Set([normalizedDraft.ticker, ...normalizedDraft.featuredTickers]),
+    ],
+    generated_at: normalizedDraft.generatedAt,
+    block_count: normalizedDraft.blocks.length,
+    attached_chart_count:
+      normalizedDraft.source?.attachedChartIds.length ??
+      normalizedDraft.blocks.length,
     subject_line: normalizedDraft.subjectLine,
     preview_html: previewHtml,
     draft_json: normalizedDraft,
@@ -906,6 +1122,13 @@ export function buildNewsletterDraftFromResult(
         `${isPriceNewsletterChartSpec(spec) ? spec.symbol : spec.stocks[0] ?? ticker} newsletter chart`,
       chartExportUrl,
       chartSpec: spec,
+      chartProvenance: buildNewsletterChartProvenance({
+        source: 'generated',
+        capturedAt: result.generatedAt,
+        imageUrl: chartImageUrl,
+        interactiveUrl: chartExportUrl,
+        scene: spec,
+      }),
       chartNeedsRegeneration: false,
       caption: block.data.caption,
       ctaText: block.data.ctaText,
@@ -1194,6 +1417,48 @@ export function renderNewsletterDraftBeehiivHtml(
   )
 }
 
+function prepareNewsletterDraftPersistence(
+  scope: NewsletterDraftScope,
+  draft: NewsletterDraftDocument,
+  status: NewsletterDraftStatus,
+  publicChartBaseUrl = getDefaultPublicChartingBaseUrl(),
+) {
+  const normalizedDraft = normalizeNewsletterDraftDocument(
+    draft,
+    publicChartBaseUrl,
+  )
+  const previewHtml = renderNewsletterDraftPreviewHtml(
+    normalizedDraft,
+    publicChartBaseUrl,
+  )
+  return {
+    normalizedDraft,
+    payload: {
+      owner_id: scope.ownerId,
+      session_id: scope.sessionId,
+      ticker: normalizedDraft.ticker,
+      status,
+      source_type: getNewsletterDraftSourceType(normalizedDraft),
+      source_review_key: getNewsletterDraftSourceReviewKey(normalizedDraft),
+      beehiiv_url: normalizedDraft.publication?.beehiivUrl ?? null,
+      published_at: normalizedDraft.publication?.publishedAt ?? null,
+      format: normalizedDraft.format,
+      featured_tickers: normalizedDraft.featuredTickers,
+      ticker_symbols: [
+        ...new Set([normalizedDraft.ticker, ...normalizedDraft.featuredTickers]),
+      ],
+      generated_at: normalizedDraft.generatedAt,
+      block_count: normalizedDraft.blocks.length,
+      attached_chart_count:
+        normalizedDraft.source?.attachedChartIds.length ??
+        normalizedDraft.blocks.length,
+      subject_line: normalizedDraft.subjectLine,
+      draft_json: normalizedDraft,
+      preview_html: previewHtml,
+    },
+  }
+}
+
 async function persistNewsletterDraftRow(
   scope: NewsletterDraftScope,
   id: string | null,
@@ -1217,23 +1482,13 @@ async function persistNewsletterDraftRow(
     return saved
   }
 
-  const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
-  const previewHtml = renderNewsletterDraftPreviewHtml(normalizedDraft, publicChartBaseUrl)
-  const supabase = getServiceClient()
-
-  const payload = {
-    owner_id: scope.ownerId,
-    session_id: scope.sessionId,
-    ticker: normalizedDraft.ticker,
+  const { payload } = prepareNewsletterDraftPersistence(
+    scope,
+    draft,
     status,
-    source_type: getNewsletterDraftSourceType(normalizedDraft),
-    source_review_key: getNewsletterDraftSourceReviewKey(normalizedDraft),
-    beehiiv_url: normalizedDraft.publication?.beehiivUrl ?? null,
-    published_at: normalizedDraft.publication?.publishedAt ?? null,
-    subject_line: normalizedDraft.subjectLine,
-    draft_json: normalizedDraft,
-    preview_html: previewHtml,
-  }
+    publicChartBaseUrl,
+  )
+  const supabase = getServiceClient()
 
   let query
 
@@ -1274,32 +1529,43 @@ async function persistNewsletterDraftRow(
 }
 
 function mapDraftSummary(row: NewsletterDraftRow): NewsletterDraftSummary {
-  const format = row.draft_json.format ?? 'single_stock'
+  const draftJson = row.draft_json
+  const format = row.format ?? draftJson?.format ?? 'single_stock'
   return {
     id: row.id,
     ticker: row.ticker,
     format,
     featuredTickers:
-      row.draft_json.featuredTickers ??
+      row.featured_tickers ??
+      draftJson?.featuredTickers ??
       (format === 'market_roundup' ? [] : [row.ticker]),
     status: row.status,
     sourceType:
-      row.source_type ?? getNewsletterDraftSourceType(row.draft_json),
+      row.source_type ??
+      (draftJson ? getNewsletterDraftSourceType(draftJson) : 'generated'),
     sourceReviewKey:
-      row.source_review_key ?? getNewsletterDraftSourceReviewKey(row.draft_json),
+      row.source_review_key ??
+      (draftJson ? getNewsletterDraftSourceReviewKey(draftJson) : null),
     beehiivUrl:
-      row.beehiiv_url ?? row.draft_json.publication?.beehiivUrl ?? null,
+      row.beehiiv_url ?? draftJson?.publication?.beehiivUrl ?? null,
     publishedAt:
-      row.published_at ?? row.draft_json.publication?.publishedAt ?? null,
+      row.published_at ?? draftJson?.publication?.publishedAt ?? null,
+    archivedAt: row.archived_at ?? null,
     attachedChartCount:
-      row.draft_json.source?.attachedChartIds.length ?? row.draft_json.blocks.length,
+      row.attached_chart_count ??
+      draftJson?.source?.attachedChartIds.length ??
+      draftJson?.blocks.length ??
+      0,
     subjectLine: row.subject_line,
-    generatedAt: row.draft_json.generatedAt,
-    blockCount: row.draft_json.blocks.length,
+    generatedAt: row.generated_at ?? draftJson?.generatedAt ?? row.created_at,
+    blockCount: row.block_count ?? draftJson?.blocks.length ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
+
+const NEWSLETTER_DRAFT_SUMMARY_COLUMNS =
+  'id, owner_id, session_id, ticker, status, source_type, source_review_key, beehiiv_url, published_at, archived_at, format, featured_tickers, ticker_symbols, generated_at, block_count, attached_chart_count, subject_line, draft_json, created_at, updated_at'
 
 export async function listNewsletterDrafts(
   scope: NewsletterDraftScope,
@@ -1313,10 +1579,9 @@ export async function listNewsletterDrafts(
   const supabase = getServiceClient()
   let query = supabase
     .from(NEWSLETTER_DRAFTS_TABLE)
-    .select(
-      'id, owner_id, session_id, ticker, status, source_type, source_review_key, beehiiv_url, published_at, subject_line, draft_json, created_at, updated_at',
-    )
+    .select(NEWSLETTER_DRAFT_SUMMARY_COLUMNS)
     .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
 
   query = scope.ownerId
     ? query.eq('owner_id', scope.ownerId)
@@ -1332,6 +1597,662 @@ export async function listNewsletterDrafts(
   }
 
   return (data as NewsletterDraftRow[]).map(mapDraftSummary)
+}
+
+const NEWSLETTER_ARCHIVE_DEFAULT_PAGE_SIZE = 25
+const NEWSLETTER_ARCHIVE_MAX_PAGE_SIZE = 100
+const NEWSLETTER_DRAFT_SUMMARY_LOOKUP_CHUNK_SIZE = 100
+const NEWSLETTER_ARCHIVE_SUMMARY_COLUMNS =
+  'id, owner_id, session_id, ticker, status, source_type, source_review_key, beehiiv_url, published_at, archived_at, format, featured_tickers, ticker_symbols, generated_at, block_count, attached_chart_count, subject_line, created_at, updated_at'
+
+interface NewsletterDraftArchiveCursor {
+  generatedAt: string
+  id: string
+}
+
+interface ArchiveFilterBuilder<T> {
+  eq(column: string, value: unknown): T
+  is(column: string, value: null): T
+  not(column: string, operator: string, value: unknown): T
+  contains(column: string, value: unknown): T
+  gte(column: string, value: string): T
+  lt(column: string, value: string): T
+  or(filters: string): T
+}
+
+export class NewsletterDraftArchiveValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NewsletterDraftArchiveValidationError'
+  }
+}
+
+type NewsletterDraftSummaryLookupColumn = 'id' | 'source_review_key'
+
+function normalizeNewsletterDraftSummaryLookupValues(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+function sortNewsletterDraftSummaryRows(
+  rows: NewsletterDraftRow[],
+): NewsletterDraftRow[] {
+  return rows.sort((left, right) => {
+    const updatedOrder = right.updated_at.localeCompare(left.updated_at)
+    return updatedOrder || right.id.localeCompare(left.id)
+  })
+}
+
+function readScopedLocalDraftRowsById(
+  scope: NewsletterDraftScope,
+  ids: string[],
+): NewsletterDraftRow[] {
+  return ids.flatMap((id) => {
+    const filePath = getLocalDraftFilePath(scope, id)
+    if (!existsSync(filePath)) return []
+
+    try {
+      const row = readLocalDraftRowFromFile(filePath)
+      return row.session_id === scope.sessionId ? [row] : []
+    } catch (error) {
+      console.error(
+        `[newsletter-drafts] Skipping unreadable local draft ${id}:`,
+        error,
+      )
+      return []
+    }
+  })
+}
+
+async function listNewsletterDraftSummariesByColumn(
+  scope: NewsletterDraftScope,
+  column: NewsletterDraftSummaryLookupColumn,
+  rawValues: string[],
+  signal?: AbortSignal,
+): Promise<NewsletterDraftSummary[]> {
+  signal?.throwIfAborted()
+  const values = normalizeNewsletterDraftSummaryLookupValues(rawValues)
+  if (values.length === 0) return []
+
+  if (usesLocalDraftStorage(scope)) {
+    const valueSet = new Set(values)
+    const rows =
+      column === 'id'
+        ? readScopedLocalDraftRowsById(scope, values)
+        : listLocalDraftRows(scope).filter((row) => {
+            const reviewKey =
+              row.source_review_key ??
+              (row.draft_json
+                ? getNewsletterDraftSourceReviewKey(row.draft_json)
+                : null)
+            return reviewKey ? valueSet.has(reviewKey) : false
+          })
+    signal?.throwIfAborted()
+    return sortNewsletterDraftSummaryRows(rows).map(mapDraftSummary)
+  }
+
+  const supabase = getServiceClient()
+  const chunks = Array.from(
+    {
+      length: Math.ceil(
+        values.length / NEWSLETTER_DRAFT_SUMMARY_LOOKUP_CHUNK_SIZE,
+      ),
+    },
+    (_, index) =>
+      values.slice(
+        index * NEWSLETTER_DRAFT_SUMMARY_LOOKUP_CHUNK_SIZE,
+        (index + 1) * NEWSLETTER_DRAFT_SUMMARY_LOOKUP_CHUNK_SIZE,
+      ),
+  )
+  const rowGroups = await Promise.all(
+    chunks.map(async (chunk) => {
+      signal?.throwIfAborted()
+      let query = supabase
+        .from(NEWSLETTER_DRAFTS_TABLE)
+        .select(NEWSLETTER_ARCHIVE_SUMMARY_COLUMNS)
+        .in(column, chunk)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+
+      query = scope.ownerId
+        ? query.eq('owner_id', scope.ownerId)
+        : query.is('owner_id', null).eq('session_id', scope.sessionId)
+      if (signal) query = query.abortSignal(signal)
+      const { data, error } = await query
+
+      if (error) {
+        throw new Error(
+          `Failed to look up newsletter drafts: ${formatNewsletterDraftStorageError(error.message)}`,
+        )
+      }
+      return (data ?? []) as NewsletterDraftRow[]
+    }),
+  )
+  signal?.throwIfAborted()
+  return sortNewsletterDraftSummaryRows(rowGroups.flat()).map(mapDraftSummary)
+}
+
+export async function listNewsletterDraftSummariesByIds(
+  scope: NewsletterDraftScope,
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<NewsletterDraftSummary[]> {
+  return listNewsletterDraftSummariesByColumn(scope, 'id', ids, signal)
+}
+
+export async function listNewsletterDraftSummariesBySourceReviewKeys(
+  scope: NewsletterDraftScope,
+  sourceReviewKeys: string[],
+  signal?: AbortSignal,
+): Promise<NewsletterDraftSummary[]> {
+  return listNewsletterDraftSummariesByColumn(
+    scope,
+    'source_review_key',
+    sourceReviewKeys,
+    signal,
+  )
+}
+
+function encodeNewsletterDraftArchiveCursor(
+  cursor: NewsletterDraftArchiveCursor,
+): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url')
+}
+
+const NEWSLETTER_ARCHIVE_CURSOR_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/
+
+function decodeNewsletterDraftArchiveCursor(
+  value: string | undefined,
+): NewsletterDraftArchiveCursor | null {
+  if (!value) return null
+  if (value.length > 500 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new NewsletterDraftArchiveValidationError('Invalid archive cursor')
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Partial<NewsletterDraftArchiveCursor>
+    const generatedAt =
+      typeof parsed.generatedAt === 'string' ? parsed.generatedAt : ''
+    const id = typeof parsed.id === 'string' ? parsed.id : ''
+    if (
+      !NEWSLETTER_ARCHIVE_CURSOR_TIMESTAMP_PATTERN.test(generatedAt) ||
+      !Number.isFinite(Date.parse(generatedAt)) ||
+      !isNewsletterUuid(id)
+    ) {
+      throw new Error('invalid cursor body')
+    }
+    // PostgreSQL can return six fractional digits. Preserve that exact safe
+    // sort key: round-tripping through Date would truncate it to milliseconds
+    // and silently skip rows at a microsecond page boundary.
+    return { generatedAt, id }
+  } catch (error) {
+    if (error instanceof NewsletterDraftArchiveValidationError) throw error
+    throw new NewsletterDraftArchiveValidationError('Invalid archive cursor')
+  }
+}
+
+function normalizeArchiveSearch(value: string | undefined): string {
+  if (!value) return ''
+  if (value.length > 120) {
+    throw new NewsletterDraftArchiveValidationError(
+      'Archive search must be 120 characters or fewer',
+    )
+  }
+  return value
+    .trim()
+    .replace(/[,()*%_\\"]/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+function normalizeArchiveTicker(value: string | undefined): string {
+  if (!value) return ''
+  const ticker = value.trim().toUpperCase()
+  if (!ticker) return ''
+  if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(ticker)) {
+    throw new NewsletterDraftArchiveValidationError('Invalid archive ticker')
+  }
+  return ticker
+}
+
+function normalizeArchiveDay(value: string | undefined, label: string): string {
+  if (!value) return ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new NewsletterDraftArchiveValidationError(`${label} must use YYYY-MM-DD`)
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new NewsletterDraftArchiveValidationError(`${label} is not a valid date`)
+  }
+  return parsed.toISOString()
+}
+
+function nextArchiveDay(value: string): string {
+  const date = new Date(value)
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString()
+}
+
+function normalizeNewsletterDraftArchiveQuery(
+  query: NewsletterDraftArchiveQuery,
+): Required<Omit<NewsletterDraftArchiveQuery, 'cursor'>> & {
+  cursor: NewsletterDraftArchiveCursor | null
+} {
+  const status = query.status ?? 'all'
+  if (
+    status !== 'all' &&
+    status !== 'draft' &&
+    status !== 'review' &&
+    status !== 'ready' &&
+    status !== 'published'
+  ) {
+    throw new NewsletterDraftArchiveValidationError('Invalid archive status')
+  }
+  const visibility = query.visibility ?? 'active'
+  if (visibility !== 'active' && visibility !== 'archived' && visibility !== 'all') {
+    throw new NewsletterDraftArchiveValidationError('Invalid archive visibility')
+  }
+  const pageSize = Math.floor(query.pageSize ?? NEWSLETTER_ARCHIVE_DEFAULT_PAGE_SIZE)
+  if (!Number.isFinite(pageSize) || pageSize < 1) {
+    throw new NewsletterDraftArchiveValidationError('Archive limit must be positive')
+  }
+  const from = normalizeArchiveDay(query.from, 'Archive from date')
+  const toDay = normalizeArchiveDay(query.to, 'Archive to date')
+  if (from && toDay && from > toDay) {
+    throw new NewsletterDraftArchiveValidationError(
+      'Archive from date cannot be after the to date',
+    )
+  }
+
+  return {
+    search: normalizeArchiveSearch(query.search),
+    status,
+    ticker: normalizeArchiveTicker(query.ticker),
+    from,
+    to: toDay ? nextArchiveDay(toDay) : '',
+    visibility,
+    pageSize: Math.min(pageSize, NEWSLETTER_ARCHIVE_MAX_PAGE_SIZE),
+    cursor: decodeNewsletterDraftArchiveCursor(query.cursor),
+  }
+}
+
+function applyNewsletterDraftArchiveFilters<
+  T extends ArchiveFilterBuilder<T>,
+>(
+  initialQuery: T,
+  scope: NewsletterDraftScope,
+  filters: ReturnType<typeof normalizeNewsletterDraftArchiveQuery>,
+  options: {
+    ignoreStatus?: boolean
+    ignoreVisibility?: boolean
+    includeCursor?: boolean
+  } = {},
+): T {
+  let query = scope.ownerId
+    ? initialQuery.eq('owner_id', scope.ownerId)
+    : initialQuery.is('owner_id', null).eq('session_id', scope.sessionId)
+
+  if (filters.search) {
+    const exactTicker = /^[A-Z0-9][A-Z0-9.-]{0,14}$/i.test(filters.search)
+      ? filters.search.toUpperCase()
+      : null
+    const clauses = [
+      `subject_line.ilike.%${filters.search}%`,
+      `ticker.ilike.%${filters.search}%`,
+    ]
+    if (exactTicker) clauses.push(`ticker_symbols.cs.{${exactTicker}}`)
+    query = query.or(clauses.join(','))
+  }
+  if (filters.ticker) {
+    query = query.contains('ticker_symbols', [filters.ticker])
+  }
+  if (filters.from) query = query.gte('generated_at', filters.from)
+  if (filters.to) query = query.lt('generated_at', filters.to)
+  if (!options.ignoreStatus && filters.status !== 'all') {
+    query = query.eq('status', filters.status)
+  }
+  if (!options.ignoreVisibility) {
+    if (filters.visibility === 'active') query = query.is('archived_at', null)
+    if (filters.visibility === 'archived') {
+      query = query.not('archived_at', 'is', null)
+    }
+  }
+  if (options.includeCursor && filters.cursor) {
+    query = query.or(
+      `generated_at.lt.${filters.cursor.generatedAt},and(generated_at.eq.${filters.cursor.generatedAt},id.lt.${filters.cursor.id})`,
+    )
+  }
+  return query
+}
+
+function filterLocalNewsletterDraftRows(
+  rows: NewsletterDraftRow[],
+  filters: ReturnType<typeof normalizeNewsletterDraftArchiveQuery>,
+  options: { ignoreStatus?: boolean; ignoreVisibility?: boolean } = {},
+): NewsletterDraftRow[] {
+  return rows.filter((row) => {
+    const summary = mapDraftSummary(row)
+    const symbols = new Set([
+      summary.ticker.toUpperCase(),
+      ...summary.featuredTickers.map((ticker) => ticker.toUpperCase()),
+    ])
+    if (filters.search) {
+      const search = filters.search.toLowerCase()
+      if (
+        !summary.subjectLine.toLowerCase().includes(search) &&
+        ![...symbols].some((ticker) => ticker.toLowerCase().includes(search))
+      ) {
+        return false
+      }
+    }
+    if (filters.ticker && !symbols.has(filters.ticker)) return false
+    if (filters.from && summary.generatedAt < filters.from) return false
+    if (filters.to && summary.generatedAt >= filters.to) return false
+    if (!options.ignoreStatus && filters.status !== 'all' && summary.status !== filters.status) {
+      return false
+    }
+    if (!options.ignoreVisibility) {
+      if (filters.visibility === 'active' && summary.archivedAt) return false
+      if (filters.visibility === 'archived' && !summary.archivedAt) return false
+    }
+    return true
+  })
+}
+
+export async function listNewsletterDraftArchivePage(
+  scope: NewsletterDraftScope,
+  input: NewsletterDraftArchiveQuery = {},
+  signal?: AbortSignal,
+): Promise<NewsletterDraftArchivePage> {
+  signal?.throwIfAborted()
+  const filters = normalizeNewsletterDraftArchiveQuery(input)
+
+  if (usesLocalDraftStorage(scope)) {
+    const allRows = listLocalDraftRows(scope)
+    const selected = filterLocalNewsletterDraftRows(allRows, filters)
+      .sort((left, right) => {
+        const dateOrder = mapDraftSummary(right).generatedAt.localeCompare(
+          mapDraftSummary(left).generatedAt,
+        )
+        return dateOrder || right.id.localeCompare(left.id)
+      })
+    const afterCursor = filters.cursor
+      ? selected.filter((row) => {
+          const generatedAt = mapDraftSummary(row).generatedAt
+          return (
+            generatedAt < filters.cursor!.generatedAt ||
+            (generatedAt === filters.cursor!.generatedAt && row.id < filters.cursor!.id)
+          )
+        })
+      : selected
+    const pageRows = afterCursor.slice(0, filters.pageSize)
+    const statusRows = filterLocalNewsletterDraftRows(allRows, filters, {
+      ignoreStatus: true,
+    })
+    const visibilityRows = filterLocalNewsletterDraftRows(allRows, filters, {
+      ignoreVisibility: true,
+    })
+    const last = pageRows.at(-1)
+    signal?.throwIfAborted()
+    return {
+      drafts: pageRows.map(mapDraftSummary),
+      pageSize: filters.pageSize,
+      total: selected.length,
+      hasMore: afterCursor.length > pageRows.length,
+      nextCursor:
+        last && afterCursor.length > pageRows.length
+          ? encodeNewsletterDraftArchiveCursor({
+              generatedAt: mapDraftSummary(last).generatedAt,
+              id: last.id,
+            })
+          : null,
+      facets: {
+        statuses: {
+          draft: statusRows.filter((row) => row.status === 'draft').length,
+          review: statusRows.filter((row) => row.status === 'review').length,
+          ready: statusRows.filter((row) => row.status === 'ready').length,
+          published: statusRows.filter((row) => row.status === 'published').length,
+        },
+        active: visibilityRows.filter((row) => !row.archived_at).length,
+        archived: visibilityRows.filter((row) => Boolean(row.archived_at)).length,
+      },
+    }
+  }
+
+  const supabase = getServiceClient()
+  let dataQuery = supabase
+    .from(NEWSLETTER_DRAFTS_TABLE)
+    .select(NEWSLETTER_ARCHIVE_SUMMARY_COLUMNS)
+  dataQuery = applyNewsletterDraftArchiveFilters(dataQuery, scope, filters, {
+    includeCursor: true,
+  })
+    .order('generated_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(filters.pageSize + 1)
+  if (signal) dataQuery = dataQuery.abortSignal(signal)
+
+  const countQuery = (
+    status: NewsletterDraftStatus | null,
+    visibility: 'active' | 'archived' | null,
+  ) => {
+    let query = supabase
+      .from(NEWSLETTER_DRAFTS_TABLE)
+      .select('id', { count: 'exact', head: true })
+    query = applyNewsletterDraftArchiveFilters(query, scope, filters, {
+      ignoreStatus: status != null,
+      ignoreVisibility: visibility != null,
+    })
+    if (status) query = query.eq('status', status)
+    if (visibility === 'active') query = query.is('archived_at', null)
+    if (visibility === 'archived') query = query.not('archived_at', 'is', null)
+    if (signal) query = query.abortSignal(signal)
+    return query
+  }
+
+  const [
+    dataResult,
+    draftCount,
+    reviewCount,
+    readyCount,
+    publishedCount,
+    activeCount,
+    archivedCount,
+  ] = await Promise.all([
+    dataQuery,
+    countQuery('draft', null),
+    countQuery('review', null),
+    countQuery('ready', null),
+    countQuery('published', null),
+    countQuery(null, 'active'),
+    countQuery(null, 'archived'),
+  ])
+
+  const results = [
+    dataResult,
+    draftCount,
+    reviewCount,
+    readyCount,
+    publishedCount,
+    activeCount,
+    archivedCount,
+  ]
+  const failed = results.find((result) => result.error)
+  if (failed?.error) {
+    throw new Error(`Failed to query newsletter archive: ${failed.error.message}`)
+  }
+
+  const rows = (dataResult.data ?? []) as unknown as NewsletterDraftRow[]
+  const hasMore = rows.length > filters.pageSize
+  const pageRows = hasMore ? rows.slice(0, filters.pageSize) : rows
+  const last = pageRows.at(-1)
+  const statuses = {
+    draft: draftCount.count ?? 0,
+    review: reviewCount.count ?? 0,
+    ready: readyCount.count ?? 0,
+    published: publishedCount.count ?? 0,
+  }
+  const total =
+    filters.status === 'all'
+      ? Object.values(statuses).reduce((sum, count) => sum + count, 0)
+      : statuses[filters.status]
+
+  return {
+    drafts: pageRows.map(mapDraftSummary),
+    pageSize: filters.pageSize,
+    total,
+    hasMore,
+    nextCursor:
+      hasMore && last
+        ? encodeNewsletterDraftArchiveCursor({
+            generatedAt: mapDraftSummary(last).generatedAt,
+            id: last.id,
+          })
+        : null,
+    facets: {
+      statuses,
+      active: activeCount.count ?? 0,
+      archived: archivedCount.count ?? 0,
+    },
+  }
+}
+
+export async function bulkSetNewsletterDraftArchiveState(
+  scope: NewsletterDraftScope,
+  action: NewsletterDraftArchiveAction,
+  items: NewsletterDraftArchiveMutationItem[],
+  idempotencyKey: string,
+): Promise<NewsletterDraftArchiveMutationResult[]> {
+  if (action !== 'archive' && action !== 'restore') {
+    throw new NewsletterDraftArchiveValidationError('Invalid archive action')
+  }
+  if (items.length < 1 || items.length > 100) {
+    throw new NewsletterDraftArchiveValidationError(
+      'Select between 1 and 100 newsletter drafts',
+    )
+  }
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(idempotencyKey)) {
+    throw new NewsletterDraftArchiveValidationError('Invalid idempotency key')
+  }
+  const seenIds = new Set<string>()
+  for (const item of items) {
+    if (!isNewsletterUuid(item.id) || seenIds.has(item.id)) {
+      throw new NewsletterDraftArchiveValidationError(
+        'Archive items must contain unique valid draft IDs',
+      )
+    }
+    if (!Number.isFinite(Date.parse(item.expectedUpdatedAt))) {
+      throw new NewsletterDraftArchiveValidationError(
+        'Archive items require valid expectedUpdatedAt values',
+      )
+    }
+    seenIds.add(item.id)
+  }
+
+  if (usesLocalDraftStorage(scope)) {
+    const rows = items.map((item) => getLocalDraftRow(scope, item.id))
+    const replayed = rows.filter((row) =>
+      row.history?.some(
+        (event) =>
+          event.metadata.idempotencyKey === idempotencyKey &&
+          event.metadata.action === action,
+      ),
+    ).length
+    if (replayed === rows.length) {
+      return rows.map((row) => ({
+        id: row.id,
+        archivedAt: row.archived_at ?? null,
+        updatedAt: row.updated_at,
+        changed: false,
+      }))
+    }
+    if (replayed !== 0) {
+      throw new Error('Incomplete local archive idempotency replay')
+    }
+    rows.forEach((row, index) => {
+      const item = items[index]!
+      if (row.updated_at !== item.expectedUpdatedAt) {
+        throw new NewsletterDraftConflictError(item.id)
+      }
+    })
+    const results: NewsletterDraftArchiveMutationResult[] = []
+    for (const row of rows) {
+      const shouldChange =
+        action === 'archive' ? !row.archived_at : Boolean(row.archived_at)
+      if (!shouldChange) {
+        await appendNewsletterDraftEvent(scope, row.id, {
+          type: action === 'archive' ? 'archived' : 'restored',
+          fromStatus: row.status,
+          toStatus: row.status,
+          beehiivUrl: row.beehiiv_url ?? null,
+          metadata: { action, idempotencyKey, changed: false },
+          dedupeKey: `archive:${idempotencyKey}:${action}:${row.id}`,
+        })
+        results.push({
+          id: row.id,
+          archivedAt: row.archived_at ?? null,
+          updatedAt: row.updated_at,
+          changed: false,
+        })
+        continue
+      }
+      const now = new Date().toISOString()
+      row.archived_at = action === 'archive' ? now : null
+      row.updated_at =
+        now <= row.updated_at
+          ? new Date(Date.parse(row.updated_at) + 1).toISOString()
+          : now
+      writeLocalDraftRow(getLocalDraftFilePath(scope, row.id), row)
+      await appendNewsletterDraftEvent(scope, row.id, {
+        type: action === 'archive' ? 'archived' : 'restored',
+        fromStatus: row.status,
+        toStatus: row.status,
+        beehiivUrl: row.beehiiv_url ?? null,
+        metadata: { action, idempotencyKey, changed: true },
+        dedupeKey: `archive:${idempotencyKey}:${action}:${row.id}`,
+      })
+      results.push({
+        id: row.id,
+        archivedAt: row.archived_at ?? null,
+        updatedAt: row.updated_at,
+        changed: true,
+      })
+    }
+    return results
+  }
+
+  const supabase = getServiceClient()
+  const { data, error } = await supabase.rpc(
+    'bulk_set_newsletter_draft_archive_state',
+    {
+      p_owner_id: scope.ownerId,
+      p_action: action,
+      p_items: items.map((item) => ({
+        id: item.id,
+        expected_updated_at: item.expectedUpdatedAt,
+      })),
+      p_idempotency_key: idempotencyKey,
+    },
+  )
+  if (error) {
+    const isConflict = /changed or are outside this scope/i.test(error.message)
+    if (isConflict) {
+      throw new NewsletterDraftConflictError('archive selection')
+    }
+    throw new Error(`Failed to update newsletter archive: ${error.message}`)
+  }
+
+  return ((data ?? []) as Array<{
+    id: string
+    archived_at: string | null
+    updated_at: string
+    changed: boolean
+  }>).map((row) => ({
+    id: row.id,
+    archivedAt: row.archived_at,
+    updatedAt: row.updated_at,
+    changed: row.changed,
+  }))
 }
 
 export async function getNewsletterDraft(
@@ -1386,7 +2307,9 @@ export async function findNewsletterDraftBySourceReviewKey(
     const row = listLocalDraftRows(scope).find(
       (candidate) =>
         (candidate.source_review_key ??
-          getNewsletterDraftSourceReviewKey(candidate.draft_json)) ===
+          (candidate.draft_json
+            ? getNewsletterDraftSourceReviewKey(candidate.draft_json)
+            : null)) ===
         normalizedReviewKey,
     )
     return row
@@ -1452,6 +2375,252 @@ export async function createNewsletterDraftFromDocument(
   return hydrateNewsletterDraftHistory(scope, saved, options.signal)
 }
 
+async function findNewsletterDraftForkReplay(
+  scope: NewsletterDraftScope,
+  sourceDraftId: string,
+  idempotencyKey: string,
+  requestHash: string,
+  signal?: AbortSignal,
+): Promise<NewsletterDraftRecord | null> {
+  signal?.throwIfAborted()
+
+  if (usesLocalDraftStorage(scope)) {
+    const replay = listLocalDraftRows(scope).find((row) =>
+      row.history?.some(
+        (event) => event.metadata.forkIdempotencyKey === idempotencyKey,
+      ),
+    )
+    if (!replay) return null
+
+    const event = replay.history?.find(
+      (candidate) =>
+        candidate.metadata.forkIdempotencyKey === idempotencyKey,
+    )
+    if (
+      event?.metadata.forkRequestHash !== requestHash ||
+      event.metadata.forkedFromDraftId !== sourceDraftId
+    ) {
+      throw new NewsletterDraftIdempotencyConflictError()
+    }
+    return mapDraftRow(replay)
+  }
+
+  const supabase = getServiceClient()
+  let query = supabase
+    .from(NEWSLETTER_DRAFT_FORK_REQUESTS_TABLE)
+    .select('source_draft_id,request_hash,created_draft_id')
+    .eq('owner_id', scope.ownerId)
+    .eq('idempotency_key', idempotencyKey)
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.maybeSingle()
+  if (error) {
+    throw new Error(`Failed to load newsletter fork receipt: ${error.message}`)
+  }
+  if (!data) return null
+  if (
+    data.source_draft_id !== sourceDraftId ||
+    data.request_hash !== requestHash
+  ) {
+    throw new NewsletterDraftIdempotencyConflictError()
+  }
+  try {
+    return await getNewsletterDraft(scope, data.created_draft_id, { signal })
+  } catch (error) {
+    if (error instanceof NewsletterDraftNotFoundError) {
+      throw new NewsletterDraftIdempotencyConflictError(
+        'The newsletter draft created by this fork request no longer exists.',
+      )
+    }
+    throw error
+  }
+}
+
+async function persistNewsletterDraftFork(
+  scope: NewsletterDraftScope,
+  source: NewsletterDraftRecord,
+  forkedDraft: NewsletterDraftDocument,
+  idempotencyKey: string,
+  requestHash: string,
+  options: { publicChartBaseUrl?: string; signal?: AbortSignal },
+): Promise<NewsletterDraftRecord> {
+  if (!scope.ownerId) {
+    // Re-check immediately before the single atomic file write. Concurrent
+    // local requests can both miss the earlier fast replay lookup while chart
+    // provenance is being reconciled.
+    const replay = await findNewsletterDraftForkReplay(
+      scope,
+      source.id,
+      idempotencyKey,
+      requestHash,
+      options.signal,
+    )
+    if (replay) {
+      return replay
+    }
+
+    options.signal?.throwIfAborted()
+    const { normalizedDraft, payload } = prepareNewsletterDraftPersistence(
+      scope,
+      forkedDraft,
+      'draft',
+      options.publicChartBaseUrl,
+    )
+    const timestamp = new Date().toISOString()
+    const draftId = crypto.randomUUID()
+    const event: NewsletterDraftEvent = {
+      id: crypto.randomUUID(),
+      draftId,
+      type: 'created',
+      fromStatus: null,
+      toStatus: 'draft',
+      beehiivUrl: null,
+      metadata: {
+        sourceType: 'manual',
+        sourceReviewKey: null,
+        forkedFromDraftId: source.id,
+        forkedFromUpdatedAt: source.updatedAt,
+        forkIdempotencyKey: idempotencyKey,
+        forkRequestHash: requestHash,
+      },
+      createdAt: timestamp,
+    }
+    const row: NewsletterDraftRow = {
+      id: draftId,
+      owner_id: null,
+      session_id: scope.sessionId,
+      ticker: payload.ticker,
+      status: 'draft',
+      source_type: 'manual',
+      source_review_key: null,
+      beehiiv_url: null,
+      published_at: null,
+      archived_at: null,
+      format: payload.format,
+      featured_tickers: payload.featured_tickers,
+      ticker_symbols: payload.ticker_symbols,
+      generated_at: payload.generated_at,
+      block_count: payload.block_count,
+      attached_chart_count: payload.attached_chart_count,
+      subject_line: payload.subject_line,
+      preview_html: payload.preview_html,
+      draft_json: normalizedDraft,
+      history: [event],
+      created_at: timestamp,
+      updated_at: timestamp,
+    }
+    writeLocalDraftRow(getLocalDraftFilePath(scope, draftId), row)
+    options.signal?.throwIfAborted()
+    return mapDraftRow(row)
+  }
+
+  const { payload } = prepareNewsletterDraftPersistence(
+    scope,
+    forkedDraft,
+    'draft',
+    options.publicChartBaseUrl,
+  )
+  const supabase = getServiceClient()
+  let query = supabase.rpc('create_newsletter_draft_fork', {
+    p_owner_id: scope.ownerId,
+    p_source_draft_id: source.id,
+    p_source_updated_at: source.updatedAt,
+    p_session_id: scope.sessionId,
+    p_idempotency_key: idempotencyKey,
+    p_request_hash: requestHash,
+    p_draft_json: payload.draft_json,
+    p_preview_html: payload.preview_html,
+  })
+  if (options.signal) query = query.abortSignal(options.signal)
+  const { data, error } = await query
+  if (error) {
+    if (/fork source not found|does not own/i.test(error.message)) {
+      throw new NewsletterDraftNotFoundError(source.id)
+    }
+    if (/fork source changed/i.test(error.message)) {
+      throw new NewsletterDraftConflictError(source.id)
+    }
+    if (/idempotency key was reused/i.test(error.message)) {
+      throw new NewsletterDraftIdempotencyConflictError(error.message)
+    }
+    if (/fork replay target no longer exists/i.test(error.message)) {
+      throw new NewsletterDraftIdempotencyConflictError(error.message)
+    }
+    if (/idempotency key|invalid fork|must be/i.test(error.message)) {
+      throw new NewsletterDraftInputValidationError(error.message)
+    }
+    throw new Error(`Failed to fork newsletter draft: ${error.message}`)
+  }
+  const row = (data as NewsletterDraftRow[] | null)?.[0]
+  if (!row) {
+    throw new Error('Newsletter draft fork returned no draft')
+  }
+  return hydrateNewsletterDraftHistory(
+    scope,
+    mapDraftRow(row),
+    options.signal,
+  )
+}
+
+export async function forkNewsletterDraft(
+  scope: NewsletterDraftScope,
+  sourceDraftId: string,
+  workingDraft: NewsletterDraftDocument,
+  options: {
+    idempotencyKey: string
+    publicChartBaseUrl?: string
+    signal?: AbortSignal
+  },
+): Promise<NewsletterDraftRecord> {
+  const idempotencyKey = options.idempotencyKey?.trim()
+  if (
+    typeof idempotencyKey !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(idempotencyKey)
+  ) {
+    throw new NewsletterDraftInputValidationError(
+      'Invalid fork idempotency key.',
+    )
+  }
+  const requestHash = sha256Hex(
+    JSON.stringify({ sourceDraftId, draft: workingDraft }),
+  )
+  const replay = await findNewsletterDraftForkReplay(
+    scope,
+    sourceDraftId,
+    idempotencyKey,
+    requestHash,
+    options.signal,
+  )
+  if (replay) return replay
+
+  const source = await getNewsletterDraft(scope, sourceDraftId, {
+    signal: options.signal,
+  })
+  const trustedWorkingDraft = await reconcileNewsletterDraftClientCharts(
+    scope,
+    source.draft,
+    workingDraft,
+    { signal: options.signal },
+  )
+  const now = new Date().toISOString()
+  const subject = trustedWorkingDraft.subjectLine?.trim() || source.subjectLine
+  const forkedDraft: NewsletterDraftDocument = {
+    ...trustedWorkingDraft,
+    source: undefined,
+    publication: undefined,
+    manualDraft: true,
+    generatedAt: now,
+    subjectLine: subject.startsWith('Copy of ') ? subject : `Copy of ${subject}`,
+  }
+  return persistNewsletterDraftFork(
+    scope,
+    source,
+    forkedDraft,
+    idempotencyKey,
+    requestHash,
+    options,
+  )
+}
+
 export async function createNewsletterDraft(
   scope: NewsletterDraftScope,
   ticker: string | undefined,
@@ -1509,7 +2678,7 @@ export async function saveNewsletterDraft(
     options.protectPublished &&
     existing.status === 'published'
   ) {
-    return existing
+    throw new NewsletterDraftConflictError(id)
   }
   if (existing.status === 'published') {
     throw new NewsletterPublishedDraftImmutableError(id)
@@ -1540,7 +2709,9 @@ export async function saveNewsletterDraft(
       const current = await getNewsletterDraft(scope, id, {
         signal: options.signal,
       })
-      if (current.status === 'published') return current
+      if (current.status === 'published') {
+        throw new NewsletterDraftConflictError(id)
+      }
     }
     throw error
   }
@@ -1671,6 +2842,7 @@ export async function regenerateNewsletterDraftChart(
     width?: number
     height?: number
     expectedUpdatedAt?: string
+    signal?: AbortSignal
   },
 ): Promise<NewsletterDraftRecord> {
   const chartBaseUrl = options?.chartBaseUrl ?? getDefaultChartingBaseUrl()
@@ -1678,7 +2850,9 @@ export async function regenerateNewsletterDraftChart(
     options?.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl()
   const width = options?.width
   const height = options?.height
-  const existing = await getNewsletterDraft(scope, id)
+  const existing = await getNewsletterDraft(scope, id, {
+    signal: options?.signal,
+  })
   if (existing.status === 'published') {
     throw new NewsletterPublishedDraftImmutableError(id)
   }
@@ -1688,36 +2862,61 @@ export async function regenerateNewsletterDraftChart(
   ) {
     throw new NewsletterDraftConflictError(id)
   }
-  const normalizedDraft = normalizeNewsletterDraftDocument(draft, publicChartBaseUrl)
+  const trustedDraft = await reconcileNewsletterDraftClientCharts(
+    scope,
+    existing.draft,
+    preserveNewsletterDraftServerMetadata(existing.draft, draft),
+    {
+      signal: options?.signal,
+      trustedRecaptureBlockId: blockId,
+    },
+  )
+  const normalizedDraft = normalizeNewsletterDraftDocument(
+    trustedDraft,
+    publicChartBaseUrl,
+  )
   const block = normalizedDraft.blocks.find((entry) => entry.id === blockId)
 
   if (!block) {
     throw new Error(`Draft does not contain block ${blockId}`)
   }
+  const capturedAt = new Date().toISOString()
+  const materializedChartSpec = materializeNewsletterChartScene(
+    block.chartSpec,
+    capturedAt,
+  )
 
-  const filename = `${normalizedDraft.ticker}_${block.templateId}_${toRunStamp()}_draft.png`
+  const captureSymbol = normalizeNewsletterCaptureSymbol(
+    normalizedDraft.ticker,
+  )
+  const filename = `${captureSymbol}_draft_${toRunStamp()}_${crypto.randomUUID().slice(0, 8)}.png`
   const temporaryDirectory = scope.ownerId
     ? mkdtempSync(join(tmpdir(), 'fin-quote-newsletter-draft-chart-'))
     : null
   const outputDirectory = temporaryDirectory ?? resolve(NEWSLETTER_CHART_OUTPUT_DIR)
   mkdirSync(outputDirectory, { recursive: true })
-  const outputPath = resolve(outputDirectory, filename)
+  const outputPath = resolveNewsletterCaptureOutputPath(
+    outputDirectory,
+    filename,
+  )
   let chartImageUrl = `/newsletter-charts/${filename}`
 
   try {
-    await captureChart(block.chartSpec, {
+    await captureChart(materializedChartSpec, {
       outputPath,
       chartBaseUrl,
       width,
       height,
+      signal: options?.signal,
     })
 
     if (scope.ownerId) {
       const uploaded = await uploadNewsletterChartImage({
         ownerId: scope.ownerId,
         chartId: `draft-${id}-${block.id}`,
-        symbol: normalizedDraft.ticker,
+        symbol: captureSymbol,
         outputPath,
+        signal: options?.signal,
       })
       chartImageUrl = uploaded.imageUrl
     }
@@ -1727,19 +2926,32 @@ export async function regenerateNewsletterDraftChart(
     }
   }
 
-  const updatedBlocks = normalizedDraft.blocks.map((entry) =>
-    entry.id === blockId
-      ? normalizeDraftBlock(
-          {
-            ...entry,
-            chartImageUrl,
-            chartNeedsRegeneration: false,
-          },
-          normalizedDraft.ticker,
-          publicChartBaseUrl,
-        )
-      : entry,
-  )
+  const updatedBlocks = normalizedDraft.blocks.map((entry) => {
+    if (entry.id !== blockId) return entry
+    const normalizedBlock = normalizeDraftBlock(
+      {
+        ...entry,
+        chartImageUrl,
+        chartSpec: materializedChartSpec,
+        chartProvenance: undefined,
+        chartNeedsRegeneration: false,
+      },
+      normalizedDraft.ticker,
+      publicChartBaseUrl,
+      capturedAt,
+    )
+    return {
+      ...normalizedBlock,
+      chartProvenance: buildNewsletterChartProvenance({
+        source: 'chart_editor',
+        capturedAt,
+        imageUrl: normalizedBlock.chartImageUrl,
+        interactiveUrl: normalizedBlock.chartExportUrl,
+        scene: materializedChartSpec,
+      }),
+      chartNeedsRegeneration: false,
+    }
+  })
 
   const saved = await saveNewsletterDraft(
     scope,

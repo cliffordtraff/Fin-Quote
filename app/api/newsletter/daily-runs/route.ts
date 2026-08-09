@@ -1,36 +1,27 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getNewsletterAutomationClock } from '@/lib/newsletter/automation-clock'
 import {
-  ensureNewsletterDailyRun,
   getConfiguredNewsletterAutomationScope,
   getLatestNewsletterDailyRun,
-  getNewsletterDailySettings,
-  NewsletterDailySourceError,
-  saveNewsletterDailySettings,
-} from '@/lib/newsletter/daily-runs'
-import {
-  getNewsletterAutomationClock,
   getNewsletterDailyAutomationRun,
-} from '@/lib/newsletter/daily-automation'
+  getNewsletterDailySettings,
+  type NewsletterDailyReadScope,
+} from '@/lib/newsletter/daily-runs-read'
 import {
   attachNewsletterDraftSessionCookie,
   resolveNewsletterDraftScope,
 } from '@/lib/newsletter/draft-session'
+import {
+  projectPublicNewsletterMorningAutomation,
+  projectPublicNewsletterMorningReport,
+  projectPublicNewsletterMorningSettings,
+} from '@/lib/newsletter/public-morning-report'
 
-function productionAccessError(ownerId: string | null): NextResponse | null {
-  if (process.env.NODE_ENV !== 'production' || ownerId) return null
-  return NextResponse.json(
-    { error: 'Sign in before running the daily newsletter generator.' },
-    { status: 401 },
-  )
-}
-
-function targetCount(value: unknown): number | undefined {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+const PRIVATE_NO_STORE_HEADERS = {
+  'Cache-Control': 'private, no-store, max-age=0',
 }
 
 function marketDate(value: unknown): string | undefined {
@@ -40,79 +31,124 @@ function marketDate(value: unknown): string | undefined {
   return value
 }
 
-function errorResponse(error: unknown): NextResponse {
-  const message =
-    error instanceof Error ? error.message : 'Daily newsletter request failed'
+function isSamePersistedScope(
+  left: NewsletterDailyReadScope,
+  right: NewsletterDailyReadScope,
+): boolean {
+  if (left.ownerId || right.ownerId) {
+    return Boolean(left.ownerId && left.ownerId === right.ownerId)
+  }
+  return left.sessionId === right.sessionId
+}
+
+function canReadFullReport(
+  requestScope: NewsletterDailyReadScope,
+  servedScope: NewsletterDailyReadScope,
+): boolean {
+  if (requestScope.ownerId) {
+    return requestScope.ownerId === servedScope.ownerId
+  }
+
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    !servedScope.ownerId &&
+    requestScope.sessionId === servedScope.sessionId
+  )
+}
+
+function canReadFullAutomation(
+  requestScope: NewsletterDailyReadScope,
+  configuredScope: NewsletterDailyReadScope | null,
+): boolean {
+  return Boolean(
+    requestScope.ownerId &&
+    configuredScope?.ownerId &&
+    requestScope.ownerId === configuredScope.ownerId,
+  )
+}
+
+function publicGetErrorResponse(error: unknown): NextResponse {
+  console.error('[newsletter/daily-runs] GET failed', error)
   return NextResponse.json(
-    { error: message },
-    { status: error instanceof NewsletterDailySourceError ? 409 : 500 },
+    { error: 'Unable to load the daily newsletter report.' },
+    { status: 500, headers: PRIVATE_NO_STORE_HEADERS },
   )
 }
 
 export async function GET(request: NextRequest) {
   try {
+    request.signal.throwIfAborted()
     const { scope, createdSessionId } =
       await resolveNewsletterDraftScope(request)
+    request.signal.throwIfAborted()
     const requestedDate = marketDate(
       request.nextUrl.searchParams.get('marketDate'),
     )
     const resolvedDate =
       requestedDate ?? getNewsletterAutomationClock().marketDate
-    let [run, settings, automation] = await Promise.all([
-      getLatestNewsletterDailyRun(scope, requestedDate),
-      getNewsletterDailySettings(scope),
-      getNewsletterDailyAutomationRun(resolvedDate),
+    const [initialRun, initialSettings, automation] = await Promise.all([
+      getLatestNewsletterDailyRun(scope, requestedDate, request.signal),
+      getNewsletterDailySettings(scope, request.signal),
+      getNewsletterDailyAutomationRun(resolvedDate, request.signal),
     ])
-    let reportReadOnly = false
+    let run = initialRun
+    let settings = initialSettings
+    let servedScope = scope
     const configuredScope = getConfiguredNewsletterAutomationScope()
     if (
       !run &&
       automation &&
       configuredScope &&
-      (configuredScope.ownerId !== scope.ownerId ||
-        configuredScope.sessionId !== scope.sessionId)
+      !isSamePersistedScope(configuredScope, scope)
     ) {
-      run = await getLatestNewsletterDailyRun(configuredScope, resolvedDate)
+      servedScope = configuredScope
+      run = await getLatestNewsletterDailyRun(
+        configuredScope,
+        resolvedDate,
+        request.signal,
+      )
       if (run) {
-        settings = await getNewsletterDailySettings(configuredScope)
-        reportReadOnly = true
+        settings = await getNewsletterDailySettings(
+          configuredScope,
+          request.signal,
+        )
       }
     }
-    const response = NextResponse.json({
-      run,
-      settings,
-      automation,
-      reportReadOnly,
-    })
+
+    const reportReadOnly = !canReadFullReport(scope, servedScope)
+    const automationReadOnly = !canReadFullAutomation(scope, configuredScope)
+    const response = NextResponse.json(
+      {
+        run:
+          reportReadOnly && run
+            ? projectPublicNewsletterMorningReport(run)
+            : run,
+        settings: reportReadOnly
+          ? projectPublicNewsletterMorningSettings(settings)
+          : settings,
+        automation: automationReadOnly
+          ? projectPublicNewsletterMorningAutomation(automation)
+          : automation,
+        reportReadOnly,
+        automationReadOnly,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS },
+    )
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
-    return errorResponse(error)
+    if (request.signal.aborted) {
+      throw request.signal.reason ?? error
+    }
+    return publicGetErrorResponse(error)
   }
 }
 
+/**
+ * Compatibility boundary for callers that still POST to the read URL. A 307
+ * keeps the request method, body, credentials, and same-origin cookie policy.
+ */
 export async function POST(request: NextRequest) {
-  try {
-    const { scope, createdSessionId } =
-      await resolveNewsletterDraftScope(request)
-    const accessError = productionAccessError(scope.ownerId)
-    if (accessError) return accessError
-
-    const body = await request.json().catch(() => ({}))
-    const requestedTarget = targetCount(body?.targetCount)
-    if (requestedTarget != null) {
-      await saveNewsletterDailySettings(scope, {
-        targetCount: requestedTarget,
-        enabled: true,
-      })
-    }
-    const run = await ensureNewsletterDailyRun(scope, {
-      marketDate: marketDate(body?.marketDate),
-      targetCount: requestedTarget,
-    })
-    const settings = await getNewsletterDailySettings(scope)
-    const response = NextResponse.json({ run, settings }, { status: 201 })
-    return attachNewsletterDraftSessionCookie(response, createdSessionId)
-  } catch (error) {
-    return errorResponse(error)
-  }
+  const actionUrl = request.nextUrl.clone()
+  actionUrl.pathname = '/api/newsletter/daily-runs/action'
+  return NextResponse.redirect(actionUrl, 307)
 }

@@ -307,7 +307,7 @@ describe('newsletter price chart editor bridge', () => {
     })
   })
 
-  it('preserves saved export-editor options when reopening a price chart', () => {
+  it('preserves saved visual options while restoring canonical render dimensions', () => {
     const chartExportSpec = {
       symbol: 'GOOGL',
       range: '1m',
@@ -351,13 +351,13 @@ describe('newsletter price chart editor bridge', () => {
       chartExportSpec,
     })
 
-    expect(resolved.baseSpec.width).toBe(2400)
-    expect(resolved.baseSpec.height).toBe(1800)
+    expect(resolved.baseSpec.width).toBe(1860)
+    expect(resolved.baseSpec.height).toBe(1320)
     expect(resolved.baseSpec.companyName).toBe('Custom Title')
     expect(resolved.baseSpec.exportOptions).toMatchObject({
-      displayWidth: 1200,
-      displayHeight: 900,
-      exportScale: 2,
+      displayWidth: 620,
+      displayHeight: 440,
+      exportScale: 3,
       visibleRange: 'custom',
       chartTitle: 'Custom Title',
       titleSize: 42,

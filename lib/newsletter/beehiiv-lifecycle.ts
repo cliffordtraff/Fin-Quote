@@ -6,6 +6,7 @@ import type {
 import { getBeehiivPostState } from '@/lib/beehiiv/client'
 import {
   claimBeehiivDeliveriesForReconciliation,
+  isNewsletterDraftSourceVersionCurrent,
   markBeehiivLifecycleApplied,
   recordBeehiivReconciliationError,
   releaseBeehiivReconciliationLease,
@@ -93,7 +94,7 @@ async function loadDraftContext(delivery: BeehiivDeliveryRecord) {
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
     .from('newsletter_drafts')
-    .select('session_id, status')
+    .select('session_id, status, updated_at')
     .eq('id', delivery.draftId)
     .eq('owner_id', delivery.ownerId)
     .maybeSingle()
@@ -220,31 +221,42 @@ export async function reconcileBeehiivDelivery(
           updated.webUrl &&
           context.status !== 'published'
         ) {
-          try {
-            await renewBeehiivReconciliationLease({
-              ownerId: delivery.ownerId,
-              draftId: delivery.draftId,
-              leaseToken: input.leaseToken,
-            })
-            await recordNewsletterPublication(
-              scope,
-              delivery.draftId,
-              updated.webUrl,
-              updated.publishedAt
-                ? new Date(updated.publishedAt)
-                : now,
-            )
-          } catch (error) {
-            // Saving a draft and appending its history are separate database
-            // writes. If persistence succeeded before a history write failed,
-            // verify the durable draft state and continue the idempotent
-            // Beehiiv transition instead of stranding a published delivery.
-            const persisted = await getNewsletterDraft(scope, delivery.draftId)
-            if (
-              persisted.status !== 'published' ||
-              persisted.beehiivUrl !== new URL(updated.webUrl).toString()
-            ) {
-              throw error
+          const sourceDraftUpdatedAt = updated.sourceDraftUpdatedAt
+          const sourceVersionIsCurrent = sourceDraftUpdatedAt
+            ? await isNewsletterDraftSourceVersionCurrent({
+                ownerId: delivery.ownerId,
+                draftId: delivery.draftId,
+                sourceDraftUpdatedAt,
+              })
+            : false
+          if (sourceVersionIsCurrent) {
+            try {
+              await renewBeehiivReconciliationLease({
+                ownerId: delivery.ownerId,
+                draftId: delivery.draftId,
+                leaseToken: input.leaseToken,
+              })
+              await recordNewsletterPublication(
+                scope,
+                delivery.draftId,
+                updated.webUrl,
+                updated.publishedAt
+                  ? new Date(updated.publishedAt)
+                  : now,
+                context.updated_at,
+              )
+            } catch (error) {
+              // Saving a draft and appending its history are separate database
+              // writes. If persistence succeeded before a history write failed,
+              // verify the durable draft state and continue the idempotent
+              // Beehiiv transition instead of stranding a published delivery.
+              const persisted = await getNewsletterDraft(scope, delivery.draftId)
+              if (
+                persisted.status !== 'published' ||
+                persisted.beehiivUrl !== new URL(updated.webUrl).toString()
+              ) {
+                throw error
+              }
             }
           }
         }

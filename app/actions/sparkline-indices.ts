@@ -2,6 +2,8 @@
 
 import { getProvider } from '@/lib/providers'
 import type { ProviderCandle } from '@/lib/providers'
+import type { ProviderQuote } from '@/lib/providers/types'
+import { DASHBOARD_INDEX_SYMBOLS } from '@/lib/dashboard-fixed-panels'
 import { safeErrorMessage } from '@/lib/safe-logging'
 
 export interface OHLCData {
@@ -28,24 +30,75 @@ export interface SparklineIndexData {
 }
 
 // Index symbols with their display names
-const INDEX_SYMBOLS = [
-  { symbol: '^GSPC', name: 'S&P 500' },
-  { symbol: '^DJI', name: 'DOW' },
-  { symbol: '^IXIC', name: 'NASDAQ' },
-  { symbol: '^RUT', name: 'Russell 2000' },
-  { symbol: '^VIX', name: 'VIX' },
-]
+const INDEX_NAMES = {
+  '^GSPC': 'S&P 500',
+  '^DJI': 'DOW',
+  '^IXIC': 'NASDAQ',
+  '^RUT': 'Russell 2000',
+  '^VIX': 'VIX',
+} as const satisfies Record<typeof DASHBOARD_INDEX_SYMBOLS[number], string>
+
+const INDEX_SYMBOLS = DASHBOARD_INDEX_SYMBOLS.map((symbol) => ({
+  symbol,
+  name: INDEX_NAMES[symbol],
+}))
+
+function hasCompleteIndexQuotePanel(quotes: ProviderQuote[]): boolean {
+  const expected = new Set<string>(INDEX_SYMBOLS.map(({ symbol }) => symbol))
+  const seen = new Set<string>()
+  return quotes.length === expected.size && quotes.every((quote) => {
+    if (
+      !expected.has(quote.symbol) ||
+      seen.has(quote.symbol) ||
+      !Number.isFinite(quote.price) ||
+      quote.price <= 0 ||
+      !Number.isFinite(quote.change) ||
+      !Number.isFinite(quote.changesPercentage)
+    ) {
+      return false
+    }
+    seen.add(quote.symbol)
+    return true
+  }) && seen.size === expected.size
+}
+
+function hasValidStrictOhlc(candle: ProviderCandle): boolean {
+  const { open, high, low, close } = candle
+
+  return (
+    Number.isFinite(open) &&
+    Number.isFinite(high) &&
+    Number.isFinite(low) &&
+    Number.isFinite(close) &&
+    open > 0 &&
+    high > 0 &&
+    low > 0 &&
+    close > 0 &&
+    high >= Math.max(open, close) &&
+    low <= Math.min(open, close) &&
+    high >= low
+  )
+}
 
 /**
  * Fetch index data with intraday prices for sparkline charts (previous day + today)
  */
-export async function getSparklineIndicesData(): Promise<{ indices: SparklineIndexData[] } | { error: string }> {
+async function loadSparklineIndicesData(
+  strict: boolean,
+  signal?: AbortSignal,
+): Promise<{ indices: SparklineIndexData[] } | { error: string }> {
   try {
     const provider = getProvider()
 
     // Batch-fetch all quotes via provider
     const allSymbols = INDEX_SYMBOLS.map(i => i.symbol)
-    const quotes = await provider.getQuotes(allSymbols)
+    const quotes = await provider.getQuotes(
+      allSymbols,
+      strict ? { failureMode: 'throw', signal } : undefined,
+    )
+    if (strict && !hasCompleteIndexQuotePanel(quotes)) {
+      throw new Error('Incomplete index quote panel')
+    }
 
     const indicesData = await Promise.all(
       INDEX_SYMBOLS.map(async ({ symbol, name }) => {
@@ -57,12 +110,23 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
         }
 
         // Fetch 1-minute intraday data for sparkline via provider
-        const intradayData = await provider.getIntraday(symbol, 1, 'minute')
+        const intradayData = await provider.getIntraday(
+          symbol,
+          1,
+          'minute',
+          undefined,
+          undefined,
+          strict ? { failureMode: 'throw', signal } : undefined,
+        )
+
+        if (strict && !intradayData.every(hasValidStrictOhlc)) {
+          throw new Error(`Invalid index OHLC data for ${symbol}`)
+        }
 
         let priceHistory: number[] = []
         let priceTimestamps: string[] = []
-        let yesterdayOHLC: OHLCData[] = []
-        let todayOHLC: OHLCData[] = []
+        const yesterdayOHLC: OHLCData[] = []
+        const todayOHLC: OHLCData[] = []
         let previousClose: number | null = null
         let todayStartIndex: number | null = null
         let yesterdayChangePercent: number | null = null
@@ -161,11 +225,27 @@ export async function getSparklineIndicesData(): Promise<{ indices: SparklineInd
       })
     )
 
-    const validIndices = indicesData.filter((c): c is SparklineIndexData => c !== null)
+    const validIndices = indicesData.filter(
+      (candidate): candidate is NonNullable<typeof candidate> =>
+        candidate !== null,
+    )
 
     return { indices: validIndices }
   } catch (error) {
     console.error('Error fetching indices data:', safeErrorMessage(error))
     return { error: 'Failed to load indices data' }
   }
+}
+
+export async function getSparklineIndicesData(): Promise<
+  { indices: SparklineIndexData[] } | { error: string }
+> {
+  return loadSparklineIndicesData(false)
+}
+
+/** Strict snapshot path: failed or partial fixed panels remain provenance. */
+export async function getSparklineIndicesDataWithStatus(
+  signal?: AbortSignal,
+): Promise<{ indices: SparklineIndexData[] } | { error: string }> {
+  return loadSparklineIndicesData(true, signal)
 }

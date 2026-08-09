@@ -3,7 +3,7 @@
 import { getProvider } from '@/lib/providers';
 import { getCurrentMarketSession } from '@/lib/market-utils';
 
-interface StockOverview {
+export interface StockOverview {
   company: {
     name: string;
     symbol: string;

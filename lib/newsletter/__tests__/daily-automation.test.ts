@@ -100,6 +100,69 @@ describe('daily newsletter automation', () => {
     ).toEqual({ 'owner:1': 'run-1' })
   })
 
+  it('turns the persisted WIIM snapshot into a durable two-sided editorial inbox', () => {
+    const rankedCandidates = [
+      ['AAA', 12, 'Alpha', 'found'],
+      ['BBB', -9, 'Beta', 'found'],
+      ['CCC', 7, 'Gamma', 'missing'],
+      ['DDD', -5, 'Delta', 'found'],
+      ['FLAT', 0, 'Flat', 'found'],
+    ].map(([symbol, move, name, catalyst], index) => ({
+      rank: index + 1,
+      ticker: symbol,
+      metadata: {
+        symbol,
+        name,
+        price: 100 + index,
+        change: Number(move),
+        changesPercentage: Number(move),
+        topNews: [],
+        whyMoving:
+          catalyst === 'found'
+            ? {
+                symbol,
+                status: 'found',
+                displayText: `${symbol} catalyst`,
+                headline: `${symbol} moved`,
+                summary: null,
+                bulletPoints: [],
+                sentiment: null,
+                source: 'finviz',
+                sourceTimestamp: null,
+                isCatalyst: true,
+                sourceUrl: 'https://example.com',
+                fetchedAt: '2026-08-07T14:30:00.000Z',
+                errorMessage: null,
+              }
+            : null,
+      },
+    }))
+
+    const discoveries = __testOnly.buildWhyMovedDiscoveriesFromWiim({
+      rankedCandidates: rankedCandidates as never,
+      marketDate: '2026-08-07',
+      session: 'cash',
+      generatedAt: '2026-08-07T14:30:00.000Z',
+      limitPerDirection: 2,
+    })
+
+    expect(discoveries.map(({ candidate }) => candidate.symbol)).toEqual([
+      'AAA',
+      'CCC',
+      'BBB',
+      'DDD',
+    ])
+    expect(discoveries[0].candidate.reviewKey).toBe(
+      '2026-08-07:cash:gainer:AAA',
+    )
+    expect(discoveries[2].candidate.direction).toBe('loser')
+    expect(discoveries[1].catalyst).toMatchObject({
+      symbol: 'CCC',
+      status: 'not_found',
+      fetchedAt: '2026-08-07T14:30:00.000Z',
+    })
+  })
+
   it('resumes the recorded failed stage and safely falls back to collection', () => {
     expect(__testOnly.retryableStage('summaries')).toBe('summaries')
     expect(__testOnly.retryableStage('finalizing')).toBe('finalizing')
