@@ -45,7 +45,7 @@ export type CatalystEarningsCalendarLoadResult =
   | { error: string }
 
 const DASHBOARD_EARNINGS_LIMIT = 10
-const MAX_PROVIDER_ROWS = 5_000
+const MAX_PROVIDER_ROWS = 10_000
 const MAX_PROVIDER_RESPONSE_BYTES = 2 * 1024 * 1024
 const PROVIDER_TIMEOUT_MS = 6_000
 const SYMBOL_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,14}$/
