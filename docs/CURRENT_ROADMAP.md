@@ -478,11 +478,11 @@ Final production verification is green on the settled head:
   Observe conflict, retry, quote-load, and import behavior before changing the
   20-symbol bound.
 
-### P3: Promote And Observe Durable Chatbot Admission
+### P3: Observe Durable Chatbot Admission
 
-- Apply `20260809140000_bound_chatbot_conversations.sql` and then
-  `20260809150000_durable_chatbot_request_admission.sql` before the matching
-  application build.
+- PR #22 is deployed at merge `6f1c4b9`. Migrations `20260809140000` and
+  `20260809150000` are aligned on linked Supabase, and production deployment
+  `dpl_GeuEHL7uksz1bEa3gqKRKV5MTowL` is READY and healthy.
 - Observe lease expiry, replay, recovery, per-account saturation, global
   saturation, revision conflicts, and bounded history latency before changing
   admission limits.
