@@ -2699,13 +2699,13 @@ console warnings or errors, and removed that test artifact. A green component su
 cannot replace following the actual button all the way through its route,
 storage boundary, and rendered result.
 
-### Release Truth: The Package Is Local Until It Is Promoted
+### Release Truth Before Promotion: Local Is Not Production
 
-The code and migrations are implemented and locally verified. They have not
-been applied to the linked Supabase project, and the application has not been
-deployed. That distinction matters because the new archive query expects the
-new summary columns and the bulk endpoint expects the new RPC. Shipping only
-one half would turn a coherent local feature into a live incompatibility.
+At this checkpoint, the code and migrations were implemented and locally
+verified but had not yet been applied to the linked Supabase project or
+deployed. That distinction mattered because the new archive query expected the
+new summary columns and the bulk endpoint expected the new RPC. Shipping only
+one half would have turned a coherent local feature into a live incompatibility.
 
 The safe release has a deliberate order: inspect the linked migration dry run;
 apply `20260807090000_scale_newsletter_archive.sql` and then
@@ -2723,8 +2723,9 @@ application, smoke test” is a sequence they can execute and recover from.
 
 That last paragraph is not ceremonial caution. Good engineers keep three
 claims separate: **implemented**, **verified in a controlled environment**, and
-**observed working in production**. This scaling pass has earned the first two.
-The release process must earn the third.
+**observed working in production**. At that checkpoint the scaling pass had
+earned the first two. The August 9 production record below documents how it
+earned the third.
 
 ## August 8, 2026: The Workstation Learned To Keep Its Own Memory
 
@@ -3278,7 +3279,15 @@ fall-back ambiguity resolves deterministically, and event ordering is BMO,
 market hours, then AMC.
 
 Each feed owns a six-second transport deadline, a two-megabyte streamed body
-ceiling, a 5,000-row raw cap, strict row validation, and a 100-item page cap.
+ceiling, a 10,000-row raw cap, strict row validation, and a 100-item page cap.
+The production FMP feed proved why bounds need evidence: one valid provider
+week contained 6,392 rows, so the old 5,000-row ceiling rejected a healthy body
+that still fit comfortably under the byte limit. The feed is global, and valid
+irrelevant symbols such as international listings may contain characters our
+local S&P contract rejects. Rows are therefore filtered to the eligible S&P
+universe before strict local symbol validation; malformed eligible rows still
+fail closed.
+
 The UI discloses qualifying totals and truncation rather than presenting a full
 week as if it were complete. A failed feed does not erase the healthy one or
 the preserved International Sessions view; a legitimate empty response remains
@@ -3422,6 +3431,13 @@ order is therefore explicit:
     lease fencing and duplicate recovery, and shortlist history;
 11. promote the matching application; then run authenticated smoke tests.
 
+Production health then exposed one database-only eligibility edge, repaired by
+the chronological follow-up
+`20260809120000_skip_disconnected_beehiiv_reconciliation.sql`. It excludes an
+explicitly disconnected integration from claims without deleting its delivery
+history. This was applied after the initial package promotion, verified with an
+empty second push dry run, and is part of the final aligned release ledger.
+
 Migration-first matters because the new application reads new scalars and
 calls new RPCs. Compatibility triggers keep old application instances valid
 during the overlap and preserve historical editor timestamps during derived
@@ -3439,3 +3455,45 @@ in that function. The larger lesson is worth keeping here: a serious
 engineering pass does not end when the happy-path feature works. It follows
 growth, cancellation, concurrency, packaging, retries, and release order until
 each layer tells the same story.
+
+### August 9, 2026: Production Closed The Loop
+
+The final release did not stop at “the PR merged.” PR #16 merged the durable
+archive/editor/delivery/chart-save package as `fc27eca`, after which its nine
+migrations were applied in order to linked Supabase project
+`hccwmbmnmbmhuslmbymq`. PR #17 merged the disconnected-Beehiiv repair as
+`b2cd84b` and applied the tenth migration, `20260809120000`. PRs #18 and #19
+then closed the two production catalyst-feed contract failures; final
+application head `7faff05` contains both repairs.
+
+The final hosted gates passed TypeScript, ESLint with zero errors (166
+non-blocking warnings), 250 Vitest files / 1,646 tests, 11 pgTAP files / 372
+assertions, a 49-unit production build, and all 114 guarded server traces.
+Pinned staged-tree secret scans were clean. Local and remote migration ledgers
+align through `20260809120000`, and the second linked push dry run is empty.
+
+Vercel deployment `dpl_ATwcqNHpYRUQRSjz5vQ1RGrZJrXH` reached READY at
+`theintraday-krnvfrpq9-fords-projects-b7da7491.vercel.app`. The public root and
+`/api/health/newsletter` returned HTTP `200`; the health body was `healthy`,
+and the settled deployment window contained no error-level or 5xx logs. A safe
+reconciliation heartbeat ran with zero configured Beehiiv integrations and
+returned `attempted: 0`, `updated: 0`, and no failures. It refreshed health
+without synchronizing, publishing, or delivering anything. No new newsletter
+canary was sent.
+
+The watchdog proof is equally precise. Manual `workflow_dispatch` run
+31125987699 showed the hosted path but never counted as schedule evidence. Real
+`event=schedule` run 31318198085 correctly caught the pre-fix `503`; after the
+repair, real scheduled run 31319998523 succeeded on exact deployed head
+`7faff05`. The machine path is proved. Human notification and operator response
+from an intentionally failing run are still unproved, and the optional external
+webhook remains unconfigured. Beehiiv is also explicitly disconnected, so a
+human OAuth reconnect is required before real remote sync, scheduling,
+publication, or delivery. Its two historical delivery rows remain intact for
+that future reconnect.
+
+This is the useful ending: reliability work is not the absence of surprises.
+It is the ability to let production reveal a bounded truth, repair only the
+owned cause, and then collect evidence at every layer—ledger, tests, deployment,
+health, logs, and off-site schedule—without pretending an optional or human
+step happened when it did not.

@@ -401,30 +401,31 @@ editor session:
   backgrounds, failure messages inside active dialogs, and stable fallback
   focus after a successful archive or deletion.
 
-This package is local. No linked database migration, Vercel promotion, or
-production smoke test has occurred. The complete release sequence now continues
-after the August 7 migrations with `20260808090000`, `20260808100000`,
-`20260808110000`, `20260808120000`, `20260808130000`, and
-`20260809090000`, then
-`20260809100000`, followed by database verification, application promotion,
-and authenticated smoke tests.
+This package is now deployed. PR #16 merged as `fc27eca`, and its nine linked
+migrations from `20260807090000` through `20260809100000` were applied in
+chronological order before application promotion. PR #17 (`b2cd84b`) then
+added and applied `20260809120000` so historical deliveries belonging to an
+explicitly disconnected Beehiiv integration no longer poison reconciliation
+health. The rows were preserved; reconnecting Beehiiv makes them eligible
+again. PRs #18 (`2a53efc`) and #19 (`7faff05`) closed the two blocking
+catalyst-feed production errors discovered by log verification.
 
-Final local verification is green on the settled tree:
+Final production verification is green on the settled head:
 
-- a clean local database reset replayed every migration through
-  `20260809100000`, including the final chart-admission contract, and all 10
-  pgTAP files / 369 assertions passed. No linked migration or remote database
-  command was run;
-- the full Vitest run passed 250 files / 1,644 tests; TypeScript passed; the
-  repository lint completed with 0 errors (177 non-blocking warnings); and
-  `git diff --check` passed;
-- the production Next.js build compiled, generated all 49 static-page units,
-  and the deployment guard accepted all 114 server traces. The settled
-  Newsletter Operations read trace is 57 files / 1,355,510 bytes (1.293 MiB),
-  with the 1,003-file heavy graph confined to the authenticated action route;
-  and
-- independent database, Next.js, React, concurrency, and release reviews found
-  no remaining actionable P0/P1 issue in the local package.
+- local and linked migration ledgers align through `20260809120000`, the
+  second push dry run is empty, and the final hosted database gate passed 11
+  pgTAP files / 372 assertions;
+- the final hosted application gate passed 250 Vitest files / 1,646 tests,
+  TypeScript, repository lint with 0 errors (166 non-blocking warnings), and
+  the pinned staged-tree secret scan;
+- the production Next.js build generated all 49 static-page units and the
+  deployment guard accepted all 114 server traces;
+- Vercel deployment `dpl_ATwcqNHpYRUQRSjz5vQ1RGrZJrXH` reached READY; the
+  public root and newsletter health route returned `200`, health was
+  `healthy`, and its settled window contained no error-level or 5xx logs; and
+- real `event=schedule` watchdog run 31319998523 succeeded on exact deployed
+  head `7faff05`. No manual `workflow_dispatch` run was counted as that proof,
+  and no additional newsletter canary was sent.
 
 ## Next Priorities
 
@@ -438,35 +439,22 @@ Final local verification is green on the settled tree:
 - Keep subject lines, cadence, and audience quality consistent while the domain
   warms.
 
-### P1: Release And Observe The Durable Workstation Package
+### P1: Observe The Deployed Durable Workstation Package
 
-- Review the local package; apply migrations `20260807090000`,
-  `20260807100000`, `20260808090000`, `20260808100000`, `20260808110000`, and
-  `20260808120000`, `20260808130000`, `20260809090000`, then `20260809100000`
-  in that order to
-  the linked Supabase project; verify the ledger, schema, write privileges,
-  archive/Beehiiv/editorial/render/fork/chart-admission RPCs, receipts, and
-  query indexes; then promote the matching application build. Do not reverse
-  that order.
-- Verify the production migration ledger and schema, then smoke-test desktop
-  and mobile search, filters, cursor paging, archive/restore, a stale-edit
-  conflict and fork, the durable Why Moved backlog/bulk transition, paged chart
-  library, operations market-date totals, shortlist accept/remove/reorder and
-  stale-revision recovery, and slow or failed chart assets
-  against real saved issues.
-- Exercise chart POST admission explicitly: an exact idempotency replay, changed
-  payload under the same key, owner/global capacity responses, the anonymous
-  development `428` retry, and a disconnected caller whose late physical save
-  is recovered from the durable receipt. Observe expired leases, replay rate,
-  owner/global saturation, and rolling-rate rejection instead of inferring
-  those paths from ordinary chart creation.
-- Confirm that an old published issue reopens the exact captured scene and
-  image, and that scheduled, published, and archived Beehiiv issues remain
-  synchronization-locked.
-- Watch archive-query latency, facet latency, conflict frequency, and bulk-RPC
-  replay failures as the issue count grows; also watch chart lease expiry,
-  duplicate-recovery conflicts, and admission saturation. Add indexes or
-  operational signals from measured evidence rather than guesses.
+- Watch archive-query latency, facet latency, conflict frequency, bulk-RPC
+  replay failures, chart lease expiry, duplicate-recovery conflicts, and
+  admission saturation as real usage grows. Change indexes or limits only from
+  measured evidence.
+- Keep the public newsletter health route and real scheduled watchdog green.
+  Prove human notification and operator response with a controlled failing run
+  only when an on-call destination is ready.
+- Beehiiv remains explicitly disconnected. A human OAuth reconnect is required
+  before remote synchronization, scheduling, publication, or delivery. After
+  reconnect, verify the preserved historical rows reconcile normally without
+  sending a new canary.
+- Configure the optional external webhook only when a real receiver and signing
+  secret exist. Its current absence is an intentional warning, not unhealthy
+  core automation.
 
 ### P2: Sync The Watchlist Without Splitting Its Identity
 
