@@ -320,7 +320,7 @@ Steps 1–8 describe the earlier baseline release.
    deployed head `7faff05`. No `workflow_dispatch` run was substituted for
    this proof.
 
-## Account Watchlist Release Candidate
+## Account Watchlist Deployed
 
 The next migration-first package makes the existing compact Market Overview
 watchlist account-aware without creating a second watchlist product. Anonymous
@@ -344,9 +344,39 @@ full reset: `COALESCE` is PostgreSQL syntax, not a schema-qualified
 passes 187 focused account/watchlist tests and the complete 270-file / 1,823-
 test Vitest suite, TypeScript, ESLint with zero errors (166 pre-existing
 warnings), a 49-unit production build, and 116 server build trace checks.
-Promotion still follows the safe order: apply and verify the migration, enable
-the flag for the matching build, then merge and smoke the account and watchlist
-paths.
+Promotion completed in that safe order. PR #21 merged as `d45b367`; migration
+`20260809130000_account_watchlist_sync.sql` was applied to linked Supabase
+project `hccwmbmnmbmhuslmbymq`, the second push dry run was empty, and
+`NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC=true` is active in production. Vercel
+deployment `dpl_2uKSdGQB2qUrrTMG8U72BboKvxKS` reached READY, the public root and
+newsletter health endpoint returned `200`, health was `healthy`, and the exact
+deployment window contained no error-level or 5xx logs. No newsletter canary
+was sent.
+
+## Durable Chatbot Release Candidate
+
+The authenticated chatbot package closes the gap between a model response and
+a durable conversation turn. Request admission is keyed by verified account,
+idempotency key, command fingerprint, and conversation revision. PostgreSQL
+enforces one active request per account, four globally, bounded acquisition and
+retry limits, a 180-second lease, exact replay, and atomic conversation-turn
+plus completion settlement. The admission ledger stores lifecycle metadata and
+content-free pointers rather than duplicating question or answer content.
+
+Conversation access now uses bounded auth-derived RPCs with keyset pagination,
+revision checks, and browser-role base-table mutation revoked. Stateless token
+verification fences expired sessions and keeps server work attached to the
+same principal throughout the request.
+
+The frozen application passed 25 focused files / 180 tests and the complete
+291-file / 1,987-test Vitest suite. TypeScript passed; ESLint reported zero
+errors and 150 non-blocking warnings; the 49-unit production build and all 116
+server build traces passed. A clean database reset replayed the full history
+through `20260809150000`, and all 14 pgTAP files / 480 assertions passed. The
+required promotion order is
+`20260809140000_bound_chatbot_conversations.sql`, then
+`20260809150000_durable_chatbot_request_admission.sql`, then the matching
+application.
 
 ## Remaining Risks
 

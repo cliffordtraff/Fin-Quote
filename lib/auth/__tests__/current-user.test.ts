@@ -1,55 +1,78 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthSessionMissingError } from '@supabase/supabase-js'
 
 const mocks = vi.hoisted(() => ({
-  createClient: vi.fn(),
-  getUser: vi.fn(),
+  resolveAuthenticatedRequest: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: mocks.createClient,
-}))
+vi.mock('@/lib/supabase/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/supabase/server')>()
+  return {
+    ...actual,
+    resolveAuthenticatedRequest: mocks.resolveAuthenticatedRequest,
+  }
+})
 
 import {
   AuthenticationRequiredError,
   AuthenticationUnavailableError,
   requireCurrentUser,
+  requireCurrentUserContext,
 } from '@/lib/auth/current-user'
+import {
+  RequestAuthenticationRequiredError,
+  RequestAuthenticationUnavailableError,
+} from '@/lib/supabase/server'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.createClient.mockResolvedValue({ auth: { getUser: mocks.getUser } })
 })
 
 describe('requireCurrentUser', () => {
-  it('distinguishes clean anonymous auth from verification outage', async () => {
-    mocks.getUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: null,
-    })
+  it('returns the verified user and the same bearer-bound context', async () => {
+    const context = {
+      accessToken: 'access-token-a',
+      client: { from: vi.fn() },
+      expiresAt: 2_000_000_000,
+      user: { id: 'user-a' },
+    }
+    mocks.resolveAuthenticatedRequest.mockResolvedValue(context)
+
+    await expect(requireCurrentUser()).resolves.toBe(context.user)
+    await expect(requireCurrentUserContext()).resolves.toBe(context)
+  })
+
+  it('distinguishes rejected credentials from verification outage', async () => {
+    mocks.resolveAuthenticatedRequest.mockRejectedValueOnce(
+      new RequestAuthenticationRequiredError('missing'),
+    )
     await expect(requireCurrentUser()).rejects.toBeInstanceOf(
       AuthenticationRequiredError,
     )
 
-    mocks.getUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: { message: 'auth service unavailable' },
-    })
+    mocks.resolveAuthenticatedRequest.mockRejectedValueOnce(
+      new RequestAuthenticationUnavailableError(),
+    )
     await expect(requireCurrentUser()).rejects.toBeInstanceOf(
       AuthenticationUnavailableError,
     )
+  })
 
-    mocks.getUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: new AuthSessionMissingError(),
-    })
-    await expect(requireCurrentUser()).rejects.toBeInstanceOf(
-      AuthenticationRequiredError,
+  it('preserves an expiring-token reason for route-level browser recovery', async () => {
+    mocks.resolveAuthenticatedRequest.mockRejectedValueOnce(
+      new RequestAuthenticationRequiredError('expiring', 2_000_000_000),
     )
+
+    await expect(requireCurrentUserContext({
+      minimumValiditySeconds: 150,
+    })).rejects.toMatchObject({
+      name: AuthenticationRequiredError.name,
+      reason: 'expiring',
+      expiresAt: 2_000_000_000,
+    })
   })
 
   it('maps unexpected verification transport failures to unavailable', async () => {
-    mocks.getUser.mockRejectedValueOnce(new Error('network offline'))
+    mocks.resolveAuthenticatedRequest.mockRejectedValueOnce(new Error('network offline'))
     await expect(requireCurrentUser()).rejects.toBeInstanceOf(
       AuthenticationUnavailableError,
     )

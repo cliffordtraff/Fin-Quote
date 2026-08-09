@@ -456,7 +456,7 @@ Final production verification is green on the settled head:
   secret exist. Its current absence is an intentional warning, not unhealthy
   core automation.
 
-### P2: Promote And Observe Account Watchlist Sync
+### P2: Observe Account Watchlist Sync
 
 - The implementation is complete behind `NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC`:
   anonymous lists remain browser-local; signed-in lists use the existing
@@ -473,11 +473,23 @@ Final production verification is green on the settled head:
 - Custom symbols use one same-origin bounded quote batch. Pulse continues to
   stream only its selected symbol, and Catalyst Calendar keeps filtering its
   already-loaded events client-side.
-- Apply the migration before the flagged application build, verify live legacy
-  row shapes and browser-role grants, then observe conflict, retry, quote-load,
-  and import behavior before changing the 20-symbol bound.
+- PR #21 is deployed at `d45b367`, migration `20260809130000` is aligned on
+  linked Supabase, and `NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC=true` is active.
+  Observe conflict, retry, quote-load, and import behavior before changing the
+  20-symbol bound.
 
-### P3: Finish External Alerting
+### P3: Promote And Observe Durable Chatbot Admission
+
+- Apply `20260809140000_bound_chatbot_conversations.sql` and then
+  `20260809150000_durable_chatbot_request_admission.sql` before the matching
+  application build.
+- Observe lease expiry, replay, recovery, per-account saturation, global
+  saturation, revision conflicts, and bounded history latency before changing
+  admission limits.
+- Keep the request ledger content-free and keep browser mutation of the base
+  conversation/message tables revoked.
+
+### P4: Finish External Alerting
 
 - Choose the actual operational receiver.
 - Configure `NEWSLETTER_ALERT_WEBHOOK_URL` and a dedicated
@@ -486,7 +498,7 @@ Final production verification is green on the settled head:
   outbox records delivery.
 - Define who responds to late, failed, and stuck-delivery alerts.
 
-### P4: Learn From Editorial Decisions
+### P5: Learn From Editorial Decisions
 
 - Analyze the new versioned shortlist ledger before changing ranking: compare
   algorithm recommendations with accepted, removed, added, and intentionally
@@ -499,7 +511,7 @@ Final production verification is green on the settled head:
 - Use the new calendar and catalyst-history foundations to show relevant context
   beside reviewed catalysts without overwriting immutable discovery evidence.
 
-### P5: Research Depth And Surface Consolidation
+### P6: Research Depth And Surface Consolidation
 
 - Consolidate experimental chart routes after their useful behavior is
   absorbed into the primary surfaces.
@@ -508,7 +520,7 @@ Final production verification is green on the settled head:
 - Decide whether replay should remain an explicitly Massive-only capability or
   gain a clearly labeled lower-resolution fallback for FMP.
 
-### P6: Complete The Account Lifecycle If The Product Needs It
+### P7: Complete The Account Lifecycle If The Product Needs It
 
 - If users need self-service deletion, build a server-owned erasure workflow
   with recent authentication, explicit scope, retention rules, confirmation,
@@ -516,7 +528,7 @@ Final production verification is green on the settled head:
 - Until that contract exists, keep the honest sign-out language and do not
   imply that authentication data or saved research was deleted.
 
-### P7: Restore Market Internals With Real Data
+### P8: Restore Market Internals With Real Data
 
 - Choose a licensed, reproducible source for advance/decline and breadth
   history.

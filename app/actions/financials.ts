@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerClient } from '@/lib/supabase/server'
+import { createPublicDatabaseClient } from '@/lib/supabase/public'
 import { CompanyWithFinancials, Company, Financial } from '@/lib/database.types'
 
 export async function getCompaniesWithFinancials(): Promise<{
@@ -108,16 +109,20 @@ function isCalculatedMetric(metric: FinancialMetric): metric is CalculatedFinanc
   return calculatedMetrics.includes(metric as CalculatedFinancialMetric)
 }
 
-export async function getFinancialsByMetric(params: {
-  symbol: string // Stock symbol (e.g., 'AAPL', 'MSFT')
-  metric: FinancialMetric
-  limit?: number // number of most recent periods to fetch
-  period?: PeriodType // 'annual' (default) or 'quarterly'
-  quarters?: number[] // optional filter for specific quarters (1-4), only valid when period='quarterly'
-}): Promise<{
+export async function getFinancialsByMetric(
+  params: {
+    symbol: string // Stock symbol (e.g., 'AAPL', 'MSFT')
+    metric: FinancialMetric
+    limit?: number // number of most recent periods to fetch
+    period?: PeriodType // 'annual' (default) or 'quarterly'
+    quarters?: number[] // optional filter for specific quarters (1-4), only valid when period='quarterly'
+  },
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
+  options?.signal?.throwIfAborted()
   const { symbol, metric } = params
   const period = params.period ?? 'annual'
   const quarters = params.quarters
@@ -134,7 +139,7 @@ export async function getFinancialsByMetric(params: {
   }
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicDatabaseClient({ signal: options?.signal })
 
     // ===============================================
     // HANDLE CALCULATED METRICS
@@ -377,6 +382,7 @@ export async function getFinancialsByMetric(params: {
 
     return { data: mapped, error: null }
   } catch (err) {
+    if (options?.signal?.aborted) throw options.signal.reason ?? err
     console.error(`Unexpected error (getFinancialsByMetric for ${symbol}):`, err)
     return {
       data: null,
@@ -386,14 +392,17 @@ export async function getFinancialsByMetric(params: {
 }
 
 // Backward-compatible alias for existing code
-export async function getAaplFinancialsByMetric(params: {
-  metric: FinancialMetric
-  limit?: number
-  period?: PeriodType
-  quarters?: number[]
-}): Promise<{
+export async function getAaplFinancialsByMetric(
+  params: {
+    metric: FinancialMetric
+    limit?: number
+    period?: PeriodType
+    quarters?: number[]
+  },
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: FinancialMetricDataPoint[] | null
   error: string | null
 }> {
-  return getFinancialsByMetric({ ...params, symbol: 'AAPL' })
+  return getFinancialsByMetric({ ...params, symbol: 'AAPL' }, options)
 }

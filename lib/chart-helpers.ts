@@ -1,7 +1,7 @@
 // Chart generation helper functions
 
 import type { ChartConfig } from '@/types/chart'
-import type { FinancialData, PriceData } from '@/app/actions/ask-question'
+import type { FinancialData, PriceData } from '@/lib/chatbot/public-types'
 import type { FinancialMetricResult } from '@/app/actions/get-financial-metric'
 import { METRIC_METADATA } from '@/lib/metric-metadata'
 

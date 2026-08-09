@@ -16,6 +16,29 @@ import { resolveMetricNames } from '@/lib/metric-resolver'
 import { calculateTTM, TTMResult, QuarterlyDataPoint } from '@/lib/ttm-calculator'
 import { supportsTTM, getTTMConfig } from '@/lib/ttm-config'
 
+function awaitWithSignal<T>(promise: PromiseLike<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return Promise.resolve(promise)
+  signal.throwIfAborted()
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup()
+      reject(signal.reason ?? new DOMException('Financial metrics request aborted.', 'AbortError'))
+    }
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    signal.addEventListener('abort', onAbort, { once: true })
+    Promise.resolve(promise).then(
+      value => {
+        cleanup()
+        resolve(value)
+      },
+      error => {
+        cleanup()
+        reject(error)
+      },
+    )
+  })
+}
+
 // Period type for annual vs quarterly vs TTM data
 export type PeriodType = 'annual' | 'quarterly' | 'ttm'
 
@@ -233,21 +256,25 @@ async function calculateTTMForMetric(
  *   period: 'quarterly' // optional, defaults to 'annual'
  * })
  */
-export async function getFinancialMetrics(params: {
-  symbol: string
-  metricNames: string[] // Array of metric names (canonical OR aliases)
-  year?: number
-  yearStart?: number
-  yearEnd?: number
-  limit?: number // Number of years/quarters per metric (default: 5 years or 12 quarters, max: 20/40)
-  period?: PeriodType // 'annual' (default), 'quarterly', or 'ttm'
-  quarters?: number[] // optional filter for specific quarters [1-4], only valid when period='quarterly'
-}): Promise<{
+export async function getFinancialMetrics(
+  params: {
+    symbol: string
+    metricNames: string[] // Array of metric names (canonical OR aliases)
+    year?: number
+    yearStart?: number
+    yearEnd?: number
+    limit?: number // Number of years/quarters per metric (default: 5 years or 12 quarters, max: 20/40)
+    period?: PeriodType // 'annual' (default), 'quarterly', or 'ttm'
+    quarters?: number[] // optional filter for specific quarters [1-4], only valid when period='quarterly'
+  },
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: FinancialMetricResult[] | null
   error: string | null
   unresolved?: string[] // Metrics that couldn't be resolved
   ttmResults?: TTMMetricResult[] // TTM results when period='ttm'
 }> {
+  options?.signal?.throwIfAborted()
   const period = params.period ?? 'annual'
   const quarters = params.quarters
 
@@ -277,11 +304,14 @@ export async function getFinancialMetrics(params: {
 
     // Handle TTM calculation for multiple metrics
     if (period === 'ttm') {
-      return await calculateTTMForMultipleMetrics(params.symbol, resolved)
+      return await awaitWithSignal(
+        calculateTTMForMultipleMetrics(params.symbol, resolved),
+        options?.signal,
+      )
     }
 
     // 3. Query database with resolved canonical names
-    const supabase = await createServerClient()
+    const supabase = await createServerClient({ signal: options?.signal })
 
     let query = supabase
       .from('financial_metrics')
@@ -325,6 +355,7 @@ export async function getFinancialMetrics(params: {
 
     return { data, error: null }
   } catch (err: any) {
+    if (options?.signal?.aborted) throw options.signal.reason ?? err
     console.error('[getFinancialMetrics] Exception:', err)
     return { data: null, error: err.message }
   }

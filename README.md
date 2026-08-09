@@ -129,6 +129,33 @@ Relevant files:
 - `lib/dashboard/preferences.ts`
 - `supabase/migrations/20260809130000_account_watchlist_sync.sql`
 
+### Durable authenticated chatbot
+
+The chatbot now treats an answer as a durable authenticated command instead of
+an ordinary streaming request. Every request carries a stable idempotency key,
+fingerprint, conversation revision, and verified user identity. PostgreSQL
+admits at most one active request per account and four globally, leases work for
+180 seconds, and replays an exact retry without spending twice. The request
+ledger stores lifecycle metadata and content-free pointers; the user question,
+assistant answer, conversation revision, and completion receipt are committed
+atomically.
+
+Conversation reads and writes go through bounded, auth-derived RPCs. Browser
+roles no longer mutate the base conversation or message tables directly, and
+server-side authentication is resolved from a stateless verified token so a
+stale cookie cannot silently outlive its principal.
+
+Relevant files:
+
+- `app/api/ask/route.ts`
+- `app/actions/conversations.ts`
+- `app/actions/chatbot-request-recovery.ts`
+- `lib/chatbot/`
+- `lib/supabase/request-session.ts`
+- `lib/supabase/verify-user.ts`
+- `supabase/migrations/20260809140000_bound_chatbot_conversations.sql`
+- `supabase/migrations/20260809150000_durable_chatbot_request_admission.sql`
+
 ## Key Routes
 
 User-facing routes:

@@ -1,390 +1,309 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
-import { Database } from '@/lib/database.types'
-import type { Conversation, Message, ConversationWithMessages } from '@/lib/database.types'
+import { fingerprintChatbotCommand } from '@/lib/chatbot/command-fingerprint'
+import { requireCurrentUserContext } from '@/lib/auth/current-user'
+import { comparePostgresTimestamps } from '@/lib/chatbot/timestamp-order'
+import {
+  chatbotConversationDatabaseRowSchema,
+  chatbotConversationDetailInputSchema,
+  chatbotConversationListInputSchema,
+  chatbotConversationPageDatabaseRowSchema,
+  deleteChatbotConversationDatabaseRowSchema,
+  deleteChatbotConversationInputSchema,
+  type ChatbotConversationDetailInput,
+  type ChatbotConversationDetailResult,
+  type ChatbotConversationListInput,
+  type ChatbotConversationListResult,
+  type DeleteChatbotConversationInput,
+  type DeleteChatbotConversationResult,
+} from '@/lib/chatbot/conversation-contract'
 
-type NewConversation = Database['public']['Tables']['conversations']['Insert']
-type NewMessage = Database['public']['Tables']['messages']['Insert']
+const CONVERSATION_DB_DEADLINE_MS = 5_000
 
-/**
- * Get all conversations for the current user, ordered by most recent
- */
-export async function getConversations(): Promise<{ conversations: Conversation[] | null; error: string | null }> {
-  try {
-    console.log('[SERVER] getConversations called')
-    const supabase = await createServerClient()
+function databaseDeadline(): {
+  signal: AbortSignal
+  clear: () => void
+} {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException(
+      'Conversation storage exceeded its deadline.',
+      'TimeoutError',
+    ))
+  }, CONVERSATION_DB_DEADLINE_MS)
+  return { signal: controller.signal, clear: () => clearTimeout(timeout) }
+}
 
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      console.log('[SERVER] getConversations: Not authenticated')
-      return { conversations: null, error: 'Not authenticated' }
-    }
+function commandUnavailable(
+  error = 'Conversation storage is temporarily unavailable.',
+) {
+  return { status: 'unavailable' as const, error }
+}
 
-    console.log('[SERVER] getConversations: Fetching for userId:', user.id)
+function listUnavailable(
+  error = 'Conversation storage is temporarily unavailable.',
+): Extract<ChatbotConversationListResult, { status: 'unavailable' }> {
+  return { status: 'unavailable', conversations: null, nextCursor: null, error }
+}
 
-    const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-
-    if (error) {
-      console.error('[SERVER] Error fetching conversations:', error)
-      return { conversations: null, error: error.message }
-    }
-
-    console.log('[SERVER] getConversations: Returned', data?.length || 0, 'conversations')
-    if (data && data.length > 0) {
-      console.log('[SERVER] Conversation titles:', data.map(c => c.title))
-    }
-
-    return { conversations: data, error: null }
-  } catch (err) {
-    console.error('[SERVER] Unexpected error in getConversations:', err)
-    return { conversations: null, error: 'An unexpected error occurred' }
+function detailUnavailable(
+  error = 'Conversation storage is temporarily unavailable.',
+): Extract<ChatbotConversationDetailResult, { status: 'unavailable' }> {
+  return {
+    status: 'unavailable',
+    conversation: null,
+    messages: null,
+    nextCursor: null,
+    error,
   }
 }
 
-/**
- * Get a single conversation with all its messages
- */
-export async function getConversation(
-  conversationId: string
-): Promise<{ conversation: ConversationWithMessages | null; error: string | null }> {
+export async function getConversations(
+  input: ChatbotConversationListInput = {},
+): Promise<ChatbotConversationListResult> {
+  const parsed = chatbotConversationListInputSchema.safeParse(input)
+  if (!parsed.success) return listUnavailable('Invalid conversation-list cursor.')
+
+  const deadline = databaseDeadline()
   try {
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { conversation: null, error: 'Not authenticated' }
-    }
-
-    // Fetch conversation with messages
-    const { data: conversationData, error: convError } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (convError) {
-      console.error('Error fetching conversation:', convError)
-      return { conversation: null, error: convError.message }
-    }
-
-    const { data: messagesData, error: msgError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-
-    if (msgError) {
-      console.error('Error fetching messages:', msgError)
-      return { conversation: null, error: msgError.message }
-    }
-
-    const conversation: ConversationWithMessages = {
-      ...conversationData,
-      messages: messagesData
-    }
-
-    return { conversation, error: null }
-  } catch (err) {
-    console.error('Unexpected error in getConversation:', err)
-    return { conversation: null, error: 'An unexpected error occurred' }
-  }
-}
-
-/**
- * Create a new conversation
- */
-export async function createConversation(
-  title?: string
-): Promise<{ conversation: Conversation | null; error: string | null }> {
-  try {
-    console.log('[SERVER] createConversation called with title:', title || 'New Conversation')
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      console.log('[SERVER] createConversation: Not authenticated')
-      return { conversation: null, error: 'Not authenticated' }
-    }
-
-    console.log('[SERVER] createConversation: Creating for userId:', user.id)
-
-    const newConversation: NewConversation = {
-      user_id: user.id,
-      title: title || 'New Conversation'
-    }
-
-    const { data, error } = await supabase
-      .from('conversations')
-      .insert(newConversation)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[SERVER] Error creating conversation:', error)
-      return { conversation: null, error: error.message }
-    }
-
-    console.log('[SERVER] createConversation: Successfully created conversation with id:', data.id)
-    return { conversation: data, error: null }
-  } catch (err) {
-    console.error('[SERVER] Unexpected error in createConversation:', err)
-    return { conversation: null, error: 'An unexpected error occurred' }
-  }
-}
-
-/**
- * Save a message to a conversation
- */
-export async function saveMessage(
-  conversationId: string,
-  role: 'user' | 'assistant',
-  content: string,
-  metadata?: {
-    chart_config?: any
-    follow_up_questions?: string[]
-    data_used?: any
-  }
-): Promise<{ message: Message | null; error: string | null }> {
-  try {
-    console.log('[SERVER] saveMessage called for conversation:', conversationId, 'role:', role)
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      console.log('[SERVER] saveMessage: Not authenticated')
-      return { message: null, error: 'Not authenticated' }
-    }
-
-    // Verify conversation belongs to user (RLS will also check, but this provides better error message)
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (convError || !conversation) {
-      console.log('[SERVER] saveMessage: Conversation not found or access denied')
-      return { message: null, error: 'Conversation not found or access denied' }
-    }
-
-    const newMessage: NewMessage = {
-      conversation_id: conversationId,
-      role,
-      content,
-      chart_config: metadata?.chart_config || null,
-      follow_up_questions: metadata?.follow_up_questions || null,
-      data_used: metadata?.data_used || null
-    }
-
-    const { data, error } = await supabase
-      .from('messages')
-      .insert(newMessage)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('[SERVER] Error saving message:', error)
-      return { message: null, error: error.message }
-    }
-
-    console.log('[SERVER] saveMessage: Successfully saved', role, 'message to conversation', conversationId)
-    return { message: data, error: null }
-  } catch (err) {
-    console.error('[SERVER] Unexpected error in saveMessage:', err)
-    return { message: null, error: 'An unexpected error occurred' }
-  }
-}
-
-/**
- * Update conversation title
- */
-export async function updateConversationTitle(
-  conversationId: string,
-  title: string
-): Promise<{ conversation: Conversation | null; error: string | null }> {
-  try {
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { conversation: null, error: 'Not authenticated' }
-    }
-
-    const { data, error } = await supabase
-      .from('conversations')
-      .update({ title })
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error updating conversation title:', error)
-      return { conversation: null, error: error.message }
-    }
-
-    return { conversation: data, error: null }
-  } catch (err) {
-    console.error('Unexpected error in updateConversationTitle:', err)
-    return { conversation: null, error: 'An unexpected error occurred' }
-  }
-}
-
-/**
- * Delete a conversation (will cascade delete all messages)
- */
-export async function deleteConversation(
-  conversationId: string
-): Promise<{ success: boolean; error: string | null }> {
-  try {
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Not authenticated' }
-    }
-
-    const { error } = await supabase
-      .from('conversations')
-      .delete()
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-
-    if (error) {
-      console.error('Error deleting conversation:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, error: null }
-  } catch (err) {
-    console.error('Unexpected error in deleteConversation:', err)
-    return { success: false, error: 'An unexpected error occurred' }
-  }
-}
-
-/**
- * Auto-generate a conversation title from the first user message
- * Uses the PostgreSQL function created in the migration
- */
-export async function autoGenerateTitle(
-  conversationId: string
-): Promise<{ title: string | null; error: string | null }> {
-  try {
-    const supabase = await createServerClient()
-
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { title: null, error: 'Not authenticated' }
-    }
-
-    // Verify conversation belongs to user
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (convError || !conversation) {
-      return { title: null, error: 'Conversation not found or access denied' }
-    }
-
-    // Call the PostgreSQL function to generate title
-    const { data, error } = await supabase.rpc('generate_conversation_title', {
-      conversation_id: conversationId
+    const { client: supabase } = await requireCurrentUserContext({
+      signal: deadline.signal,
     })
+    const { data, error } = await supabase.rpc('list_chatbot_conversations', {
+      p_before_updated_at: parsed.data.beforeUpdatedAt ?? null,
+      p_before_id: parsed.data.beforeId ?? null,
+      p_limit: parsed.data.limit,
+    }).abortSignal(deadline.signal)
+    if (
+      error ||
+      !Array.isArray(data) ||
+      data.length > parsed.data.limit + 1
+    ) return listUnavailable()
 
-    if (error) {
-      console.error('Error generating title:', error)
-      return { title: null, error: error.message }
+    const validatedRows = data.map(row =>
+      chatbotConversationDatabaseRowSchema.safeParse(row),
+    )
+    if (validatedRows.some(result => !result.success)) return listUnavailable()
+
+    const rows = validatedRows.flatMap(result =>
+      result.success ? [result.data] : [],
+    )
+    for (let index = 1; index < rows.length; index += 1) {
+      const previous = rows[index - 1]!
+      const current = rows[index]!
+      const timestampOrder = comparePostgresTimestamps(
+        previous.updated_at,
+        current.updated_at,
+      )
+      if (
+        timestampOrder < 0 ||
+        (timestampOrder === 0 && previous.id <= current.id)
+      ) return listUnavailable()
+    }
+    const hasMore = rows.length > parsed.data.limit
+    const page = rows.slice(0, parsed.data.limit).map(row => ({
+      id: row.id,
+      title: row.title,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      revision: row.revision,
+    }))
+
+    if (page.length === 0 && !parsed.data.beforeId) {
+      return { status: 'empty', conversations: [], nextCursor: null }
     }
 
-    // Update the conversation with the generated title
-    const { error: updateError } = await supabase
-      .from('conversations')
-      .update({ title: data })
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-
-    if (updateError) {
-      console.error('Error updating conversation with generated title:', updateError)
-      return { title: null, error: updateError.message }
+    const last = page.at(-1)
+    return {
+      status: 'ready',
+      conversations: page,
+      nextCursor: hasMore && last
+        ? { beforeUpdatedAt: last.updatedAt, beforeId: last.id }
+        : null,
     }
-
-    return { title: data, error: null }
-  } catch (err) {
-    console.error('Unexpected error in autoGenerateTitle:', err)
-    return { title: null, error: 'An unexpected error occurred' }
+  } catch {
+    return listUnavailable()
+  } finally {
+    deadline.clear()
   }
 }
 
-/**
- * Migrate a conversation from localStorage to the database
- * This is a one-time operation to preserve existing conversations
- */
-export async function migrateLocalStorageConversation(
-  messages: Array<{
-    role: 'user' | 'assistant'
-    content: string
-    chart_config?: any
-    follow_up_questions?: string[]
-    data_used?: any
-  }>
-): Promise<{ conversationId: string | null; error: string | null }> {
+export async function getConversation(
+  input: string | ChatbotConversationDetailInput,
+): Promise<ChatbotConversationDetailResult> {
+  const parsed = chatbotConversationDetailInputSchema.safeParse(
+    typeof input === 'string' ? { conversationId: input } : input,
+  )
+  if (!parsed.success) {
+    return {
+      status: 'not_found',
+      conversation: null,
+      messages: null,
+      nextCursor: null,
+    }
+  }
+
+  const deadline = databaseDeadline()
   try {
-    const supabase = await createServerClient()
+    const { client: supabase } = await requireCurrentUserContext({
+      signal: deadline.signal,
+    })
+    const { data, error } = await supabase.rpc(
+      'get_chatbot_conversation_page',
+      {
+        p_conversation_id: parsed.data.conversationId,
+        p_before_created_at: parsed.data.beforeCreatedAt ?? null,
+        p_before_id: parsed.data.beforeId ?? null,
+        p_limit: parsed.data.limit,
+      },
+    ).abortSignal(deadline.signal)
+    if (
+      error ||
+      !Array.isArray(data) ||
+      data.length < 1 ||
+      data.length > parsed.data.limit
+    ) return detailUnavailable()
 
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { conversationId: null, error: 'Not authenticated' }
-    }
-
-    // Create conversation with temporary title
-    const { conversation, error: convError } = await createConversation('Migrated Conversation')
-    if (convError || !conversation) {
-      return { conversationId: null, error: convError || 'Failed to create conversation' }
-    }
-
-    // Insert all messages
-    for (const message of messages) {
-      const { error: msgError } = await saveMessage(
-        conversation.id,
-        message.role,
-        message.content,
-        {
-          chart_config: message.chart_config,
-          follow_up_questions: message.follow_up_questions,
-          data_used: message.data_used
-        }
-      )
-
-      if (msgError) {
-        console.error('Error migrating message:', msgError)
-        // Continue with other messages even if one fails
+    const decodedRows = data.map(row =>
+      chatbotConversationPageDatabaseRowSchema.safeParse(row),
+    )
+    if (decodedRows.some(row => !row.success)) return detailUnavailable()
+    const rows = decodedRows.flatMap(row => row.success ? [row.data] : [])
+    const first = rows[0]
+    if (!first) return detailUnavailable()
+    if (first.status === 'not_found') {
+      if (rows.length !== 1) return detailUnavailable()
+      return {
+        status: 'not_found',
+        conversation: null,
+        messages: null,
+        nextCursor: null,
       }
     }
+    if (first.status === 'overflow') {
+      if (rows.length !== 1) return detailUnavailable()
+      return {
+        status: 'overflow',
+        conversation: null,
+        messages: null,
+        nextCursor: null,
+        error: 'This legacy conversation is too large to load safely.',
+      }
+    }
+    if (
+      rows.some(row =>
+        row.status !== 'ready' ||
+        row.conversation_id !== first.conversation_id ||
+        row.title !== first.title ||
+        row.conversation_created_at !== first.conversation_created_at ||
+        row.conversation_updated_at !== first.conversation_updated_at ||
+        row.revision !== first.revision ||
+        row.has_more !== first.has_more
+      ) ||
+      !first.conversation_id ||
+      !first.title ||
+      !first.conversation_created_at ||
+      !first.conversation_updated_at ||
+      first.revision === null
+    ) return detailUnavailable()
 
-    // Auto-generate title from first user message
-    await autoGenerateTitle(conversation.id)
+    const messageRows = rows.filter(row => row.message_id !== null)
+    for (let index = 1; index < messageRows.length; index += 1) {
+      const previous = messageRows[index - 1]!
+      const current = messageRows[index]!
+      if (
+        comparePostgresTimestamps(
+          previous.message_created_at!,
+          current.message_created_at!,
+        ) < 0 ||
+        (
+          comparePostgresTimestamps(
+            previous.message_created_at!,
+            current.message_created_at!,
+          ) === 0 &&
+          previous.message_id! <= current.message_id!
+        )
+      ) return detailUnavailable()
+    }
 
-    return { conversationId: conversation.id, error: null }
-  } catch (err) {
-    console.error('Unexpected error in migrateLocalStorageConversation:', err)
-    return { conversationId: null, error: 'An unexpected error occurred' }
+    const oldest = messageRows.at(-1)
+    if (first.has_more && !oldest) return detailUnavailable()
+
+    return {
+      status: 'ready',
+      conversation: {
+        id: first.conversation_id,
+        title: first.title,
+        createdAt: first.conversation_created_at,
+        updatedAt: first.conversation_updated_at,
+        revision: first.revision,
+      },
+      messages: [...messageRows].reverse().map(message => ({
+        id: message.message_id!,
+        role: message.message_role!,
+        content: message.message_content!,
+        createdAt: message.message_created_at!,
+        chartConfig: message.chart_config,
+        followUpQuestions: message.follow_up_questions,
+        dataUsed: message.data_used,
+      })),
+      nextCursor: first.has_more && oldest
+        ? {
+            beforeCreatedAt: oldest.message_created_at!,
+            beforeId: oldest.message_id!,
+          }
+        : null,
+    }
+  } catch {
+    return detailUnavailable()
+  } finally {
+    deadline.clear()
+  }
+}
+
+export async function deleteConversation(
+  input: DeleteChatbotConversationInput,
+): Promise<DeleteChatbotConversationResult> {
+  const parsed = deleteChatbotConversationInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return commandUnavailable('Invalid conversation delete command.')
+  }
+
+  const requestFingerprint = await fingerprintChatbotCommand({
+    version: 1,
+    conversationId: parsed.data.conversationId,
+    expectedRevision: parsed.data.expectedRevision,
+  })
+  const deadline = databaseDeadline()
+
+  try {
+    const { client: supabase } = await requireCurrentUserContext({
+      signal: deadline.signal,
+    })
+
+    const { data, error } = await supabase.rpc('delete_chatbot_conversation', {
+      p_conversation_id: parsed.data.conversationId,
+      p_expected_revision: parsed.data.expectedRevision,
+      p_idempotency_key: parsed.data.idempotencyKey,
+      p_request_fingerprint: requestFingerprint,
+    }).abortSignal(deadline.signal)
+
+    if (error || !Array.isArray(data) || data.length !== 1) {
+      return commandUnavailable()
+    }
+    const decoded = deleteChatbotConversationDatabaseRowSchema.safeParse(data[0])
+    if (!decoded.success) return commandUnavailable()
+    const row = decoded.data
+
+    return {
+      status: 'ready',
+      disposition: row.disposition,
+      conversationId: row.conversation_id,
+      revision: row.revision,
+    }
+  } catch {
+    return commandUnavailable()
+  } finally {
+    deadline.clear()
   }
 }

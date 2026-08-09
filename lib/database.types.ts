@@ -60,6 +60,138 @@ export interface Database {
         }
         Relationships: []
       }
+      chatbot_conversation_command_receipts: {
+        Row: {
+          receipt_id: number
+          owner_id: string
+          idempotency_key: string
+          request_fingerprint: string
+          command_type: string
+          conversation_id: string
+          result_revision: number | null
+          result_updated_at: string | null
+          user_message_id: string | null
+          assistant_message_id: string | null
+          created_at: string
+        }
+        Insert: {
+          receipt_id?: number
+          owner_id: string
+          idempotency_key: string
+          request_fingerprint: string
+          command_type: string
+          conversation_id: string
+          result_revision?: number | null
+          result_updated_at?: string | null
+          user_message_id?: string | null
+          assistant_message_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          receipt_id?: number
+          owner_id?: string
+          idempotency_key?: string
+          request_fingerprint?: string
+          command_type?: string
+          conversation_id?: string
+          result_revision?: number | null
+          result_updated_at?: string | null
+          user_message_id?: string | null
+          assistant_message_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      chatbot_deleted_conversations: {
+        Row: {
+          owner_id: string
+          conversation_id: string
+          delete_idempotency_key: string
+          delete_request_fingerprint: string
+          deleted_revision: number
+          deleted_at: string
+        }
+        Insert: {
+          owner_id: string
+          conversation_id: string
+          delete_idempotency_key: string
+          delete_request_fingerprint: string
+          deleted_revision: number
+          deleted_at?: string
+        }
+        Update: {
+          owner_id?: string
+          conversation_id?: string
+          delete_idempotency_key?: string
+          delete_request_fingerprint?: string
+          deleted_revision?: number
+          deleted_at?: string
+        }
+        Relationships: []
+      }
+      chatbot_request_admissions: {
+        Row: {
+          owner_id: string
+          idempotency_key: string
+          request_fingerprint: string
+          status: string
+          lease_token: string | null
+          lease_expires_at: string | null
+          admitted_at: string
+          updated_at: string
+          settled_at: string | null
+          result_conversation_id: string | null
+          result_revision: number | null
+          attempt_count: number
+        }
+        Insert: {
+          owner_id: string
+          idempotency_key: string
+          request_fingerprint: string
+          status: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          admitted_at?: string
+          updated_at?: string
+          settled_at?: string | null
+          result_conversation_id?: string | null
+          result_revision?: number | null
+          attempt_count?: number
+        }
+        Update: {
+          owner_id?: string
+          idempotency_key?: string
+          request_fingerprint?: string
+          status?: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          admitted_at?: string
+          updated_at?: string
+          settled_at?: string | null
+          result_conversation_id?: string | null
+          result_revision?: number | null
+          attempt_count?: number
+        }
+        Relationships: []
+      }
+      chatbot_request_rate_events: {
+        Row: {
+          event_id: number
+          owner_id: string
+          admitted_at: string
+        }
+        Insert: {
+          event_id?: number
+          owner_id: string
+          admitted_at?: string
+        }
+        Update: {
+          event_id?: number
+          owner_id?: string
+          admitted_at?: string
+        }
+        Relationships: []
+      }
       dashboard_chart_render_assets: {
         Row: {
           render_key: string
@@ -350,6 +482,7 @@ export interface Database {
           title: string
           created_at: string
           updated_at: string
+          revision: number
         }
         Insert: {
           id?: string
@@ -357,12 +490,14 @@ export interface Database {
           title: string
           created_at?: string
           updated_at?: string
+          revision?: number
         }
         Update: {
           id?: string
           user_id?: string
           title?: string
           updated_at?: string
+          revision?: number
         }
         Relationships: [
           {
@@ -3251,6 +3386,156 @@ export interface Database {
           archived_at: string | null
           updated_at: string
           changed: boolean
+        }>
+      }
+      acquire_chatbot_request_admission: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_request_fingerprint: string
+        }
+        Returns: Array<{
+          disposition: string
+          lease_token: string | null
+          retry_after_seconds: number
+          result_conversation_id: string | null
+          result_revision: number | null
+        }>
+      }
+      fail_chatbot_request_admission: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_request_fingerprint: string
+          p_lease_token: string
+        }
+        Returns: string
+      }
+      resolve_chatbot_request_admission: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_request_fingerprint: string
+        }
+        Returns: Array<{
+          disposition: string
+          result_conversation_id: string | null
+          result_revision: number | null
+        }>
+      }
+      resolve_owned_chatbot_request_admission: {
+        Args: {
+          p_idempotency_key: string
+          p_request_fingerprint: string
+        }
+        Returns: Array<{
+          disposition: string
+          result_conversation_id: string | null
+          result_revision: number | null
+        }>
+      }
+      list_chatbot_conversations: {
+        Args: {
+          p_before_updated_at: string | null
+          p_before_id: string | null
+          p_limit: number
+        }
+        Returns: Array<{
+          id: string
+          title: string
+          created_at: string
+          updated_at: string
+          revision: number
+        }>
+      }
+      get_chatbot_conversation_page: {
+        Args: {
+          p_conversation_id: string
+          p_before_created_at: string | null
+          p_before_id: string | null
+          p_limit: number
+        }
+        Returns: Array<{
+          status: string
+          conversation_id: string | null
+          title: string | null
+          conversation_created_at: string | null
+          conversation_updated_at: string | null
+          revision: number | null
+          message_id: string | null
+          message_role: string | null
+          message_content: string | null
+          message_created_at: string | null
+          chart_config: Json | null
+          follow_up_questions: string[] | null
+          data_used: Json | null
+          has_more: boolean
+        }>
+      }
+      preflight_chatbot_conversation_turn: {
+        Args: {
+          p_conversation_id: string | null
+          p_expected_revision: number
+        }
+        Returns: string
+      }
+      commit_chatbot_turn_and_complete_request: {
+        Args: {
+          p_conversation_id: string | null
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_turn_request_fingerprint: string
+          p_user_content: string
+          p_assistant_content: string
+          p_chart_config: Json | null
+          p_follow_up_questions: string[] | null
+          p_data_used: Json | null
+          p_admission_request_fingerprint: string
+          p_lease_token: string
+        }
+        Returns: Array<{
+          disposition: string
+          conversation_id: string | null
+          revision: number | null
+          title: string | null
+          updated_at: string | null
+          user_message_id: string | null
+          assistant_message_id: string | null
+        }>
+      }
+      commit_chatbot_conversation_turn: {
+        Args: {
+          p_conversation_id: string | null
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_request_fingerprint: string
+          p_user_content: string
+          p_assistant_content: string
+          p_chart_config?: Json | null
+          p_follow_up_questions?: string[] | null
+          p_data_used?: Json | null
+        }
+        Returns: Array<{
+          disposition: string
+          conversation_id: string | null
+          revision: number | null
+          title: string | null
+          updated_at: string | null
+          user_message_id: string | null
+          assistant_message_id: string | null
+        }>
+      }
+      delete_chatbot_conversation: {
+        Args: {
+          p_conversation_id: string
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_request_fingerprint: string
+        }
+        Returns: Array<{
+          disposition: string
+          conversation_id: string
+          revision: number | null
         }>
       }
       generate_conversation_title: {

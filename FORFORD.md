@@ -3557,3 +3557,60 @@ guarded server traces, and all 12 pgTAP files / 406 assertions after a clean
 database reset through `20260809130000`. The feature remains deliberately
 flagged until that migration is applied ahead of the matching application.
 That order is not operational trivia; it is part of the design.
+
+---
+
+## The Chatbot Learned The Difference Between “Answered” And “Delivered”
+
+A streamed chatbot answer can look finished in the browser while the system is
+still in the most dangerous part of the job. Imagine a restaurant server who
+brings dinner to the table, then drops the signed receipt on the walk back to
+the register. The customer ate, the kitchen spent the ingredients, but the
+ledger cannot prove what happened. Pressing retry should not cook a second
+dinner.
+
+The durable chatbot gives every authenticated request a claim ticket made from
+an idempotency key, a command fingerprint, the target conversation revision,
+and the verified account. PostgreSQL—not one particular web process—decides
+whether that ticket may begin, should replay a completed result, or conflicts
+with different work. Admission is intentionally narrow: one active request per
+account, four active requests globally, 20 acquisitions per ten minutes, at
+most six attempts, and a 180-second lease around a route whose own maximum is
+120 seconds. The extra minute is a safety rail for background settlement, not
+permission to let model work run forever.
+
+The durable receipt does not become a second conversation database. It records
+lifecycle state, fingerprints, attempts, leases, and content-free pointers.
+The actual question, assistant answer, conversation revision, and successful
+request completion are committed together. A crash before that transaction
+leaves recoverable work; a lost response after it produces an exact replay.
+That closes the expensive gap between “the model answered” and “the product can
+prove the answer was delivered once.”
+
+Conversation history received the same bounded treatment. Auth-derived,
+keyset-paginated RPCs enforce ownership, revision checks, page sizes, and
+bounded text at the database boundary. Browser roles no longer write the base
+conversation and message tables directly. The request identity is also
+resolved statelessly from a verified token with an expiry fence, avoiding a
+surprising class of bugs where a cached cookie helper outlives the principal it
+was supposed to represent.
+
+The clean database replay caught two wonderfully unglamorous PostgreSQL
+lessons. `substring` accepts schema-qualified function syntax only in its
+comma-argument form, while `COALESCE` is SQL syntax and cannot be called as
+`pg_catalog.coalesce`. pgTAP then caught tests that accidentally expected
+revoked table privileges and a replay assertion that joined a receipt hidden
+by RLS. Those were test-design bugs, not reasons to weaken production access.
+Good security tests ask what each role truly needs; they do not grant extra
+power merely to make an assertion convenient.
+
+The frozen release candidate passed 25 focused files / 180 tests and the full
+291-file / 1,987-test Vitest suite. TypeScript passed, ESLint reported zero
+errors and 150 non-blocking warnings, the production build generated all 49
+static-page units, and all 116 server traces passed the packaging guard. A
+clean Supabase reset replayed through
+`20260809150000_durable_chatbot_request_admission.sql`, with all 14 pgTAP files
+/ 480 assertions green. Promotion order is part of the feature: apply
+`20260809140000_bound_chatbot_conversations.sql`, then
+`20260809150000_durable_chatbot_request_admission.sql`, verify the linked
+ledger, and only then expose the matching application.

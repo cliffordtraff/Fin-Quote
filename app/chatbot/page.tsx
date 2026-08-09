@@ -7,8 +7,16 @@ import { useRouter, useSearchParams } from 'next/navigation'
 const CHAT_ENABLED = process.env.NEXT_PUBLIC_ENABLE_CHAT === 'true'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import { askQuestion, submitFeedback, FinancialData, PriceData, FilingData, PassageData } from '@/app/actions/ask-question'
-import { getConversation, createConversation, saveMessage, autoGenerateTitle } from '@/app/actions/conversations'
+import { submitFeedback } from '@/app/actions/ask-question'
+import { resolvePendingChatbotRequest } from '@/app/actions/chatbot-request-recovery'
+import type {
+  FinancialData,
+  PriceData,
+  FilingData,
+  PassageData,
+} from '@/lib/chatbot/public-types'
+import { getConversation } from '@/app/actions/conversations'
+import type { ChatbotConversationMessageCursor } from '@/lib/chatbot/conversation-contract'
 import FinancialChart from '@/components/FinancialChart'
 import RecentQueries from '@/components/RecentQueries'
 import AuthModal from '@/components/AuthModal'
@@ -22,51 +30,44 @@ import type { ChartConfig } from '@/types/chart'
 import type { ConversationHistory, Message } from '@/types/conversation'
 import type { FlowEvent } from '@/lib/flow/events'
 import {
-  MAX_CHAT_HISTORY_MESSAGES,
+  CHATBOT_EXPECTED_USER_HEADER,
   MAX_CHAT_QUESTION_LENGTH,
 } from '@/lib/chatbot/constants'
-
-const stripMarkdown = (text: string): string => {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\*(.*?)\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/[_~]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-const formatNumberValue = (value: number, decimals: number): string =>
-  new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  }).format(value)
-
-const formatMetricValue = (value: number, yAxisLabel: string): string => {
-  const label = yAxisLabel.toLowerCase()
-
-  if (label.includes('%')) {
-    return `${formatNumberValue(value, 1)}%`
-  }
-
-  if (label.includes('($b)')) {
-    return `$${formatNumberValue(value, 1)}B`
-  }
-
-  if (label.includes('($m)')) {
-    return `$${formatNumberValue(value, 1)}M`
-  }
-
-  if (label.includes('($)')) {
-    return `$${formatNumberValue(value, 2)}`
-  }
-
-  if (label.includes('ratio') || label.includes('turnover')) {
-    return formatNumberValue(value, 2)
-  }
-
-  return formatNumberValue(value, 1)
-}
+import {
+  projectChatbotPromptHistory,
+  projectChatbotRequestBody,
+} from '@/lib/chatbot/prompt-history'
+import {
+  createChatbotRequestCoordinator,
+  createChatbotSseParser,
+  parseChatbotCompletionReceipt,
+  type ChatbotCompletionReceipt,
+  type ChatbotSseEvent,
+} from '@/lib/chatbot/client-stream'
+import {
+  CHATBOT_PENDING_COMMAND_MAX_ATTEMPTS,
+  clearPendingChatbotCommand,
+  getPendingChatbotRecoveryPath,
+  hasPendingChatbotCommand,
+  isRetryablePendingChatbotResponse,
+  loadPendingChatbotCommand,
+  loadPendingChatbotRecoveryMarker,
+  schedulePendingChatbotCommandExpiry,
+  savePendingChatbotCommand,
+  type PendingChatbotCommand,
+  type PendingChatbotRequestBody,
+} from '@/lib/chatbot/pending-command'
+import { fingerprintChatbotRequest } from '@/lib/chatbot/request-fingerprint'
+import {
+  classifyCompletedConversationRecovery,
+  classifyPendingMarkerResolution,
+} from '@/lib/chatbot/request-resolution'
+import { ChatbotHistoryGenerationFence } from '@/lib/chatbot/history-generation'
+import {
+  isChatbotConversationTargetReady,
+  type ChatbotConversationTargetStatus,
+} from '@/lib/chatbot/conversation-target'
+import { ChatbotClientAuthFence } from '@/lib/chatbot/client-auth'
 
 /**
  * Extracts years from question and returns filtered year range based on distance-based context
@@ -141,93 +142,11 @@ const getFilteredYearRange = (question: string, availableData: any[]): any[] => 
   ).sort((a, b) => a.year - b.year)
 }
 
-const summarizeAnswer = (rawAnswer: string, chartConfig: ChartConfig | null): string => {
-  const cleanedAnswer = stripMarkdown(rawAnswer)
-
-  if (
-    !chartConfig ||
-    !Array.isArray(chartConfig.data) ||
-    !Array.isArray(chartConfig.categories) ||
-    chartConfig.data.length !== chartConfig.categories.length ||
-    chartConfig.data.length <= 4
-  ) {
-    return cleanedAnswer
-  }
-
-  const { categories, yAxisLabel, title } = chartConfig
-  // Only narrate simple number[] data (column/line charts), not time-series or candlestick
-  if (!chartConfig.data.every((d): d is number => typeof d === 'number')) return cleanedAnswer
-  const data = chartConfig.data as number[]
-  if (data.length === 0) return cleanedAnswer
-
-  const metricMatch = title?.match(/AAPL\s+(.+?)\s*\(/i)
-  const metricDisplayName = (metricMatch ? metricMatch[1] : yAxisLabel.replace(/\s*\(.*\)/, '')).trim() || 'metric'
-  const metricLower = metricDisplayName.toLowerCase()
-
-  const startYear = categories[0]
-  const endYear = categories[categories.length - 1]
-  const startValue = data[0]
-  const endValue = data[data.length - 1]
-
-  let minIndex = 0
-  let maxIndex = 0
-  data.forEach((value, index) => {
-    if (value < data[minIndex]) minIndex = index
-    if (value > data[maxIndex]) maxIndex = index
-  })
-
-  const startText = formatMetricValue(startValue, yAxisLabel)
-  const endText = formatMetricValue(endValue, yAxisLabel)
-
-  const extremes: string[] = []
-  if (data.length > 2) {
-    if (maxIndex !== 0 && maxIndex !== data.length - 1) {
-      extremes.push(`peaking at ${formatMetricValue(data[maxIndex], yAxisLabel)} in ${categories[maxIndex]}`)
-    }
-    if (minIndex !== 0 && minIndex !== data.length - 1 && minIndex !== maxIndex) {
-      extremes.push(`bottoming at ${formatMetricValue(data[minIndex], yAxisLabel)} in ${categories[minIndex]}`)
-    }
-  }
-
-  let extremesText = ''
-  if (extremes.length === 1) {
-    extremesText = `, ${extremes[0]}`
-  } else if (extremes.length === 2) {
-    extremesText = `, ${extremes[0]} and ${extremes[1]}`
-  }
-
-  const normalizedLabel = yAxisLabel.toLowerCase()
-  let tolerance = Math.abs(startValue) * 0.01
-  if (!Number.isFinite(tolerance) || tolerance < 0.01) {
-    tolerance = 0.01
-  }
-  if (normalizedLabel.includes('%')) {
-    tolerance = Math.max(tolerance, 0.3)
-  } else if (normalizedLabel.includes('($')) {
-    tolerance = Math.max(tolerance, 1)
-  } else {
-    tolerance = Math.max(tolerance, 0.02)
-  }
-
-  const diff = endValue - startValue
-  let trendClause: string
-  if (diff > tolerance) {
-    trendClause = 'increased over the period'
-  } else if (diff < -tolerance) {
-    trendClause = 'decreased over the period'
-  } else {
-    trendClause = 'was relatively flat over the period'
-  }
-
-  const firstSentence = `AAPL's ${metricDisplayName} moved from ${startText} in ${startYear} to ${endText} in ${endYear}${extremesText}.`
-  const secondSentence = `Overall ${metricLower} ${trendClause}; check the data table below for the full year-by-year breakdown.`
-
-  return `${firstSentence} ${secondSentence}`
-}
-
 const SCROLL_BUFFER_PX = 8  // Minimal gap between question and header
 const HEADER_HEIGHT_PX = 80
 const EXTRA_SCROLL_UP = 50  // Extra pixels to scroll up to hide previous content completely
+const EMPTY_CONVERSATION_HISTORY: ConversationHistory = []
+const EMPTY_FLOW_EVENTS: FlowEvent[] = []
 
 function AskPageContent() {
   const searchParams = useSearchParams()
@@ -253,7 +172,22 @@ function AskPageContent() {
   const [loadingMessage, setLoadingMessage] = useState<string>('')
   const [selectedTool, setSelectedTool] = useState<string | null>(null)
   const [conversationHistory, setConversationHistory] = useState<ConversationHistory>([])
+  const [publishedHistoryScope, setPublishedHistoryScope] = useState('')
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [currentConversationRevision, setCurrentConversationRevision] = useState(0)
+  const [conversationTargetState, setConversationTargetState] = useState<{
+    scope: string
+    status: ChatbotConversationTargetStatus
+  }>({ scope: '', status: 'pending' })
+  const [olderMessagesCursor, setOlderMessagesCursor] =
+    useState<ChatbotConversationMessageCursor | null>(null)
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
+  const [olderMessagesError, setOlderMessagesError] = useState('')
+  const [pendingRecoveryLocked, setPendingRecoveryLocked] = useState(false)
+  const [pendingRecoveryPath, setPendingRecoveryPath] = useState<string | null>(null)
+  const [pendingRecoveryPublishedScope, setPendingRecoveryPublishedScope] =
+    useState('')
+  const [pendingRecoveryCheck, setPendingRecoveryCheck] = useState(0)
   const [sessionId, setSessionId] = useState<string>('')
   const [queryLogId, setQueryLogId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<'thumbs_up' | 'thumbs_down' | null>(null)
@@ -273,10 +207,85 @@ function AskPageContent() {
   // Auth state
   const [user, setUser] = useState<User | null>(null)
   const [authResolved, setAuthResolved] = useState(false)
+  const [authUnavailable, setAuthUnavailable] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showFinancialsModal, setShowFinancialsModal] = useState(false)
   const supabase = createClient()
+  const authFenceRef = useRef<ChatbotClientAuthFence | null>(null)
+  const requestedConversationId = searchParams.get('id')
+  const authenticatedUserId = user?.id ?? null
+  const requestedHistoryScope = !authResolved
+    ? 'auth:pending'
+    : authenticatedUserId
+      ? `user:${authenticatedUserId}:conversation:${requestedConversationId ?? 'new'}`
+      : sessionId
+        ? `anonymous:${sessionId}`
+        : 'anonymous:pending'
+  const activeHistoryScopeRef = useRef(requestedHistoryScope)
+  activeHistoryScopeRef.current = requestedHistoryScope
+  const historyGenerationFenceRef = useRef<ChatbotHistoryGenerationFence | null>(
+    null,
+  )
+  if (!historyGenerationFenceRef.current) {
+    historyGenerationFenceRef.current = new ChatbotHistoryGenerationFence()
+  }
+  const historyGenerationFence = historyGenerationFenceRef.current
+  const olderMessagesLoadGenerationRef = useRef(0)
+  const historyIsPublished = publishedHistoryScope === requestedHistoryScope
+  const requestedTargetRequiresRead = Boolean(
+    authResolved && authenticatedUserId && requestedConversationId,
+  )
+  const visibleConversationTargetStatus =
+    conversationTargetState.scope === requestedHistoryScope
+      ? conversationTargetState.status
+      : requestedTargetRequiresRead
+        ? 'pending'
+        : 'ready'
+  const conversationTargetReady = isChatbotConversationTargetReady(
+    requestedTargetRequiresRead,
+    visibleConversationTargetStatus,
+  )
+  const visibleConversationHistory = historyIsPublished
+    ? conversationHistory
+    : EMPTY_CONVERSATION_HISTORY
+  const visibleCurrentConversationId = historyIsPublished
+    ? currentConversationId
+    : null
+  const visibleCurrentConversationRevision = historyIsPublished
+    ? currentConversationRevision
+    : 0
+  const visibleOlderMessagesCursor = historyIsPublished
+    ? olderMessagesCursor
+    : null
+  const visibleLoadingOlderMessages = historyIsPublished
+    ? loadingOlderMessages
+    : false
+  const visibleOlderMessagesError = historyIsPublished ? olderMessagesError : ''
+  const pendingRecoveryIsPublished =
+    pendingRecoveryPublishedScope === requestedHistoryScope
+  const visiblePendingRecoveryLocked = pendingRecoveryIsPublished
+    ? pendingRecoveryLocked
+    : false
+  const visiblePendingRecoveryPath = pendingRecoveryIsPublished
+    ? pendingRecoveryPath
+    : null
+  const visibleQuestion = historyIsPublished ? question : ''
+  const visibleAnswer = historyIsPublished ? answer : ''
+  const visibleError = historyIsPublished ? error : ''
+  const visibleLoading = historyIsPublished ? loading : false
+  const visibleLoadingStep = historyIsPublished ? loadingStep : null
+  const visibleSelectedTool = historyIsPublished ? selectedTool : null
+  const visibleLoadingMessage = historyIsPublished ? loadingMessage : ''
+  const visibleFlowEvents = historyIsPublished ? flowEvents : EMPTY_FLOW_EVENTS
+  const visibleQueryLogId = historyIsPublished ? queryLogId : null
+  const visibleFeedback = historyIsPublished ? feedback : null
+  const visibleShowCommentBox = historyIsPublished ? showCommentBox : false
+  const visibleFeedbackComment = historyIsPublished ? feedbackComment : ''
+  const visibleFeedbackSubmitting = historyIsPublished
+    ? feedbackSubmitting
+    : false
+  const visibleDataReceived = historyIsPublished ? dataReceived : false
 
   // Ref for the textarea to enable auto-focus
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -290,6 +299,38 @@ function AskPageContent() {
   // Ref for tracking the previous message's follow-up questions (to measure height for scroll)
   const previousFollowUpRef = useRef<HTMLDivElement>(null)
 
+  const requestCoordinatorRef = useRef<ReturnType<
+    typeof createChatbotRequestCoordinator
+  > | null>(null)
+  if (!requestCoordinatorRef.current) {
+    requestCoordinatorRef.current = createChatbotRequestCoordinator()
+  }
+  const requestCoordinator = requestCoordinatorRef.current
+  const pendingRecoveryStartedRef = useRef<string | null>(null)
+  const optimisticBaselineRef = useRef<{
+    idempotencyKey: string
+    scope: string
+    history: ConversationHistory
+    question: string
+  } | null>(null)
+  const retryTimerRef = useRef<number | null>(null)
+  const pageMountedRef = useRef(false)
+  const pendingSubmitRef = useRef<(
+    command: PendingChatbotCommand,
+  ) => void>(() => undefined)
+
+  useEffect(() => {
+    pageMountedRef.current = true
+    return () => {
+      pageMountedRef.current = false
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+      requestCoordinator.cancelCurrent()
+    }
+  }, [requestCoordinator])
+
   // Auto-resize textarea based on content
   useEffect(() => {
     const textarea = textareaRef.current
@@ -299,7 +340,7 @@ function AskPageContent() {
     textarea.style.height = 'auto'
     // Set height to scrollHeight (content height)
     textarea.style.height = `${textarea.scrollHeight}px`
-  }, [question])
+  }, [visibleQuestion])
 
   // Generate or retrieve session ID on mount
   useEffect(() => {
@@ -313,74 +354,184 @@ function AskPageContent() {
 
   // Auth state management
   useEffect(() => {
-    // Get current user on mount
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
+    const authFence = new ChatbotClientAuthFence()
+    authFenceRef.current = authFence
+    const lookupGeneration = authFence.beginInitialLookup()
+    const publishResolution = (
+      resolution: ReturnType<typeof authFence.resolveInitialLookup>,
+    ) => {
+      if (!resolution) return
+      if (resolution.status === 'unavailable') {
+        // Keep the principal unresolved. Publishing a null user here would
+        // activate anonymous scope and erase another principal's exact retry.
+        setAuthUnavailable(true)
+        setAuthResolved(false)
+        return
+      }
+      setUser(resolution.user)
+      setAuthUnavailable(false)
       setAuthResolved(true)
-    })
+    }
+
+    void supabase.auth.getUser().then(
+      result => publishResolution(
+        authFence.resolveInitialLookup(lookupGeneration, result),
+      ),
+      () => publishResolution(authFence.rejectInitialLookup(lookupGeneration)),
+    )
 
     // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setAuthResolved(true)
+      publishResolution(authFence.publishAuthEvent(session?.user ?? null))
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      authFence.dispose()
+      if (authFenceRef.current === authFence) authFenceRef.current = null
+      subscription.unsubscribe()
+    }
   }, [])
 
-  // Load conversation from URL parameter or localStorage
+  // Load conversation from URL parameter or localStorage. State is published
+  // only under the exact auth/session + conversation key, so a previous
+  // account's content is hidden synchronously before this effect runs.
   useEffect(() => {
-    const loadConversation = async () => {
-      const conversationId = searchParams.get('id')
+    const scope = requestedHistoryScope
+    const generation = historyGenerationFence.begin()
+    olderMessagesLoadGenerationRef.current += 1
+    const isCurrent = () =>
+      historyGenerationFence.isCurrent(generation) &&
+      activeHistoryScopeRef.current === scope
 
+    if (!authResolved || (!authenticatedUserId && !sessionId)) return
+
+    requestCoordinator.cancelCurrent(
+      new DOMException('Chatbot identity or conversation changed.', 'AbortError'),
+    )
+    pendingRecoveryStartedRef.current = null
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+    if (optimisticBaselineRef.current?.scope !== scope) {
+      optimisticBaselineRef.current = null
+    }
+    setPublishedHistoryScope(scope)
+    setConversationHistory([])
+    setCurrentConversationId(null)
+    setCurrentConversationRevision(0)
+    setConversationTargetState({
+      scope,
+      status: authenticatedUserId && requestedConversationId
+        ? 'pending'
+        : 'ready',
+    })
+    setOlderMessagesCursor(null)
+    setLoadingOlderMessages(false)
+    setOlderMessagesError('')
+    setQuestion('')
+    setAnswer('')
+    setDataUsed(null)
+    setChartConfig(null)
+    setFlowEvents([])
+    setFollowUpQuestions([])
+    setQueryLogId(null)
+    setFeedback(null)
+    setShowCommentBox(false)
+    setFeedbackComment('')
+    setFeedbackSubmitting(false)
+    setCopied(false)
+    setError('')
+    setLoading(false)
+    setLoadingStep(null)
+    setLoadingMessage('')
+    setSelectedTool(null)
+    setDataReceived(false)
+
+    const loadConversation = async () => {
       // If authenticated and conversation ID in URL, load from database
-      if (user && conversationId) {
-        const { conversation, error } = await getConversation(conversationId)
-        if (error) {
-          console.error('Failed to load conversation:', error)
+      if (authenticatedUserId && requestedConversationId) {
+        const result = await getConversation(requestedConversationId)
+        if (!isCurrent()) return
+        if (result.status !== 'ready') {
+          setConversationTargetState({ scope, status: result.status })
+          setError(
+            result.status === 'not_found'
+              ? 'Conversation not found.'
+              : result.status === 'overflow'
+                ? result.error
+                : 'Conversation history is temporarily unavailable.',
+          )
           return
         }
 
-        if (conversation) {
-          setCurrentConversationId(conversation.id)
-          // Convert database messages to conversation history format
-          const history: ConversationHistory = conversation.messages.map(msg => ({
-            role: msg.role as 'user' | 'assistant',
-            content: msg.content,
-            timestamp: msg.created_at,
-            chartConfig: msg.chart_config as ChartConfig | undefined,
-            followUpQuestions: msg.follow_up_questions || undefined,
-            dataUsed: msg.data_used as any,
-          }))
-          setConversationHistory(history)
-        }
+        setCurrentConversationId(result.conversation.id)
+        setCurrentConversationRevision(result.conversation.revision)
+        setConversationTargetState({ scope, status: 'ready' })
+        setOlderMessagesCursor(result.nextCursor)
+        const history: ConversationHistory = result.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+          timestamp: msg.createdAt,
+          chartConfig: msg.chartConfig as ChartConfig | undefined,
+          followUpQuestions: msg.followUpQuestions || undefined,
+          dataUsed: msg.dataUsed as any,
+        }))
+        setConversationHistory(history)
+        setError('')
       }
       // Otherwise load from localStorage for non-authenticated users
-      else if (!user) {
+      else if (!authenticatedUserId) {
         const saved = localStorage.getItem('finquote_conversation')
         if (saved) {
           try {
             const parsed = JSON.parse(saved)
-            setConversationHistory(parsed)
+            if (isCurrent()) setConversationHistory(parsed)
           } catch (err) {
             console.error('Failed to load conversation history:', err)
-            localStorage.removeItem('finquote_conversation')
+            if (isCurrent()) localStorage.removeItem('finquote_conversation')
           }
         }
       }
     }
 
     loadConversation()
-  }, [user, searchParams])
+    return () => {
+      historyGenerationFence.invalidateIfCurrent(generation)
+    }
+  }, [
+    authResolved,
+    authenticatedUserId,
+    historyGenerationFence,
+    requestCoordinator,
+    requestedConversationId,
+    requestedHistoryScope,
+    sessionId,
+  ])
 
   // Save conversation history to localStorage for non-authenticated users only
   useEffect(() => {
-    if (!user && conversationHistory.length > 0) {
+    if (
+      authResolved &&
+      !user &&
+      sessionId &&
+      historyIsPublished &&
+      requestedHistoryScope.startsWith('anonymous:') &&
+      conversationHistory.length > 0
+    ) {
       localStorage.setItem('finquote_conversation', JSON.stringify(conversationHistory))
     }
-  }, [conversationHistory, user])
+  }, [
+    authResolved,
+    conversationHistory,
+    historyIsPublished,
+    requestedHistoryScope,
+    sessionId,
+    user,
+  ])
 
   // Auto-focus textarea when user starts typing anywhere on the page
   useEffect(() => {
@@ -448,15 +599,15 @@ function AskPageContent() {
   // Step 2: Scroll immediately after user message is posted
   // Using useEffect to run after DOM is fully painted
   useEffect(() => {
-    if (conversationHistory.length === 0) return
+    if (visibleConversationHistory.length === 0) return
 
-    const lastMessage = conversationHistory[conversationHistory.length - 1]
+    const lastMessage = visibleConversationHistory.at(-1)
     // Only scroll when user message is added (question is posted)
-    if (lastMessage.role !== 'user') return
+    if (!lastMessage || lastMessage.role !== 'user') return
 
     // Only scroll once per user message
-    if (hasScrolledForMessage.current === conversationHistory.length) return
-    hasScrolledForMessage.current = conversationHistory.length
+    if (hasScrolledForMessage.current === visibleConversationHistory.length) return
+    hasScrolledForMessage.current = visibleConversationHistory.length
 
     // Scroll immediately after question is posted
     requestAnimationFrame(() => {
@@ -467,7 +618,7 @@ function AskPageContent() {
         const messageContainers = scrollContainerRef.current.querySelectorAll('.space-y-0 > .space-y-1')
 
         // The user message is the last container
-        const userMessageIndex = conversationHistory.length - 1
+        const userMessageIndex = visibleConversationHistory.length - 1
         const userMessageElement = messageContainers[userMessageIndex] as HTMLElement
 
         if (!userMessageElement) {
@@ -498,13 +649,52 @@ function AskPageContent() {
         }, 300) // Wait for initial scrollIntoView to complete
       })
     })
-  }, [conversationHistory.length])
+  }, [visibleConversationHistory])
 
   // Streaming version using Server-Sent Events
-  const handleSubmitStreaming = async (e: React.FormEvent) => {
+  const handleSubmitStreaming = async (
+    e: React.FormEvent,
+    pendingCommand?: PendingChatbotCommand,
+  ) => {
     e.preventDefault()
 
-    if (!question.trim()) {
+    if (!historyIsPublished) return
+    if (!pendingCommand && !conversationTargetReady) {
+      setError(
+        visibleConversationTargetStatus === 'pending'
+          ? 'This conversation is still loading.'
+          : visibleConversationTargetStatus === 'not_found'
+            ? 'Conversation not found. Start a new chat to continue.'
+            : 'This conversation cannot be loaded safely. Reload before sending.',
+      )
+      return
+    }
+    if (
+      !pendingCommand &&
+      hasPendingChatbotCommand(
+        window.sessionStorage,
+        requestedHistoryScope,
+      )
+    ) {
+      setPendingRecoveryLocked(true)
+      setPendingRecoveryPublishedScope(requestedHistoryScope)
+      setPendingRecoveryPath(getPendingChatbotRecoveryPath(
+        window.sessionStorage,
+        requestedHistoryScope,
+      ))
+      setError('A previous answer is still being recovered. Wait for it to finish or reload this chat.')
+      return
+    }
+    if (pendingCommand && pendingCommand.scope !== requestedHistoryScope) return
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+
+    const submittedQuestion = (
+      pendingCommand?.body.question ?? visibleQuestion
+    ).trim()
+    if (!submittedQuestion) {
       setError('Please enter a question')
       return
     }
@@ -514,6 +704,73 @@ function AskPageContent() {
       setShowAuthModal(true)
       return
     }
+    const expectedUserId = user.id
+
+    const historySnapshot = pendingCommand?.body.conversationHistory ??
+      projectChatbotPromptHistory(
+        visibleConversationHistory.map(({ role, content, timestamp }) => ({
+          role,
+          content,
+          timestamp,
+        })),
+      )
+    const conversationIdSnapshot = pendingCommand?.body.conversationId ??
+      visibleCurrentConversationId
+    const conversationRevisionSnapshot = pendingCommand?.body.expectedRevision ??
+      visibleCurrentConversationRevision
+    const requestSessionId = pendingCommand?.body.sessionId ?? sessionId
+    const clientRequest = requestCoordinator.begin(
+      pendingCommand?.body.idempotencyKey,
+    )
+    const requestScope = requestedHistoryScope
+    const isCurrent = () =>
+      requestCoordinator.isCurrent(clientRequest.generation) &&
+      activeHistoryScopeRef.current === requestScope
+    const requestBody: PendingChatbotRequestBody = projectChatbotRequestBody({
+      question: submittedQuestion,
+      conversationHistory: historySnapshot,
+      sessionId: requestSessionId,
+      idempotencyKey: clientRequest.idempotencyKey,
+      conversationId: conversationIdSnapshot,
+      expectedRevision: conversationRevisionSnapshot,
+    })
+    const attempt = pendingCommand?.attempt ?? 0
+    let retainedCommand: PendingChatbotCommand
+    try {
+      const requestFingerprint = pendingCommand?.requestFingerprint ??
+        await fingerprintChatbotRequest(requestBody)
+      if (!isCurrent()) return
+      retainedCommand = savePendingChatbotCommand(
+        window.sessionStorage,
+        requestScope,
+        requestBody,
+        requestFingerprint,
+        attempt,
+        Date.now(),
+        pendingCommand ? {
+          savedAt: pendingCommand.savedAt,
+          expiresAt: pendingCommand.expiresAt,
+        } : undefined,
+      )
+    } catch {
+      requestCoordinator.finish(clientRequest.generation)
+      setError('Unable to retain this request safely. Please try again.')
+      return
+    }
+    pendingRecoveryStartedRef.current = clientRequest.idempotencyKey
+    // Arm the original ten-minute content-erasure timer for a fresh command.
+    // The started-key fence prevents this effect tick from launching a second
+    // request while still guaranteeing an idle/exhausted tab is scrubbed.
+    setPendingRecoveryCheck(previous => previous + 1)
+    setPendingRecoveryLocked(true)
+    setPendingRecoveryPublishedScope(requestScope)
+    setPendingRecoveryPath(getPendingChatbotRecoveryPath(
+      window.sessionStorage,
+      requestScope,
+    ))
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+    let retryableTransportFailure = true
+    let retryDelayMs = 500
 
     setLoading(true)
     setError('')
@@ -525,36 +782,92 @@ function AskPageContent() {
     setFollowUpQuestions([])
     setFlowEvents([])
     setDataReceived(false)
+    setQueryLogId(null)
+    setFeedback(null)
+    setShowCommentBox(false)
+    setFeedbackComment('')
+    setFeedbackSubmitting(false)
 
     // Create user message
     const userMessage: Message = {
       role: 'user',
-      content: question,
+      content: submittedQuestion,
       timestamp: new Date().toISOString(),
     }
 
-    // Add user message to conversation history immediately
-    setConversationHistory(prev => [...prev, userMessage])
-
-    // Clear the input box immediately
-    setQuestion('')
+    // Recovery reuses the original optimistic row (or reloads the durable
+    // conversation) and must never append the same user turn again.
+    if (!pendingCommand) {
+      optimisticBaselineRef.current = {
+        idempotencyKey: clientRequest.idempotencyKey,
+        scope: requestScope,
+        history: visibleConversationHistory,
+        question: visibleQuestion,
+      }
+      setConversationHistory(previous => [...previous, userMessage])
+      setQuestion('')
+    }
 
     try {
       const response = await fetch('/api/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          conversationHistory: conversationHistory
-            .slice(-MAX_CHAT_HISTORY_MESSAGES)
-            .map(({ role, content, timestamp }) => ({ role, content, timestamp })),
-          sessionId,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          [CHATBOT_EXPECTED_USER_HEADER]: expectedUserId,
+        },
+        body: JSON.stringify(requestBody),
+        signal: clientRequest.signal,
       })
+      if (!isCurrent()) return
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => null)
-        if (response.status === 401) {
+        if (!isCurrent()) return
+        const responseCode = errorBody?.code
+        const retryAfterSeconds = Number(response.headers.get('retry-after'))
+        if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+          retryDelayMs = Math.min(180_000, retryAfterSeconds * 1_000)
+        }
+        retryableTransportFailure = isRetryablePendingChatbotResponse(
+          response.status,
+          responseCode,
+        )
+        if (responseCode === 'CHATBOT_AUTH_REFRESH_REQUIRED') {
+          // The request was retained before fetch. Refresh in the singleton
+          // browser client, then let the normal retry path reuse its exact key.
+          // auth-js acquires the same per-storage-key lock internally here.
+          const refreshed = await supabase.auth.refreshSession().catch(() => null)
+          if (!isCurrent()) return
+          if (
+            refreshed?.data.user
+            && refreshed.data.user.id !== expectedUserId
+          ) {
+            retryableTransportFailure = false
+          }
+        } else if (responseCode === 'CHATBOT_PRINCIPAL_MISMATCH') {
+          // Do not retry an A-scoped command under request-cookie principal B.
+          // Revalidate through the auth-event fence so a late lookup also
+          // cannot overwrite a newer tab/account transition.
+          retryableTransportFailure = false
+          const authFence = authFenceRef.current
+          const lookupGeneration = authFence?.beginInitialLookup()
+          if (authFence && lookupGeneration !== undefined) {
+            const result = await supabase.auth.getUser().catch(() => null)
+            if (!isCurrent()) return
+            const resolution = result
+              ? authFence.resolveInitialLookup(lookupGeneration, result)
+              : authFence.rejectInitialLookup(lookupGeneration)
+            if (resolution?.status === 'unavailable') {
+              setUser(null)
+              setAuthUnavailable(true)
+              setAuthResolved(false)
+            } else if (resolution) {
+              setUser(resolution.user)
+              setAuthUnavailable(false)
+              setAuthResolved(true)
+            }
+          }
+        } else if (response.status === 401) {
           setShowAuthModal(true)
         }
         throw new Error(
@@ -564,14 +877,15 @@ function AskPageContent() {
         )
       }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      reader = response.body?.getReader() ?? null
 
       if (!reader) {
         throw new Error('No response body')
       }
+      if (!requestCoordinator.attachReader(clientRequest.generation, reader)) return
 
       const updateFlowEvent = (incoming: FlowEvent) => {
+        if (!isCurrent()) return
         setFlowEvents(prev => {
           const existingIndex = prev.findIndex(event => event.id === incoming.id)
           if (existingIndex === -1) {
@@ -597,25 +911,16 @@ function AskPageContent() {
       let receivedData: any = null
       let receivedChart: any = null
       let receivedFollowUpQuestions: string[] = []
+      let selectedToolName: string | null = null
+      let streamFailed = false
+      let streamCompleted = false
+      let completionReceipt: ChatbotCompletionReceipt | null = null
+      let terminalFailureMessage = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n\n')
-
-        for (const line of lines) {
-          if (!line.trim()) continue
-
-          // Parse SSE format: "event: eventName\ndata: {...}"
-          const eventMatch = line.match(/event: (\w+)\ndata: (.+)/)
-          if (!eventMatch) continue
-
-          const [, eventType, dataStr] = eventMatch
-          const data = JSON.parse(dataStr)
-
-          switch (eventType) {
+      const handleEvent = ({ event: eventType, data: rawData }: ChatbotSseEvent) => {
+        if (!isCurrent()) return
+        const data = rawData as Record<string, any>
+        switch (eventType) {
             case 'flow':
               updateFlowEvent(data as FlowEvent)
               // Update loading message with detailed flow information
@@ -633,15 +938,18 @@ function AskPageContent() {
                   setLoadingStep('calculating')
                 } else if (flowEvent.step === 'answer_generation') {
                   // Customize message based on selected tool
-                  if (selectedTool === 'getAaplFinancialsByMetric') {
+                  if (
+                    selectedToolName === 'getFinancialsByMetric' ||
+                    selectedToolName === 'getAaplFinancialsByMetric'
+                  ) {
                     message = '✍️ Generating answer from financial data...'
-                  } else if (selectedTool === 'getFinancialMetric') {
+                  } else if (selectedToolName === 'getFinancialMetric') {
                     message = '✍️ Generating answer from financial metrics...'
-                  } else if (selectedTool === 'getPrices') {
+                  } else if (selectedToolName === 'getPrices') {
                     message = '✍️ Generating answer from price data...'
-                  } else if (selectedTool === 'getRecentFilings') {
+                  } else if (selectedToolName === 'getRecentFilings') {
                     message = '✍️ Generating answer from filing metadata...'
-                  } else if (selectedTool === 'listMetrics') {
+                  } else if (selectedToolName === 'listMetrics') {
                     message = '✍️ Generating answer from metrics catalog...'
                   } else {
                     message = '✍️ Generating answer from fetched data...'
@@ -658,6 +966,7 @@ function AskPageContent() {
               } else if (flowEvent.status === 'success' && flowEvent.step === 'tool_selection') {
                 // Capture the selected tool and show it prominently
                 const toolName = flowEvent.summary?.replace('Selected ', '') || 'tool'
+                selectedToolName = toolName
                 setSelectedTool(toolName)
                 setLoadingMessage(`✓ ${flowEvent.summary}`)
               }
@@ -672,6 +981,9 @@ function AskPageContent() {
               break
 
             case 'answer':
+              if (typeof data.content !== 'string') {
+                throw new Error('The chatbot returned an invalid answer event.')
+              }
               streamedAnswer += data.content
               setAnswer(streamedAnswer)
               break
@@ -696,17 +1008,141 @@ function AskPageContent() {
             case 'complete':
               // Answer complete
               console.log('Latency:', data.latency)
+              completionReceipt = parseChatbotCompletionReceipt(data)
+              streamCompleted = true
+              requestCoordinator.acceptFeedbackReceipt(
+                clientRequest.generation,
+                data.queryLogId,
+              )
               break
 
             case 'error':
-              setError(data.message)
+              streamFailed = true
+              retryableTransportFailure = data.retryable === true && (
+                data.code === 'CHATBOT_COMPLETION_UNCERTAIN' ||
+                data.code === 'CHATBOT_TIMEOUT'
+              )
+              terminalFailureMessage = typeof data.message === 'string'
+                ? data.message
+                : 'The chatbot request failed.'
+              requestCoordinator.invalidateFeedbackReceipt(clientRequest.generation)
+              setError(terminalFailureMessage)
               break
-          }
         }
       }
 
+      const parser = createChatbotSseParser(handleEvent)
+      while (isCurrent()) {
+        const { done, value } = await reader.read()
+        if (!isCurrent()) return
+        if (done) {
+          parser.finish()
+          break
+        }
+        parser.push(value)
+      }
+      if (!isCurrent()) return
+
+      // The parser callback mutates this local synchronously while draining,
+      // but TypeScript cannot infer that mutation across the callback boundary.
+      const durableReceipt = completionReceipt as ChatbotCompletionReceipt | null
+
+      // A retry of a response lost after durable completion carries only the
+      // content-free conversation pointer. Navigate to it and let the exact
+      // scoped detail loader recover the stored answer.
+      if (
+        streamCompleted &&
+        durableReceipt &&
+        (!streamedAnswer || pendingCommand !== undefined)
+      ) {
+        const recovered = await getConversation(durableReceipt.conversationId)
+        if (!isCurrent()) return
+        const recoveryDecision = classifyCompletedConversationRecovery(
+          recovered.status,
+          recovered.status === 'ready' ? recovered.conversation.revision : null,
+          durableReceipt.revision,
+        )
+        if (recoveryDecision === 'retain') {
+          throw new Error(
+            recovered.status === 'unavailable'
+              ? recovered.error
+              : 'The completed conversation could not be recovered.',
+          )
+        }
+        if (recoveryDecision !== 'publish') {
+          clearPendingChatbotCommand(
+            window.sessionStorage,
+            clientRequest.idempotencyKey,
+          )
+          setPendingRecoveryLocked(false)
+          setPendingRecoveryPath(null)
+          setConversationHistory([])
+          setCurrentConversationId(null)
+          setCurrentConversationRevision(0)
+          setConversationTargetState({
+            scope: requestScope,
+            status: conversationIdSnapshot
+              ? recoveryDecision === 'clear_deleted'
+                ? 'not_found'
+                : 'overflow'
+              : 'ready',
+          })
+          setOlderMessagesCursor(null)
+          optimisticBaselineRef.current = null
+          setError(recoveryDecision === 'clear_deleted'
+            ? 'This completed chat was deleted in another tab.'
+            : 'This completed chat is too large to display safely.')
+          return
+        }
+        if (recovered.status !== 'ready') return
+        const recoveredHistory: ConversationHistory = recovered.messages.map(message => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          timestamp: message.createdAt,
+          chartConfig: message.chartConfig as ChartConfig | undefined,
+          followUpQuestions: message.followUpQuestions ?? undefined,
+          dataUsed: message.dataUsed as any,
+        }))
+        setConversationHistory(recoveredHistory)
+        setCurrentConversationId(recovered.conversation.id)
+        setCurrentConversationRevision(recovered.conversation.revision)
+        setConversationTargetState({ scope: requestScope, status: 'ready' })
+        setOlderMessagesCursor(recovered.nextCursor)
+        setQuestion('')
+        clearPendingChatbotCommand(
+          window.sessionStorage,
+          clientRequest.idempotencyKey,
+        )
+        setPendingRecoveryLocked(false)
+        setPendingRecoveryPath(null)
+        if (
+          optimisticBaselineRef.current?.idempotencyKey ===
+            clientRequest.idempotencyKey
+        ) {
+          optimisticBaselineRef.current = null
+        }
+        router.push(`/chatbot?id=${durableReceipt.conversationId}`)
+        setRefreshQueriesTrigger(previous => previous + 1)
+        return
+      }
+
+      if (streamFailed || !streamCompleted || !durableReceipt) {
+        throw new Error(
+          terminalFailureMessage || 'The chatbot response ended before completion.',
+        )
+      }
+
       // Update conversation history (no summarization in streaming mode)
-      if (streamedAnswer && !error) {
+      if (
+        streamedAnswer &&
+        !streamFailed &&
+        streamCompleted &&
+        durableReceipt
+      ) {
+        const feedbackReceipt = requestCoordinator.getFeedbackReceipt(
+          clientRequest.generation,
+        )
         // In streaming mode, trust the LLM prompt to generate concise answers
         // The prompt already instructs: "If >4 data points, write 2 sentences max"
         // Client-side summarization would cause a jarring flash after streaming
@@ -720,52 +1156,30 @@ function AskPageContent() {
         }
 
         // Add only assistant message (user message was already added at the start)
+        if (!isCurrent()) return
         setConversationHistory(prev => [...prev, assistantMessage])
         // Answer is already displayed during streaming - don't replace it!
 
-        // Save to database if user is authenticated
-        if (user) {
-          // Create new conversation if this is the first message
-          let convId = currentConversationId
-          if (!convId) {
-            const { conversation, error: createError } = await createConversation()
-            if (!createError && conversation) {
-              convId = conversation.id
-              setCurrentConversationId(convId)
-              // Update URL with conversation ID
-              router.push(`/chatbot?id=${convId}`)
-
-              // Refresh sidebar immediately after creating conversation
-              console.log('[ask/page] New conversation created, refreshing sidebar')
-              setRefreshQueriesTrigger(prev => prev + 1)
-
-              // Save user message
-              await saveMessage(convId, 'user', userMessage.content)
-            }
-          } else {
-            // Save user message to existing conversation
-            await saveMessage(convId, 'user', userMessage.content)
-          }
-
-          // Save assistant message
-          if (convId) {
-            await saveMessage(convId, 'assistant', streamedAnswer, {
-              chart_config: receivedChart,
-              follow_up_questions: receivedFollowUpQuestions.length > 0 ? receivedFollowUpQuestions : undefined,
-              data_used: receivedData,
-            })
-
-            // Auto-generate title after first exchange
-            if (conversationHistory.length === 0) {
-              await autoGenerateTitle(convId)
-              // Refresh sidebar again to show the generated title
-              console.log('[ask/page] Title generated, refreshing sidebar')
-              setRefreshQueriesTrigger(prev => prev + 1)
-            }
-          }
+        setCurrentConversationId(durableReceipt.conversationId)
+        setCurrentConversationRevision(durableReceipt.revision)
+        setConversationTargetState({ scope: requestScope, status: 'ready' })
+        setQuestion('')
+        clearPendingChatbotCommand(
+          window.sessionStorage,
+          clientRequest.idempotencyKey,
+        )
+        setPendingRecoveryLocked(false)
+        setPendingRecoveryPath(null)
+        if (
+          optimisticBaselineRef.current?.idempotencyKey ===
+            clientRequest.idempotencyKey
+        ) {
+          optimisticBaselineRef.current = null
         }
+        router.push(`/chatbot?id=${durableReceipt.conversationId}`)
 
         // Reset feedback state
+        setQueryLogId(feedbackReceipt)
         setFeedback(null)
         setShowCommentBox(false)
         setFeedbackComment('')
@@ -779,141 +1193,409 @@ function AskPageContent() {
         })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      if (!isCurrent() || clientRequest.signal.aborted) return
+      if (retryableTransportFailure && attempt < CHATBOT_PENDING_COMMAND_MAX_ATTEMPTS) {
+        let nextPending: PendingChatbotCommand
+        try {
+          nextPending = savePendingChatbotCommand(
+            window.sessionStorage,
+            requestScope,
+            requestBody,
+            retainedCommand.requestFingerprint,
+            attempt + 1,
+            Date.now(),
+            {
+              savedAt: retainedCommand.savedAt,
+              expiresAt: retainedCommand.expiresAt,
+            },
+          )
+        } catch {
+          const marker = loadPendingChatbotRecoveryMarker(
+            window.sessionStorage,
+            requestScope,
+          )
+          if (marker?.idempotencyKey === clientRequest.idempotencyKey) {
+            setPendingRecoveryLocked(true)
+            setPendingRecoveryPublishedScope(requestScope)
+            setPendingRecoveryPath(getPendingChatbotRecoveryPath(
+              window.sessionStorage,
+              requestScope,
+            ))
+            setError('Saved request content expired. Reload to check whether the answer committed.')
+            return
+          }
+          clearPendingChatbotCommand(
+            window.sessionStorage,
+            clientRequest.idempotencyKey,
+          )
+          setPendingRecoveryLocked(false)
+          setPendingRecoveryPath(null)
+          setError('The saved-answer recovery window expired. Please try again.')
+          return
+        }
+        setError('Connection interrupted. Recovering the saved answer…')
+        retryTimerRef.current = window.setTimeout(() => {
+          retryTimerRef.current = null
+          if (
+            !pageMountedRef.current ||
+            activeHistoryScopeRef.current !== requestScope ||
+            pendingRecoveryStartedRef.current !== clientRequest.idempotencyKey
+          ) return
+          const retained = loadPendingChatbotCommand(
+            window.sessionStorage,
+            requestScope,
+          )
+          if (
+            !retained ||
+            retained.body.idempotencyKey !== clientRequest.idempotencyKey ||
+            retained.attempt !== nextPending.attempt
+          ) return
+          pendingSubmitRef.current(nextPending)
+        }, retryDelayMs)
+        return
+      }
+      if (retryableTransportFailure) {
+        // Automatic polling is exhausted, but the last attempt may have
+        // committed before its terminal bytes were lost. Keep the same key
+        // recoverable across reload until the original ten-minute TTL.
+        setError('Connection interrupted. Reload to recover the saved answer.')
+        return
+      }
+      clearPendingChatbotCommand(
+        window.sessionStorage,
+        clientRequest.idempotencyKey,
+      )
+      setPendingRecoveryLocked(false)
+      setPendingRecoveryPath(null)
+      let terminalFailureDisplay: string | null = null
+      if (pendingCommand) {
+        if (conversationIdSnapshot) {
+          setConversationTargetState({ scope: requestScope, status: 'pending' })
+          const restored = await getConversation(conversationIdSnapshot)
+          if (!isCurrent()) return
+          if (restored.status === 'ready') {
+            setConversationHistory(restored.messages.map(message => ({
+              id: message.id,
+              role: message.role,
+              content: message.content,
+              timestamp: message.createdAt,
+              chartConfig: message.chartConfig as ChartConfig | undefined,
+              followUpQuestions: message.followUpQuestions ?? undefined,
+              dataUsed: message.dataUsed as any,
+            })))
+            setCurrentConversationId(restored.conversation.id)
+            setCurrentConversationRevision(restored.conversation.revision)
+            setConversationTargetState({ scope: requestScope, status: 'ready' })
+            setOlderMessagesCursor(restored.nextCursor)
+          } else {
+            setConversationHistory([])
+            setCurrentConversationId(null)
+            setCurrentConversationRevision(0)
+            setConversationTargetState({
+              scope: requestScope,
+              status: restored.status,
+            })
+            setOlderMessagesCursor(null)
+            terminalFailureDisplay = restored.status === 'not_found'
+              ? 'This chat no longer exists. Start a new chat to continue.'
+              : restored.status === 'overflow'
+                ? restored.error
+                : 'Conversation history is temporarily unavailable. Reload before sending.'
+          }
+        } else {
+          setConversationHistory([])
+          setCurrentConversationId(null)
+          setCurrentConversationRevision(0)
+          setConversationTargetState({ scope: requestScope, status: 'ready' })
+          setOlderMessagesCursor(null)
+        }
+        setQuestion(submittedQuestion)
+      }
+      const baseline = optimisticBaselineRef.current
+      if (
+        baseline?.idempotencyKey === clientRequest.idempotencyKey &&
+        baseline.scope === requestScope
+      ) {
+        // A definitive non-admission/failure means the optimistic user row was
+        // never committed. Restore the exact pre-command snapshot. This runs
+        // only under isCurrent(), so an older request cannot roll back a newer
+        // generation; uncertain outcomes retain both the row and same key.
+        setConversationHistory(baseline.history)
+        setQuestion(baseline.question)
+        optimisticBaselineRef.current = null
+      }
+      setError(terminalFailureDisplay ?? (
+        err instanceof Error ? err.message : 'An unexpected error occurred'
+      ))
     } finally {
-      setLoading(false)
-      setLoadingStep(null)
-      setLoadingMessage('')
+      if (reader) {
+        await reader.cancel(
+          new DOMException('Chatbot response processing finished.', 'AbortError'),
+        ).catch(() => undefined)
+      }
+      if (isCurrent()) {
+        requestCoordinator.finish(clientRequest.generation)
+        setLoading(false)
+        setLoadingStep(null)
+        setLoadingMessage('')
+      }
     }
   }
 
-  // Non-streaming version (original)
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  pendingSubmitRef.current = command => {
+    void handleSubmitStreaming({ preventDefault() {} } as React.FormEvent, command)
+  }
 
-    if (!question.trim()) {
-      setError('Please enter a question')
-      return
+  // Recover a command after a tab reload using the exact same bounded payload
+  // and key. After ten minutes the content is erased, but a content-free marker
+  // keeps the exact durable identity resolvable for the key's bounded window.
+  useEffect(() => {
+    if (!historyIsPublished) return
+    const scope = requestedHistoryScope
+    let cancelled = false
+    const isCurrentScope = () =>
+      !cancelled && activeHistoryScopeRef.current === scope
+    const pending = loadPendingChatbotCommand(
+      window.sessionStorage,
+      scope,
+    )
+    const marker = loadPendingChatbotRecoveryMarker(
+      window.sessionStorage,
+      scope,
+    )
+    const recoveryExists = hasPendingChatbotCommand(
+      window.sessionStorage,
+      scope,
+    )
+    const recoveryPath = getPendingChatbotRecoveryPath(
+      window.sessionStorage,
+      scope,
+    )
+    setPendingRecoveryLocked(recoveryExists)
+    setPendingRecoveryPublishedScope(scope)
+    setPendingRecoveryPath(recoveryPath)
+    if (!pending && !marker && recoveryExists) {
+      setError('Another chat has an answer pending recovery. Return to it before starting a new request.')
     }
+    const cancelExpiry = schedulePendingChatbotCommandExpiry(
+      window.sessionStorage,
+      scope,
+      promoted => {
+        if (!isCurrentScope()) return
+        if (promoted) {
+          requestCoordinator.cancelCurrent(new DOMException(
+            'Pending request content retention expired.',
+            'AbortError',
+          ))
+          pendingRecoveryStartedRef.current = null
+          if (retryTimerRef.current !== null) {
+            window.clearTimeout(retryTimerRef.current)
+            retryTimerRef.current = null
+          }
+          setLoading(false)
+          setLoadingStep(null)
+          setLoadingMessage('')
+          setAnswer('')
+          setSelectedTool(null)
+          setDataUsed(null)
+          setChartConfig(null)
+          setFollowUpQuestions([])
+          setFlowEvents([])
+          setDataReceived(false)
+        }
+        const baseline = optimisticBaselineRef.current
+        if (baseline?.scope === scope) {
+          setConversationHistory(baseline.history)
+          setQuestion(baseline.question)
+          optimisticBaselineRef.current = null
+        }
+        setPendingRecoveryLocked(promoted !== null)
+        setPendingRecoveryPath(promoted
+          ? getPendingChatbotRecoveryPath(window.sessionStorage, scope)
+          : null)
+        setError(promoted
+          ? 'Saved request content expired. Reload to check whether the answer committed.'
+          : 'Saved-answer recovery expired. Please try again.')
+        setPendingRecoveryCheck(previous => previous + 1)
+      },
+    )
 
-    if (!user) {
-      setError('Sign in to ask a question.')
-      setShowAuthModal(true)
-      return
-    }
+    if (marker) {
+      // Fence a same-scope initial loader: it must not publish an older
+      // revision after this exact-key resolution/recovery finishes.
+      historyGenerationFence.invalidate()
+      void (async () => {
+        const resolved = await resolvePendingChatbotRequest({
+          idempotencyKey: marker.idempotencyKey,
+          requestFingerprint: marker.requestFingerprint,
+        })
+        if (!isCurrentScope()) return
+        const markerDecision = classifyPendingMarkerResolution(
+          resolved.status === 'ready' ? resolved : null,
+        )
 
-    setLoading(true)
-    setError('')
-    setAnswer('')
-    setDataUsed(null)
-    setChartConfig(null)
-
-    // Create user message
-    const userMessage: Message = {
-      role: 'user',
-      content: question,
-      timestamp: new Date().toISOString(),
-    }
-
-    try {
-      // Infer which tool will be called
-      const toolInfo = inferToolFromQuestion(question)
-
-      // Step 1: Analyzing question (200ms)
-      setLoadingStep('analyzing')
-      setLoadingMessage('Parsing your question...')
-      await new Promise(resolve => setTimeout(resolve, 200))
-
-      // Step 2: Selecting tool (300ms)
-      setLoadingStep('selecting')
-      setLoadingMessage('Selecting optimal tool...')
-      await new Promise(resolve => setTimeout(resolve, 300))
-
-      // Step 3: Calling tool (show actual tool)
-      setLoadingStep('calling')
-      const effectiveTool = toolInfo.tool === 'searchFilings' ? 'getRecentFilings' : toolInfo.tool
-
-      if (effectiveTool === 'getAaplFinancialsByMetric' && toolInfo.metric) {
-        setLoadingMessage(`Calling getAaplFinancialsByMetric('${toolInfo.metric}')`)
-      } else if (effectiveTool === 'getPrices') {
-        setLoadingMessage(`Calling getPrices({ range: '${toolInfo.range}' })`)
-      } else if (effectiveTool === 'getRecentFilings') {
-        setLoadingMessage('Calling getRecentFilings (filing metadata)')
-      } else {
-        setLoadingMessage(`Calling ${effectiveTool}()`)
-      }
-      await new Promise(resolve => setTimeout(resolve, 400))
-
-      // Step 4: Fetching from database
-      setLoadingStep('fetching')
-      setLoadingMessage('Querying Supabase database...')
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Step 5: Calculating (if ratio)
-      const isRatio = question.toLowerCase().includes('margin') ||
-                      question.toLowerCase().includes('roe') ||
-                      question.toLowerCase().includes('roa') ||
-                      question.toLowerCase().includes('ratio')
-      if (isRatio) {
-        setLoadingStep('calculating')
-        setLoadingMessage('Computing financial ratios...')
-        await new Promise(resolve => setTimeout(resolve, 300))
-      }
-
-      // Step 6: Generating answer
-      setLoadingStep('generating')
-      setLoadingMessage('Generating answer with GPT-5-nano...')
-
-      // Send question with conversation history and session ID
-      const result = await askQuestion(
-        question,
-        conversationHistory
-          .slice(-MAX_CHAT_HISTORY_MESSAGES)
-          .map(({ role, content, timestamp }) => ({ role, content, timestamp })),
-        sessionId,
-      )
-
-      if (result.error) {
-        setError(result.error)
-      } else {
-        const formattedAnswer = summarizeAnswer(result.answer, result.chartConfig)
-        // Create assistant message
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: formattedAnswer,
-          timestamp: new Date().toISOString(),
+        if (
+          markerDecision === 'recover' &&
+          resolved.status === 'ready' &&
+          resolved.disposition === 'completed' &&
+          resolved.conversationId &&
+          resolved.revision !== null
+        ) {
+          const recovered = await getConversation(resolved.conversationId)
+          if (!isCurrentScope()) return
+          const recoveryDecision = classifyCompletedConversationRecovery(
+            recovered.status,
+            recovered.status === 'ready'
+              ? recovered.conversation.revision
+              : null,
+            resolved.revision,
+          )
+          if (recoveryDecision === 'retain') {
+            setError('The saved answer committed, but its conversation is temporarily unavailable. Reload to recover it.')
+            return
+          }
+          if (recoveryDecision !== 'publish') {
+            clearPendingChatbotCommand(
+              window.sessionStorage,
+              marker.idempotencyKey,
+            )
+            setPendingRecoveryLocked(false)
+            setPendingRecoveryPath(null)
+            setConversationHistory([])
+            setCurrentConversationId(null)
+            setCurrentConversationRevision(0)
+            setConversationTargetState({
+              scope,
+              status: requestedConversationId
+                ? recoveryDecision === 'clear_deleted'
+                  ? 'not_found'
+                  : 'overflow'
+                : 'ready',
+            })
+            setOlderMessagesCursor(null)
+            setError(recoveryDecision === 'clear_deleted'
+              ? 'This completed chat was deleted in another tab.'
+              : 'This completed chat is too large to display safely.')
+            return
+          }
+          if (recovered.status !== 'ready') return
+          setConversationHistory(recovered.messages.map(message => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            timestamp: message.createdAt,
+            chartConfig: message.chartConfig as ChartConfig | undefined,
+            followUpQuestions: message.followUpQuestions ?? undefined,
+            dataUsed: message.dataUsed as any,
+          })))
+          setCurrentConversationId(recovered.conversation.id)
+          setCurrentConversationRevision(recovered.conversation.revision)
+          setConversationTargetState({ scope, status: 'ready' })
+          setOlderMessagesCursor(recovered.nextCursor)
+          clearPendingChatbotCommand(window.sessionStorage, marker.idempotencyKey)
+          setPendingRecoveryLocked(false)
+          setPendingRecoveryPath(null)
+          setError('')
+          router.push(`/chatbot?id=${resolved.conversationId}`)
+          setRefreshQueriesTrigger(previous => previous + 1)
+          return
         }
 
-        // Update conversation history with both messages
-        setConversationHistory([...conversationHistory, userMessage, assistantMessage])
+        if (
+          markerDecision === 'retain'
+        ) {
+          setError('Saved-answer status is temporarily unavailable. Reload to continue recovery; the original question has been erased from this browser.')
+          return
+        }
 
-        // Update UI
-        setAnswer(formattedAnswer)
-        setDataUsed(result.dataUsed)
-        setChartConfig(result.chartConfig)
-        setQueryLogId(result.queryLogId)
-
-        // Reset feedback state for new answer
-        setFeedback(null)
-        setShowCommentBox(false)
-        setFeedbackComment('')
-
-        // Refresh recent queries sidebar
-        setRefreshQueriesTrigger(prev => prev + 1)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
-      setLoading(false)
-      setLoadingStep(null)
-      setLoadingMessage('')
-      setQuestion('') // Clear input after submission
+        // The durable identity is definitively non-committable (including an
+        // expired lease, which the combo RPC now fences). Clear only after the
+        // authoritative resolution, then publish DB state rather than an
+        // optimistic row.
+        clearPendingChatbotCommand(window.sessionStorage, marker.idempotencyKey)
+        if (requestedConversationId) {
+          setConversationTargetState({ scope, status: 'pending' })
+        }
+        setPendingRecoveryLocked(false)
+        setPendingRecoveryPath(null)
+        let terminalMessage = 'The saved request did not commit. You can ask it again.'
+        if (requestedConversationId) {
+          const restored = await getConversation(requestedConversationId)
+          if (!isCurrentScope()) return
+          if (restored.status === 'ready') {
+            setConversationHistory(restored.messages.map(message => ({
+              id: message.id,
+              role: message.role,
+              content: message.content,
+              timestamp: message.createdAt,
+              chartConfig: message.chartConfig as ChartConfig | undefined,
+              followUpQuestions: message.followUpQuestions ?? undefined,
+              dataUsed: message.dataUsed as any,
+            })))
+            setCurrentConversationId(restored.conversation.id)
+            setCurrentConversationRevision(restored.conversation.revision)
+            setConversationTargetState({ scope, status: 'ready' })
+            setOlderMessagesCursor(restored.nextCursor)
+          } else {
+            setConversationHistory([])
+            setCurrentConversationId(null)
+            setCurrentConversationRevision(0)
+            setConversationTargetState({ scope, status: restored.status })
+            setOlderMessagesCursor(null)
+            terminalMessage = restored.status === 'not_found'
+              ? 'The saved request did not commit, and this chat no longer exists. Start a new chat to continue.'
+              : restored.status === 'overflow'
+                ? restored.error
+                : 'The saved request did not commit, and this conversation is temporarily unavailable. Reload before sending.'
+          }
+        } else {
+          setConversationHistory([])
+          setCurrentConversationId(null)
+          setCurrentConversationRevision(0)
+          setConversationTargetState({ scope, status: 'ready' })
+          setOlderMessagesCursor(null)
+        }
+        setError(terminalMessage)
+      })()
     }
-  }
+
+    if (
+      !pending ||
+      pendingRecoveryStartedRef.current === pending.body.idempotencyKey
+    ) {
+      return () => {
+        cancelled = true
+        cancelExpiry()
+      }
+    }
+
+    // Fence the still-running initial detail request before launching an exact
+    // retained command. Its older revision must never clobber recovery.
+    historyGenerationFence.invalidate()
+    pendingRecoveryStartedRef.current = pending.body.idempotencyKey
+    setQuestion(pending.body.question)
+    pendingSubmitRef.current(pending)
+    return () => {
+      cancelled = true
+      cancelExpiry()
+    }
+  }, [
+    historyIsPublished,
+    historyGenerationFence,
+    pendingRecoveryCheck,
+    requestCoordinator,
+    requestedConversationId,
+    requestedHistoryScope,
+    router,
+  ])
 
   // Handle feedback submission
   const handleFeedbackClick = async (feedbackType: 'thumbs_up' | 'thumbs_down') => {
-    if (!queryLogId) return
+    if (
+      !historyIsPublished ||
+      !visibleQueryLogId ||
+      !requestCoordinator.ownsFeedbackReceipt(visibleQueryLogId)
+    ) return
 
     setFeedback(feedbackType)
     setShowCommentBox(true)
@@ -922,7 +1604,7 @@ function AskPageContent() {
     if (feedbackType === 'thumbs_up') {
       setFeedbackSubmitting(true)
       const result = await submitFeedback({
-        queryLogId,
+        queryLogId: visibleQueryLogId,
         feedback: feedbackType,
       })
       setFeedbackSubmitting(false)
@@ -935,13 +1617,18 @@ function AskPageContent() {
 
   // Handle comment submission
   const handleCommentSubmit = async () => {
-    if (!queryLogId || !feedback) return
+    if (
+      !historyIsPublished ||
+      !visibleQueryLogId ||
+      !visibleFeedback ||
+      !requestCoordinator.ownsFeedbackReceipt(visibleQueryLogId)
+    ) return
 
     setFeedbackSubmitting(true)
     const result = await submitFeedback({
-      queryLogId,
-      feedback,
-      comment: feedbackComment.trim() || undefined,
+      queryLogId: visibleQueryLogId,
+      feedback: visibleFeedback,
+      comment: visibleFeedbackComment.trim() || undefined,
     })
     setFeedbackSubmitting(false)
 
@@ -954,9 +1641,12 @@ function AskPageContent() {
 
   // Handle follow-up question click
   const handleFollowUpQuestionClick = (selectedQuestion: string) => {
+    if (!historyIsPublished) return
+    const expectedScope = requestedHistoryScope
     setQuestion(selectedQuestion)
     // Trigger submit after a brief delay to ensure state is updated
     setTimeout(() => {
+      if (activeHistoryScopeRef.current !== expectedScope) return
       const form = document.querySelector('form')
       if (form) {
         const event = new Event('submit', { bubbles: true, cancelable: true })
@@ -967,8 +1657,9 @@ function AskPageContent() {
 
   // Copy answer to clipboard
   const handleCopyAnswer = async () => {
+    if (!historyIsPublished) return
     try {
-      await navigator.clipboard.writeText(answer)
+      await navigator.clipboard.writeText(visibleAnswer)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -976,10 +1667,106 @@ function AskPageContent() {
     }
   }
 
+  const handleLoadOlderMessages = async () => {
+    const cursor = visibleOlderMessagesCursor
+    const conversationId = visibleCurrentConversationId
+    if (
+      !historyIsPublished ||
+      !conversationId ||
+      !cursor ||
+      visibleLoadingOlderMessages
+    ) return
+
+    const scope = requestedHistoryScope
+    const expectedRevision = visibleCurrentConversationRevision
+    const generation = ++olderMessagesLoadGenerationRef.current
+    const isCurrent = () =>
+      olderMessagesLoadGenerationRef.current === generation &&
+      activeHistoryScopeRef.current === scope
+
+    setLoadingOlderMessages(true)
+    setOlderMessagesError('')
+    try {
+      const result = await getConversation({
+        conversationId,
+        beforeCreatedAt: cursor.beforeCreatedAt,
+        beforeId: cursor.beforeId,
+      })
+      if (!isCurrent()) return
+      if (
+        result.status !== 'ready' ||
+        result.conversation.id !== conversationId ||
+        result.conversation.revision !== expectedRevision
+      ) {
+        setOlderMessagesError(
+          result.status === 'unavailable'
+            ? result.error
+            : 'Older messages could not be loaded safely. Refresh the conversation.',
+        )
+        return
+      }
+
+      const olderHistory: ConversationHistory = result.messages.map(message => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.createdAt,
+        chartConfig: message.chartConfig as ChartConfig | undefined,
+        followUpQuestions: message.followUpQuestions ?? undefined,
+        dataUsed: message.dataUsed as any,
+      }))
+      setConversationHistory(current => {
+        const existingIds = new Set(
+          current.flatMap(message => message.id ? [message.id] : []),
+        )
+        return [
+          ...olderHistory.filter(message =>
+            !message.id || !existingIds.has(message.id)
+          ),
+          ...current,
+        ]
+      })
+      setOlderMessagesCursor(result.nextCursor)
+    } catch {
+      if (isCurrent()) {
+        setOlderMessagesError('Older messages are temporarily unavailable.')
+      }
+    } finally {
+      if (isCurrent()) setLoadingOlderMessages(false)
+    }
+  }
+
   // Clear conversation history / Start new conversation
   const handleClearConversation = async () => {
+    if (hasPendingChatbotCommand(
+      window.sessionStorage,
+      requestedHistoryScope,
+    )) {
+      setPendingRecoveryLocked(true)
+      setPendingRecoveryPublishedScope(requestedHistoryScope)
+      setPendingRecoveryPath(getPendingChatbotRecoveryPath(
+        window.sessionStorage,
+        requestedHistoryScope,
+      ))
+      setError('Finish recovering the pending answer before starting a new chat.')
+      return
+    }
+    requestCoordinator.cancelCurrent(
+      new DOMException('Started a new conversation.', 'AbortError'),
+    )
+    setLoading(false)
+    setLoadingStep(null)
+    setLoadingMessage('')
     setConversationHistory([])
     setCurrentConversationId(null)
+    setCurrentConversationRevision(0)
+    setConversationTargetState({
+      scope: requestedHistoryScope,
+      status: 'ready',
+    })
+    setOlderMessagesCursor(null)
+    setLoadingOlderMessages(false)
+    setOlderMessagesError('')
     localStorage.removeItem('finquote_conversation')
 
     // Generate new session ID for fresh conversation
@@ -996,22 +1783,8 @@ function AskPageContent() {
     setShowCommentBox(false)
     setFeedbackComment('')
 
-    // Create new conversation immediately if authenticated
-    if (user) {
-      console.log('[ask/page] Creating new conversation on New Chat click')
-      const { conversation, error: createError } = await createConversation()
-      if (!createError && conversation) {
-        setCurrentConversationId(conversation.id)
-        router.push(`/chatbot?id=${conversation.id}`)
-
-        // Refresh sidebar to show the new conversation
-        console.log('[ask/page] New conversation created, refreshing sidebar')
-        setRefreshQueriesTrigger(prev => prev + 1)
-      }
-    } else {
-      // Clear conversation ID from URL if not authenticated
-      router.push('/chatbot')
-    }
+    // A new row is created only when a complete user/assistant turn commits.
+    router.push('/chatbot')
 
     // Focus the textarea after clearing
     setTimeout(() => {
@@ -1021,16 +1794,20 @@ function AskPageContent() {
 
   // Handle clicking on a recent query
   const handleRecentQueryClick = (queryText: string) => {
+    if (!historyIsPublished) return
     setQuestion(queryText)
     // Optionally auto-submit:
-    // setTimeout(() => handleSubmit(new Event('submit') as any), 100)
+    // Deliberately leave selection as an edit-before-send interaction.
   }
 
   // Handle clicking on an example query
   const handleExampleClick = (exampleQuery: string) => {
+    if (!historyIsPublished) return
+    const expectedScope = requestedHistoryScope
     setQuestion(exampleQuery)
     // Auto-submit after a short delay
     setTimeout(() => {
+      if (activeHistoryScopeRef.current !== expectedScope) return
       const form = document.querySelector('form')
       if (form) {
         form.requestSubmit()
@@ -1038,60 +1815,8 @@ function AskPageContent() {
     }, 100)
   }
 
-  // Infer the likely tool and parameters from the question
-  const inferToolFromQuestion = (q: string): { tool: string; metric?: string; range?: string } => {
-    const lower = q.toLowerCase()
-
-    // Check for price queries
-    if (lower.includes('price') || lower.includes('stock')) {
-      const range = lower.includes('today') || lower.includes('week') ? '7d' :
-                    lower.includes('month') || lower.includes('30') ? '30d' : '90d'
-      return { tool: 'getPrices', range }
-    }
-
-    // Check for filing queries (content search is disabled; return metadata tool)
-    if (lower.includes('filing') || lower.includes('10-k') || lower.includes('10-q') ||
-        lower.includes('risk') || lower.includes('sec')) {
-      return { tool: 'getRecentFilings' }
-    }
-
-    // Financial metrics
-    const metricMap: Record<string, string> = {
-      'gross margin': 'gross_profit',
-      'gross profit': 'gross_profit',
-      'operating margin': 'operating_income',
-      'operating income': 'operating_income',
-      'net margin': 'net_income',
-      'net profit': 'net_income',
-      'net income': 'net_income',
-      'profit': 'net_income',
-      'earnings': 'net_income',
-      'roe': 'net_income',
-      'return on equity': 'net_income',
-      'roa': 'net_income',
-      'return on assets': 'net_income',
-      'revenue': 'revenue',
-      'sales': 'revenue',
-      'debt to equity': 'total_liabilities',
-      'debt to assets': 'total_liabilities',
-      'debt': 'total_liabilities',
-      'asset turnover': 'total_assets',
-      'assets': 'total_assets',
-      'cash flow': 'operating_cash_flow',
-      'eps': 'eps'
-    }
-
-    for (const [keyword, metric] of Object.entries(metricMap)) {
-      if (lower.includes(keyword)) {
-        return { tool: 'getAaplFinancialsByMetric', metric }
-      }
-    }
-
-    return { tool: 'getAaplFinancialsByMetric', metric: 'revenue' }
-  }
-
   // Check if conversation is empty (center the input)
-  const isEmptyConversation = conversationHistory.length === 0
+  const isEmptyConversation = visibleConversationHistory.length === 0
 
   // Don't render anything while redirecting (chat disabled)
   if (!CHAT_ENABLED) {
@@ -1114,7 +1839,8 @@ function AskPageContent() {
           onQueryClick={handleRecentQueryClick}
           onNewChat={handleClearConversation}
           refreshTrigger={refreshQueriesTrigger}
-          currentConversationId={currentConversationId}
+          currentConversationId={visibleCurrentConversationId}
+          navigationLocked={visiblePendingRecoveryLocked}
         />
       </div>
 
@@ -1141,7 +1867,7 @@ function AskPageContent() {
       <div className={`fixed top-0 left-0 right-0 z-40 border-b border-gray-200 dark:border-[rgb(33,33,33)] bg-white dark:bg-[rgb(33,33,33)] px-6 py-4 transition-[margin] ${flowPanelOffsetClass}`}>
         <div className="flex justify-end items-center">
           <div className="flex items-center gap-3">
-            {conversationHistory.length > 0 && (
+            {visibleConversationHistory.length > 0 && (
               <button
                 onClick={handleClearConversation}
                 className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
@@ -1179,19 +1905,56 @@ function AskPageContent() {
       {/* Main scrollable content area - conversation */}
       <div ref={scrollContainerRef} className={`${sidebarOpen ? 'lg:ml-96 xl:ml-[28rem]' : 'lg:ml-96 xl:ml-[28rem] lg:mr-96 xl:mr-[28rem]'} flex-1 overflow-y-auto transition-[margin] duration-300 ${isEmptyConversation ? '' : 'pt-20'} ${flowPanelOffsetClass} relative z-50 pointer-events-none`}>
         <div className={`max-w-6xl mx-auto p-6 space-y-0 ${isEmptyConversation ? '' : 'pb-32 lg:pb-[35vh]'} pointer-events-auto`}>
-            {error && (
+            {visibleError && (
               <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-8">
                 <p className="font-medium text-lg">Error</p>
-                <p className="text-base">{error}</p>
+                <p className="text-base">{visibleError}</p>
+                {visiblePendingRecoveryLocked && visiblePendingRecoveryPath && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(visiblePendingRecoveryPath)}
+                    className="mt-3 rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium hover:bg-red-100"
+                  >
+                    Return to pending chat
+                  </button>
+                )}
+                {!visiblePendingRecoveryLocked &&
+                  visibleConversationTargetStatus === 'not_found' && (
+                  <button
+                    type="button"
+                    onClick={handleClearConversation}
+                    className="mt-3 rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium hover:bg-red-100"
+                  >
+                    Start a new chat
+                  </button>
+                )}
+              </div>
+            )}
+
+            {visibleOlderMessagesError && (
+              <p className="mb-4 text-center text-sm text-red-700 dark:text-red-300">
+                {visibleOlderMessagesError}
+              </p>
+            )}
+            {visibleOlderMessagesCursor && (
+              <div className="mb-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleLoadOlderMessages}
+                  disabled={visibleLoadingOlderMessages}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  {visibleLoadingOlderMessages ? 'Loading older…' : 'Load older messages'}
+                </button>
               </div>
             )}
 
             {/* Display conversation history */}
-            {conversationHistory.map((message, index) => {
-              const isLastMessage = index === conversationHistory.length - 1
+            {visibleConversationHistory.map((message, index) => {
+              const isLastMessage = index === visibleConversationHistory.length - 1
               return (
                 <div
-                  key={index}
+                  key={message.id ?? `${message.timestamp}:${message.role}:${index}`}
                   className={`space-y-1 ${index > 0 ? 'mt-6' : ''}`}
                   ref={isLastMessage ? latestMessageRef : null}
                 >
@@ -1251,7 +2014,9 @@ function AskPageContent() {
                       const data = message.dataUsed.data as FinancialData[]
 
                       // Get the user's question from the previous message
-                      const userQuestion = index > 0 ? conversationHistory[index - 1].content : ''
+                      const userQuestion = index > 0
+                        ? visibleConversationHistory[index - 1].content
+                        : ''
 
                       // Apply smart filtering based on years mentioned in question
                       const filteredData = getFilteredYearRange(userQuestion, data)
@@ -1290,7 +2055,9 @@ function AskPageContent() {
                       const data = message.dataUsed.data
 
                       // Get the user's question from the previous message
-                      const userQuestion = index > 0 ? conversationHistory[index - 1].content : ''
+                      const userQuestion = index > 0
+                        ? visibleConversationHistory[index - 1].content
+                        : ''
 
                       // Apply smart filtering based on years mentioned in question
                       const filteredData = getFilteredYearRange(userQuestion, data)
@@ -1340,9 +2107,9 @@ function AskPageContent() {
                     {/* Follow-up questions for this message */}
                     {/* Only show follow-ups for the most recent assistant message */}
                     {message.followUpQuestions && message.followUpQuestions.length > 0 && (
-                      <div className={index < conversationHistory.length - 1 ? 'hidden' : ''}>
+                      <div className={index < visibleConversationHistory.length - 1 ? 'hidden' : ''}>
                         <FollowUpQuestions
-                          ref={index === conversationHistory.length - 2 ? previousFollowUpRef : null}
+                          ref={index === visibleConversationHistory.length - 2 ? previousFollowUpRef : null}
                           questions={message.followUpQuestions}
                           onQuestionClick={handleFollowUpQuestionClick}
                         />
@@ -1355,29 +2122,29 @@ function AskPageContent() {
             })}
 
             {/* Loading status indicator - positioned like answer */}
-            {loading && !answer && (
+            {visibleLoading && !visibleAnswer && (
               <div className="space-y-4 mt-6">
                 {/* Show selected tool indicator if tool has been chosen */}
-                {selectedTool && (
+                {visibleSelectedTool && (
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      Using {selectedTool}
+                      Using {visibleSelectedTool}
                     </span>
                   </div>
                 )}
                 <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
                   <p className="text-gray-600 dark:text-gray-400 text-xl">
-                    {loadingMessage || (
+                    {visibleLoadingMessage || (
                       <>
-                        {loadingStep === 'analyzing' && 'Analyzing...'}
-                        {loadingStep === 'selecting' && 'Selecting Tool...'}
-                        {loadingStep === 'calling' && 'Calling API...'}
-                        {loadingStep === 'fetching' && 'Fetching Data...'}
-                        {loadingStep === 'calculating' && 'Calculating...'}
-                        {loadingStep === 'generating' && 'Generating Answer...'}
+                        {visibleLoadingStep === 'analyzing' && 'Analyzing...'}
+                        {visibleLoadingStep === 'selecting' && 'Selecting Tool...'}
+                        {visibleLoadingStep === 'calling' && 'Calling API...'}
+                        {visibleLoadingStep === 'fetching' && 'Fetching Data...'}
+                        {visibleLoadingStep === 'calculating' && 'Calculating...'}
+                        {visibleLoadingStep === 'generating' && 'Generating Answer...'}
                       </>
                     )}
                   </p>
@@ -1386,25 +2153,25 @@ function AskPageContent() {
             )}
 
             {/* Show current streaming answer (text only - chart appears when complete) */}
-            {loading && answer && (
+            {visibleLoading && visibleAnswer && (
               <div className="space-y-4">
                 {/* Show selected tool indicator */}
-                {selectedTool && (
+                {visibleSelectedTool && (
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-medium">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      Using {selectedTool}
+                      Using {visibleSelectedTool}
                     </span>
                   </div>
                 )}
                 <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
-                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{answer}</p>
+                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-2xl">{visibleAnswer}</p>
                 </div>
 
                 {/* Loading indicator for chart/table - only show if data hasn't been received yet */}
-                {!dataReceived && (
+                {!visibleDataReceived && (
                   <div className="bg-white dark:bg-[rgb(33,33,33)] rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex gap-2">
@@ -1413,13 +2180,13 @@ function AskPageContent() {
                         <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {selectedTool === 'getAaplFinancialsByMetric' || selectedTool === 'getFinancialMetric'
+                        {visibleSelectedTool === 'getAaplFinancialsByMetric' || visibleSelectedTool === 'getFinancialMetric'
                           ? '📊 Preparing financial chart and data table...'
-                          : selectedTool === 'getPrices'
+                          : visibleSelectedTool === 'getPrices'
                           ? '📈 Preparing price chart...'
-                          : selectedTool === 'getRecentFilings'
+                          : visibleSelectedTool === 'getRecentFilings'
                           ? '📄 Preparing filing data table...'
-                          : selectedTool === 'listMetrics'
+                          : visibleSelectedTool === 'listMetrics'
                           ? '📋 Preparing metrics catalog table...'
                           : '📊 Generating chart and data table...'}
                       </p>
@@ -1430,7 +2197,7 @@ function AskPageContent() {
             )}
 
             {/* Feedback section (shown only when not loading and has answer) */}
-            {!loading && answer && (
+            {!visibleLoading && visibleAnswer && visibleQueryLogId && (
               <div className="space-y-6">
                 {/* Feedback and comment section */}
                 <div className="bg-gray-50 dark:bg-[rgb(33,33,33)] rounded-lg p-6">
@@ -1441,9 +2208,9 @@ function AskPageContent() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleFeedbackClick('thumbs_up')}
-                          disabled={feedbackSubmitting}
+                          disabled={visibleFeedbackSubmitting}
                           className={`p-2 rounded-lg transition-colors ${
-                            feedback === 'thumbs_up'
+                            visibleFeedback === 'thumbs_up'
                               ? 'bg-green-100 text-green-700'
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           } disabled:opacity-50`}
@@ -1460,9 +2227,9 @@ function AskPageContent() {
                         </button>
                         <button
                           onClick={() => handleFeedbackClick('thumbs_down')}
-                          disabled={feedbackSubmitting}
+                          disabled={visibleFeedbackSubmitting}
                           className={`p-2 rounded-lg transition-colors ${
-                            feedback === 'thumbs_down'
+                            visibleFeedback === 'thumbs_down'
                               ? 'bg-red-100 text-red-700'
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           } disabled:opacity-50`}
@@ -1481,13 +2248,13 @@ function AskPageContent() {
                     </div>
 
                     {/* Comment Box */}
-                    {showCommentBox && (
+                    {visibleShowCommentBox && (
                       <div className="mt-4 space-y-3">
                         <textarea
-                          value={feedbackComment}
+                          value={visibleFeedbackComment}
                           onChange={(e) => setFeedbackComment(e.target.value)}
                           placeholder={
-                            feedback === 'thumbs_down'
+                            visibleFeedback === 'thumbs_down'
                               ? 'What was wrong with this answer? (optional)'
                               : 'Any additional comments? (optional)'
                           }
@@ -1497,17 +2264,17 @@ function AskPageContent() {
                         <div className="flex gap-2">
                           <button
                             onClick={handleCommentSubmit}
-                            disabled={feedbackSubmitting}
+                            disabled={visibleFeedbackSubmitting}
                             className="px-4 py-2 bg-blue-600 text-white text-base rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
                           >
-                            {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                            {visibleFeedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
                           </button>
                           <button
                             onClick={() => {
                               setShowCommentBox(false)
                               setFeedbackComment('')
                             }}
-                            disabled={feedbackSubmitting}
+                            disabled={visibleFeedbackSubmitting}
                             className="px-4 py-2 bg-gray-200 text-gray-700 text-base rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
                           >
                             Cancel
@@ -1533,32 +2300,53 @@ function AskPageContent() {
               {/* Textarea field */}
               <textarea
                 ref={textareaRef}
-                value={question}
+                value={visibleQuestion}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
-                    if (question.trim()) {
+                    if (visibleQuestion.trim()) {
                       handleSubmitStreaming(e as any)
                     }
                   }
                 }}
-                placeholder={user ? 'Ask anything' : 'Sign in to ask a question'}
+                placeholder={
+                  authUnavailable
+                    ? 'Authentication is temporarily unavailable'
+                    : user
+                      ? 'Ask anything'
+                      : authResolved
+                        ? 'Sign in to ask a question'
+                        : 'Checking sign-in status'
+                }
                 rows={1}
                 maxLength={MAX_CHAT_QUESTION_LENGTH}
                 className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-xl resize-none overflow-hidden leading-normal max-h-[200px] py-0"
                 style={{ height: 'auto' }}
-                disabled={loading || !authResolved}
+                disabled={
+                  !historyIsPublished ||
+                  !conversationTargetReady ||
+                  visibleLoading ||
+                  visiblePendingRecoveryLocked ||
+                  !authResolved
+                }
               />
 
               {/* Send button */}
               <button
                 type="submit"
-                disabled={loading || !authResolved || !question.trim()}
+                disabled={
+                  !historyIsPublished ||
+                  !conversationTargetReady ||
+                  visibleLoading ||
+                  visiblePendingRecoveryLocked ||
+                  !authResolved ||
+                  !visibleQuestion.trim()
+                }
                 className="flex-shrink-0 w-11 h-11 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-                title={loading ? 'Stop' : user ? 'Send message' : 'Sign in to ask'}
+                title={visibleLoading ? 'Stop' : user ? 'Send message' : 'Sign in to ask'}
               >
-                {loading ? (
+                {visibleLoading ? (
                   <div className="w-4 h-4 bg-white rounded-sm"></div>
                 ) : (
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1581,12 +2369,19 @@ function AskPageContent() {
               </p>
             )}
 
+            {authUnavailable && (
+              <p className="mt-3 text-center text-sm text-amber-700 dark:text-amber-300">
+                Authentication is temporarily unavailable. Your pending
+                request is preserved; refresh to retry.
+              </p>
+            )}
+
           </form>
         </div>
       </div>
 
       <FlowVisualization
-        events={flowEvents}
+        events={visibleFlowEvents}
         isOpen={flowPanelOpen}
         onToggle={() => setFlowPanelOpen(prev => !prev)}
         filter={flowFilter}
