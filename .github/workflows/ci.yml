@@ -68,6 +68,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+          OPENAI_API_KEY: ci-placeholder-openai-key
           NEXT_PUBLIC_CHARTING_URL: https://charts.example.invalid
           NEWSLETTER_PUBLIC_CHARTING_URL: https://charts.example.invalid
           NEXT_PUBLIC_ENABLE_LANDING: 'false'
