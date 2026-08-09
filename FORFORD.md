@@ -3614,3 +3614,14 @@ clean Supabase reset replayed through
 `20260809140000_bound_chatbot_conversations.sql`, then
 `20260809150000_durable_chatbot_request_admission.sql`, verify the linked
 ledger, and only then expose the matching application.
+
+That promotion is now complete. Commit `6bd6c81` passed the protected checks
+and merged through PR #22 as `6f1c4b9`. The two migrations were applied in
+chronological order to linked Supabase project `hccwmbmnmbmhuslmbymq`; local
+and remote ledgers align through `20260809150000`, and the second linked dry
+run is empty. Production deployment `dpl_GeuEHL7uksz1bEa3gqKRKV5MTowL`
+reached READY and took the `www.theintraday.com` alias. The public root and
+newsletter health route returned HTTP `200`, health reported `healthy`, and
+the exact deployment window contained zero error-level and zero 5xx log
+entries. The smoke test did not submit a model request and no newsletter
+canary was sent.

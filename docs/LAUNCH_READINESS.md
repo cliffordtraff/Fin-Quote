@@ -353,7 +353,7 @@ newsletter health endpoint returned `200`, health was `healthy`, and the exact
 deployment window contained no error-level or 5xx logs. No newsletter canary
 was sent.
 
-## Durable Chatbot Release Candidate
+## Durable Chatbot Deployed
 
 The authenticated chatbot package closes the gap between a model response and
 a durable conversation turn. Request admission is keyed by verified account,
@@ -377,6 +377,16 @@ required promotion order is
 `20260809140000_bound_chatbot_conversations.sql`, then
 `20260809150000_durable_chatbot_request_admission.sql`, then the matching
 application.
+
+Promotion completed in exactly that order. Commit `6bd6c81` merged through PR
+#22 as `6f1c4b9`; both migrations were applied to linked Supabase project
+`hccwmbmnmbmhuslmbymq`, the local and remote ledgers align through
+`20260809150000`, and the second linked push dry run is empty. Vercel deployment
+`dpl_GeuEHL7uksz1bEa3gqKRKV5MTowL` reached READY and owns the production alias.
+The public root and `/api/health/newsletter` returned HTTP `200`, health was
+`healthy`, and a bounded exact-deployment query found zero error-level and zero
+5xx logs. The production smoke did not invoke the model, and no newsletter
+canary was sent.
 
 ## Remaining Risks
 
