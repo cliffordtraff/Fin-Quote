@@ -182,7 +182,13 @@ export function getDefaultChartingBaseUrl(): string {
 export function getDefaultChartingBaseUrlForHost(
   hostHeader: string | null | undefined,
 ): string {
-  if (isLocalChartingHost(hostHeader)) {
+  // Host is client-controlled at the HTTP boundary. It is useful for local
+  // development, but must never be able to redirect a production render to a
+  // loopback service.
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    isLocalChartingHost(hostHeader)
+  ) {
     return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
   }
 
@@ -200,25 +206,18 @@ export function getDefaultPublicChartingBaseUrl(): string {
     return normalizeBaseUrl(configured)
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
-  }
-
-  return normalizeBaseUrl(
-    DEFAULT_CHARTING_BASE_URL,
-  )
+  return normalizeBaseUrl(DEFAULT_CHARTING_BASE_URL)
 }
 
 export function getDefaultPublicChartingBaseUrlForHost(
   hostHeader: string | null | undefined,
 ): string {
+  // Keep the host-aware API paired with the render URL resolver, but never
+  // turn an email-facing link into localhost merely because the app is local.
+  void hostHeader
   const configured = process.env.NEWSLETTER_PUBLIC_CHARTING_URL?.trim()
   if (configured) {
     return normalizeBaseUrl(configured)
-  }
-
-  if (isLocalChartingHost(hostHeader)) {
-    return normalizeBaseUrl(DEFAULT_LOCAL_CHARTING_BASE_URL)
   }
 
   return getDefaultPublicChartingBaseUrl()
@@ -301,41 +300,43 @@ function resolveFundamentalsNewsletterChart(
   const chartTitleText = buildChartTitleText(spec)
   const metricColors = mapMetricColors(spec.colors)
 
-  const fundState = {
-    active: true,
-    workspaceMode: 'fundamentals',
-    symbol: ticker,
-    compareSymbols,
-    period: spec.periodType === 'quarterly' ? 'quarter' : 'annual',
-    chartType:
-      spec.chartType === 'line' || spec.chartType === 'area'
-        ? spec.chartType
-        : 'bar',
-    exportColors: false,
-    showLabels: spec.showLabels !== false,
-    showTooltip: true,
-    hoverFocusEnabled: true,
-    gradientBars: false,
-    brandColorsMode: 'off',
-    stacked: spec.stacked === true,
-    indexed: spec.indexToZero === true,
-    sliderOnlyMode: true,
-    yearRangeCustomized:
-      Number.isFinite(spec.minYear) || Number.isFinite(spec.maxYear),
-    metricColors,
-    addedMetrics,
-    visibleMetrics,
-    activeMetric,
-    activeSeriesId: activeMetric ? `${ticker}::${activeMetric}` : '',
-    chartTitleCustomized: Boolean(chartTitleText),
-    chartTitleText,
-    chartTitleLeft: null,
-    chartTitleTop: null,
-    autoAnnotationLeft: null,
-    autoAnnotationTop: null,
-    minYear: Number.isFinite(spec.minYear) ? spec.minYear : null,
-    maxYear: Number.isFinite(spec.maxYear) ? spec.maxYear : null,
-  }
+  const fundState = spec.editorState
+    ? (JSON.parse(JSON.stringify(spec.editorState)) as Record<string, unknown>)
+    : {
+        active: true,
+        workspaceMode: 'fundamentals',
+        symbol: ticker,
+        compareSymbols,
+        period: spec.periodType === 'quarterly' ? 'quarter' : 'annual',
+        chartType:
+          spec.chartType === 'line' || spec.chartType === 'area'
+            ? spec.chartType
+            : 'bar',
+        exportColors: false,
+        showLabels: spec.showLabels !== false,
+        showTooltip: true,
+        hoverFocusEnabled: true,
+        gradientBars: false,
+        brandColorsMode: 'off',
+        stacked: spec.stacked === true,
+        indexed: spec.indexToZero === true,
+        sliderOnlyMode: true,
+        yearRangeCustomized:
+          Number.isFinite(spec.minYear) || Number.isFinite(spec.maxYear),
+        metricColors,
+        addedMetrics,
+        visibleMetrics,
+        activeMetric,
+        activeSeriesId: activeMetric ? `${ticker}::${activeMetric}` : '',
+        chartTitleCustomized: Boolean(chartTitleText),
+        chartTitleText,
+        chartTitleLeft: null,
+        chartTitleTop: null,
+        autoAnnotationLeft: null,
+        autoAnnotationTop: null,
+        minYear: Number.isFinite(spec.minYear) ? spec.minYear : null,
+        maxYear: Number.isFinite(spec.maxYear) ? spec.maxYear : null,
+      }
 
   const captureSpec = {
     version: 1,

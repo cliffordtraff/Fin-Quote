@@ -84,6 +84,8 @@ export interface PriceChartExportSpec {
 
 export interface FundamentalsNewsletterChartSpec extends ChartExportSpec {
   mode?: 'fundamentals'
+  /** Exact raw fundamentals editor state used for the rendered image. */
+  editorState?: Record<string, unknown>
 }
 
 export interface PriceNewsletterChartSpec {
@@ -524,6 +526,8 @@ export type NewsletterDraftEventType =
   | 'beehiiv_scheduled'
   | 'beehiiv_published'
   | 'beehiiv_archived'
+  | 'archived'
+  | 'restored'
 
 export interface NewsletterCatalystSource {
   reviewId: string
@@ -615,11 +619,36 @@ export interface NewsletterDraftBlock {
   chartAlt: string
   chartExportUrl: string
   chartSpec: NewsletterChartSpec
+  /**
+   * The immutable image and the exact editable scene that produced it travel
+   * together. Older drafts are backfilled from the block fields when read.
+   */
+  chartProvenance?: NewsletterDraftChartProvenance
   chartNeedsRegeneration: boolean
   caption?: string
   ctaText?: string
   ctaUrl?: string
   footer?: string
+}
+
+export type NewsletterDraftChartProvenanceSource =
+  | 'generated'
+  | 'automation'
+  | 'chart_editor'
+  | 'chart_library'
+  | 'legacy'
+
+export interface NewsletterDraftChartProvenance {
+  version: 1
+  source: NewsletterDraftChartProvenanceSource
+  libraryItemId?: string
+  capturedAt: string
+  rendererContract: string
+  imageUrl: string
+  imageSha256: string | null
+  interactiveUrl: string
+  scene: NewsletterChartSpec
+  sceneSha256: string
 }
 
 export interface NewsletterDraftStatsItem {
@@ -668,6 +697,7 @@ export interface NewsletterDraftRecord {
   sourceReviewKey: string | null
   beehiivUrl: string | null
   publishedAt: string | null
+  archivedAt: string | null
   attachedChartCount: number
   subjectLine: string
   previewHtml: string
@@ -687,10 +717,56 @@ export interface NewsletterDraftSummary {
   sourceReviewKey: string | null
   beehiivUrl: string | null
   publishedAt: string | null
+  archivedAt: string | null
   attachedChartCount: number
   subjectLine: string
   generatedAt: string
   blockCount: number
   createdAt: string
   updatedAt: string
+}
+
+export type NewsletterDraftArchiveVisibility = 'active' | 'archived' | 'all'
+
+export interface NewsletterDraftArchiveFilters {
+  search?: string
+  status?: NewsletterDraftStatus | 'all'
+  ticker?: string
+  from?: string
+  to?: string
+  visibility?: NewsletterDraftArchiveVisibility
+}
+
+export interface NewsletterDraftArchiveQuery extends NewsletterDraftArchiveFilters {
+  cursor?: string
+  pageSize?: number
+}
+
+export interface NewsletterDraftArchiveFacets {
+  statuses: Record<NewsletterDraftStatus, number>
+  active: number
+  archived: number
+}
+
+export interface NewsletterDraftArchivePage {
+  drafts: NewsletterDraftSummary[]
+  pageSize: number
+  total: number
+  nextCursor: string | null
+  hasMore: boolean
+  facets: NewsletterDraftArchiveFacets
+}
+
+export type NewsletterDraftArchiveAction = 'archive' | 'restore'
+
+export interface NewsletterDraftArchiveMutationItem {
+  id: string
+  expectedUpdatedAt: string
+}
+
+export interface NewsletterDraftArchiveMutationResult {
+  id: string
+  archivedAt: string | null
+  updatedAt: string
+  changed: boolean
 }

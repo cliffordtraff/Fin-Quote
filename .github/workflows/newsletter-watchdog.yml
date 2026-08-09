@@ -57,3 +57,40 @@ jobs:
           if jq -e '(.warnings // []) | any(.code == "webhook_not_configured" or .code == "webhook_configuration_invalid")' "$response_file" >/dev/null; then
             echo '::warning::Newsletter health is passing, but optional webhook delivery is disabled; inspect its production configuration.'
           fi
+
+      - name: Check dashboard commentary freshness
+        if: ${{ always() }}
+        shell: bash
+        env:
+          DASHBOARD_COMMENTARY_HEALTH_URL: ${{ vars.DASHBOARD_COMMENTARY_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          health_url="${DASHBOARD_COMMENTARY_HEALTH_URL:-https://www.theintraday.com/api/health/dashboard-commentary}"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          curl_exit=0
+          http_code="$(
+            curl --silent --show-error --location \
+              --connect-timeout 5 --max-time 20 \
+              --retry 2 --retry-delay 2 --retry-all-errors \
+              --output "$response_file" --write-out '%{http_code}' \
+              "$health_url"
+          )" || curl_exit=$?
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::error::Dashboard commentary health endpoint was unreachable (curl exit ${curl_exit})."
+            exit 1
+          fi
+
+          if [ "$http_code" != '200' ]; then
+            echo "::error::Dashboard commentary health endpoint returned HTTP ${http_code}."
+            sed -n '1,80p' "$response_file"
+            exit 1
+          fi
+
+          if ! jq -e '.status == "healthy"' "$response_file" >/dev/null; then
+            echo '::error::Dashboard commentary health response was not healthy.'
+            sed -n '1,80p' "$response_file"
+            exit 1
+          fi

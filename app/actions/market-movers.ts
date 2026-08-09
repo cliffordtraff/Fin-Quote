@@ -6,6 +6,7 @@ import { deriveGainers, deriveLosers, type ExtendedHoursStock } from '@/app/acti
 import { getProvider } from '@/lib/providers'
 import type { ProviderQuote } from '@/lib/providers/types'
 import { isPulseTodayChartableCandidate } from '@/lib/pulse-today-utils'
+import { safeErrorMessage } from '@/lib/safe-logging'
 
 // Types
 export interface MoverData {
@@ -546,6 +547,86 @@ export async function getAllSessionMovers(
     cash: movers,
     afterhours: movers,
     currentSession: marketStatus.session,
+  }
+}
+
+/**
+ * Snapshot-specific boundary that keeps an upstream/fallback outage distinct
+ * from an authoritative mover list. The legacy loader remains tolerant for
+ * existing surfaces; a fast patch must never erase a populated list merely
+ * because every source collapsed to an empty fallback.
+ */
+export async function getAllSessionMoversWithStatus(
+  direction: Direction,
+  signal?: AbortSignal,
+): Promise<AllSessionMoversResult | { error: string }> {
+  try {
+    signal?.throwIfAborted()
+    const marketStatus = getMarketStatus()
+    const provider = getProvider()
+    let movers: MoverData[] = []
+
+    try {
+      const quotes = direction === 'gainers'
+        ? await provider.getGainers()
+        : await provider.getLosers()
+      signal?.throwIfAborted()
+      movers = await filterPulseTodayChartableMovers(
+        provider,
+        quotesToMovers(quotes),
+      )
+    } catch (error) {
+      signal?.throwIfAborted()
+      console.error(
+        `[market-movers] strict ${direction} provider fetch failed:`,
+        safeErrorMessage(error),
+      )
+    }
+
+    if (movers.length === 0) {
+      const cashResult = await getMarketMovers('cash', direction)
+      signal?.throwIfAborted()
+
+      const cachedAtMs = cashResult.cachedAt
+        ? Date.parse(cashResult.cachedAt)
+        : Number.NaN
+      const cacheAgeMs = Date.now() - cachedAtMs
+      const isFreshActiveCash =
+        marketStatus.session === 'cash' &&
+        cashResult.isLive &&
+        Number.isFinite(cacheAgeMs) &&
+        cacheAgeMs >= 0 &&
+        cacheAgeMs < CACHE_TTL_MS
+      const isAuthoritativeClosingSnapshot =
+        (marketStatus.session === 'afterhours' ||
+          marketStatus.session === 'closed') &&
+        !cashResult.isLive &&
+        Number.isFinite(cachedAtMs)
+
+      if (isFreshActiveCash || isAuthoritativeClosingSnapshot) {
+        movers = cashResult.movers
+      }
+    }
+
+    signal?.throwIfAborted()
+
+    if (movers.length === 0) {
+      return { error: `No ${direction} data returned` }
+    }
+
+    return {
+      premarket: movers,
+      cash: movers,
+      afterhours: movers,
+      currentSession: marketStatus.session,
+    }
+  } catch (error) {
+    signal?.throwIfAborted()
+    console.error(
+      `[market-movers] ${direction} status load failed:`,
+      safeErrorMessage(error),
+    )
+    return { error: `Failed to load ${direction}` }
   }
 }
 

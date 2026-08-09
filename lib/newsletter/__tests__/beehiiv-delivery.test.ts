@@ -10,17 +10,17 @@ const mocks = vi.hoisted(() => {
     beginBeehiivSyncRemoteCall: vi.fn(),
     buildNewsletterDraftBeehiivExport: vi.fn(),
     claimBeehiivSyncOperation: vi.fn(),
-    completeBeehiivSyncOperation: vi.fn(),
     createBeehiivPostDraft: vi.fn(),
     getBeehiivDelivery: vi.fn(),
     getBeehiivIntegration: vi.fn(),
     getBeehiivPostState: vi.fn(),
     getBeehiivSyncOperation: vi.fn(),
+    isNewsletterDraftSourceVersionCurrent: vi.fn(),
     listBeehiivPublications: vi.fn(),
     lookup: vi.fn(),
+    persistBeehiivSyncReceipt: vi.fn(),
     recordBeehiivSyncFailure: vi.fn(),
     recordBeehiivSyncRemoteResult: vi.fn(),
-    saveBeehiivDelivery: vi.fn(),
     saveBeehiivPublication: vi.fn(),
     updateBeehiivPostDraft: vi.fn(),
   }
@@ -43,13 +43,14 @@ vi.mock('@/lib/beehiiv/client', () => ({
 vi.mock('@/lib/beehiiv/store', () => ({
   beginBeehiivSyncRemoteCall: mocks.beginBeehiivSyncRemoteCall,
   claimBeehiivSyncOperation: mocks.claimBeehiivSyncOperation,
-  completeBeehiivSyncOperation: mocks.completeBeehiivSyncOperation,
   getBeehiivDelivery: mocks.getBeehiivDelivery,
   getBeehiivIntegration: mocks.getBeehiivIntegration,
   getBeehiivSyncOperation: mocks.getBeehiivSyncOperation,
+  isNewsletterDraftSourceVersionCurrent:
+    mocks.isNewsletterDraftSourceVersionCurrent,
+  persistBeehiivSyncReceipt: mocks.persistBeehiivSyncReceipt,
   recordBeehiivSyncFailure: mocks.recordBeehiivSyncFailure,
   recordBeehiivSyncRemoteResult: mocks.recordBeehiivSyncRemoteResult,
-  saveBeehiivDelivery: mocks.saveBeehiivDelivery,
   saveBeehiivPublication: mocks.saveBeehiivPublication,
 }))
 
@@ -75,6 +76,11 @@ import {
   preflightBeehiivImageAssets,
   wrapNewsletterHtmlForBeehiivMcp,
 } from '@/lib/newsletter/beehiiv-delivery'
+import { beehiivDeliveryNeedsSync } from '@/lib/beehiiv/sync-freshness'
+import {
+  buildNewsletterChartProvenance,
+  materializeNewsletterChartScene,
+} from '@/lib/newsletter/chart-provenance'
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001'
 const DRAFT_ID = '00000000-0000-4000-8000-000000000002'
@@ -84,6 +90,7 @@ const PUBLICATION = {
   description: null,
   url: 'https://example.beehiiv.com',
 }
+const SOURCE_DRAFT_UPDATED_AT = '2026-08-06T11:45:00.123456Z'
 
 function pngProbe(width = 620, height = 440): ArrayBuffer {
   const buffer = new ArrayBuffer(24)
@@ -96,10 +103,27 @@ function pngProbe(width = 620, height = 440): ArrayBuffer {
 }
 
 function exportFixture() {
+  const capturedAt = '2026-08-06T11:30:00.000Z'
+  const chartImageUrl = 'https://assets.example/chart.png'
+  const chartExportUrl = 'https://charts.example.com/tos/AAPL'
+  const chartSpec = materializeNewsletterChartScene(
+    {
+      mode: 'price',
+      symbol: 'AAPL',
+      range: '6m',
+      interval: 'D',
+      chartType: 'candles',
+    },
+    capturedAt,
+  )
   return {
     html: '<table><tr><td>Ready</td></tr></table>',
-    resolvedImageUrls: ['https://assets.example/chart.png'],
-    record: { id: DRAFT_ID, status: 'ready' },
+    resolvedImageUrls: [chartImageUrl],
+    record: {
+      id: DRAFT_ID,
+      status: 'ready',
+      updatedAt: SOURCE_DRAFT_UPDATED_AT,
+    },
     draft: {
       ticker: 'AAPL',
       subjectLine: 'Apple setup',
@@ -109,8 +133,17 @@ function exportFixture() {
           id: 'block-1',
           heading: 'The chart',
           body: '<p>Price is moving.</p>',
-          chartImageUrl: 'https://assets.example/chart.png',
+          chartImageUrl,
           chartAlt: 'Apple daily price chart',
+          chartExportUrl,
+          chartSpec,
+          chartProvenance: buildNewsletterChartProvenance({
+            source: 'chart_editor',
+            capturedAt,
+            imageUrl: chartImageUrl,
+            interactiveUrl: chartExportUrl,
+            scene: chartSpec,
+          }),
           chartNeedsRegeneration: false,
         },
       ],
@@ -130,6 +163,7 @@ function deliveryFixture(overrides: Record<string, unknown> = {}) {
     editorUrl: 'https://app.beehiiv.com/posts/post-1',
     webUrl: null,
     contentHash: 'old-content',
+    sourceDraftUpdatedAt: SOURCE_DRAFT_UPDATED_AT,
     lifecycleStatus: 'draft',
     lifecycleAppliedStatus: 'draft',
     lifecycleAppliedAt: null,
@@ -154,6 +188,8 @@ function operationFixture(input: Record<string, any>, overrides = {}) {
     operationKind: input.operationKind ?? 'create',
     operationKey: input.operationKey ?? 'operation-key',
     contentHash: input.contentHash ?? 'content-hash',
+    sourceDraftUpdatedAt:
+      input.sourceDraftUpdatedAt ?? SOURCE_DRAFT_UPDATED_AT,
     title: input.title ?? 'Apple setup',
     syncState: 'claimed',
     remotePostId: null,
@@ -205,31 +241,42 @@ beforeEach(() => {
   })
   mocks.getBeehiivDelivery.mockResolvedValue(null)
   mocks.getBeehiivSyncOperation.mockResolvedValue(null)
+  mocks.isNewsletterDraftSourceVersionCurrent.mockResolvedValue(true)
   mocks.recordBeehiivSyncFailure.mockResolvedValue(undefined)
   mocks.getBeehiivPostState.mockResolvedValue({ status: 'draft' })
   mocks.claimBeehiivSyncOperation.mockImplementation(async (input) =>
     operationFixture(input),
   )
-  mocks.recordBeehiivSyncRemoteResult.mockImplementation(async (input) =>
-    operationFixture(input, {
-      syncState: 'remote_recorded',
-      remotePostId: input.postId,
-      remotePreviewUrl: input.previewUrl,
-      remoteEditorUrl: input.editorUrl,
-    }),
-  )
+  mocks.recordBeehiivSyncRemoteResult.mockImplementation(async (input) => {
+    const claimedInput = mocks.claimBeehiivSyncOperation.mock.calls.at(-1)?.[0]
+    return operationFixture(
+      { ...claimedInput, leaseToken: input.leaseToken },
+      {
+        syncState: 'remote_recorded',
+        remotePostId: input.postId,
+        remotePreviewUrl: input.previewUrl,
+        remoteEditorUrl: input.editorUrl,
+      },
+    )
+  })
   mocks.createBeehiivPostDraft.mockResolvedValue({
     postId: 'post_00000000-0000-0000-0000-000000000004',
     previewUrl: 'https://app.beehiiv.com/preview',
     editorUrl: 'https://app.beehiiv.com/posts/post-1',
   })
-  mocks.saveBeehiivDelivery.mockImplementation(async (input) =>
-    deliveryFixture({
-      publicationId: input.publicationId,
-      postId: input.postId,
-      contentHash: input.contentHash,
-    }),
-  )
+  mocks.persistBeehiivSyncReceipt.mockImplementation(async () => {
+    const claimedInput = mocks.claimBeehiivSyncOperation.mock.calls.at(-1)?.[0]
+    const remoteInput = mocks.recordBeehiivSyncRemoteResult.mock.calls.at(-1)?.[0]
+    return deliveryFixture({
+      publicationId: claimedInput?.publicationId ?? PUBLICATION.id,
+      postId:
+        remoteInput?.postId ??
+        'post_00000000-0000-0000-0000-000000000004',
+      contentHash: claimedInput?.contentHash ?? 'content-hash',
+      sourceDraftUpdatedAt:
+        claimedInput?.sourceDraftUpdatedAt ?? SOURCE_DRAFT_UPDATED_AT,
+    })
+  })
 })
 
 afterEach(() => {
@@ -289,11 +336,157 @@ describe('Beehiiv MCP newsletter delivery', () => {
     expect(result.mode).toBe('created')
     expect(mocks.createBeehiivPostDraft).toHaveBeenCalledTimes(1)
     expect(mocks.recordBeehiivSyncRemoteResult).toHaveBeenCalledTimes(1)
-    expect(mocks.saveBeehiivDelivery).toHaveBeenCalledTimes(1)
+    expect(mocks.persistBeehiivSyncReceipt).toHaveBeenCalledTimes(1)
     expect(
       mocks.recordBeehiivSyncRemoteResult.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.saveBeehiivDelivery.mock.invocationCallOrder[0])
-    expect(mocks.completeBeehiivSyncOperation).toHaveBeenCalledTimes(1)
+    ).toBeLessThan(mocks.persistBeehiivSyncReceipt.mock.invocationCallOrder[0])
+  })
+
+  it('keeps a slow sync tied to V1 when V2 is saved during the remote call', async () => {
+    const nextDraftUpdatedAt = '2026-08-06T11:45:00.123457Z'
+    let finishCreate!: (value: {
+      postId: string
+      previewUrl: string | null
+      editorUrl: string
+    }) => void
+    mocks.createBeehiivPostDraft.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishCreate = resolve
+        }),
+    )
+    mocks.isNewsletterDraftSourceVersionCurrent
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+
+    const result = deliver()
+    const rejected = expect(result).rejects.toMatchObject({
+      code: 'draft_changed',
+    })
+    await vi.waitFor(() => {
+      expect(mocks.createBeehiivPostDraft).toHaveBeenCalledTimes(1)
+    })
+
+    finishCreate({
+      postId: 'post_00000000-0000-0000-0000-000000000004',
+      previewUrl: null,
+      editorUrl: 'https://app.beehiiv.com/posts/post-1',
+    })
+    await rejected
+
+    expect(mocks.claimBeehiivSyncOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceDraftUpdatedAt: SOURCE_DRAFT_UPDATED_AT,
+      }),
+    )
+    expect(mocks.persistBeehiivSyncReceipt).toHaveBeenCalledTimes(1)
+    expect(
+      beehiivDeliveryNeedsSync(
+        nextDraftUpdatedAt,
+        deliveryFixture({
+          sourceDraftUpdatedAt: SOURCE_DRAFT_UPDATED_AT,
+          syncedAt: '2026-08-06T11:46:00.000000Z',
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  it('stops before the remote boundary when the source version changed during preflight', async () => {
+    mocks.isNewsletterDraftSourceVersionCurrent.mockResolvedValueOnce(false)
+
+    await expect(deliver()).rejects.toMatchObject({
+      code: 'draft_changed',
+    })
+
+    expect(mocks.createBeehiivPostDraft).not.toHaveBeenCalled()
+    expect(mocks.updateBeehiivPostDraft).not.toHaveBeenCalled()
+    expect(mocks.recordBeehiivSyncFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: 'failed',
+        error: expect.stringContaining('changed while Beehiiv sync was in flight'),
+      }),
+    )
+  })
+
+  it('advances an unchanged remote receipt to an equivalent newer source version', async () => {
+    const fixture = exportFixture()
+    const title = fixture.draft.subjectLine
+    const subjectLine = fixture.draft.subjectLine
+    const previewText = buildBeehiivPreviewText(fixture.draft.introText)
+    const fingerprint = createBeehiivDeliveryContentHash({
+      title,
+      subjectLine,
+      previewText,
+      htmlContent: wrapNewsletterHtmlForBeehiivMcp(fixture.html),
+    })
+    const operationKey = createBeehiivRecoveryMarker(DRAFT_ID, fingerprint)
+    const contentHash = createBeehiivDeliveryContentHash({
+      title,
+      subjectLine,
+      previewText,
+      htmlContent: wrapNewsletterHtmlForBeehiivMcp(
+        `<!-- ${operationKey} -->${fixture.html}`,
+      ),
+    })
+    mocks.getBeehiivDelivery.mockResolvedValue(
+      deliveryFixture({
+        contentHash,
+        sourceDraftUpdatedAt: '2026-08-06T11:40:00.000000Z',
+      }),
+    )
+
+    const result = await deliver()
+
+    expect(result.mode).toBe('unchanged')
+    expect(mocks.createBeehiivPostDraft).not.toHaveBeenCalled()
+    expect(mocks.updateBeehiivPostDraft).not.toHaveBeenCalled()
+    expect(mocks.recordBeehiivSyncRemoteResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: 'post_00000000-0000-0000-0000-000000000004',
+      }),
+    )
+    expect(mocks.persistBeehiivSyncReceipt).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a stale unchanged-content request overwrite a newer receipt', async () => {
+    const fixture = exportFixture()
+    const title = fixture.draft.subjectLine
+    const previewText = buildBeehiivPreviewText(fixture.draft.introText)
+    const fingerprint = createBeehiivDeliveryContentHash({
+      title,
+      subjectLine: title,
+      previewText,
+      htmlContent: wrapNewsletterHtmlForBeehiivMcp(fixture.html),
+    })
+    const operationKey = createBeehiivRecoveryMarker(DRAFT_ID, fingerprint)
+    const contentHash = createBeehiivDeliveryContentHash({
+      title,
+      subjectLine: title,
+      previewText,
+      htmlContent: wrapNewsletterHtmlForBeehiivMcp(
+        `<!-- ${operationKey} -->${fixture.html}`,
+      ),
+    })
+    const observed = deliveryFixture({
+      contentHash,
+      sourceDraftUpdatedAt: '2026-08-06T11:40:00.000000Z',
+    })
+    const newer = deliveryFixture({
+      postId: 'post-newer',
+      contentHash: 'newer-content-hash',
+      sourceDraftUpdatedAt: '2026-08-06T11:44:00.000000Z',
+    })
+    mocks.getBeehiivDelivery
+      .mockResolvedValueOnce(observed)
+      .mockResolvedValueOnce(newer)
+
+    await expect(deliver()).rejects.toMatchObject({ code: 'busy' })
+
+    expect(mocks.recordBeehiivSyncRemoteResult).not.toHaveBeenCalled()
+    expect(mocks.persistBeehiivSyncReceipt).not.toHaveBeenCalled()
+    expect(mocks.recordBeehiivSyncFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'failed' }),
+    )
   })
 
   it('normalizes subject and preview copy at the Beehiiv boundary', async () => {
@@ -356,12 +549,16 @@ describe('Beehiiv MCP newsletter delivery', () => {
         remoteEditorUrl: 'https://app.beehiiv.com/posts/post_recovered',
       }),
     )
+    mocks.persistBeehiivSyncReceipt.mockResolvedValueOnce(
+      deliveryFixture({ postId: 'post_recovered' }),
+    )
 
     const result = await deliver()
 
     expect(result.mode).toBe('created')
     expect(result.delivery.postId).toBe('post_recovered')
     expect(mocks.createBeehiivPostDraft).not.toHaveBeenCalled()
+    expect(mocks.persistBeehiivSyncReceipt).toHaveBeenCalledTimes(1)
   })
 
   it('fails safe when a previous create is ambiguous', async () => {
@@ -410,6 +607,37 @@ describe('Beehiiv MCP newsletter delivery', () => {
     )
   })
 
+  it('marks an indeterminate update ambiguous so newer content cannot overtake it', async () => {
+    mocks.getBeehiivDelivery.mockResolvedValue(deliveryFixture())
+    mocks.updateBeehiivPostDraft.mockRejectedValueOnce(
+      new Error('Update timed out while Beehiiv may still be applying it'),
+    )
+
+    await expect(deliver()).rejects.toThrow('Update timed out')
+
+    expect(mocks.recordBeehiivSyncFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'ambiguous' }),
+    )
+    expect(mocks.persistBeehiivSyncReceipt).not.toHaveBeenCalled()
+  })
+
+  it('blocks different content behind an ambiguous update receipt', async () => {
+    mocks.getBeehiivDelivery.mockResolvedValue(deliveryFixture())
+    mocks.claimBeehiivSyncOperation.mockImplementationOnce(async (input) =>
+      operationFixture(input, {
+        syncState: 'ambiguous',
+        leaseToken: null,
+        lastError: 'Previous update may still finish',
+      }),
+    )
+
+    await expect(deliver()).rejects.toMatchObject({
+      code: 'ambiguous_update',
+    })
+
+    expect(mocks.updateBeehiivPostDraft).not.toHaveBeenCalled()
+  })
+
   it('never resumes a remote result recorded for different content', async () => {
     mocks.claimBeehiivSyncOperation.mockImplementation(async (input) =>
       operationFixture(input, {
@@ -426,7 +654,7 @@ describe('Beehiiv MCP newsletter delivery', () => {
       code: 'recovery_conflict',
     })
     expect(mocks.createBeehiivPostDraft).not.toHaveBeenCalled()
-    expect(mocks.saveBeehiivDelivery).not.toHaveBeenCalled()
+    expect(mocks.persistBeehiivSyncReceipt).not.toHaveBeenCalled()
   })
 
   it('does not hide an unmatched recovery record on the unchanged path', async () => {

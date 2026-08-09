@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface DraftCreateResponse {
@@ -12,10 +12,16 @@ interface DraftCreateResponse {
 
 interface NewsletterDraftCreateProps {
   defaultFormat?: 'single_stock' | 'market_roundup'
+  beforeCreate?: () => boolean
+  getEditSequence?: () => number
+  beforeNavigate?: (submittedEditSequence: number | null) => boolean
 }
 
 export default function NewsletterDraftCreate({
   defaultFormat = 'single_stock',
+  beforeCreate,
+  getEditSequence,
+  beforeNavigate,
 }: NewsletterDraftCreateProps = {}) {
   const router = useRouter()
   const [ticker, setTicker] = useState('')
@@ -23,6 +29,16 @@ export default function NewsletterDraftCreate({
   const [format, setFormat] = useState<'single_stock' | 'market_roundup'>(defaultFormat)
   const [submittingMode, setSubmittingMode] = useState<'generate' | 'blank' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const requestControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      requestControllerRef.current?.abort()
+    }
+  }, [])
 
   const normalizedTicker = useMemo(() => ticker.trim().toUpperCase(), [ticker])
   const promptPlaceholder = useMemo(
@@ -34,6 +50,12 @@ export default function NewsletterDraftCreate({
   )
 
   async function createDraft(mode: 'generate' | 'blank') {
+    if (beforeCreate && !beforeCreate()) return
+    const submittedEditSequence = getEditSequence?.() ?? null
+    const controller = new AbortController()
+    requestControllerRef.current?.abort()
+    requestControllerRef.current = controller
+
     try {
       setSubmittingMode(mode)
       setError(null)
@@ -43,6 +65,7 @@ export default function NewsletterDraftCreate({
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           ticker: format === 'single_stock' ? normalizedTicker || undefined : undefined,
           format,
@@ -58,67 +81,103 @@ export default function NewsletterDraftCreate({
         throw new Error(payload.error || 'Failed to create newsletter draft')
       }
 
+      if (!mountedRef.current || controller.signal.aborted) return
+      if (beforeNavigate && !beforeNavigate(submittedEditSequence)) {
+        setError(
+          'The new draft was created, but newer edits in this editor are still open. It was not opened automatically.',
+        )
+        return
+      }
       router.push(`/newsletter/editor/${payload.draft.id}`)
     } catch (err) {
+      if (controller.signal.aborted || !mountedRef.current) return
       setError(err instanceof Error ? err.message : 'Failed to create newsletter draft')
     } finally {
-      setSubmittingMode(null)
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null
+      }
+      if (mountedRef.current) setSubmittingMode(null)
     }
   }
 
   return (
-    <section className="mx-auto w-full max-w-md rounded-2xl border border-gray-300 bg-white p-4 shadow-sm sm:p-6">
-      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-gray-600">
+    <section
+      aria-labelledby="newsletter-draft-create-title"
+      className="mx-auto w-full max-w-md rounded-2xl border border-gray-300 bg-white p-4 shadow-sm sm:p-6"
+    >
+      <h2
+        id="newsletter-draft-create-title"
+        className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-600"
+      >
         Start A Draft
-      </label>
+      </h2>
       <p className="mt-2 text-sm text-gray-600">
         Generate with AI, or start from a blank manual draft you fill in yourself.
       </p>
       <div className="mt-4 grid gap-3">
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setFormat('single_stock')}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-              format === 'single_stock'
-                ? 'bg-sage-700 text-white'
-                : 'text-gray-700 hover:bg-cream-100'
-            }`}
-          >
-            Single stock
-          </button>
-          <button
-            type="button"
-            onClick={() => setFormat('market_roundup')}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-              format === 'market_roundup'
-                ? 'bg-sage-700 text-white'
-                : 'text-gray-700 hover:bg-cream-100'
-            }`}
-          >
-            Market roundup
-          </button>
-        </div>
+        <fieldset>
+          <legend className="sr-only">Newsletter format</legend>
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-white p-1">
+            <button
+              type="button"
+              aria-pressed={format === 'single_stock'}
+              onClick={() => setFormat('single_stock')}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                format === 'single_stock'
+                  ? 'bg-sage-700 text-white'
+                  : 'text-gray-700 hover:bg-cream-100'
+              }`}
+            >
+              Single stock
+            </button>
+            <button
+              type="button"
+              aria-pressed={format === 'market_roundup'}
+              onClick={() => setFormat('market_roundup')}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                format === 'market_roundup'
+                  ? 'bg-sage-700 text-white'
+                  : 'text-gray-700 hover:bg-cream-100'
+              }`}
+            >
+              Market roundup
+            </button>
+          </div>
+        </fieldset>
 
         {format === 'single_stock' ? (
-          <input
-            value={ticker}
-            onChange={(event) => setTicker(event.target.value)}
-            placeholder="AAPL"
-            className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium uppercase tracking-[0.16em] text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
-          />
+          <div>
+            <label htmlFor="newsletter-draft-ticker" className="sr-only">
+              Stock ticker
+            </label>
+            <input
+              id="newsletter-draft-ticker"
+              value={ticker}
+              onChange={(event) => setTicker(event.target.value)}
+              placeholder="AAPL"
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium uppercase tracking-[0.16em] text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+            />
+          </div>
         ) : null}
 
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-600">
+          <label
+            htmlFor="newsletter-generation-prompt"
+            className="block text-xs font-semibold uppercase tracking-[0.16em] text-gray-600"
+          >
             AI generation prompt
           </label>
-          <p className="mt-2 text-sm text-gray-500">
+          <p
+            id="newsletter-generation-prompt-description"
+            className="mt-2 text-sm text-gray-500"
+          >
             {format === 'market_roundup'
               ? 'Leave this blank to auto-pick 3-5 of today’s most interesting names, or describe the theme you want.'
               : 'Leave this blank for the default deep dive, or describe the angle you want the generator to emphasize.'}
           </p>
           <textarea
+            id="newsletter-generation-prompt"
+            aria-describedby="newsletter-generation-prompt-description"
             value={generationPrompt}
             onChange={(event) => setGenerationPrompt(event.target.value)}
             placeholder={promptPlaceholder}
@@ -152,7 +211,10 @@ export default function NewsletterDraftCreate({
       </div>
 
       {error ? (
-        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {error}
         </div>
       ) : null}

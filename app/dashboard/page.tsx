@@ -8,16 +8,17 @@ import { fetchAllMarketData } from '@/lib/fetch-market-data'
 export const dynamic = 'force-dynamic'
 
 export default async function Dashboard() {
-  const initialRenderedAt = new Date().toISOString()
-  const [initialData, chartOfDayPresentation] = await Promise.all([
-    fetchAllMarketData(),
+  const [initialSnapshot, chartOfDayPresentation] = await Promise.all([
+    fetchAllMarketData({ withProvenance: true }),
     loadDashboardChartOfTheDayPresentation(),
   ])
+  const initialRenderedAt = new Date().toISOString()
 
   return (
     <AppShell showFooter>
       <MarketDashboardSunday
-        initialData={initialData}
+        initialData={initialSnapshot.data}
+        initialCaptureTimes={initialSnapshot.captureTimes}
         chartOfDayPresentation={chartOfDayPresentation}
         initialRenderedAt={initialRenderedAt}
       />

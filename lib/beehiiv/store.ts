@@ -19,6 +19,13 @@ import type { BeehiivOAuthCredentials } from './oauth-provider'
 const PROVIDER = 'beehiiv'
 const DELIVERY_LIST_PAGE_SIZE = 1_000
 const DELIVERY_LIST_HARD_LIMIT = 10_000
+const BEEHIIV_LIFECYCLE_STATUSES = [
+  'draft',
+  'scheduled',
+  'published',
+  'archived',
+  'unknown',
+] as const satisfies readonly BeehiivLifecycleStatus[]
 
 export class BeehiivDeliveryListLimitError extends Error {
   readonly limit: number
@@ -64,6 +71,7 @@ interface BeehiivDeliveryRow {
   preview_url: string | null
   editor_url: string
   content_hash: string
+  source_draft_updated_at: string | null
   lifecycle_status: string
   lifecycle_applied_status: string | null
   lifecycle_applied_at: string | null
@@ -90,6 +98,7 @@ interface BeehiivSyncOperationRow {
   operation_kind: string
   operation_key: string
   content_hash: string
+  source_draft_updated_at: string | null
   title: string
   sync_state: string
   remote_post_id: string | null
@@ -154,6 +163,7 @@ function mapDeliveryRow(row: BeehiivDeliveryRow): BeehiivDeliveryRecord {
     editorUrl: row.editor_url,
     webUrl: row.web_url,
     contentHash: row.content_hash,
+    sourceDraftUpdatedAt: row.source_draft_updated_at,
     lifecycleStatus: row.lifecycle_status as BeehiivLifecycleStatus,
     lifecycleAppliedStatus: row.lifecycle_applied_status as BeehiivLifecycleStatus | null,
     lifecycleAppliedAt: row.lifecycle_applied_at,
@@ -186,6 +196,7 @@ function mapSyncOperationRow(
     operationKind: row.operation_kind as BeehiivSyncOperationKind,
     operationKey: row.operation_key,
     contentHash: row.content_hash,
+    sourceDraftUpdatedAt: row.source_draft_updated_at,
     title: row.title,
     syncState: row.sync_state as BeehiivSyncState,
     remotePostId: row.remote_post_id,
@@ -327,13 +338,14 @@ export async function claimBeehiivSyncOperation(input: {
   operationKind: BeehiivSyncOperationKind
   operationKey: string
   contentHash: string
+  sourceDraftUpdatedAt: string
   title: string
   leaseToken: string
   leaseSeconds?: number
 }): Promise<BeehiivSyncOperationRecord | null> {
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase.rpc(
-    'claim_newsletter_beehiiv_sync',
+    'claim_newsletter_beehiiv_sync_v2',
     {
       p_owner_id: input.ownerId,
       p_draft_id: input.draftId,
@@ -342,6 +354,7 @@ export async function claimBeehiivSyncOperation(input: {
       p_operation_key: input.operationKey,
       p_content_hash: input.contentHash,
       p_title: input.title,
+      p_source_draft_updated_at: input.sourceDraftUpdatedAt,
       p_lease_token: input.leaseToken,
       p_lease_seconds: input.leaseSeconds ?? 90,
     },
@@ -351,6 +364,81 @@ export async function claimBeehiivSyncOperation(input: {
   }
   const row = (data?.[0] ?? null) as BeehiivSyncOperationRow | null
   return row ? mapSyncOperationRow(row) : null
+}
+
+export async function isNewsletterDraftSourceVersionCurrent(input: {
+  ownerId: string
+  draftId: string
+  sourceDraftUpdatedAt: string
+}): Promise<boolean> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase.rpc(
+    'is_newsletter_draft_source_version_current',
+    {
+      p_owner_id: input.ownerId,
+      p_draft_id: input.draftId,
+      p_source_draft_updated_at: input.sourceDraftUpdatedAt,
+    },
+  )
+  if (error) {
+    throw new Error(
+      `Failed to verify the Beehiiv source draft version: ${error.message}`,
+    )
+  }
+  return data === true
+}
+
+export async function rebindBeehiivDeliverySourceVersion(input: {
+  ownerId: string
+  draftId: string
+  publicationId: string
+  postId: string
+  contentHash: string
+  expectedSourceDraftUpdatedAt: string | null
+  sourceDraftUpdatedAt: string
+}): Promise<BeehiivDeliveryRecord | null> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase.rpc(
+    'rebind_newsletter_beehiiv_delivery_source_version',
+    {
+      p_owner_id: input.ownerId,
+      p_draft_id: input.draftId,
+      p_publication_id: input.publicationId,
+      p_post_id: input.postId,
+      p_content_hash: input.contentHash,
+      p_expected_source_draft_updated_at:
+        input.expectedSourceDraftUpdatedAt,
+      p_source_draft_updated_at: input.sourceDraftUpdatedAt,
+    },
+  )
+  if (error) {
+    throw new Error(
+      `Failed to rebind the Beehiiv delivery source version: ${error.message}`,
+    )
+  }
+  const row = (data?.[0] ?? null) as BeehiivDeliveryRow | null
+  return row ? mapDeliveryRow(row) : null
+}
+
+export async function persistBeehiivSyncReceipt(input: {
+  ownerId: string
+  draftId: string
+  leaseToken: string
+}): Promise<BeehiivDeliveryRecord | null> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase.rpc(
+    'persist_newsletter_beehiiv_sync_receipt',
+    {
+      p_owner_id: input.ownerId,
+      p_draft_id: input.draftId,
+      p_lease_token: input.leaseToken,
+    },
+  )
+  if (error) {
+    throw new Error(`Failed to persist Beehiiv sync receipt: ${error.message}`)
+  }
+  const row = (data?.[0] ?? null) as BeehiivDeliveryRow | null
+  return row ? mapDeliveryRow(row) : null
 }
 
 export async function getBeehiivSyncOperation(
@@ -539,6 +627,37 @@ export async function listBeehiivDeliveries(
   return Array.from(deliveriesById.values(), mapDeliveryRow)
 }
 
+/**
+ * Returns exact lifecycle facets without hydrating the owner's delivery
+ * history. Each query is a count-only index lookup, so polling callers do a
+ * fixed amount of database work as the archive grows.
+ */
+export async function countBeehiivDeliveriesByLifecycle(
+  ownerId: string,
+  signal?: AbortSignal,
+): Promise<Record<BeehiivLifecycleStatus, number>> {
+  signal?.throwIfAborted()
+  const supabase = createServiceRoleClient()
+  const entries = await Promise.all(
+    BEEHIIV_LIFECYCLE_STATUSES.map(async (status) => {
+      let query = supabase
+        .from('newsletter_beehiiv_deliveries')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', ownerId)
+        .eq('lifecycle_status', status)
+      if (signal) query = query.abortSignal(signal)
+      const { count, error } = await query
+      if (error) {
+        throw new Error(
+          `Failed to count ${status} Beehiiv deliveries: ${error.message}`,
+        )
+      }
+      return [status, count ?? 0] as const
+    }),
+  )
+  return Object.fromEntries(entries) as Record<BeehiivLifecycleStatus, number>
+}
+
 export async function claimBeehiivDeliveriesForReconciliation(input: {
   leaseToken: string
   limit?: number
@@ -702,6 +821,7 @@ export async function saveBeehiivDelivery(input: {
   previewUrl: string | null
   editorUrl: string
   contentHash: string
+  sourceDraftUpdatedAt: string
 }): Promise<BeehiivDeliveryRecord> {
   const timestamp = new Date().toISOString()
   const supabase = createServiceRoleClient()
@@ -717,6 +837,7 @@ export async function saveBeehiivDelivery(input: {
         preview_url: input.previewUrl,
         editor_url: input.editorUrl,
         content_hash: input.contentHash,
+        source_draft_updated_at: input.sourceDraftUpdatedAt,
         synced_at: timestamp,
       },
       { onConflict: 'draft_id' },

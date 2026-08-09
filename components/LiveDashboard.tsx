@@ -50,6 +50,143 @@ const TIMEFRAME_OPTIONS: { value: Timeframe; label: string }[] = [
 
 const SPEED_OPTIONS: ReplaySpeed[] = [1, 2, 5, 10]
 
+interface PollTaskContext {
+  signal: AbortSignal
+  isCurrent: () => boolean
+}
+
+interface SerializedPollingOptions {
+  enabled: boolean
+  intervalMs: number
+  runImmediately?: boolean
+  task: (context: PollTaskContext) => Promise<void>
+}
+
+/**
+ * Runs one request at a time and only schedules the next request after the
+ * current one settles. Manual refreshes intentionally replace (and abort) the
+ * current generation so a symbol/timeframe change never waits on stale work.
+ */
+function useSerializedPolling({
+  enabled,
+  intervalMs,
+  runImmediately = false,
+  task,
+}: SerializedPollingOptions) {
+  const taskRef = useRef(task)
+  const enabledRef = useRef(enabled)
+  const intervalMsRef = useRef(intervalMs)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const controllerRef = useRef<AbortController | null>(null)
+  const generationRef = useRef(0)
+  const runRef = useRef<((replaceCurrent: boolean) => void) | null>(null)
+  const refreshOnEnableRef = useRef(false)
+
+  taskRef.current = task
+  enabledRef.current = enabled
+  intervalMsRef.current = intervalMs
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  const cancel = useCallback(() => {
+    generationRef.current += 1
+    clearTimer()
+    controllerRef.current?.abort()
+    controllerRef.current = null
+  }, [clearTimer])
+
+  const run = useCallback((replaceCurrent: boolean) => {
+    if (!enabledRef.current || document.visibilityState === 'hidden') return
+
+    if (controllerRef.current) {
+      if (!replaceCurrent) return
+      controllerRef.current.abort()
+      controllerRef.current = null
+    }
+
+    clearTimer()
+    const generation = ++generationRef.current
+    const controller = new AbortController()
+    controllerRef.current = controller
+
+    const isCurrent = () =>
+      enabledRef.current &&
+      document.visibilityState !== 'hidden' &&
+      generationRef.current === generation &&
+      controllerRef.current === controller &&
+      !controller.signal.aborted
+
+    void taskRef.current({ signal: controller.signal, isCurrent })
+      .catch(() => {
+        // A failed poll is retried at the normal cadence below.
+      })
+      .finally(() => {
+        if (!isCurrent()) return
+        controllerRef.current = null
+        timerRef.current = setTimeout(() => {
+          runRef.current?.(false)
+        }, intervalMsRef.current)
+      })
+  }, [clearTimer])
+
+  runRef.current = run
+
+  const refresh = useCallback(() => {
+    if (!enabledRef.current) {
+      // A symbol can be selected in the same render that enables its polls.
+      // Preserve the immediate refresh intent until that effect commits.
+      refreshOnEnableRef.current = true
+      return
+    }
+    runRef.current?.(true)
+  }, [])
+
+  useEffect(() => {
+    cancel()
+    if (!enabled) return
+
+    const runIfIdle = () => runRef.current?.(false)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        cancel()
+      } else {
+        // Returning to a visible tab starts a fresh generation immediately.
+        refreshOnEnableRef.current = false
+        runRef.current?.(true)
+      }
+    }
+    const handleFocus = () => {
+      if (document.visibilityState !== 'hidden') runRef.current?.(true)
+    }
+
+    if (document.visibilityState !== 'hidden') {
+      const shouldRunImmediately = runImmediately || refreshOnEnableRef.current
+      refreshOnEnableRef.current = false
+      if (shouldRunImmediately) {
+        runIfIdle()
+      } else {
+        timerRef.current = setTimeout(runIfIdle, intervalMs)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+      cancel()
+    }
+  }, [cancel, enabled, intervalMs, runImmediately])
+
+  return useMemo(() => ({ cancel, refresh }), [cancel, refresh])
+}
+
 function ohlcToCandlePoints(ohlcData: OHLCData[]): CandlePoint[] {
   return ohlcData.map((c) => ({
     time: Math.floor(new Date(c.date).getTime() / 1000),
@@ -58,6 +195,26 @@ function ohlcToCandlePoints(ohlcData: OHLCData[]): CandlePoint[] {
     low: c.low,
     close: c.close,
   }))
+}
+
+function pickActiveMovers(
+  result: {
+    premarket?: MoverData[]
+    cash?: MoverData[]
+    afterhours?: MoverData[]
+    currentSession?: MarketSession
+  },
+  fallbackSession: MarketSession,
+) {
+  const activeSession = result.currentSession ?? fallbackSession
+  if (activeSession === 'premarket' && result.premarket?.length) return result.premarket
+  if (activeSession === 'afterhours' && result.afterhours?.length) return result.afterhours
+  if (activeSession === 'closed') {
+    if (result.afterhours?.length) return result.afterhours
+    if (result.cash?.length) return result.cash
+    if (result.premarket?.length) return result.premarket
+  }
+  return result.cash ?? []
 }
 
 export default function LiveDashboard({
@@ -100,9 +257,19 @@ export default function LiveDashboard({
 
   const selectedSymbolRef = useRef(selectedSymbol)
   selectedSymbolRef.current = selectedSymbol
+  const moverTabRef = useRef(moverTab)
+  moverTabRef.current = moverTab
+  const sessionRef = useRef(session)
+  sessionRef.current = session
 
   const isStreaming = !isReplay && (timeframe === '1s' || timeframe === '10s')
   const pollingInterval = timeframe === '1m' ? 1 : 5 // minute multiplier for REST candles
+  const isReplayRef = useRef(isReplay)
+  isReplayRef.current = isReplay
+  const isStreamingRef = useRef(isStreaming)
+  isStreamingRef.current = isStreaming
+  const pollingIntervalRef = useRef(pollingInterval)
+  pollingIntervalRef.current = pollingInterval
 
   // WebSocket streaming hook — disabled in replay mode
   const stream = useLiveStream(
@@ -114,9 +281,16 @@ export default function LiveDashboard({
   const replay = useReplay(activeReplayConfig)
 
   // Fetch OHLC data for a stock symbol
-  const fetchOHLC = useCallback(async (symbol: string, interval: number = 5) => {
+  const fetchOHLC = useCallback(async (
+    symbol: string,
+    interval: number = 5,
+    signal?: AbortSignal,
+  ) => {
     try {
-      const res = await fetch(`/api/stock-intraday/${encodeURIComponent(symbol)}?interval=${interval}`)
+      const res = await fetch(
+        `/api/stock-intraday/${encodeURIComponent(symbol)}?interval=${interval}`,
+        { signal },
+      )
       if (!res.ok) return null
       return (await res.json()) as StockIntradayOHLC
     } catch {
@@ -124,143 +298,159 @@ export default function LiveDashboard({
     }
   }, [])
 
-  // Handle chip click (gainers or Mag 7)
-  const handleSelectSymbol = useCallback(
-    async (symbol: string) => {
-      if (symbol === selectedSymbol) return
-      setSelectedSymbol(symbol)
-      setLivePrice(null)
-      setLivePrevClose(null)
+  // Poll 2: Selected stock OHLC (every 30s) — disabled while replaying/streaming.
+  // The callback reads refs so a manual refresh can atomically replace stale work
+  // before React commits the corresponding symbol state update.
+  const ohlcPoll = useSerializedPolling({
+    enabled: !isReplay && !isStreaming && !!selectedSymbol,
+    intervalMs: 30_000,
+    task: useCallback(async ({ signal, isCurrent }: PollTaskContext) => {
+      const symbol = selectedSymbolRef.current
+      const interval = pollingIntervalRef.current
+      if (!symbol) return
+
+      const data = await fetchOHLC(symbol, interval, signal)
+      if (
+        isCurrent() &&
+        selectedSymbolRef.current === symbol &&
+        pollingIntervalRef.current === interval
+      ) {
+        if (
+          data &&
+          typeof data.symbol === 'string' &&
+          data.symbol.toUpperCase() === symbol.toUpperCase()
+        ) {
+          setGainerOHLC(data)
+        }
+        setLoadingOHLC(false)
+      }
+    }, [fetchOHLC]),
+  })
+
+  // Poll 3: Fast quote poll (every 5s) — disabled while replaying/streaming.
+  const quotePoll = useSerializedPolling({
+    enabled: !isReplay && !isStreaming && !!selectedSymbol,
+    intervalMs: 5_000,
+    runImmediately: true,
+    task: useCallback(async ({ signal, isCurrent }: PollTaskContext) => {
+      const symbol = selectedSymbolRef.current
+      if (!symbol) return
+
+      const res = await fetch(`/api/quote/${encodeURIComponent(symbol)}`, { signal })
+      if (!res.ok) return
+      const quote = await res.json()
+      if (!isCurrent() || selectedSymbolRef.current !== symbol) return
+
+      if (quote && typeof quote.price === 'number') {
+        setLivePrice(quote.price)
+        setLivePriceChange(typeof quote.change === 'number' ? quote.change : null)
+        setLivePriceChangePct(
+          typeof quote.changesPercentage === 'number' ? quote.changesPercentage : null,
+        )
+        setLivePrevClose(
+          typeof quote.previousClose === 'number' && quote.previousClose > 0
+            ? quote.previousClose
+            : null,
+        )
+      }
+    }, []),
+  })
+
+  const selectSymbol = useCallback((symbol: string) => {
+    if (!symbol || symbol === selectedSymbolRef.current) return
+
+    // Update the ref first: even an abort-ignoring old request is stale before
+    // the state update renders, and the new request reads the new symbol.
+    selectedSymbolRef.current = symbol
+    setSelectedSymbol(symbol)
+    setGainerOHLC(null)
+    setLivePrice(null)
+    setLivePriceChange(null)
+    setLivePriceChangePct(null)
+    setLivePrevClose(null)
+
+    if (!isReplayRef.current && !isStreamingRef.current) {
       setLoadingOHLC(true)
-      const data = await fetchOHLC(symbol, pollingInterval)
-      if (data) setGainerOHLC(data)
+      ohlcPoll.refresh()
+      quotePoll.refresh()
+    } else {
       setLoadingOHLC(false)
-    },
-    [selectedSymbol, fetchOHLC, pollingInterval]
-  )
+      ohlcPoll.cancel()
+      quotePoll.cancel()
+    }
+  }, [ohlcPoll, quotePoll])
 
-  // Check if currently viewing a Mag 7 stock (don't auto-switch away)
-  const isMag7 = MAG7.some((m) => m.symbol === selectedSymbol)
+  // Handle chip/table selection.
+  const handleSelectSymbol = useCallback((symbol: string) => {
+    selectSymbol(symbol)
+  }, [selectSymbol])
 
-  // Helper: pick active movers from AllSessionMoversResult shape
-  const pickActiveMovers = useCallback(
-    (r: { premarket?: MoverData[]; cash?: MoverData[]; afterhours?: MoverData[]; currentSession?: MarketSession }) => {
-      const sess = r.currentSession ?? session
-      if (sess === 'premarket' && r.premarket?.length) return r.premarket
-      if (sess === 'afterhours' && r.afterhours?.length) return r.afterhours
-      if (sess === 'closed') {
-        if (r.afterhours?.length) return r.afterhours
-        if (r.cash?.length) return r.cash
-        if (r.premarket?.length) return r.premarket
+  // Poll 1: Gainers + losers list (every 30s) — disabled in replay mode.
+  useSerializedPolling({
+    enabled: !isReplay,
+    intervalMs: 30_000,
+    task: useCallback(async ({ signal, isCurrent }: PollTaskContext) => {
+      const res = await fetch('/api/market-snapshot/live-movers', { signal })
+      if (!res.ok) return
+      const data = await res.json()
+      if (!isCurrent()) return
+
+      const gainersResult = data.gainers && typeof data.gainers === 'object'
+        ? data.gainers
+        : null
+      const losersResult = data.losers && typeof data.losers === 'object'
+        ? data.losers
+        : null
+      const newGainers = gainersResult
+        ? pickActiveMovers(gainersResult, sessionRef.current)
+        : []
+      const newLosers = losersResult
+        ? pickActiveMovers(losersResult, sessionRef.current)
+        : []
+
+      if (newGainers.length > 0) setGainers(newGainers)
+      if (newLosers.length > 0) setLosers(newLosers)
+
+      const nextSession = gainersResult?.currentSession ?? losersResult?.currentSession
+      if (nextSession) setSession(nextSession as MarketSession)
+
+      const activeMovers = moverTabRef.current === 'gainers' ? newGainers : newLosers
+      const currentSymbol = selectedSymbolRef.current
+      const isPinnedMag7 = MAG7.some(({ symbol }) => symbol === currentSymbol)
+      if (
+        !isPinnedMag7 &&
+        activeMovers.length > 0 &&
+        (!currentSymbol || !activeMovers.some(({ symbol }) => symbol === currentSymbol))
+      ) {
+        selectSymbol(activeMovers[0].symbol)
       }
-      return r.cash ?? []
-    },
-    [session]
-  )
+    }, [selectSymbol]),
+  })
 
-  // Poll 1: Gainers + losers list (every 30s) — disabled in replay mode
   useEffect(() => {
-    if (isReplay) return
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/market-snapshot/fast')
-        if (!res.ok) return
-        const data = await res.json()
-
-        // Update gainers
-        if (data.gainers && typeof data.gainers === 'object') {
-          const newGainers = pickActiveMovers(data.gainers)
-          const sess = data.gainers.currentSession as MarketSession
-
-          if (newGainers.length > 0) {
-            setGainers(newGainers)
-
-            // If selected gainer fell off the list (and not a Mag 7), switch to new top
-            if (
-              selectedSymbolRef.current &&
-              !isMag7 &&
-              !newGainers.find((m) => m.symbol === selectedSymbolRef.current)
-            ) {
-              setSelectedSymbol(newGainers[0].symbol)
-              if (!isStreaming) {
-                const ohlc = await fetchOHLC(newGainers[0].symbol, pollingInterval)
-                if (ohlc) setGainerOHLC(ohlc)
-              }
-            }
-          }
-
-          if (sess) setSession(sess)
-        }
-
-        // Update losers
-        if (data.losers && typeof data.losers === 'object') {
-          const newLosers = pickActiveMovers(data.losers)
-          if (newLosers.length > 0) setLosers(newLosers)
-        }
-      } catch {
-        // Silently ignore polling errors
-      }
-    }, 30_000)
-
-    return () => clearInterval(pollInterval)
-  }, [isReplay, fetchOHLC, isStreaming, isMag7, pollingInterval, pickActiveMovers])
-
-  // Poll 2: Selected stock OHLC (every 30s) — disabled in replay mode
-  useEffect(() => {
-    if (isReplay) return
-    if (!selectedSymbol || isStreaming) return
-
-    const pollInterval = setInterval(async () => {
-      const data = await fetchOHLC(selectedSymbol, pollingInterval)
-      if (data) setGainerOHLC(data)
-    }, 30_000)
-
-    return () => clearInterval(pollInterval)
-  }, [isReplay, selectedSymbol, fetchOHLC, isStreaming, pollingInterval])
+    if (isReplay || isStreaming) setLoadingOHLC(false)
+  }, [isReplay, isStreaming])
 
   // Refetch candles when switching between 1m and 5m (different resolutions)
   const prevPollingInterval = useRef(pollingInterval)
   useEffect(() => {
-    if (isReplay) return
-    if (prevPollingInterval.current !== pollingInterval && !isStreaming && selectedSymbol) {
-      prevPollingInterval.current = pollingInterval
-      fetchOHLC(selectedSymbol, pollingInterval).then((data) => {
-        if (data) setGainerOHLC(data)
-      })
+    const previousInterval = prevPollingInterval.current
+    prevPollingInterval.current = pollingInterval
+    if (
+      previousInterval !== pollingInterval &&
+      !isReplay &&
+      !isStreaming &&
+      selectedSymbol
+    ) {
+      setGainerOHLC(null)
+      setLoadingOHLC(true)
+      ohlcPoll.refresh()
     }
-  }, [isReplay, pollingInterval, isStreaming, selectedSymbol, fetchOHLC])
-
-  // Poll 3: Fast quote poll (every 5s) — disabled in replay mode
-  useEffect(() => {
-    if (isReplay) return
-    if (isStreaming || !selectedSymbol) return
-
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/quote/${encodeURIComponent(selectedSymbol)}`)
-        if (!res.ok) return
-        const q = await res.json()
-        if (typeof q.price === 'number') {
-          setLivePrice(q.price)
-          setLivePriceChange(q.change)
-          setLivePriceChangePct(q.changesPercentage)
-          if (typeof q.previousClose === 'number' && q.previousClose > 0) {
-            setLivePrevClose(q.previousClose)
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    poll()
-    const interval = setInterval(poll, 5_000)
-    return () => clearInterval(interval)
-  }, [isReplay, selectedSymbol, isStreaming])
+  }, [isReplay, pollingInterval, isStreaming, selectedSymbol, ohlcPoll])
 
   // Active data source
-  const activeData: StockIntradayOHLC | null = gainerOHLC
+  const activeData: StockIntradayOHLC | null =
+    gainerOHLC?.symbol.toUpperCase() === selectedSymbol.toUpperCase() ? gainerOHLC : null
 
   // ---------- 5m polling-mode candle data ----------
   const pollingChartData = useMemo(() => {
@@ -462,7 +652,7 @@ export default function LiveDashboard({
   const mag7Match = MAG7.find((m) => m.symbol === displaySymbol)
   const displayName = isReplay
     ? (mag7Match?.name ?? displaySymbol)
-    : (gainerOHLC?.name ?? mag7Match?.name ?? selectedSymbol)
+    : (activeData?.name ?? mag7Match?.name ?? selectedSymbol)
 
   const displayPrice = isReplay
     ? (replay.lastPrice ?? 0)
@@ -504,7 +694,7 @@ export default function LiveDashboard({
       ? (stream.candles.length > 0 || !!activeData)
       : !!activeData
 
-  const hasNoData = !isReplay && gainers.length === 0 && !gainerOHLC && !isStreaming
+  const hasNoData = !isReplay && gainers.length === 0 && !activeData && !isStreaming
 
   if (hasNoData) {
     return (

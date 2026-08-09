@@ -285,6 +285,33 @@ describe('replay route', () => {
     expect(mocks.getIntraday).toHaveBeenCalledTimes(2)
   })
 
+  it('returns a retryable upstream failure instead of caching incomplete aggregate pages', async () => {
+    const incompleteError = Object.assign(
+      new Error('Massive aggregate data is incomplete'),
+      {
+        name: 'MassiveAggregateIncompleteError',
+        code: 'MASSIVE_AGGREGATE_INCOMPLETE',
+        reason: 'page_limit',
+      },
+    )
+    mocks.getIntraday.mockRejectedValue(incompleteError)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const query = {
+      date: '2026-07-10',
+      from: '09:30',
+      to: '16:00',
+    }
+
+    const firstResponse = await replayRequest('TSLA', query)
+    const secondResponse = await replayRequest('TSLA', query)
+
+    expect(firstResponse.status).toBe(502)
+    expect(await firstResponse.json()).toEqual({ error: 'Replay fetch failed' })
+    expect(secondResponse.status).toBe(502)
+    expect(mocks.getIntraday).toHaveBeenCalledTimes(2)
+    errorSpy.mockRestore()
+  })
+
   it('does not indefinitely cache candles with a missing historical baseline', async () => {
     const replayTimestamp = new Date('2026-07-10T09:30:30-04:00').getTime()
     mocks.getIntraday.mockResolvedValue([

@@ -7,6 +7,8 @@ import {
   resolveNewsletterDraftScope,
 } from '@/lib/newsletter/draft-session'
 import {
+  NewsletterManagedPublicationBusyError,
+  NewsletterManagedPublicationVersionError,
   NewsletterPublicationReadinessError,
   recordNewsletterPublication,
 } from '@/lib/newsletter/publication'
@@ -26,7 +28,23 @@ export async function PATCH(
     const body = await request.json().catch(() => ({}))
     const beehiivUrl =
       typeof body?.beehiivUrl === 'string' ? body.beehiivUrl : ''
-    const draft = await recordNewsletterPublication(scope, id, beehiivUrl)
+    const expectedUpdatedAt =
+      typeof body?.expectedUpdatedAt === 'string'
+        ? body.expectedUpdatedAt
+        : undefined
+    if (!expectedUpdatedAt) {
+      return NextResponse.json(
+        { error: 'expectedUpdatedAt is required' },
+        { status: 400 },
+      )
+    }
+    const draft = await recordNewsletterPublication(
+      scope,
+      id,
+      beehiivUrl,
+      new Date(),
+      expectedUpdatedAt,
+    )
     const response = NextResponse.json({ draft })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
@@ -37,6 +55,18 @@ export async function PATCH(
           issues: error.readiness.issues,
         },
         { status: 422 },
+      )
+    }
+    if (error instanceof NewsletterManagedPublicationVersionError) {
+      return NextResponse.json(
+        { error: error.message, code: 'beehiiv_source_mismatch' },
+        { status: 409 },
+      )
+    }
+    if (error instanceof NewsletterManagedPublicationBusyError) {
+      return NextResponse.json(
+        { error: error.message, code: 'beehiiv_sync_in_progress' },
+        { status: 409 },
       )
     }
     if (error instanceof NewsletterDraftConflictError) {

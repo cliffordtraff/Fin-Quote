@@ -50,4 +50,13 @@ export function getProvider(): MarketDataProvider {
 }
 
 // Re-export types for convenience
-export type { MarketDataProvider, ProviderQuote, ProviderCandle, ProviderNews, CandleTimespan } from './types'
+export type {
+  CandleRequestOptions,
+  CandleTimespan,
+  MarketDataProvider,
+  ProviderRequestOptions,
+  ProviderCandle,
+  ProviderNews,
+  ProviderQuote,
+  QuoteRequestOptions,
+} from './types'

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   NewsletterDraftEvent,
   NewsletterDraftRecord,
@@ -10,7 +10,12 @@ import type {
 interface NewsletterPublicationPanelProps {
   record: NewsletterDraftRecord
   disabled?: boolean
-  onRecordChange: (record: NewsletterDraftRecord) => void
+  getEditSequence: () => number
+  onRecordChange: (
+    record: NewsletterDraftRecord,
+    submittedEditSequence: number,
+  ) => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 function formatDateTime(value: string): string {
@@ -47,23 +52,52 @@ function eventLabel(event: NewsletterDraftEvent): string {
   if (event.type === 'beehiiv_draft_synced') {
     return 'Beehiiv draft synced'
   }
+  if (event.type === 'beehiiv_scheduled') return 'Beehiiv issue scheduled'
+  if (event.type === 'beehiiv_published') return 'Beehiiv issue published'
+  if (event.type === 'beehiiv_archived') return 'Beehiiv issue archived'
+  if (event.type === 'archived') return 'Issue archived locally'
+  if (event.type === 'restored') return 'Issue restored to active history'
   return 'Publication recorded'
 }
 
 export default function NewsletterPublicationPanel({
   record,
   disabled = false,
+  getEditSequence,
   onRecordChange,
+  onDirtyChange,
 }: NewsletterPublicationPanelProps) {
-  const [beehiivUrl, setBeehiivUrl] = useState(record.beehiivUrl ?? '')
+  const persistedBeehiivUrl = record.beehiivUrl ?? ''
+  const [beehiivUrl, setBeehiivUrl] = useState(persistedBeehiivUrl)
+  const previousPersistedBeehiivUrlRef = useRef(persistedBeehiivUrl)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const source = record.draft.source
 
   useEffect(() => {
-    setBeehiivUrl(record.beehiivUrl ?? '')
-  }, [record.beehiivUrl])
+    const previousPersistedUrl = previousPersistedBeehiivUrlRef.current
+    setBeehiivUrl((current) =>
+      current === previousPersistedUrl ? persistedBeehiivUrl : current,
+    )
+    previousPersistedBeehiivUrlRef.current = persistedBeehiivUrl
+  }, [persistedBeehiivUrl])
+
+  const publicationUrlDirty =
+    record.status !== 'published' &&
+    beehiivUrl !== previousPersistedBeehiivUrlRef.current &&
+    beehiivUrl !== persistedBeehiivUrl
+
+  useEffect(() => {
+    onDirtyChange?.(publicationUrlDirty)
+  }, [onDirtyChange, publicationUrlDirty])
+
+  function updateBeehiivUrl(nextUrl: string) {
+    setBeehiivUrl(nextUrl)
+    onDirtyChange?.(
+      record.status !== 'published' && nextUrl !== persistedBeehiivUrl,
+    )
+  }
 
   const history = useMemo(
     () => [...record.history].reverse(),
@@ -75,13 +109,17 @@ export default function NewsletterPublicationPanel({
       setSaving(true)
       setError(null)
       setNotice(null)
+      const submittedEditSequence = getEditSequence()
       const response = await fetch(
         `/api/newsletter/drafts/${record.id}/publication`,
         {
           method: 'PATCH',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ beehiivUrl }),
+          body: JSON.stringify({
+            beehiivUrl,
+            expectedUpdatedAt: record.updatedAt,
+          }),
         },
       )
       const payload = (await response.json().catch(() => ({}))) as {
@@ -99,7 +137,7 @@ export default function NewsletterPublicationPanel({
         )
       }
 
-      onRecordChange(payload.draft)
+      onRecordChange(payload.draft, submittedEditSequence)
       setNotice(
         record.beehiivUrl
           ? 'Beehiiv publication URL updated.'
@@ -265,22 +303,24 @@ export default function NewsletterPublicationPanel({
             Beehiiv publication
           </h2>
           <p className="mt-1 text-xs leading-5 text-gray-500">
-            Recording the live issue URL marks this draft as published and adds
-            the change to its history.
+            {record.status === 'published'
+              ? 'Published issue content is locked. Create an editable copy for corrections.'
+              : 'Recording the live issue URL marks this draft as published and adds the change to its history.'}
           </p>
-          <label className="mt-3 block">
+          {record.status !== 'published' ? <label className="mt-3 block">
             <span className="sr-only">Beehiiv publication URL</span>
             <input
               type="url"
               inputMode="url"
               value={beehiivUrl}
-              onChange={(event) => setBeehiivUrl(event.target.value)}
+              onChange={(event) => updateBeehiivUrl(event.target.value)}
               placeholder="https://your-publication.beehiiv.com/p/..."
               disabled={disabled || saving}
               className="h-10 w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 disabled:bg-gray-100"
             />
-          </label>
+          </label> : null}
           <div className="mt-3 flex flex-wrap items-center gap-3">
+            {record.status !== 'published' ? (
             <button
               type="button"
               onClick={() => void recordPublication()}
@@ -293,6 +333,7 @@ export default function NewsletterPublicationPanel({
                   ? 'Update publication URL'
                   : 'Record publication'}
             </button>
+            ) : null}
             {record.beehiivUrl ? (
               <a
                 href={record.beehiivUrl}
@@ -310,10 +351,21 @@ export default function NewsletterPublicationPanel({
             </p>
           ) : null}
           {error ? (
-            <p className="mt-3 text-xs leading-5 text-red-700">{error}</p>
+            <p
+              role="alert"
+              className="mt-3 text-xs leading-5 text-red-700"
+            >
+              {error}
+            </p>
           ) : null}
           {notice ? (
-            <p className="mt-3 text-xs leading-5 text-sage-800">{notice}</p>
+            <p
+              role="status"
+              aria-live="polite"
+              className="mt-3 text-xs leading-5 text-sage-800"
+            >
+              {notice}
+            </p>
           ) : null}
         </div>
       </div>

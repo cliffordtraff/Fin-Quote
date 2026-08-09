@@ -50,10 +50,13 @@ export async function getSectorPerformance() {
       throw new Error('Failed to fetch sector performance data')
     }
 
-    const dailyData = await dailyResponse.json()
+    const dailyData: unknown = await dailyResponse.json()
+    if (!Array.isArray(dailyData)) {
+      throw new Error('Invalid sector performance payload')
+    }
 
     // Calculate YTD by summing daily changes from start of year
-    let ytdMap: Record<string, number> = {}
+    const ytdMap: Record<string, number> = {}
     if (historicalResponse.ok) {
       const historicalData = await historicalResponse.json()
       if (Array.isArray(historicalData) && historicalData.length > 0) {
@@ -73,7 +76,7 @@ export async function getSectorPerformance() {
       }
     }
 
-    if (Array.isArray(dailyData) && dailyData.length > 0) {
+    if (dailyData.length > 0) {
       const sectors: SectorData[] = dailyData.map((item: any) => ({
         sector: item.sector,
         changesPercentage: item.changesPercentage,

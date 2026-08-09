@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getDraft: vi.fn(),
   normalizeDraft: vi.fn((draft) => draft),
   preserveMetadata: vi.fn((_existing, incoming) => incoming),
+  reconcileCharts: vi.fn((_scope, _existing, incoming) => incoming),
   renderPreview: vi.fn(() => '<html></html>'),
   resolveScope: vi.fn(),
   saveDraft: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/lib/newsletter/drafts', async (importOriginal) => {
     getNewsletterDraft: mocks.getDraft,
     normalizeNewsletterDraftDocument: mocks.normalizeDraft,
     preserveNewsletterDraftServerMetadata: mocks.preserveMetadata,
+    reconcileNewsletterDraftClientCharts: mocks.reconcileCharts,
     renderNewsletterDraftPreviewHtml: mocks.renderPreview,
     saveNewsletterDraft: mocks.saveDraft,
   }
@@ -50,7 +52,10 @@ vi.mock('@/lib/newsletter/charting-platform-export', async (importOriginal) => {
 })
 
 import { DELETE, PATCH } from '@/app/api/newsletter/drafts/[id]/route'
-import { NewsletterPublishedDraftImmutableError } from '@/lib/newsletter/drafts'
+import {
+  NewsletterDraftConflictError,
+  NewsletterPublishedDraftImmutableError,
+} from '@/lib/newsletter/drafts'
 
 const draftDocument = {
   ticker: 'AAPL',
@@ -72,6 +77,7 @@ const publishedRecord = {
   sourceReviewKey: null,
   beehiivUrl: 'https://theintraday.beehiiv.com/p/apple',
   publishedAt: '2026-08-06T13:00:00.000Z',
+  archivedAt: null,
   attachedChartCount: 0,
   subjectLine: 'Apple update',
   previewHtml: '<html></html>',
@@ -91,6 +97,35 @@ beforeEach(() => {
 })
 
 describe('published newsletter draft API immutability', () => {
+  it('returns structured latest state without discarding a stale working copy', async () => {
+    mocks.saveDraft.mockRejectedValue(new NewsletterDraftConflictError('draft-1'))
+    const request = new NextRequest(
+      'https://finquote.example/api/newsletter/drafts/draft-1',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draft: { ...draftDocument, subjectLine: 'My local edits' },
+          expectedUpdatedAt: '2026-08-06T12:30:00.000Z',
+        }),
+      },
+    )
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'draft-1' }),
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'draft_conflict',
+      latest: {
+        id: 'draft-1',
+        status: 'published',
+        updatedAt: publishedRecord.updatedAt,
+      },
+    })
+  })
+
   it('returns 409 when a stale editor tries to rewrite published content', async () => {
     mocks.saveDraft.mockRejectedValue(
       new NewsletterPublishedDraftImmutableError('draft-1'),

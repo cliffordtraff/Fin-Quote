@@ -4,6 +4,11 @@ import { isPriceNewsletterChartSpec } from './chart-spec'
 import { buildPriceExportEditorBaseSpec } from './chart-editor'
 import { resolveChartingPlatformNewsletterChart } from './charting-platform-export'
 import { getNewsletterChartRenderDimensions } from './render-dimensions'
+import {
+  getNewsletterRenderHeaders,
+  readBoundedResponseBytes,
+  readBoundedResponseText,
+} from './render-request'
 
 type Browser = import('puppeteer').Browser
 const DEFAULT_RENDER_ROUTE_PATH = '/tos/api/newsletter/render'
@@ -13,6 +18,11 @@ const DEFAULT_RETRY_DELAY_MS = 1_000
 const MAX_RETRY_DELAY_MS = 65_000
 const DEFAULT_TOTAL_TIMEOUT_MS = 40_000
 const MAX_TOTAL_TIMEOUT_MS = 55_000
+// Supabase's public newsletter-charts bucket rejects files above 10 MiB. Stop
+// reading at the same boundary instead of spending memory and bandwidth on an
+// image that persistence can never accept.
+const MAX_RENDER_RESPONSE_BYTES = 10 * 1024 * 1024
+export const MAX_RENDER_ERROR_DIAGNOSTIC_BYTES = 16 * 1024
 const RETRYABLE_RENDER_STATUSES = new Set([408, 425, 429, 502, 503, 504])
 
 export interface CaptureChartOptions {
@@ -70,15 +80,6 @@ export function getChartExportRenderUrl(chartBaseUrl: string): string {
   return `${trimmed}${CHART_EXPORT_RENDER_ROUTE_PATH}`
 }
 
-function renderHeaders(): Record<string, string> {
-  const apiKey = process.env.NEWSLETTER_RENDER_API_KEY?.trim()
-  return {
-    Accept: 'image/png',
-    'Content-Type': 'application/json',
-    ...(apiKey ? { 'X-Newsletter-Render-Key': apiKey } : {}),
-  }
-}
-
 function retryAfterMs(response: Response): number | null {
   const raw = response.headers.get('retry-after')?.trim()
   if (!raw) return null
@@ -94,14 +95,21 @@ function retryAfterMs(response: Response): number | null {
 async function renderErrorDetail(response: Response): Promise<string> {
   let detail = `${response.status} ${response.statusText}`.trim()
   try {
+    const diagnostic = await readBoundedResponseText(
+      response,
+      MAX_RENDER_ERROR_DIAGNOSTIC_BYTES,
+    )
+    if (diagnostic.truncated) return detail
+
+    const text = diagnostic.text.trim()
+    if (!text) return detail
     const contentType = response.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
-      const payload = (await response.json()) as { error?: string }
+      const payload = JSON.parse(text) as { error?: string }
       if (payload && typeof payload.error === 'string' && payload.error.trim()) {
         detail = payload.error.trim()
       }
     } else {
-      const text = (await response.text()).trim()
       if (text) detail = text
     }
   } catch {}
@@ -183,7 +191,7 @@ async function requestChartImage(
         : timeoutSignal
       const response = await fetch(renderUrl, {
         method: 'POST',
-        headers: renderHeaders(),
+        headers: getNewsletterRenderHeaders(),
         body: JSON.stringify(body),
         signal,
       })
@@ -195,7 +203,9 @@ async function requestChartImage(
         )
       }
 
-      const pngBytes = Buffer.from(await response.arrayBuffer())
+      const pngBytes = Buffer.from(
+        await readBoundedResponseBytes(response, MAX_RENDER_RESPONSE_BYTES),
+      )
       if (pngBytes.length === 0) {
         throw new Error(`${errorPrefix} returned an empty PNG response`)
       }
@@ -271,8 +281,11 @@ async function captureChartFromExportSpec(
 
     const { captureSpec } = resolveChartingPlatformNewsletterChart(spec, {
       chartBaseUrl: options.chartBaseUrl,
-      width: options.width ?? chartExportSpec.width,
-      height: options.height ?? chartExportSpec.height,
+      // Price exports keep the same physical contract even when an older
+      // caller still supplies legacy capture dimensions. Otherwise a 404 on
+      // the primary renderer would silently change the image geometry.
+      width: chartExportSpec.width,
+      height: chartExportSpec.height,
       theme: chartExportSpec.theme === 'dark' ? 'dark' : 'light',
     })
     pngBytes = await requestChartImage(

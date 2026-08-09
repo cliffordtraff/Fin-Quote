@@ -44,6 +44,7 @@ import { ensureStockMentionInCopy } from './copy-normalization'
 import { normalizeNewsletterSubject } from './delivery-quality'
 import { resolveNewsletterOutputDirectory } from './output-directory'
 import { resolveEditorialChart } from './resolve-chart'
+import { materializeNewsletterChartScene } from './chart-provenance'
 import { pickFundamentalsYearRange } from './template-scoring'
 import {
   createNewsletterModelClient,
@@ -243,6 +244,7 @@ async function generateSingleStockNewsletter(params: {
   publicChartBaseUrl: string
   absOutputDir: string
   runStamp: string
+  capturedAt: string
   chartRenderWidth?: number
   chartRenderHeight?: number
   timings: Record<string, number>
@@ -269,6 +271,7 @@ async function generateSingleStockNewsletter(params: {
     publicChartBaseUrl,
     absOutputDir,
     runStamp,
+    capturedAt,
     chartRenderWidth,
     chartRenderHeight,
     timings,
@@ -374,11 +377,15 @@ async function generateSingleStockNewsletter(params: {
             selection.periodType ?? template.defaultPeriodType,
           )
         : null
-    return resolveEditorialChart(selection.templateId, {
+    const resolved = resolveEditorialChart(selection.templateId, {
       ticker: tickerUpper,
       periodType: selection.periodType,
       ...(yearOverride ? { yearOverride } : {}),
     })
+    return {
+      ...resolved,
+      spec: materializeNewsletterChartScene(resolved.spec, capturedAt),
+    }
   })
 
   const tCapture = Date.now()
@@ -472,6 +479,7 @@ async function generateMarketRoundupNewsletter(params: {
   publicChartBaseUrl: string
   absOutputDir: string
   runStamp: string
+  capturedAt: string
   chartRenderWidth?: number
   chartRenderHeight?: number
   timings: Record<string, number>
@@ -498,6 +506,7 @@ async function generateMarketRoundupNewsletter(params: {
     publicChartBaseUrl,
     absOutputDir,
     runStamp,
+    capturedAt,
     chartRenderWidth,
     chartRenderHeight,
     timings,
@@ -604,7 +613,10 @@ async function generateMarketRoundupNewsletter(params: {
         stock,
         context,
         selection: { ...selection, ticker: stock.ticker },
-        resolved,
+        resolved: {
+          ...resolved,
+          spec: materializeNewsletterChartScene(resolved.spec, capturedAt),
+        },
       }
     }),
   )
@@ -738,6 +750,7 @@ export async function generateNewsletter(
           publicChartBaseUrl,
           absOutputDir,
           runStamp,
+          capturedAt: now.toISOString(),
           chartRenderWidth,
           chartRenderHeight,
           timings,
@@ -751,6 +764,7 @@ export async function generateNewsletter(
           publicChartBaseUrl,
           absOutputDir,
           runStamp,
+          capturedAt: now.toISOString(),
           chartRenderWidth,
           chartRenderHeight,
           timings,

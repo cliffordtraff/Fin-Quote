@@ -1,5 +1,10 @@
 import type { EarningsData } from '@/app/actions/earnings-calendar'
 import type { MarketNewsItem } from '@/app/actions/get-market-news'
+import {
+  catalystStableId,
+  earningsTimestamp,
+  parseNewYorkTimestamp,
+} from '@/lib/catalyst-calendar'
 
 interface EconomicEvent {
   date: string
@@ -30,11 +35,6 @@ interface CatalystItem {
 
 const INITIAL_ITEM_COUNT = 6
 
-function earningsTimestamp(earning: EarningsData): number {
-  const hour = earning.time === 'bmo' ? 8 : earning.time === 'amc' ? 16 : 12
-  return new Date(`${earning.date}T${String(hour).padStart(2, '0')}:00:00-04:00`).getTime()
-}
-
 function formatEconomicDetail(event: EconomicEvent): string | null {
   const parts = [
     event.previous !== null ? `Prev ${event.previous}${event.unit}` : null,
@@ -51,18 +51,18 @@ function buildCatalystItems(
   referenceTimestamp: number,
 ): CatalystItem[] {
   const items: CatalystItem[] = [
-    ...economicEvents.map((event, index) => ({
-      id: `economic-${event.date}-${index}`,
-      timestamp: new Date(event.date).getTime(),
+    ...economicEvents.map((event) => ({
+      id: catalystStableId('economic', [event.date, event.event]),
+      timestamp: parseNewYorkTimestamp(event.date),
       type: 'Economic' as const,
       title: event.event,
       detail: formatEconomicDetail(event),
       impact: event.impact === 'High' ? 'high' as const : 'normal' as const,
       href: null,
     })),
-    ...earnings.map((earning, index) => ({
-      id: `earnings-${earning.symbol}-${earning.date}-${index}`,
-      timestamp: earningsTimestamp(earning),
+    ...earnings.map((earning) => ({
+      id: catalystStableId('earnings', [earning.symbol, earning.date]),
+      timestamp: earningsTimestamp(earning.date, earning.time),
       type: 'Earnings' as const,
       title: `${earning.symbol} · ${earning.name}`,
       detail:
@@ -76,8 +76,8 @@ function buildCatalystItems(
       impact: 'normal' as const,
       href: `/stock/${encodeURIComponent(earning.symbol)}`,
     })),
-    ...news.map((item, index) => ({
-      id: `headline-${item.publishedDate}-${index}`,
+    ...news.map((item) => ({
+      id: catalystStableId('headline', [item.publishedDate, item.url, item.title]),
       timestamp: new Date(item.publishedDate).getTime(),
       type: 'Headline' as const,
       title: item.title,

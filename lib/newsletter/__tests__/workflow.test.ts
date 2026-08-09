@@ -6,15 +6,32 @@ import {
   isNewsletterDraftStatus,
   resolveNewsletterDraftSaveStatus,
 } from '@/lib/newsletter/workflow'
+import {
+  buildNewsletterChartProvenance,
+  materializeNewsletterChartScene,
+} from '@/lib/newsletter/chart-provenance'
 
 function buildDraft(
   overrides: Partial<NewsletterDraftDocument> = {},
 ): NewsletterDraftDocument {
+  const capturedAt = '2026-07-28T12:00:00.000Z'
+  const chartSpec = materializeNewsletterChartScene(
+    {
+      mode: 'price',
+      symbol: 'AAPL',
+      range: '6m',
+      interval: 'D',
+      chartType: 'candles',
+    },
+    capturedAt,
+  )
+  const chartImageUrl = '/newsletter-charts/aapl.png'
+  const chartExportUrl = 'https://charts.example.com/tos/AAPL'
   return {
     ticker: 'AAPL',
     format: 'single_stock',
     featuredTickers: ['AAPL'],
-    generatedAt: '2026-07-28T12:00:00.000Z',
+    generatedAt: capturedAt,
     subjectLine: 'Apple earnings setup',
     introText: 'The key numbers to watch before the report.',
     autoPickedStock: false,
@@ -26,16 +43,17 @@ function buildDraft(
         selectionReason: 'Price action frames the setup.',
         heading: 'Shares hold above support',
         body: '<p>Apple remains above its post-earnings breakout level.</p>',
-        chartImageUrl: '/newsletter-charts/aapl.png',
+        chartImageUrl,
         chartAlt: 'Apple price chart',
-        chartExportUrl: 'https://charts.example.com/tos/AAPL',
-        chartSpec: {
-          mode: 'price',
-          symbol: 'AAPL',
-          range: '6m',
-          interval: 'D',
-          chartType: 'candles',
-        },
+        chartExportUrl,
+        chartSpec,
+        chartProvenance: buildNewsletterChartProvenance({
+          source: 'chart_editor',
+          capturedAt,
+          imageUrl: chartImageUrl,
+          interactiveUrl: chartExportUrl,
+          scene: chartSpec,
+        }),
         chartNeedsRegeneration: false,
       },
     ],
@@ -100,10 +118,35 @@ describe('newsletter publishing workflow', () => {
       getNewsletterDraftReadiness(draft).issues.map((issue) => issue.id),
     ).toEqual([
       'subject-line-length',
+      'block-block-1-chart-provenance',
       'block-block-1-chart-alt',
       'block-block-1-chart-link',
       'block-block-1-cta-link',
     ])
+  })
+
+  it('requires a current exact scene for every final chart image', () => {
+    const complete = buildDraft()
+    const withoutProvenance = buildDraft({
+      blocks: complete.blocks.map((block) => ({
+        ...block,
+        chartProvenance: undefined,
+      })),
+    })
+    const tampered = buildDraft({
+      blocks: complete.blocks.map((block) => ({
+        ...block,
+        chartProvenance: block.chartProvenance
+          ? { ...block.chartProvenance, sceneSha256: '0'.repeat(64) }
+          : undefined,
+      })),
+    })
+
+    for (const draft of [withoutProvenance, tampered]) {
+      expect(
+        getNewsletterDraftReadiness(draft).issues.map((issue) => issue.id),
+      ).toContain('block-block-1-chart-provenance')
+    }
   })
 
   it('blocks a daily draft whose source headline belongs to another entity', () => {

@@ -63,6 +63,19 @@ jobs:
       - name: Test
         run: npm run test:run
 
+      - name: Production build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+          NEXT_PUBLIC_CHARTING_URL: https://charts.example.invalid
+          NEWSLETTER_PUBLIC_CHARTING_URL: https://charts.example.invalid
+          NEXT_PUBLIC_ENABLE_LANDING: 'false'
+        run: npm run build
+
+      - name: Verify server build traces
+        run: node scripts/verify-build-traces.mjs
+
   database-tests:
     name: Supabase pgTAP
     runs-on: ubuntu-latest

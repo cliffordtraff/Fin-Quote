@@ -1,4 +1,4 @@
-import { cache } from 'react'
+import { cache, Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import AppShell from '@/components/AppShell'
@@ -9,21 +9,34 @@ import NewsFeed from '@/components/NewsFeed'
 import CompanyDescription from '@/components/CompanyDescription'
 import StockInsiderTrades from '@/components/StockInsiderTrades'
 import StockWhyMovingBanner from '@/components/StockWhyMovingBanner'
+import { AsyncStockCatalystHistory } from '@/components/StockCatalystHistory'
 // CompanySegmentsCard removed — backup preserved in /stock-v1
-import { getStockOverview } from '@/app/actions/stock-overview'
+import { getStockOverview, type StockOverview } from '@/app/actions/stock-overview'
 import { getStockKeyStats } from '@/app/actions/stock-key-stats'
 import { getAllFinancials } from '@/app/actions/get-all-financials'
 import { getStockNews } from '@/app/actions/get-stock-news'
-import { getCompanyProfile } from '@/app/actions/get-company-profile'
+import { getCompanyProfile, type CompanyProfile } from '@/app/actions/get-company-profile'
 // getSegmentData removed — backup preserved in /stock-v1
 import { getInsiderTradesBySymbol } from '@/app/actions/insider-trading'
 import { getDiscoverStocks } from '@/app/actions/discover-stocks'
 import { getStockWhyMoving } from '@/app/actions/stock-why-moving'
-import { isValidSymbol } from '@/lib/symbol-resolver'
+import { isValidStockPageSymbol, normalizeMarketSymbol } from '@/lib/market-symbol'
+import { getSymbolValidity } from '@/lib/symbol-resolver'
+import { getBoundedStockPageEssentials } from '@/lib/stock-page-essential-admission'
+import {
+  getStockCatalystHistory,
+  type StockCatalystHistoryResult,
+} from '@/lib/stock-catalyst-history'
 import DiscoverMoreCarousel from '@/components/DiscoverMoreCarousel'
 
 interface PageProps {
   params: Promise<{ symbol: string }>
+}
+
+const UNAVAILABLE_CATALYST_HISTORY: StockCatalystHistoryResult = {
+  status: 'unavailable',
+  reason: 'query',
+  items: [],
 }
 
 // Cached profile loader - shared between metadata and page
@@ -34,25 +47,35 @@ const getCachedProfile = cache(async (symbol: string) => {
 // Dynamic metadata
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { symbol } = await params
-  const normalizedSymbol = symbol.toUpperCase()
+  const normalizedSymbol = normalizeMarketSymbol(symbol)
+  const fallbackMetadata = {
+    title: `${normalizedSymbol} Stock - The Intraday`,
+    description: `Stock data and financials for ${normalizedSymbol}`,
+  }
+
+  if (!isValidStockPageSymbol(normalizedSymbol)) {
+    return fallbackMetadata
+  }
 
   try {
-    const profile = await getCachedProfile(normalizedSymbol)
-    if (!profile) {
-      return {
-        title: `${normalizedSymbol} Stock - The Intraday`,
-        description: `Stock data and financials for ${normalizedSymbol}`,
-      }
+    const validity = await getSymbolValidity(normalizedSymbol)
+    if (validity === 'not_found') {
+      return fallbackMetadata
     }
+
+    const profile = validity === 'valid'
+      ? await getCachedProfile(normalizedSymbol).catch(() => null)
+      : await getBoundedStockPageEssentials(normalizedSymbol).then(
+          (essentials) => essentials?.overview ? essentials.profile : null,
+        )
+    if (!profile) return fallbackMetadata
+
     return {
       title: `${profile.companyName} (${normalizedSymbol}) Stock - Financial Data & Analysis | The Intraday`,
       description: `Comprehensive financial analysis for ${profile.companyName} (${normalizedSymbol}). View income statements, balance sheets, cash flow, 139+ financial metrics, SEC filings, and AI-powered insights.`,
     }
   } catch {
-    return {
-      title: `${normalizedSymbol} Stock - The Intraday`,
-      description: `Stock data and financials for ${normalizedSymbol}`,
-    }
+    return fallbackMetadata
   }
 }
 
@@ -112,32 +135,38 @@ function formatInteger(value: number | null | undefined): string {
 
 export default async function StockPage({ params }: PageProps) {
   const { symbol } = await params
-  const normalizedSymbol = symbol.toUpperCase()
+  const normalizedSymbol = normalizeMarketSymbol(symbol)
 
-  // Validate symbol exists
-  const valid = await isValidSymbol(normalizedSymbol)
-  if (!valid) {
+  if (!isValidStockPageSymbol(normalizedSymbol)) {
     notFound()
   }
 
-  // Parallel data fetching for all sections
-  const [overview, keyStats, financials, news, profile, insiderResult, discoverResult, whyMoving] = await Promise.all([
-    getStockOverview(normalizedSymbol).catch(() => null),
-    getStockKeyStats(normalizedSymbol).catch(() => null),
-    getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
-    getStockNews(normalizedSymbol, 20).catch(() => []),
-    getCachedProfile(normalizedSymbol).catch(() => null),
-    getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
-    getDiscoverStocks(normalizedSymbol, 12).catch(() => ({ stocks: [] })),
-    getStockWhyMoving(normalizedSymbol).catch(() => null),
-  ])
+  // Registry admission bounds arbitrary valid-shaped URLs before any provider
+  // work begins. Outages use a separately capped essential confirmation lease.
+  const validity = await getSymbolValidity(normalizedSymbol)
+  if (validity === 'not_found') {
+    notFound()
+  }
 
-  // Extract insider trades from result
-  const insiderTrades = 'trades' in insiderResult ? insiderResult.trades : []
-  const discoverStocks = 'stocks' in discoverResult ? discoverResult.stocks : []
+  let overview: StockOverview | null
+  let profilePromise: Promise<CompanyProfile | null>
+  let outageProfileConfirmed = true
+  if (validity === 'valid') {
+    // Start both essential reads together after admission, but let a missing
+    // overview stop immediately instead of waiting on a slow profile request.
+    const overviewPromise = getStockOverview(normalizedSymbol).catch(() => null)
+    profilePromise = getCachedProfile(normalizedSymbol).catch(() => null)
+    overview = await overviewPromise
+  } else {
+    const essentials = await getBoundedStockPageEssentials(normalizedSymbol)
+    overview = essentials?.overview ?? null
+    profilePromise = Promise.resolve(essentials?.profile ?? null)
+    outageProfileConfirmed = Boolean(essentials?.profile)
+  }
 
-  // If we couldn't get basic overview data, show a message
-  if (!overview) {
+  // A missing essential quote is a transient data failure, not evidence that
+  // the symbol does not exist, and must stop the expensive secondary fanout.
+  if (!overview || !outageProfileConfirmed) {
     return (
       <AppShell mainClassName="mx-auto w-full max-w-[1500px] min-w-0 flex-1 px-4 py-16 text-center">
         <h1 className="mb-4 text-2xl font-semibold text-gray-950 dark:text-white">
@@ -149,6 +178,32 @@ export default async function StockPage({ params }: PageProps) {
       </AppShell>
     )
   }
+
+  const catalystHistoryPromise = getStockCatalystHistory(normalizedSymbol).catch(
+    () => UNAVAILABLE_CATALYST_HISTORY,
+  )
+  const secondaryLoad = Promise.all([
+    getStockKeyStats(normalizedSymbol).catch(() => null),
+    getAllFinancials(normalizedSymbol).catch(() => ({ incomeStatement: [], balanceSheet: [], cashFlow: [] })),
+    getStockNews(normalizedSymbol, 20).catch(() => []),
+    getInsiderTradesBySymbol(normalizedSymbol, 20).catch(() => ({ trades: [] })),
+    getDiscoverStocks(normalizedSymbol, 12).catch(() => ({ stocks: [] })),
+    getStockWhyMoving(normalizedSymbol).catch(() => null),
+  ])
+  const [
+    profile,
+    [
+      keyStats,
+      financials,
+      news,
+      insiderResult,
+      discoverResult,
+      whyMoving,
+    ],
+  ] = await Promise.all([profilePromise, secondaryLoad])
+
+  const insiderTrades = 'trades' in insiderResult ? insiderResult.trades : []
+  const discoverStocks = 'stocks' in discoverResult ? discoverResult.stocks : []
 
   return (
     <AppShell showFooter mainClassName="min-w-0 flex-1">
@@ -163,13 +218,13 @@ export default async function StockPage({ params }: PageProps) {
         initialMarketStatus={overview.marketStatus}
       />
 
-      {whyMoving?.status === 'found' && whyMoving.displayText && (
+      {whyMoving?.status === 'found' && whyMoving.displayText ? (
         <section className="bg-cream-100 dark:bg-gray-900">
           <div className="mx-auto max-w-[1500px] px-4 pt-2 pb-0 sm:px-6 lg:px-8">
             <StockWhyMovingBanner whyMoving={whyMoving} />
           </div>
         </section>
-      )}
+      ) : null}
 
       {/* Price Chart Section */}
       <section className="bg-cream-100 dark:bg-gray-900">
@@ -179,6 +234,15 @@ export default async function StockPage({ params }: PageProps) {
           </div>
         </div>
       </section>
+
+      <Suspense fallback={null}>
+        <AsyncStockCatalystHistory
+          historyPromise={catalystHistoryPromise}
+          currentSummaryText={
+            whyMoving?.status === 'found' ? whyMoving.displayText : null
+          }
+        />
+      </Suspense>
 
       {/* Quick Stats Grid Section - Finviz Style */}
       <section className="bg-cream-100 dark:bg-gray-900">

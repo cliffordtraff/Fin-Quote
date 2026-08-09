@@ -1,13 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type {
   NewsletterDraftBlock,
   NewsletterDraftDocument,
   NewsletterDraftRecord,
   NewsletterDraftStatus,
 } from '@/lib/newsletter/types'
+import { sha256Hex } from '@/lib/newsletter/sha256'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import { RichTextEditor } from '@/components/newsletter/RichTextEditor'
 import NewsletterChartEditorDrawer from '@/components/newsletter/NewsletterChartEditorDrawer'
@@ -20,8 +29,10 @@ import NewsletterWorkflowBar from '@/components/newsletter/NewsletterWorkflowBar
 import NewsletterDraftCreate from '@/app/newsletter/editor/NewsletterDraftCreate'
 
 interface DraftResponse {
-  draft: NewsletterDraftRecord
+  draft?: NewsletterDraftRecord
   error?: string
+  code?: string
+  latest?: NewsletterDraftRecord
 }
 
 interface NewsletterDraftEditorProps {
@@ -30,6 +41,86 @@ interface NewsletterDraftEditorProps {
 
 type SelectedPanel = 'overview' | 'header' | 'intro' | 'stats' | string
 type DropPosition = 'before' | 'after'
+
+interface DraftConflict {
+  latest: NewsletterDraftRecord
+  message: string
+}
+
+type DeferredChartServerChange = DraftConflict
+
+const FRESHNESS_CHECK_INTERVAL_MS = 60_000
+const UNSAVED_HISTORY_STATE_KEY = '__newsletterDraftUnsavedGuard'
+
+function formatEditorTimestamp(value: string | null): string {
+  if (!value) return 'Not yet'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown'
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function resolveSelectedPanel(
+  current: SelectedPanel,
+  nextDraft: NewsletterDraftDocument,
+): SelectedPanel {
+  if (
+    current === 'overview' ||
+    current === 'header' ||
+    current === 'intro' ||
+    current === 'stats'
+  ) {
+    return current
+  }
+
+  return nextDraft.blocks.some((block) => block.id === current)
+    ? current
+    : nextDraft.blocks[0]?.id ?? 'overview'
+}
+
+function getExactChartUrl(block: NewsletterDraftBlock | null): string | null {
+  if (!block) return null
+  return (
+    block.chartProvenance?.imageUrl ||
+    block.chartImageUrl ||
+    block.chartProvenance?.interactiveUrl ||
+    block.chartExportUrl ||
+    null
+  )
+}
+
+function mergeSavedChartIntoLocalDraft(
+  localDraft: NewsletterDraftDocument,
+  savedDraft: NewsletterDraftDocument,
+  blockId: string,
+): NewsletterDraftDocument {
+  const savedBlock = savedDraft.blocks.find((block) => block.id === blockId)
+  if (!savedBlock) return localDraft
+
+  return {
+    ...localDraft,
+    blocks: localDraft.blocks.map((block) =>
+      block.id === blockId
+        ? {
+            ...block,
+            chartImageUrl: savedBlock.chartImageUrl,
+            chartAlt: savedBlock.chartAlt,
+            chartExportUrl: savedBlock.chartExportUrl,
+            chartSpec: savedBlock.chartSpec,
+            chartProvenance: savedBlock.chartProvenance,
+            chartNeedsRegeneration: savedBlock.chartNeedsRegeneration,
+            caption: savedBlock.caption,
+          }
+        : block,
+    ),
+  }
+}
 
 function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   const next = items.slice()
@@ -127,15 +218,22 @@ function CopyableControl({
   label?: string
   copiedControlId: string | null
   onCopy: (copyId: string, value: string) => Promise<void>
-  renderControl: () => ReactNode
+  renderControl: (controlId: string) => ReactNode
 }) {
   const copied = copiedControlId === copyId
+  const controlId = `${copyId}-control`
+  const accessibleLabel = label ?? 'field value'
 
   return (
     <div className="space-y-1">
       <div className={`flex items-center gap-2 ${label ? 'justify-between' : 'justify-end'}`}>
         {label ? (
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <label
+            htmlFor={controlId}
+            className="text-sm font-medium text-gray-700"
+          >
+            {label}
+          </label>
         ) : null}
         <button
           type="button"
@@ -149,13 +247,15 @@ function CopyableControl({
               ? 'text-sage-700'
               : 'text-gray-500 hover:text-sage-800'
           }`}
-          aria-label={copied ? 'Copied' : 'Copy field value'}
+          aria-label={
+            copied ? `${accessibleLabel} copied` : `Copy ${accessibleLabel}`
+          }
           title={copied ? 'Copied' : 'Copy'}
         >
           <CopyIcon copied={copied} />
         </button>
       </div>
-      {renderControl()}
+      {renderControl(controlId)}
     </div>
   )
 }
@@ -163,11 +263,15 @@ function CopyableControl({
 export default function NewsletterDraftEditor({
   draftId,
 }: NewsletterDraftEditorProps) {
+  const router = useRouter()
   const isNewDraft = draftId === 'new'
   const previewSectionRef = useRef<HTMLElement | null>(null)
   const inspectorSectionRef = useRef<HTMLElement | null>(null)
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const expandedPreviewFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const expandedPreviewDialogRef = useRef<HTMLDivElement | null>(null)
+  const expandedPreviewCloseButtonRef = useRef<HTMLButtonElement | null>(null)
+  const expandedPreviewTriggerRef = useRef<HTMLButtonElement | null>(null)
   const beehiivPanelRef = useRef<NewsletterBeehiivPanelHandle | null>(null)
   const copyResetTimeoutRef = useRef<number | null>(null)
   const [record, setRecord] = useState<NewsletterDraftRecord | null>(null)
@@ -175,8 +279,14 @@ export default function NewsletterDraftEditor({
   const [selectedPanel, setSelectedPanel] = useState<SelectedPanel>('overview')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [forking, setForking] = useState(false)
   const [regeneratingNewsletter, setRegeneratingNewsletter] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [publicationUrlDirty, setPublicationUrlDirty] = useState(false)
+  const [conflict, setConflict] = useState<DraftConflict | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null)
+  const [freshnessError, setFreshnessError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false)
@@ -188,6 +298,21 @@ export default function NewsletterDraftEditor({
   const [chartEditorOpen, setChartEditorOpen] = useState(false)
   const [chartLibraryOpen, setChartLibraryOpen] = useState(false)
   const draftRef = useRef<NewsletterDraftDocument | null>(null)
+  const recordRef = useRef<NewsletterDraftRecord | null>(null)
+  const dirtyRef = useRef(false)
+  const publicationUrlDirtyRef = useRef(false)
+  const savingRef = useRef(false)
+  const editSequenceRef = useRef(0)
+  const chartEditorOpenedEditSequenceRef = useRef(0)
+  const freshnessCheckInFlightRef = useRef(false)
+  const readOnlyRef = useRef(false)
+  const chartEditorSessionOpenRef = useRef(false)
+  const navigationGuardEntryRef = useRef<{
+    href: string
+    token: string
+  } | null>(null)
+  const deferredChartServerChangeRef =
+    useRef<DeferredChartServerChange | null>(null)
   const [newDraftOpenFormat, setNewDraftOpenFormat] = useState<
     'single_stock' | 'market_roundup' | null
   >(null)
@@ -196,6 +321,26 @@ export default function NewsletterDraftEditor({
     blockId: string
     position: DropPosition
   } | null>(null)
+
+  const ensureNavigationGuardEntry = useCallback(() => {
+    if (navigationGuardEntryRef.current) return
+    const token = crypto.randomUUID()
+    const href = window.location.href
+    navigationGuardEntryRef.current = { href, token }
+    window.history.pushState(
+      {
+        ...window.history.state,
+        [UNSAVED_HISTORY_STATE_KEY]: token,
+      },
+      '',
+      href,
+    )
+  }, [])
+
+  const handlePublicationUrlDirtyChange = useCallback((nextDirty: boolean) => {
+    publicationUrlDirtyRef.current = nextDirty
+    setPublicationUrlDirty(nextDirty)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -208,6 +353,22 @@ export default function NewsletterDraftEditor({
   useEffect(() => {
     draftRef.current = draft
   }, [draft])
+
+  useEffect(() => {
+    recordRef.current = record
+  }, [record])
+
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty])
+
+  useEffect(() => {
+    publicationUrlDirtyRef.current = publicationUrlDirty
+  }, [publicationUrlDirty])
+
+  useEffect(() => {
+    savingRef.current = saving
+  }, [saving])
 
   const handlePreviewIframeClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null
@@ -224,7 +385,14 @@ export default function NewsletterDraftEditor({
     event.preventDefault()
     event.stopPropagation()
     setSelectedPanel(blockId)
-    setChartEditorOpen(true)
+    if (readOnlyRef.current) {
+      const exactChartUrl = getExactChartUrl(block)
+      if (exactChartUrl) {
+        window.open(exactChartUrl, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
+    openChartEditor()
   }
 
   const attachPreviewChartHandler = (iframe: HTMLIFrameElement | null) => {
@@ -267,37 +435,77 @@ export default function NewsletterDraftEditor({
       setError(null)
       setRecord(null)
       setDraft(null)
+      recordRef.current = null
+      draftRef.current = null
+      dirtyRef.current = false
+      setDirty(false)
+      publicationUrlDirtyRef.current = false
+      setPublicationUrlDirty(false)
+      setConflict(null)
+      setLastSavedAt(null)
+      setLastCheckedAt(null)
+      chartEditorSessionOpenRef.current = false
+      deferredChartServerChangeRef.current = null
+      setChartEditorOpen(false)
       return
     }
+
+    setLoading(true)
+    setError(null)
+    setNotice(null)
+    setRecord(null)
+    setDraft(null)
+    setDirty(false)
+    setPublicationUrlDirty(false)
+    setConflict(null)
+    setLastSavedAt(null)
+    setLastCheckedAt(null)
+    setFreshnessError(null)
+    setSelectedPanel('overview')
+    setIsPreviewExpanded(false)
+    setDraggedBlockId(null)
+    setChartEditorOpen(false)
+    setChartLibraryOpen(false)
+    recordRef.current = null
+    draftRef.current = null
+    dirtyRef.current = false
+    publicationUrlDirtyRef.current = false
+    savingRef.current = false
+    editSequenceRef.current = 0
+    freshnessCheckInFlightRef.current = false
+    readOnlyRef.current = false
+    chartEditorSessionOpenRef.current = false
+    deferredChartServerChangeRef.current = null
 
     let cancelled = false
 
     async function loadDraft() {
       try {
-        setLoading(true)
-        setError(null)
         const response = await fetch(`/api/newsletter/drafts/${draftId}`, {
           credentials: 'include',
           cache: 'no-store',
         })
         const payload = (await response.json()) as DraftResponse
 
-        if (!response.ok) {
+        if (!response.ok || !payload.draft) {
           throw new Error(payload.error || 'Failed to load newsletter draft')
         }
 
         if (!cancelled) {
-          setRecord(payload.draft)
-          setDraft(payload.draft.draft)
+          const loadedDraft = payload.draft
+          const checkedAt = new Date().toISOString()
+          recordRef.current = loadedDraft
+          draftRef.current = loadedDraft.draft
+          dirtyRef.current = false
+          setRecord(loadedDraft)
+          setDraft(loadedDraft.draft)
+          setDirty(false)
+          setConflict(null)
+          setLastSavedAt(loadedDraft.updatedAt)
+          setLastCheckedAt(checkedAt)
+          setFreshnessError(null)
           setSelectedPanel((current) =>
-            current === 'overview' ||
-            current === 'header' ||
-            current === 'intro' ||
-            current === 'stats'
-              ? current
-              : payload.draft.draft.blocks.some((block) => block.id === current)
-                ? current
-                : payload.draft.draft.blocks[0]?.id ?? 'overview',
+            resolveSelectedPanel(current, loadedDraft.draft),
           )
         }
       } catch (err) {
@@ -316,6 +524,233 @@ export default function NewsletterDraftEditor({
       cancelled = true
     }
   }, [draftId, isNewDraft])
+
+  const checkFreshness = useCallback(async () => {
+    const currentRecord = recordRef.current
+    if (
+      isNewDraft ||
+      !currentRecord ||
+      savingRef.current ||
+      freshnessCheckInFlightRef.current
+    ) {
+      return
+    }
+    const requestedUpdatedAt = currentRecord.updatedAt
+
+    freshnessCheckInFlightRef.current = true
+    try {
+      const response = await fetch(`/api/newsletter/drafts/${draftId}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      const payload = (await response.json()) as DraftResponse
+      if (!response.ok || !payload.draft) {
+        throw new Error(payload.error || 'Failed to check draft freshness')
+      }
+
+      const latest = payload.draft
+      const baseline = recordRef.current
+      if (
+        !baseline ||
+        baseline.updatedAt !== requestedUpdatedAt ||
+        savingRef.current
+      ) {
+        return
+      }
+
+      const checkedAt = new Date().toISOString()
+      setLastCheckedAt(checkedAt)
+      setFreshnessError(null)
+      if (latest.updatedAt === baseline.updatedAt) return
+
+      if (chartEditorSessionOpenRef.current) {
+        deferredChartServerChangeRef.current = {
+          latest,
+          message:
+            latest.status === 'published'
+              ? 'This issue was published elsewhere while the chart editor was open. Your chart edits are preserved and can be saved as a new draft.'
+              : 'A newer server version is available while the chart editor is open. Your chart edits are preserved until you resolve the conflict.',
+        }
+        setNotice(
+          latest.status === 'published'
+            ? 'This issue was published elsewhere while the chart editor was open. Your chart session is preserved; saving it will offer conflict recovery.'
+            : 'A newer server version is available while the chart editor is open. Your chart session remains pinned to its original save version so it cannot overwrite that update.',
+        )
+        return
+      }
+
+      if (dirtyRef.current || publicationUrlDirtyRef.current) {
+        setConflict({
+          latest,
+          message:
+            latest.status === 'published'
+              ? 'This issue was published elsewhere while you had local edits. Your edits are preserved and can be saved as a new draft.'
+              : 'A newer server version is available. Your local edits are preserved until you choose how to resolve this conflict.',
+        })
+        return
+      }
+
+      editSequenceRef.current += 1
+      recordRef.current = latest
+      draftRef.current = latest.draft
+      dirtyRef.current = false
+      setRecord(latest)
+      setDraft(latest.draft)
+      setDirty(false)
+      setConflict(null)
+      setLastSavedAt(latest.updatedAt)
+      setSelectedPanel((current) =>
+        resolveSelectedPanel(current, latest.draft),
+      )
+      setNotice('Draft refreshed with the latest saved version.')
+    } catch (freshnessCheckError) {
+      setFreshnessError(
+        freshnessCheckError instanceof Error
+          ? freshnessCheckError.message
+          : 'Failed to check draft freshness',
+      )
+    } finally {
+      freshnessCheckInFlightRef.current = false
+    }
+  }, [draftId, isNewDraft])
+
+  useEffect(() => {
+    if (isNewDraft || loading || !record) return
+
+    const handleFocus = () => {
+      void checkFreshness()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkFreshness()
+      }
+    }
+    const intervalId = window.setInterval(() => {
+      void checkFreshness()
+    }, FRESHNESS_CHECK_INTERVAL_MS)
+
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [checkFreshness, isNewDraft, loading, record])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (
+        !dirtyRef.current &&
+        !publicationUrlDirtyRef.current &&
+        !chartEditorSessionOpenRef.current
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+
+  const confirmUnsavedNavigation = useCallback((): boolean => {
+    if (
+      !dirtyRef.current &&
+      !publicationUrlDirtyRef.current &&
+      !chartEditorSessionOpenRef.current
+    ) {
+      return true
+    }
+    return window.confirm(
+      'Leave this editor and discard your unsaved newsletter changes or chart session?',
+    )
+  }, [])
+
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return
+      }
+
+      const target = event.target
+      const anchor =
+        target instanceof Element ? target.closest<HTMLAnchorElement>('a[href]') : null
+      if (
+        !anchor ||
+        anchor.target === '_blank' ||
+        anchor.hasAttribute('download')
+      ) {
+        return
+      }
+
+      const destination = new URL(anchor.href, window.location.href)
+      const current = new URL(window.location.href)
+      if (
+        destination.origin === current.origin &&
+        destination.pathname === current.pathname &&
+        destination.search === current.search
+      ) {
+        return
+      }
+
+      if (confirmUnsavedNavigation()) return
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+    }
+
+    document.addEventListener('click', handleDocumentClick, true)
+    return () => document.removeEventListener('click', handleDocumentClick, true)
+  }, [confirmUnsavedNavigation])
+
+  useEffect(() => {
+    if (
+      (!dirty && !publicationUrlDirty && !chartEditorOpen) ||
+      navigationGuardEntryRef.current
+    ) {
+      return
+    }
+    ensureNavigationGuardEntry()
+  }, [chartEditorOpen, dirty, ensureNavigationGuardEntry, publicationUrlDirty])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const guardEntry = navigationGuardEntryRef.current
+      if (!guardEntry || window.location.href !== guardEntry.href) {
+        navigationGuardEntryRef.current = null
+        return
+      }
+
+      if (!confirmUnsavedNavigation()) {
+        window.history.pushState(
+          {
+            ...window.history.state,
+            [UNSAVED_HISTORY_STATE_KEY]: guardEntry.token,
+          },
+          '',
+          guardEntry.href,
+        )
+        return
+      }
+
+      navigationGuardEntryRef.current = null
+      window.history.back()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [confirmUnsavedNavigation])
 
   useEffect(() => {
     return () => {
@@ -337,6 +772,30 @@ export default function NewsletterDraftEditor({
     }
     return draft.blocks.find((block) => block.id === selectedPanel) ?? null
   }, [draft, selectedPanel])
+  const isPublished =
+    record?.status === 'published' || conflict?.latest.status === 'published'
+  const mutationBlocked = isPublished || conflict !== null
+  const exactChartUrl = getExactChartUrl(selectedBlock)
+  const editorStatus = conflict
+    ? 'Conflict'
+    : isPublished
+      ? 'Published'
+      : saving
+        ? 'Saving'
+        : dirty || publicationUrlDirty
+          ? 'Unsaved'
+          : 'Saved'
+
+  useEffect(() => {
+    readOnlyRef.current = isPublished
+    if (isPublished || conflict) {
+      chartEditorSessionOpenRef.current = false
+      deferredChartServerChangeRef.current = null
+      setChartEditorOpen(false)
+      setChartLibraryOpen(false)
+    }
+  }, [conflict, isPublished])
+
   const shouldAutoScrollSelectedPreviewAnchor = selectedBlock != null
   const selectedPreviewAnchorId = useMemo(() => {
     if (selectedPanel === 'overview') return 'newsletter-preview-header'
@@ -367,10 +826,38 @@ export default function NewsletterDraftEditor({
   useEffect(() => {
     if (!isPreviewExpanded) return
 
+    const trigger = expandedPreviewTriggerRef.current
     const previousOverflow = document.body.style.overflow
+    const focusFrame = window.requestAnimationFrame(() => {
+      expandedPreviewCloseButtonRef.current?.focus()
+    })
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsPreviewExpanded(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const dialog = expandedPreviewDialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
       }
     }
 
@@ -378,73 +865,89 @@ export default function NewsletterDraftEditor({
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
+      window.cancelAnimationFrame(focusFrame)
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
+      if (trigger?.isConnected) trigger.focus()
     }
   }, [isPreviewExpanded])
 
-  function scrollPreviewFrameToAnchor(
-    frame: HTMLIFrameElement | null,
-    anchorId: string | null,
-    alignPreviewSection: boolean,
-  ) {
-    if (!anchorId || !frame) return
+  const scrollPreviewFrameToAnchor = useCallback(
+    (
+      frame: HTMLIFrameElement | null,
+      anchorId: string | null,
+      alignPreviewSection: boolean,
+    ) => {
+      if (!anchorId || !frame) return
 
-    const previewSection = previewSectionRef.current
-    const inspectorSection = inspectorSectionRef.current
-    const frameWindow = frame?.contentWindow
-    const frameDocument = frame?.contentDocument
-    if (!frameWindow || !frameDocument) return
+      const previewSection = previewSectionRef.current
+      const inspectorSection = inspectorSectionRef.current
+      const frameWindow = frame?.contentWindow
+      const frameDocument = frame?.contentDocument
+      if (!frameWindow || !frameDocument) return
 
-    const anchor = frameDocument.getElementById(anchorId)
-    if (!anchor) return
-    const isBlockAnchor = anchorId.startsWith('newsletter-preview-block-')
-    const previewScrollTopOffset = isBlockAnchor
-      ? BLOCK_PREVIEW_SCROLL_TOP_OFFSET
-      : DEFAULT_PREVIEW_SCROLL_TOP_OFFSET
-    const pageScrollTopOffset = isBlockAnchor
-      ? BLOCK_PAGE_SCROLL_TOP_OFFSET
-      : DEFAULT_PAGE_SCROLL_TOP_OFFSET
-
-    requestAnimationFrame(() => {
-      anchor.scrollIntoView({
-        block: 'start',
-        inline: 'nearest',
-        behavior: 'auto',
-      })
-
-      frameWindow.scrollBy({
-        top: -previewScrollTopOffset,
-        left: 0,
-        behavior: 'auto',
-      })
-
-      if (!alignPreviewSection) return
+      const anchor = frameDocument.getElementById(anchorId)
+      if (!anchor) return
+      const isBlockAnchor = anchorId.startsWith('newsletter-preview-block-')
+      const previewScrollTopOffset = isBlockAnchor
+        ? BLOCK_PREVIEW_SCROLL_TOP_OFFSET
+        : DEFAULT_PREVIEW_SCROLL_TOP_OFFSET
+      const pageScrollTopOffset = isBlockAnchor
+        ? BLOCK_PAGE_SCROLL_TOP_OFFSET
+        : DEFAULT_PAGE_SCROLL_TOP_OFFSET
 
       requestAnimationFrame(() => {
-        const desiredViewportTop = pageScrollTopOffset
-        const alignTarget = inspectorSection ?? previewSection
-        const targetPageTop = alignTarget
-          ? Math.max(
-              window.scrollY +
-                alignTarget.getBoundingClientRect().top -
-                desiredViewportTop,
-              0,
-            )
-          : 0
-        window.scrollTo({
-          top: targetPageTop,
+        anchor.scrollIntoView({
+          block: 'start',
+          inline: 'nearest',
+          behavior: 'auto',
+        })
+
+        frameWindow.scrollBy({
+          top: -previewScrollTopOffset,
           left: 0,
           behavior: 'auto',
         })
-      })
-    })
-  }
 
-  function scrollPreviewToSelectedAnchor(anchorId: string | null) {
-    scrollPreviewFrameToAnchor(previewFrameRef.current, anchorId, !isPreviewExpanded)
-    scrollPreviewFrameToAnchor(expandedPreviewFrameRef.current, anchorId, false)
-  }
+        if (!alignPreviewSection) return
+
+        requestAnimationFrame(() => {
+          const desiredViewportTop = pageScrollTopOffset
+          const alignTarget = inspectorSection ?? previewSection
+          const targetPageTop = alignTarget
+            ? Math.max(
+                window.scrollY +
+                  alignTarget.getBoundingClientRect().top -
+                  desiredViewportTop,
+                0,
+              )
+            : 0
+          window.scrollTo({
+            top: targetPageTop,
+            left: 0,
+            behavior: 'auto',
+          })
+        })
+      })
+    },
+    [],
+  )
+
+  const scrollPreviewToSelectedAnchor = useCallback(
+    (anchorId: string | null) => {
+      scrollPreviewFrameToAnchor(
+        previewFrameRef.current,
+        anchorId,
+        !isPreviewExpanded,
+      )
+      scrollPreviewFrameToAnchor(
+        expandedPreviewFrameRef.current,
+        anchorId,
+        false,
+      )
+    },
+    [isPreviewExpanded, scrollPreviewFrameToAnchor],
+  )
 
   useEffect(() => {
     if (!shouldAutoScrollSelectedPreviewAnchor) return
@@ -453,10 +956,16 @@ export default function NewsletterDraftEditor({
     record?.previewHtml,
     selectedPreviewAnchorId,
     isPreviewExpanded,
+    scrollPreviewToSelectedAnchor,
     shouldAutoScrollSelectedPreviewAnchor,
   ])
 
   function updateDraft(next: NewsletterDraftDocument) {
+    if (readOnlyRef.current) return
+    ensureNavigationGuardEntry()
+    editSequenceRef.current += 1
+    draftRef.current = next
+    dirtyRef.current = true
     setDraft(next)
     setDirty(true)
     setNotice(null)
@@ -539,6 +1048,10 @@ export default function NewsletterDraftEditor({
   }
 
   function handleBlockDragStart(blockId: string, event: React.DragEvent<HTMLButtonElement>) {
+    if (readOnlyRef.current) {
+      event.preventDefault()
+      return
+    }
     setDraggedBlockId(blockId)
     setDropTarget(null)
     event.dataTransfer.effectAllowed = 'move'
@@ -585,9 +1098,21 @@ export default function NewsletterDraftEditor({
     status: NewsletterDraftStatus | undefined,
     successMessage: string,
   ) {
-    if (!draft || !record) return
+    const submittedDraft = draftRef.current
+    const submittedRecord = recordRef.current
+    if (
+      !submittedDraft ||
+      !submittedRecord ||
+      readOnlyRef.current ||
+      conflict ||
+      savingRef.current
+    ) {
+      return
+    }
+    const submittedEditSequence = editSequenceRef.current
 
     try {
+      savingRef.current = true
       setSaving(true)
       setError(null)
       setNotice(null)
@@ -599,25 +1124,69 @@ export default function NewsletterDraftEditor({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          draft,
-          expectedUpdatedAt: record.updatedAt,
+          draft: submittedDraft,
+          expectedUpdatedAt: submittedRecord.updatedAt,
           ...(status ? { status } : {}),
         }),
       })
 
       const payload = (await response.json()) as DraftResponse
 
-      if (!response.ok) {
+      if (response.status === 409 && payload.latest) {
+        setLastCheckedAt(new Date().toISOString())
+        setFreshnessError(null)
+        setConflict({
+          latest: payload.latest,
+          message:
+            payload.latest.status === 'published'
+              ? 'This issue was published elsewhere before your save completed. Your local work is preserved and can be forked into a new draft.'
+              : payload.error ||
+                'The server has a newer version. Your local work is preserved until you resolve the conflict.',
+        })
+        setError(null)
+        return
+      }
+
+      if (!response.ok || !payload.draft) {
         throw new Error(payload.error || 'Failed to save newsletter draft')
       }
 
-      setRecord(payload.draft)
-      setDraft(payload.draft.draft)
-      setDirty(false)
-      setNotice(successMessage)
+      const savedRecord = payload.draft
+      recordRef.current = savedRecord
+      setRecord(savedRecord)
+      setLastSavedAt(savedRecord.updatedAt)
+      setLastCheckedAt(new Date().toISOString())
+      setConflict(null)
+
+      if (editSequenceRef.current === submittedEditSequence) {
+        draftRef.current = savedRecord.draft
+        dirtyRef.current = false
+        setDraft(savedRecord.draft)
+        setDirty(false)
+        setSelectedPanel((current) =>
+          resolveSelectedPanel(current, savedRecord.draft),
+        )
+        setNotice(successMessage)
+      } else {
+        dirtyRef.current = true
+        setDirty(true)
+        if (savedRecord.status === 'published') {
+          setConflict({
+            latest: savedRecord,
+            message:
+              'This issue was published while newer local edits were still in progress. Your local work is preserved and can be saved as a new draft.',
+          })
+          setNotice(null)
+        } else {
+          setNotice(
+            'Earlier edits were saved. Newer edits made during the save are still unsaved.',
+          )
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save newsletter draft')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -631,6 +1200,123 @@ export default function NewsletterDraftEditor({
       status,
       `Publishing stage updated to ${status === 'ready' ? 'ready to publish' : status}.`,
     )
+  }
+
+  function reloadLatestConflictVersion() {
+    if (!conflict) return
+    if (
+      dirtyRef.current &&
+      !window.confirm(
+        'Reload the latest server version and discard your unsaved local edits?',
+      )
+    ) {
+      return
+    }
+
+    const latest = conflict.latest
+    editSequenceRef.current += 1
+    recordRef.current = latest
+    draftRef.current = latest.draft
+    dirtyRef.current = false
+    setRecord(latest)
+    setDraft(latest.draft)
+    setDirty(false)
+    setConflict(null)
+    setLastSavedAt(latest.updatedAt)
+    setLastCheckedAt(new Date().toISOString())
+    setSelectedPanel((current) =>
+      resolveSelectedPanel(current, latest.draft),
+    )
+    setError(null)
+    setNotice('Loaded the latest server version.')
+  }
+
+  async function forkLocalDraft() {
+    const localDraft = draftRef.current
+    if (!localDraft || forking) return
+    const submittedEditSequence = editSequenceRef.current
+    const idempotencyKey = `fork-${sha256Hex(
+      JSON.stringify({ sourceDraftId: draftId, draft: localDraft }),
+    )}`
+
+    try {
+      setForking(true)
+      setError(null)
+      const response = await fetch(`/api/newsletter/drafts/${draftId}/fork`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft: localDraft, idempotencyKey }),
+      })
+      const payload = (await response.json()) as DraftResponse
+      if (!response.ok || !payload.draft) {
+        throw new Error(payload.error || 'Failed to save local work as a new draft')
+      }
+
+      if (editSequenceRef.current === submittedEditSequence) {
+        dirtyRef.current = false
+        setDirty(false)
+        router.push(`/newsletter/editor/${payload.draft.id}`)
+      } else {
+        dirtyRef.current = true
+        setDirty(true)
+        setNotice(
+          'A new draft was saved from the earlier snapshot, but newer edits are still unsaved. Save local work as a new draft again to include them.',
+        )
+      }
+    } catch (forkError) {
+      setError(
+        forkError instanceof Error
+          ? forkError.message
+          : 'Failed to save local work as a new draft',
+      )
+    } finally {
+      setForking(false)
+    }
+  }
+
+  function closeChartEditor() {
+    chartEditorSessionOpenRef.current = false
+    setChartEditorOpen(false)
+
+    const deferredChange = deferredChartServerChangeRef.current
+    deferredChartServerChangeRef.current = null
+    if (!deferredChange) return
+
+    const latest = deferredChange.latest
+    editSequenceRef.current += 1
+    recordRef.current = latest
+    setRecord(latest)
+    setLastSavedAt(latest.updatedAt)
+    setLastCheckedAt(new Date().toISOString())
+    setFreshnessError(null)
+    setError(null)
+
+    if (dirtyRef.current) {
+      setConflict(deferredChange)
+      setNotice(null)
+      return
+    }
+
+    draftRef.current = latest.draft
+    dirtyRef.current = false
+    setDraft(latest.draft)
+    setDirty(false)
+    setConflict(null)
+    setSelectedPanel((current) =>
+      resolveSelectedPanel(current, latest.draft),
+    )
+    setNotice('Draft refreshed with the latest saved version.')
+  }
+
+  function openChartEditor() {
+    if (readOnlyRef.current) return
+    setIsPreviewExpanded(false)
+    ensureNavigationGuardEntry()
+    deferredChartServerChangeRef.current = null
+    chartEditorSessionOpenRef.current = true
+    chartEditorOpenedEditSequenceRef.current = editSequenceRef.current
+    setChartEditorOpen(true)
   }
 
   async function copyBeehiivHtml(openBeehiiv = false) {
@@ -722,6 +1408,7 @@ export default function NewsletterDraftEditor({
   }
 
   async function regenerateNewsletter() {
+    if (readOnlyRef.current || conflict) return
     if (draft?.manualDraft) {
       setError(
         'Blank manual drafts do not support regenerate. Start with Generate, or keep editing this draft manually.',
@@ -738,9 +1425,12 @@ export default function NewsletterDraftEditor({
       }
     }
 
-    if (!record) return
+    const currentRecord = recordRef.current
+    if (!currentRecord) return
+    const submittedEditSequence = editSequenceRef.current
 
     try {
+      savingRef.current = true
       setRegeneratingNewsletter(true)
       setError(null)
       setNotice(null)
@@ -751,30 +1441,57 @@ export default function NewsletterDraftEditor({
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expectedUpdatedAt: record.updatedAt }),
+          body: JSON.stringify({ expectedUpdatedAt: currentRecord.updatedAt }),
         },
       )
 
       const payload = (await response.json()) as DraftResponse
 
-      if (!response.ok) {
+      if (response.status === 409 && payload.latest) {
+        setLastCheckedAt(new Date().toISOString())
+        setConflict({
+          latest: payload.latest,
+          message:
+            payload.error ||
+            'The server has a newer version. Your local work is preserved until you resolve the conflict.',
+        })
+        return
+      }
+
+      if (!response.ok || !payload.draft) {
         throw new Error(payload.error || 'Failed to regenerate newsletter')
       }
 
-      setRecord(payload.draft)
-      setDraft(payload.draft.draft)
+      const regeneratedRecord = payload.draft
+      setLastCheckedAt(new Date().toISOString())
+
+      if (editSequenceRef.current !== submittedEditSequence) {
+        dirtyRef.current = true
+        setDirty(true)
+        setConflict({
+          latest: regeneratedRecord,
+          message:
+            'Newsletter regeneration completed while you were making newer local edits. Your edits are preserved and can be saved as a new draft.',
+        })
+        setNotice(null)
+        return
+      }
+
+      recordRef.current = regeneratedRecord
+      draftRef.current = regeneratedRecord.draft
+      dirtyRef.current = false
+      setRecord(regeneratedRecord)
+      setDraft(regeneratedRecord.draft)
+      setLastSavedAt(regeneratedRecord.updatedAt)
       setSelectedPanel((current) =>
-        current === 'overview' ||
-        current === 'header' ||
-        current === 'intro' ||
-        current === 'stats'
-          ? current
-          : payload.draft.draft.blocks[0]?.id ?? 'overview',
+        resolveSelectedPanel(current, regeneratedRecord.draft),
       )
       setDirty(false)
+      setConflict(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to regenerate newsletter')
     } finally {
+      savingRef.current = false
       setRegeneratingNewsletter(false)
     }
   }
@@ -841,7 +1558,16 @@ export default function NewsletterDraftEditor({
               </button>
               {newDraftOpenFormat ? (
                 <div className="absolute right-0 top-full z-30 mt-2 w-[420px] max-w-[calc(100vw-2rem)]">
-                  <NewsletterDraftCreate defaultFormat={newDraftOpenFormat} />
+                  <NewsletterDraftCreate
+                    defaultFormat={newDraftOpenFormat}
+                    beforeCreate={confirmUnsavedNavigation}
+                    getEditSequence={() => editSequenceRef.current}
+                    beforeNavigate={(submittedEditSequence) =>
+                      (submittedEditSequence === editSequenceRef.current &&
+                        !chartEditorSessionOpenRef.current) ||
+                      confirmUnsavedNavigation()
+                    }
+                  />
                 </div>
               ) : null}
             </div>
@@ -965,7 +1691,10 @@ export default function NewsletterDraftEditor({
 
   if (!draft || !record) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-sm text-red-700 shadow-sm">
+      <div
+        role="alert"
+        className="rounded-2xl border border-red-200 bg-red-50 p-8 text-sm text-red-700 shadow-sm"
+      >
         {error || 'Unable to load this newsletter draft.'}
       </div>
     )
@@ -973,6 +1702,20 @@ export default function NewsletterDraftEditor({
 
   return (
     <div className="space-y-4">
+      <div
+        data-testid="newsletter-editor-surface"
+        className="space-y-4"
+        inert={
+          chartEditorOpen || chartLibraryOpen || isPreviewExpanded
+            ? true
+            : undefined
+        }
+        aria-hidden={
+          chartEditorOpen || chartLibraryOpen || isPreviewExpanded
+            ? true
+            : undefined
+        }
+      >
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-5 py-3.5 shadow-sm xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1000,19 +1743,42 @@ export default function NewsletterDraftEditor({
           <h1 className="text-lg font-semibold tracking-tight text-gray-900">
             {draft.subjectLine}
           </h1>
+          <div
+            className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+            aria-live="polite"
+          >
+            <span
+              data-testid="editor-status"
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                editorStatus === 'Conflict'
+                  ? 'bg-red-100 text-red-800'
+                  : editorStatus === 'Unsaved'
+                    ? 'bg-amber-100 text-amber-800'
+                    : editorStatus === 'Saving'
+                      ? 'bg-blue-100 text-blue-800'
+                      : editorStatus === 'Published'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-sage-100 text-sage-800'
+              }`}
+            >
+              {editorStatus}
+            </span>
+            <span>
+              Last saved{' '}
+              <time dateTime={lastSavedAt ?? undefined}>
+                {formatEditorTimestamp(lastSavedAt)}
+              </time>
+            </span>
+            <span>
+              Last checked{' '}
+              <time dateTime={lastCheckedAt ?? undefined}>
+                {formatEditorTimestamp(lastCheckedAt)}
+              </time>
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {dirty ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-800">
-              Unsaved
-            </span>
-          ) : (
-            <span className="rounded-full bg-sage-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sage-800">
-              Synced
-            </span>
-          )}
-
           <div ref={newDraftPopoverRef} className="relative">
             <button
               type="button"
@@ -1031,62 +1797,105 @@ export default function NewsletterDraftEditor({
             </button>
             {newDraftOpenFormat ? (
               <div className="absolute right-0 top-full z-30 mt-2 w-[420px] max-w-[calc(100vw-2rem)]">
-                <NewsletterDraftCreate defaultFormat={newDraftOpenFormat} />
+                <NewsletterDraftCreate
+                  defaultFormat={newDraftOpenFormat}
+                  beforeCreate={confirmUnsavedNavigation}
+                  getEditSequence={() => editSequenceRef.current}
+                  beforeNavigate={(submittedEditSequence) =>
+                    (submittedEditSequence === editSequenceRef.current &&
+                      !chartEditorSessionOpenRef.current) ||
+                    confirmUnsavedNavigation()
+                  }
+                />
               </div>
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={saveDraft}
-            disabled={!dirty || saving || regeneratingNewsletter}
-            className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          {!isPublished ? (
+            <>
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={!dirty || saving || regeneratingNewsletter || mutationBlocked}
+                className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
 
-          <button
-            type="button"
-            onClick={regenerateNewsletter}
-            disabled={regeneratingNewsletter || saving || draft.manualDraft === true}
-            className="rounded-lg border border-gray-900 px-2.5 py-1.5 text-xs font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {regeneratingNewsletter ? 'Regenerating…' : 'Regenerate'}
-          </button>
+              <button
+                type="button"
+                onClick={regenerateNewsletter}
+                disabled={
+                  regeneratingNewsletter ||
+                  saving ||
+                  draft.manualDraft === true ||
+                  mutationBlocked
+                }
+                className="rounded-lg border border-gray-900 px-2.5 py-1.5 text-xs font-semibold text-gray-900 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {regeneratingNewsletter ? 'Regenerating…' : 'Regenerate'}
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setChartEditorOpen(true)}
-            disabled={!selectedBlock || saving || regeneratingNewsletter}
-            className="rounded-lg bg-sage-700 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-sage-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Edit chart
-          </button>
+              <button
+                type="button"
+                onClick={openChartEditor}
+                disabled={
+                  !selectedBlock ||
+                  saving ||
+                  regeneratingNewsletter ||
+                  mutationBlocked
+                }
+                className="rounded-lg bg-sage-700 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-sage-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Edit chart
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setChartLibraryOpen(true)}
-            disabled={!selectedBlock || saving || regeneratingNewsletter || isNewDraft}
-            className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
-            title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
-          >
-            Choose chart
-          </button>
+              <button
+                type="button"
+                onClick={() => setChartLibraryOpen(true)}
+                disabled={
+                  !selectedBlock ||
+                  saving ||
+                  regeneratingNewsletter ||
+                  isNewDraft ||
+                  mutationBlocked
+                }
+                className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
+                title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
+              >
+                Choose chart
+              </button>
 
-          <button
-            type="button"
-            onClick={() => void beehiivPanelRef.current?.deliver()}
-            disabled={beehiivBusy || copyingBeehiiv || dirty}
-            className="rounded-lg bg-gray-950 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-            title={dirty ? 'Save the draft before syncing the latest version' : 'Create or sync the Beehiiv draft'}
-          >
-            {beehiivBusy ? 'Syncing…' : 'Sync Beehiiv draft'}
-          </button>
+              <button
+                type="button"
+                onClick={() => void beehiivPanelRef.current?.deliver()}
+                disabled={
+                  beehiivBusy ||
+                  copyingBeehiiv ||
+                  dirty ||
+                  mutationBlocked
+                }
+                className="rounded-lg bg-gray-950 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                title={dirty ? 'Save the draft before syncing the latest version' : 'Create or sync the Beehiiv draft'}
+              >
+                {beehiivBusy ? 'Syncing…' : 'Sync Beehiiv draft'}
+              </button>
+            </>
+          ) : exactChartUrl ? (
+            <a
+              href={exactChartUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-sage-700 px-2.5 py-1.5 text-xs font-semibold text-sage-800 transition hover:bg-sage-50"
+            >
+              View exact chart
+            </a>
+          ) : null}
 
           <button
             type="button"
             onClick={downloadNewsletterHtml}
-            disabled={downloadingHtml || dirty}
+            disabled={downloadingHtml || dirty || conflict !== null}
             className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-sage-400 hover:text-sage-800 disabled:cursor-not-allowed disabled:opacity-50"
             title={dirty ? 'Save draft first to download latest HTML' : 'Download newsletter as HTML file'}
           >
@@ -1095,8 +1904,12 @@ export default function NewsletterDraftEditor({
 
           <button
             type="button"
-            onClick={() => setIsPreviewExpanded(true)}
+            onClick={(event) => {
+              expandedPreviewTriggerRef.current = event.currentTarget
+              setIsPreviewExpanded(true)
+            }}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:border-sage-400 hover:text-sage-800"
+            aria-label="Open fullscreen preview"
             title="Fullscreen preview"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1111,8 +1924,13 @@ export default function NewsletterDraftEditor({
 
       <NewsletterWorkflowBar
         draft={draft}
-        status={record.status}
-        busy={saving || regeneratingNewsletter}
+        status={conflict?.latest.status ?? record.status}
+        busy={
+          saving ||
+          regeneratingNewsletter ||
+          publicationUrlDirty ||
+          mutationBlocked
+        }
         onStatusChange={(status) => void updateWorkflowStatus(status)}
       />
 
@@ -1123,7 +1941,9 @@ export default function NewsletterDraftEditor({
           saving ||
           regeneratingNewsletter ||
           dirty ||
-          copyingBeehiiv
+          publicationUrlDirty ||
+          copyingBeehiiv ||
+          mutationBlocked
         }
         onNotice={(message) => {
           setError(null)
@@ -1139,22 +1959,142 @@ export default function NewsletterDraftEditor({
 
       <NewsletterPublicationPanel
         record={record}
-        disabled={saving || regeneratingNewsletter || dirty}
-        onRecordChange={(nextRecord) => {
+        disabled={
+          saving ||
+          regeneratingNewsletter ||
+          beehiivBusy ||
+          dirty ||
+          mutationBlocked
+        }
+        getEditSequence={() => editSequenceRef.current}
+        onDirtyChange={handlePublicationUrlDirtyChange}
+        onRecordChange={(nextRecord, submittedEditSequence) => {
+          if (
+            !chartEditorSessionOpenRef.current &&
+            !dirtyRef.current &&
+            recordRef.current?.updatedAt === nextRecord.updatedAt
+          ) {
+            setLastSavedAt(nextRecord.updatedAt)
+            setLastCheckedAt(new Date().toISOString())
+            setFreshnessError(null)
+            setError(null)
+            setConflict(null)
+            return
+          }
+
+          const hasNewerLocalEdits =
+            editSequenceRef.current !== submittedEditSequence
+
+          if (chartEditorSessionOpenRef.current) {
+            deferredChartServerChangeRef.current = {
+              latest: nextRecord,
+              message:
+                nextRecord.status === 'published'
+                  ? 'Publication completed while the chart editor was open. Your chart edits are preserved and can be saved as a new draft.'
+                  : 'Publication details changed while the chart editor was open. Your chart edits are preserved until you resolve the conflict.',
+            }
+            setLastCheckedAt(new Date().toISOString())
+            setFreshnessError(null)
+            setError(null)
+            setNotice(
+              nextRecord.status === 'published'
+                ? 'Publication completed while the chart editor was open. Save the chart to recover your attempted chart edits safely.'
+                : 'Publication details changed while the chart editor was open. Save the chart to resolve the newer server version safely.',
+            )
+            return
+          }
+
+          editSequenceRef.current += 1
+          recordRef.current = nextRecord
           setRecord(nextRecord)
+          setLastSavedAt(nextRecord.updatedAt)
+          setLastCheckedAt(new Date().toISOString())
+          setFreshnessError(null)
+          setError(null)
+
+          if (hasNewerLocalEdits) {
+            dirtyRef.current = true
+            setDirty(true)
+            setConflict({
+              latest: nextRecord,
+              message:
+                nextRecord.status === 'published'
+                  ? 'Publication completed while you were making newer local edits. Your edits are preserved and can be saved as a new draft.'
+                  : 'Publication details changed while you were making newer local edits. Your edits are preserved until you resolve the conflict.',
+            })
+            setNotice(null)
+            return
+          }
+
+          draftRef.current = nextRecord.draft
+          dirtyRef.current = false
           setDraft(nextRecord.draft)
           setDirty(false)
+          setConflict(null)
         }}
       />
 
+      {conflict ? (
+        <section
+          role="alert"
+          aria-label="Newsletter draft conflict"
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-900"
+        >
+          <p className="font-semibold">A newer version of this issue exists.</p>
+          <p className="mt-1 leading-6">{conflict.message}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={reloadLatestConflictVersion}
+              disabled={forking}
+              className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-semibold text-red-800 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reload latest
+            </button>
+            <button
+              type="button"
+              onClick={() => void forkLocalDraft()}
+              disabled={forking}
+              className="rounded-lg bg-red-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {forking ? 'Saving new draft…' : 'Save local work as new draft'}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {isPublished && !conflict ? (
+        <div className="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-900">
+          Published content is read-only. The saved preview, download, published
+          issue link, and exact chart assets remain available for reference.
+        </div>
+      ) : null}
+
+      {freshnessError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          Freshness check failed: {freshnessError}. Your current work is unchanged.
+        </div>
+      ) : null}
+
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {error}
         </div>
       ) : null}
 
       {notice ? (
-        <div className="rounded-2xl border border-sage-200 bg-sage-50 px-4 py-3 text-sm text-sage-800">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="rounded-2xl border border-sage-200 bg-sage-50 px-4 py-3 text-sm text-sage-800"
+        >
           {notice}
         </div>
       ) : null}
@@ -1224,7 +2164,7 @@ export default function NewsletterDraftEditor({
                   <button
                     key={block.id}
                     type="button"
-                    draggable
+                    draggable={!isPublished}
                     onClick={() => setSelectedPanel(block.id)}
                     onDragStart={(event) => handleBlockDragStart(block.id, event)}
                     onDragOver={(event) => handleBlockDragOver(block.id, event)}
@@ -1234,7 +2174,7 @@ export default function NewsletterDraftEditor({
 	                      isActive
 	                        ? 'border-sage-700 bg-sage-700 text-white'
 	                        : 'border-gray-200 bg-white text-gray-700 hover:border-sage-300 hover:bg-sage-50'
-	                    } ${isDragged ? 'opacity-60' : ''} ${dropBefore ? 'border-t-4 border-t-sage-500' : ''} ${dropAfter ? 'border-b-4 border-b-sage-500' : ''} cursor-grab active:cursor-grabbing`}
+	                    } ${isDragged ? 'opacity-60' : ''} ${dropBefore ? 'border-t-4 border-t-sage-500' : ''} ${dropAfter ? 'border-b-4 border-b-sage-500' : ''} ${isPublished ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
 	                  >
 	                    <div className="flex items-center justify-between gap-3">
 	                      <span className="text-sm font-medium">
@@ -1300,12 +2240,15 @@ export default function NewsletterDraftEditor({
                   label="Subject line"
                   copiedControlId={copiedControlId}
                   onCopy={handleCopyControlValue}
-                  renderControl={() => (
+                  renderControl={(controlId) => (
                     <textarea
+                      id={controlId}
                       value={draft.subjectLine}
                       onChange={(event) => updateDraftField('subjectLine', event.target.value)}
+                      readOnly={isPublished}
+                      aria-readonly={isPublished}
                       rows={3}
-                      className="w-full resize-y rounded-2xl border border-gray-300 px-5 py-3 text-sm leading-6 text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                      className="w-full resize-y rounded-2xl border border-gray-300 px-5 py-3 text-sm leading-6 text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                     />
                   )}
                 />
@@ -1320,11 +2263,14 @@ export default function NewsletterDraftEditor({
                   label="Title"
                   copiedControlId={copiedControlId}
                   onCopy={handleCopyControlValue}
-                  renderControl={() => (
+                  renderControl={(controlId) => (
                     <input
+                      id={controlId}
                       value={draft.header!.title}
                       onChange={(event) => updateHeaderField('title', event.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                      readOnly={isPublished}
+                      aria-readonly={isPublished}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                     />
                   )}
                 />
@@ -1337,11 +2283,14 @@ export default function NewsletterDraftEditor({
                   label="Date text"
                   copiedControlId={copiedControlId}
                   onCopy={handleCopyControlValue}
-                  renderControl={() => (
+                  renderControl={(controlId) => (
                     <input
+                      id={controlId}
                       value={draft.header!.dateText}
                       onChange={(event) => updateHeaderField('dateText', event.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                      readOnly={isPublished}
+                      aria-readonly={isPublished}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                     />
                   )}
                 />
@@ -1354,11 +2303,14 @@ export default function NewsletterDraftEditor({
                   label="Badge text"
                   copiedControlId={copiedControlId}
                   onCopy={handleCopyControlValue}
-                  renderControl={() => (
+                  renderControl={(controlId) => (
                     <input
+                      id={controlId}
                       value={draft.header!.badgeText}
                       onChange={(event) => updateHeaderField('badgeText', event.target.value)}
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                      readOnly={isPublished}
+                      aria-readonly={isPublished}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                     />
                   )}
                 />
@@ -1373,12 +2325,15 @@ export default function NewsletterDraftEditor({
                   label="Intro"
                   copiedControlId={copiedControlId}
                   onCopy={handleCopyControlValue}
-                  renderControl={() => (
+                  renderControl={(controlId) => (
                     <textarea
+                      id={controlId}
                       value={draft.introText}
                       onChange={(event) => updateDraftField('introText', event.target.value)}
+                      readOnly={isPublished}
+                      aria-readonly={isPublished}
                       rows={16}
-                      className="min-h-[420px] w-full rounded-2xl border border-gray-300 px-4 py-2.5 text-sm leading-6 text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                      className="min-h-[420px] w-full rounded-2xl border border-gray-300 px-4 py-2.5 text-sm leading-6 text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                     />
                   )}
                 />
@@ -1403,13 +2358,16 @@ export default function NewsletterDraftEditor({
                         label="Label"
                         copiedControlId={copiedControlId}
                         onCopy={handleCopyControlValue}
-                        renderControl={() => (
+                        renderControl={(controlId) => (
                           <input
+                            id={controlId}
                             value={item.label}
                             onChange={(event) =>
                               updateStatsItem(index, 'label', event.target.value)
                             }
-                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                            readOnly={isPublished}
+                            aria-readonly={isPublished}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                           />
                         )}
                       />
@@ -1422,13 +2380,16 @@ export default function NewsletterDraftEditor({
                         label="Value"
                         copiedControlId={copiedControlId}
                         onCopy={handleCopyControlValue}
-                        renderControl={() => (
+                        renderControl={(controlId) => (
                           <input
+                            id={controlId}
                             value={item.value}
                             onChange={(event) =>
                               updateStatsItem(index, 'value', event.target.value)
                             }
-                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                            readOnly={isPublished}
+                            aria-readonly={isPublished}
+                            className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                           />
                         )}
                       />
@@ -1447,13 +2408,16 @@ export default function NewsletterDraftEditor({
                     label="Heading"
                     copiedControlId={copiedControlId}
                     onCopy={handleCopyControlValue}
-                    renderControl={() => (
+                    renderControl={(controlId) => (
                       <input
+                        id={controlId}
                         value={selectedBlock.heading}
                         onChange={(event) =>
                           updateBlockField(selectedBlock.id, 'heading', event.target.value)
                         }
-                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20"
+                        readOnly={isPublished}
+                        aria-readonly={isPublished}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sage-500 focus:ring-2 focus:ring-sage-500/20 read-only:bg-gray-50"
                       />
                     )}
                   />
@@ -1466,9 +2430,12 @@ export default function NewsletterDraftEditor({
                     label="Commentary"
                     copiedControlId={copiedControlId}
                     onCopy={handleCopyControlValue}
-                    renderControl={() => (
+                    renderControl={(controlId) => (
                       <RichTextEditor
+                        id={controlId}
                         value={selectedBlock.body}
+                        ariaLabel="Commentary"
+                        readOnly={isPublished}
                         onChange={(html) =>
                           updateBlockField(selectedBlock.id, 'body', html)
                         }
@@ -1478,39 +2445,110 @@ export default function NewsletterDraftEditor({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setChartLibraryOpen(true)}
-                disabled={saving || regeneratingNewsletter || isNewDraft}
-                className="w-full rounded-xl border border-sage-700 px-4 py-2.5 text-sm font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
-                title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
-              >
-                Choose saved chart
-              </button>
+              {isPublished && exactChartUrl ? (
+                <a
+                  href={exactChartUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block w-full rounded-xl border border-sage-700 px-4 py-2.5 text-center text-sm font-semibold text-sage-800 transition hover:bg-sage-50"
+                >
+                  View exact chart
+                </a>
+              ) : !isPublished ? (
+                <button
+                  type="button"
+                  onClick={() => setChartLibraryOpen(true)}
+                  disabled={
+                    saving ||
+                    regeneratingNewsletter ||
+                    isNewDraft ||
+                    mutationBlocked
+                  }
+                  className="w-full rounded-xl border border-sage-700 px-4 py-2.5 text-sm font-semibold text-sage-800 transition hover:bg-sage-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={isNewDraft ? 'Create or save the draft before choosing a saved chart' : 'Choose a saved chart'}
+                >
+                  Choose saved chart
+                </button>
+              ) : null}
 
             </div>
           ) : null}
         </section>
       </div>
+      </div>
 
-      {chartEditorOpen && record && draft && selectedBlock ? (
+      {chartEditorOpen && record && draft && selectedBlock && !mutationBlocked ? (
         <NewsletterChartEditorDrawer
           key={selectedBlock.id}
           draftId={draftId}
           draft={draft}
           block={selectedBlock}
           expectedUpdatedAt={record.updatedAt}
-          onClose={() => setChartEditorOpen(false)}
-          onSaved={(updatedRecord) => {
+          openedEditSequence={chartEditorOpenedEditSequenceRef.current}
+          onClose={closeChartEditor}
+          onConflict={(latest, attemptedDraft, message) => {
+            chartEditorSessionOpenRef.current = false
+            deferredChartServerChangeRef.current = null
+            editSequenceRef.current += 1
+            draftRef.current = attemptedDraft
+            dirtyRef.current = true
+            setDraft(attemptedDraft)
+            setDirty(true)
+            setConflict({ latest, message })
+            setLastCheckedAt(new Date().toISOString())
+            setFreshnessError(null)
+            setError(null)
+            setNotice(null)
+          }}
+          onSaved={(updatedRecord, openedEditSequence) => {
+            if (editSequenceRef.current !== openedEditSequence) {
+              const localDraft = draftRef.current ?? draft
+              const recoverableDraft = mergeSavedChartIntoLocalDraft(
+                localDraft,
+                updatedRecord.draft,
+                selectedBlock.id,
+              )
+              chartEditorSessionOpenRef.current = false
+              deferredChartServerChangeRef.current = null
+              setChartEditorOpen(false)
+              editSequenceRef.current += 1
+              recordRef.current = updatedRecord
+              draftRef.current = recoverableDraft
+              dirtyRef.current = true
+              setRecord(updatedRecord)
+              setDraft(recoverableDraft)
+              setDirty(true)
+              setConflict({
+                latest: updatedRecord,
+                message:
+                  'The chart finished saving after newer local edits were made. Your text and the newly captured chart are preserved together; reload the saved chart or save this work as a new draft.',
+              })
+              setLastSavedAt(updatedRecord.updatedAt)
+              setLastCheckedAt(new Date().toISOString())
+              setFreshnessError(null)
+              setError(null)
+              setNotice(null)
+              return false
+            }
+
+            deferredChartServerChangeRef.current = null
+            editSequenceRef.current += 1
+            recordRef.current = updatedRecord
+            draftRef.current = updatedRecord.draft
+            dirtyRef.current = false
             setRecord(updatedRecord)
             setDraft(updatedRecord.draft)
             setDirty(false)
+            setConflict(null)
+            setLastSavedAt(updatedRecord.updatedAt)
+            setLastCheckedAt(new Date().toISOString())
             setNotice('Chart updated and preview refreshed.')
+            return editSequenceRef.current
           }}
         />
       ) : null}
 
-      {chartLibraryOpen && record && draft && selectedBlock ? (
+      {chartLibraryOpen && record && draft && selectedBlock && !mutationBlocked ? (
         <NewsletterChartLibraryPicker
           key={selectedBlock.id}
           draftId={draftId}
@@ -1518,18 +2556,87 @@ export default function NewsletterDraftEditor({
           block={selectedBlock}
           expectedUpdatedAt={record.updatedAt}
           onClose={() => setChartLibraryOpen(false)}
-          onInserted={(updatedRecord) => {
+          getEditSequence={() => editSequenceRef.current}
+          onConflict={(latest, attemptedDraft, message) => {
+            editSequenceRef.current += 1
+            draftRef.current = attemptedDraft
+            dirtyRef.current = true
+            setDraft(attemptedDraft)
+            setDirty(true)
+            setConflict({ latest, message })
+            setLastCheckedAt(new Date().toISOString())
+            setFreshnessError(null)
+            setError(null)
+            setNotice(null)
+          }}
+          onInserted={(updatedRecord, submittedEditSequence) => {
+            if (
+              !dirtyRef.current &&
+              recordRef.current?.updatedAt === updatedRecord.updatedAt
+            ) {
+              setLastSavedAt(updatedRecord.updatedAt)
+              setLastCheckedAt(new Date().toISOString())
+              setFreshnessError(null)
+              setError(null)
+              setConflict(null)
+              setNotice('Saved chart inserted and preview refreshed.')
+              return
+            }
+
+            if (editSequenceRef.current !== submittedEditSequence) {
+              const localDraft = draftRef.current ?? draft
+              const recoverableDraft = mergeSavedChartIntoLocalDraft(
+                localDraft,
+                updatedRecord.draft,
+                selectedBlock.id,
+              )
+              setChartLibraryOpen(false)
+              editSequenceRef.current += 1
+              recordRef.current = updatedRecord
+              draftRef.current = recoverableDraft
+              dirtyRef.current = true
+              setRecord(updatedRecord)
+              setDraft(recoverableDraft)
+              setDirty(true)
+              setConflict({
+                latest: updatedRecord,
+                message:
+                  'The saved chart was inserted while newer local edits were still in progress. Your local work and the inserted chart are preserved together; reload the server version or save this work as a new draft.',
+              })
+              setLastSavedAt(updatedRecord.updatedAt)
+              setLastCheckedAt(new Date().toISOString())
+              setFreshnessError(null)
+              setError(null)
+              setNotice(null)
+              return
+            }
+
+            editSequenceRef.current += 1
+            recordRef.current = updatedRecord
+            draftRef.current = updatedRecord.draft
+            dirtyRef.current = false
             setRecord(updatedRecord)
             setDraft(updatedRecord.draft)
             setDirty(false)
+            setConflict(null)
+            setLastSavedAt(updatedRecord.updatedAt)
+            setLastCheckedAt(new Date().toISOString())
             setNotice('Saved chart inserted and preview refreshed.')
           }}
         />
       ) : null}
 
       {isPreviewExpanded ? (
-        <div className="fixed inset-0 z-50 bg-gray-950/55 p-4 backdrop-blur-sm">
+        <div
+          ref={expandedPreviewDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expanded-newsletter-preview-title"
+          tabIndex={-1}
+          className="fixed inset-0 z-50 bg-gray-950/55 p-4 backdrop-blur-sm"
+        >
           <button
+            ref={expandedPreviewCloseButtonRef}
             type="button"
             onClick={() => setIsPreviewExpanded(false)}
             className="absolute right-8 top-8 z-10 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-sage-400 hover:text-sage-800"
@@ -1547,9 +2654,12 @@ export default function NewsletterDraftEditor({
                     <span className="h-3 w-3 rounded-full bg-[#28c840]" />
                   </div>
                   <div className="ml-auto flex items-center gap-2 text-right">
-                    <div className="text-[13px] font-medium text-[#4b5563]">
+                    <h2
+                      id="expanded-newsletter-preview-title"
+                      className="text-[13px] font-medium text-[#4b5563]"
+                    >
                       Email Style Preview
-                    </div>
+                    </h2>
                     <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#b9c0cb] text-[10px] font-semibold leading-none text-[#7b8491]">
                       i
                     </span>

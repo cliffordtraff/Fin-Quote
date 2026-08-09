@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DASHBOARD_CHART_OF_THE_DAY_DEFAULT_SELECTION,
@@ -24,6 +24,10 @@ function decodeBase64UrlJson<T>(value: string): T {
 }
 
 describe('resolveDashboardChartOfTheDay', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('uses the newsletter editorial template and charting platform render pipeline', () => {
     const result = resolveDashboardChartOfTheDay({
       hostHeader: 'localhost:3000',
@@ -78,6 +82,20 @@ describe('resolveDashboardChartOfTheDay', () => {
     expect(interactiveUrl.searchParams.get('view')).toBe('fundamentals')
     expect(interactiveUrl.searchParams.get('theme')).toBe('dark')
     expect(interactiveFundState.sliderOnlyMode).toBe(true)
+  })
+
+  it('never lets a caller-controlled Host header choose a production render destination', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_CHARTING_URL', '')
+
+    const result = resolveDashboardChartOfTheDay({
+      hostHeader: 'localhost:3001',
+    })
+
+    expect(result.chartBaseUrl).toBe('https://charts.theintraday.com')
+    expect(result.renderUrl).toBe(
+      'https://charts.theintraday.com/tos/api/newsletter/render',
+    )
   })
 
   it('builds embed-ready iframe urls for both themes', () => {

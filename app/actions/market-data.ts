@@ -2,6 +2,10 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 import { getProvider } from '@/lib/providers'
+import type {
+  CandleRequestOptions,
+  QuoteRequestOptions,
+} from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
 
 const MARKET_DATA_DEBUG = process.env.MARKET_DATA_DEBUG === 'true'
@@ -551,18 +555,32 @@ export async function getRussellMarketData() {
  * Fetch latest ES futures price and intraday data for homepage
  * ES futures trade nearly 24 hours (Sunday 6pm - Friday 5pm ET)
  */
-export async function getESFuturesMarketData() {
+async function loadESFuturesMarketData(
+  quoteOptions: QuoteRequestOptions = {},
+  candleOptions: CandleRequestOptions = {},
+) {
   try {
     const provider = getProvider()
 
     // Fetch latest price quote for ES futures
-    const quote = await provider.getQuote('ES=F')
+    const quote = quoteOptions.freshness || quoteOptions.failureMode || quoteOptions.signal
+      ? await provider.getQuote('ES=F', quoteOptions)
+      : await provider.getQuote('ES=F')
     if (!quote) {
       return { error: 'Failed to fetch price data' }
     }
 
     // Fetch 1-minute intraday data and aggregate into 10-minute candles
-    const intradayCandles = await provider.getIntraday('ES=F', 1, 'minute')
+    const intradayCandles = candleOptions.failureMode || candleOptions.signal
+      ? await provider.getIntraday(
+        'ES=F',
+        1,
+        'minute',
+        undefined,
+        undefined,
+        candleOptions,
+      )
+      : await provider.getIntraday('ES=F', 1, 'minute')
 
     let priceHistory: Array<{ date: string; open: number; high: number; low: number; close: number }> = []
 
@@ -598,7 +616,15 @@ export async function getESFuturesMarketData() {
       debugMarketData('Fetching daily historical data for ES Futures')
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-      const dailyCandles = await provider.getHistoricalDaily('ES=F', ninetyDaysAgo.toISOString().split('T')[0])
+      const fromDate = ninetyDaysAgo.toISOString().split('T')[0]
+      const dailyCandles = candleOptions.failureMode || candleOptions.signal
+        ? await provider.getHistoricalDaily(
+          'ES=F',
+          fromDate,
+          undefined,
+          candleOptions,
+        )
+        : await provider.getHistoricalDaily('ES=F', fromDate)
 
       priceHistory = dailyCandles.slice(0, 30).reverse().map(c => ({
         date: c.date,
@@ -634,6 +660,17 @@ export async function getESFuturesMarketData() {
     console.error('Error in getESFuturesMarketData:', safeErrorMessage(error))
     return { error: 'Failed to fetch market data' }
   }
+}
+
+export async function getESFuturesMarketData() {
+  return loadESFuturesMarketData()
+}
+
+export async function getESFuturesMarketDataWithStatus() {
+  return loadESFuturesMarketData(
+    { freshness: 'live' },
+    { failureMode: 'throw' },
+  )
 }
 
 /**

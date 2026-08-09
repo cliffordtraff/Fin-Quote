@@ -1,13 +1,12 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
-import { listBeehiivDeliveries } from '@/lib/beehiiv/store'
 import { WIIM_SUMMARY_CONFIG_VERSION } from '@/lib/generated-stock-why-moving'
 import {
   appendNewsletterDraftEvent,
   createNewsletterDraftFromDocument,
   findNewsletterDraftBySourceReviewKey,
   getNewsletterDraft,
-  listNewsletterDrafts,
+  NewsletterDraftNotFoundError,
   saveNewsletterDraft,
   type NewsletterDraftScope,
 } from './drafts'
@@ -16,6 +15,12 @@ import {
   saveNewsletterChartLibraryItem,
   type NewsletterChartLibraryItem,
 } from './chart-library'
+import {
+  hasSameNewsletterDraftChartEvidence,
+  isNewsletterChartCaptureCurrentForMarketDate,
+  isNewsletterChartLibraryEvidenceCurrent,
+  isNewsletterChartProvenanceCurrent,
+} from './chart-provenance'
 import {
   getDefaultChartingBaseUrl,
   getDefaultPublicChartingBaseUrl,
@@ -27,28 +32,41 @@ import {
   type DailyWiimCandidateRow,
 } from './daily-selection'
 import {
-  DEFAULT_NEWSLETTER_DAILY_TARGET,
   MAX_NEWSLETTER_DAILY_TARGET,
   MIN_NEWSLETTER_DAILY_TARGET,
   clampNewsletterDailyTarget,
   resolveExistingRunTarget,
 } from './daily-target'
+import {
+  defaultNewsletterDailySettings,
+  getConfiguredNewsletterAutomationScope,
+  getNewsletterDailyRun,
+  getNewsletterDailyScopeKey,
+  getNewsletterDailySettings,
+  mapItemRow,
+  mapRunRow,
+  mapSettingsRow,
+} from './daily-runs-read'
+export {
+  getConfiguredNewsletterAutomationScope,
+  getLatestNewsletterDailyRun,
+  getNewsletterDailyRun,
+  getNewsletterDailyScopeKey,
+  getNewsletterDailySettings,
+  NewsletterDailyRunNotFoundError,
+} from './daily-runs-read'
 import type {
   NewsletterDailyCandidate,
   NewsletterDailyItemStatus,
   NewsletterDailyProcessingResult,
-  NewsletterDailyQualityBand,
   NewsletterDailyRun,
   NewsletterDailyRunItem,
   NewsletterDailyRunStatus,
   NewsletterDailySettings,
-  NewsletterDailySourceRef,
-  NewsletterDailyBeehiivDelivery,
 } from './daily-types'
 import type {
   NewsletterDraftDocument,
   NewsletterDraftRecord,
-  NewsletterDraftStatus,
 } from './types'
 import { canSetNewsletterDraftStatus } from './workflow'
 import { isNewsletterSourceEntityMatch } from './source-integrity'
@@ -64,7 +82,6 @@ export const MAX_NEWSLETTER_DAILY_ITEM_RETRIES = 3
 
 type DailySettingsRow =
   Database['public']['Tables']['newsletter_daily_settings']['Row']
-type DailyRunRow = Database['public']['Tables']['newsletter_daily_runs']['Row']
 type DailyItemRow =
   Database['public']['Tables']['newsletter_daily_run_items']['Row']
 
@@ -97,13 +114,6 @@ export interface DailyProcessOptions {
   signal?: AbortSignal
 }
 
-export class NewsletterDailyRunNotFoundError extends Error {
-  constructor(id: string) {
-    super(`Newsletter daily run not found: ${id}`)
-    this.name = 'NewsletterDailyRunNotFoundError'
-  }
-}
-
 export class NewsletterDailySourceError extends Error {
   constructor(message: string) {
     super(message)
@@ -126,25 +136,6 @@ function getServiceClient() {
       persistSession: false,
     },
   })
-}
-
-export function getNewsletterDailyScopeKey(
-  scope: NewsletterDraftScope,
-): string {
-  return scope.ownerId
-    ? `owner:${scope.ownerId}`
-    : `session:${scope.sessionId}`
-}
-
-export function getConfiguredNewsletterAutomationScope(): NewsletterDraftScope | null {
-  const ownerId = process.env.NEWSLETTER_AUTOMATION_OWNER_ID?.trim() || null
-  const sessionId =
-    process.env.NEWSLETTER_AUTOMATION_SESSION_ID?.trim() ||
-    'newsletter-daily-automation'
-  if (!ownerId && !process.env.NEWSLETTER_AUTOMATION_SESSION_ID?.trim()) {
-    return null
-  }
-  return { ownerId, sessionId }
 }
 
 export { clampNewsletterDailyTarget } from './daily-target'
@@ -195,109 +186,6 @@ function getEasternDateBounds(date: string) {
     end: new Date(
       Date.parse(`${nextDate}T00:00:00Z`) - endOffset * 60_000,
     ).toISOString(),
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
-}
-
-function asSourceRefs(value: unknown): NewsletterDailySourceRef[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((entry) => {
-    if (!isRecord(entry)) return []
-    const kind = typeof entry.kind === 'string' ? entry.kind : ''
-    const label = typeof entry.label === 'string' ? entry.label : ''
-    if (!kind || !label) return []
-    return [{
-      kind,
-      label,
-      url: typeof entry.url === 'string' ? entry.url : undefined,
-      publishedAt:
-        typeof entry.publishedAt === 'string' ? entry.publishedAt : undefined,
-    }]
-  })
-}
-
-function mapSettingsRow(row: DailySettingsRow): NewsletterDailySettings {
-  return {
-    enabled: row.enabled,
-    targetCount: row.target_count,
-    timezone: row.timezone,
-    generationHour: row.generation_hour,
-  }
-}
-
-function defaultNewsletterDailySettings(): NewsletterDailySettings {
-  return {
-    enabled: true,
-    targetCount: DEFAULT_NEWSLETTER_DAILY_TARGET,
-    timezone: 'America/New_York',
-    generationHour: 8,
-  }
-}
-
-function mapItemRow(row: DailyItemRow): NewsletterDailyRunItem {
-  return {
-    id: row.id,
-    runId: row.run_id,
-    rank: row.rank,
-    ticker: row.ticker,
-    status: row.status as NewsletterDailyItemStatus,
-    qualityBand: row.quality_band as NewsletterDailyQualityBand,
-    relevanceScore: Number(row.relevance_score),
-    confidenceScore: Number(row.confidence_score),
-    candidateType: row.candidate_type,
-    stateLabel: row.state_label,
-    movePercent:
-      row.move_percent == null ? null : Number(row.move_percent),
-    reasonType: row.reason_type,
-    headline: row.headline,
-    summaryText: row.summary_text,
-    keyFact: row.key_fact,
-    sourceRefs: asSourceRefs(row.source_refs_json),
-    candidateMetadata: isRecord(row.candidate_json)
-      ? row.candidate_json
-      : {},
-    draftId: row.draft_id,
-    draftStatus: row.draft_status as NewsletterDraftStatus | null,
-    chartId: row.chart_id,
-    chartImageUrl: row.chart_image_url,
-    subjectLine: row.subject_line,
-    beehiivDelivery: null,
-    errorMessage: row.error_message,
-    retryCount: row.retry_count,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
-}
-
-function mapRunRow(
-  row: DailyRunRow,
-  items: NewsletterDailyRunItem[],
-): NewsletterDailyRun {
-  return {
-    id: row.id,
-    marketDate: row.market_date,
-    edition: 'morning',
-    status: row.status as NewsletterDailyRunStatus,
-    targetCount: row.target_count,
-    sourceWiimRunId: row.source_wiim_run_id,
-    sourceGeneratedAt: row.source_generated_at,
-    selectedCount: row.selected_count,
-    generatedCount: row.generated_count,
-    readyCount: row.ready_count,
-    attentionCount: row.attention_count,
-    failedCount: row.failed_count,
-    errorMessage: row.error_message,
-    metadata: isRecord(row.metadata_json) ? row.metadata_json : {},
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    items,
   }
 }
 
@@ -410,28 +298,6 @@ async function loadSourceUniverse(
   }
 }
 
-export async function getNewsletterDailySettings(
-  scope: NewsletterDraftScope,
-  signal?: AbortSignal,
-): Promise<NewsletterDailySettings> {
-  signal?.throwIfAborted()
-  const supabase = getServiceClient()
-  let query = supabase
-    .from(SETTINGS_TABLE)
-    .select('*')
-    .eq('scope_key', getNewsletterDailyScopeKey(scope))
-  if (signal) query = query.abortSignal(signal)
-  const { data, error } = await query.maybeSingle()
-
-  if (error) {
-    throw new Error(`Failed to load newsletter daily settings: ${error.message}`)
-  }
-  if (!data) {
-    return defaultNewsletterDailySettings()
-  }
-  return mapSettingsRow(data as DailySettingsRow)
-}
-
 export async function saveNewsletterDailySettings(
   scope: NewsletterDraftScope,
   input: Partial<NewsletterDailySettings>,
@@ -472,129 +338,6 @@ export async function saveNewsletterDailySettings(
     )
   }
   return mapSettingsRow(data as DailySettingsRow)
-}
-
-async function syncItemDraftStates(
-  scope: NewsletterDraftScope,
-  items: NewsletterDailyRunItem[],
-  signal?: AbortSignal,
-): Promise<NewsletterDailyRunItem[]> {
-  signal?.throwIfAborted()
-  if (!items.some((item) => item.draftId)) return items
-  const draftIds = items.flatMap((item) =>
-    item.draftId ? [item.draftId] : [],
-  )
-  const [summaries, deliveries] = await Promise.all([
-    listNewsletterDrafts(scope, signal),
-    scope.ownerId
-      ? listBeehiivDeliveries(scope.ownerId, draftIds, signal)
-      : Promise.resolve([]),
-  ])
-  const byId = new Map(summaries.map((draft) => [draft.id, draft]))
-  const deliveriesByDraft = new Map(
-    deliveries.map((delivery) => [delivery.draftId, delivery]),
-  )
-  return items.map((item) => {
-    const draft = item.draftId ? byId.get(item.draftId) : null
-    if (!draft) return item
-    const delivery = deliveriesByDraft.get(draft.id)
-    const beehiivDelivery: NewsletterDailyBeehiivDelivery | null = delivery
-      ? {
-          id: delivery.id,
-          postId: delivery.postId,
-          editorUrl: delivery.editorUrl,
-          previewUrl: delivery.previewUrl,
-          webUrl: delivery.webUrl,
-          lifecycleStatus: delivery.lifecycleStatus,
-          beehiivStatus: delivery.beehiivStatus,
-          scheduledAt: delivery.scheduledAt,
-          publishedAt: delivery.publishedAt,
-          syncedAt: delivery.syncedAt,
-          lastReconciledAt: delivery.lastReconciledAt,
-          lastReconcileError: delivery.lastReconcileError,
-          needsSync:
-            new Date(draft.updatedAt).getTime() >
-            new Date(delivery.syncedAt).getTime(),
-        }
-      : null
-    const status: NewsletterDailyItemStatus =
-      draft.status === 'published' ||
-      beehiivDelivery?.lifecycleStatus === 'published'
-        ? 'published'
-        : draft.status === 'ready'
-          ? 'ready'
-          : item.status
-    return {
-      ...item,
-      status,
-      draftStatus: draft.status,
-      subjectLine: draft.subjectLine,
-      beehiivDelivery,
-    }
-  })
-}
-
-export async function getNewsletterDailyRun(
-  scope: NewsletterDraftScope,
-  id: string,
-  signal?: AbortSignal,
-): Promise<NewsletterDailyRun> {
-  signal?.throwIfAborted()
-  const supabase = getServiceClient()
-  const scopeKey = getNewsletterDailyScopeKey(scope)
-  let runQuery = supabase
-        .from(RUNS_TABLE)
-        .select('*')
-        .eq('id', id)
-        .eq('scope_key', scopeKey)
-  let itemsQuery = supabase
-        .from(ITEMS_TABLE)
-        .select('*')
-        .eq('run_id', id)
-        .order('rank', { ascending: true })
-  if (signal) {
-    runQuery = runQuery.abortSignal(signal)
-    itemsQuery = itemsQuery.abortSignal(signal)
-  }
-  const [{ data: run, error: runError }, { data: itemRows, error: itemError }] =
-    await Promise.all([runQuery.maybeSingle(), itemsQuery])
-
-  if (runError || itemError) {
-    throw new Error(
-      `Failed to load newsletter daily run: ${
-        runError?.message ?? itemError?.message
-      }`,
-    )
-  }
-  if (!run) throw new NewsletterDailyRunNotFoundError(id)
-
-  const items = await syncItemDraftStates(
-    scope,
-    ((itemRows ?? []) as DailyItemRow[]).map(mapItemRow),
-    signal,
-  )
-  return mapRunRow(run as DailyRunRow, items)
-}
-
-export async function getLatestNewsletterDailyRun(
-  scope: NewsletterDraftScope,
-  marketDate?: string,
-): Promise<NewsletterDailyRun | null> {
-  const supabase = getServiceClient()
-  let query = supabase
-    .from(RUNS_TABLE)
-    .select('id')
-    .eq('scope_key', getNewsletterDailyScopeKey(scope))
-    .order('market_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  if (marketDate) query = query.eq('market_date', marketDate)
-  const { data, error } = await query.maybeSingle()
-  if (error) {
-    throw new Error(`Failed to find newsletter daily run: ${error.message}`)
-  }
-  return data ? getNewsletterDailyRun(scope, data.id) : null
 }
 
 function candidateItemContentPayload(
@@ -1163,7 +906,32 @@ function isChartCurrent(
   chart: NewsletterChartLibraryItem,
   marketDate: string,
 ): boolean {
-  return chart.updatedAt.slice(0, 10) >= marketDate
+  const capturedAt = chart.capturedAt
+  return (
+    isNewsletterChartCaptureCurrentForMarketDate(capturedAt, marketDate) &&
+    isNewsletterChartLibraryEvidenceCurrent(chart)
+  )
+}
+
+function isDailyDraftBlockCurrent(
+  block: NewsletterDraftDocument['blocks'][number],
+  marketDate: string,
+): boolean {
+  const provenance = block.chartProvenance
+  const capturedAt = provenance?.capturedAt
+  if (
+    block.chartNeedsRegeneration ||
+    !provenance ||
+    provenance.source === 'legacy' ||
+    !isNewsletterChartCaptureCurrentForMarketDate(capturedAt, marketDate)
+  ) {
+    return false
+  }
+  return isNewsletterChartProvenanceCurrent(provenance, {
+    imageUrl: block.chartImageUrl,
+    interactiveUrl: block.chartExportUrl,
+    scene: block.chartSpec,
+  })
 }
 
 async function createDefaultDailyChart(
@@ -1232,6 +1000,7 @@ function mergeRepairedDailyDraft(
                 chartAlt: repairedBlock.chartAlt,
                 chartExportUrl: repairedBlock.chartExportUrl,
                 chartSpec: repairedBlock.chartSpec,
+                chartProvenance: repairedBlock.chartProvenance,
                 chartNeedsRegeneration: false,
               }
             : block,
@@ -1308,6 +1077,55 @@ function mergeDailyItemAttentionMessage(
   return [existing, ...additions].filter(Boolean).join(' ')
 }
 
+function isDraftLinkedToDailyItem(
+  draft: NewsletterDraftRecord,
+  run: NewsletterDailyRun,
+  item: NewsletterDailyRunItem,
+): boolean {
+  const source = draft.draft.source
+  return (
+    source?.type === 'daily_batch' &&
+    source.dailyBatch.runId === run.id &&
+    source.dailyBatch.itemId === item.id &&
+    source.dailyBatch.ticker.trim().toUpperCase() ===
+      item.ticker.trim().toUpperCase()
+  )
+}
+
+async function resolveExistingDailyItemDraft(
+  scope: NewsletterDraftScope,
+  run: NewsletterDailyRun,
+  item: NewsletterDailyRunItem,
+  attemptKey: string,
+  signal?: AbortSignal,
+): Promise<NewsletterDraftRecord | null> {
+  if (item.draftId) {
+    try {
+      const linked = await getNewsletterDraft(scope, item.draftId, { signal })
+      if (!isDraftLinkedToDailyItem(linked, run, item)) {
+        throw new Error(
+          `Newsletter item ${item.ticker} is linked to a draft from a different daily run or item.`,
+        )
+      }
+      return linked
+    } catch (error) {
+      if (!(error instanceof NewsletterDraftNotFoundError)) throw error
+    }
+  }
+
+  const byAttemptKey = await findNewsletterDraftBySourceReviewKey(
+    scope,
+    attemptKey,
+    { signal },
+  )
+  if (byAttemptKey && !isDraftLinkedToDailyItem(byAttemptKey, run, item)) {
+    throw new Error(
+      `Newsletter item ${item.ticker} found a draft that does not belong to this daily item.`,
+    )
+  }
+  return byAttemptKey
+}
+
 async function processDailyItem(
   scope: NewsletterDraftScope,
   run: NewsletterDailyRun,
@@ -1322,17 +1140,24 @@ async function processDailyItem(
 
   try {
     options.signal?.throwIfAborted()
-    const existing = await findNewsletterDraftBySourceReviewKey(
-      scope,
-      itemKey,
-      { signal: options.signal },
-    )
+    const existing = rebuildingQuarantinedDraft
+      ? null
+      : await resolveExistingDailyItemDraft(
+          scope,
+          run,
+          item,
+          itemKey,
+          options.signal,
+        )
     options.signal?.throwIfAborted()
     if (
       !rebuildingQuarantinedDraft &&
       existing?.draft.source?.type === 'daily_batch' &&
       existing.draft.source.automationStatus === 'complete' &&
-      !existing.draft.blocks.some((block) => block.chartNeedsRegeneration)
+      existing.draft.blocks.length > 0 &&
+      existing.draft.blocks.every((block) =>
+        isDailyDraftBlockCurrent(block, run.marketDate),
+      )
     ) {
       const chartId = existing.draft.source.attachedChartIds[0] ?? null
       const chart = chartsBySymbol.get(item.ticker) ?? null
@@ -1350,6 +1175,16 @@ async function processDailyItem(
               chartImageUrl: existing.draft.blocks[0].chartImageUrl,
               thumbnailUrl: existing.draft.blocks[0].chartImageUrl,
               chartExportUrl: existing.draft.blocks[0].chartExportUrl,
+              capturedAt:
+                existing.draft.blocks[0].chartProvenance?.capturedAt ??
+                existing.createdAt,
+              rendererContract:
+                existing.draft.blocks[0].chartProvenance?.rendererContract ??
+                'legacy-reconstructed-v0',
+              sceneHash:
+                existing.draft.blocks[0].chartProvenance?.sceneSha256 ?? '',
+              imageSha256:
+                existing.draft.blocks[0].chartProvenance?.imageSha256 ?? null,
               createdAt: existing.createdAt,
               updatedAt: existing.updatedAt,
             }
@@ -1368,7 +1203,13 @@ async function processDailyItem(
           dependencies.createChart ?? createDefaultDailyChart
         chart = await createChart(scope, item, options)
         options.signal?.throwIfAborted()
-        chartsBySymbol.set(item.ticker, chart)
+        if (!isChartCurrent(chart, run.marketDate)) {
+          warning =
+            'Automatic chart capture returned unverified provenance and must be retried.'
+          chart = null
+        } else {
+          chartsBySymbol.set(item.ticker, chart)
+        }
       } catch (error) {
         if (options.signal?.aborted) throw options.signal.reason ?? error
         warning =
@@ -1398,11 +1239,23 @@ async function processDailyItem(
         : chart
           ? mergeRepairedDailyDraft(existing.draft, rebuilt)
           : existing.draft
+      const chartEvidenceChanged =
+        existing.draft.blocks.length !== document.blocks.length ||
+        existing.draft.blocks.some(
+          (block, index) =>
+            !document.blocks[index] ||
+            !hasSameNewsletterDraftChartEvidence(
+              block,
+              document.blocks[index],
+            ),
+        )
       draft = await saveNewsletterDraft(
         scope,
         existing.id,
         document,
-        existing.status,
+        existing.status === 'ready' && chartEvidenceChanged
+          ? 'review'
+          : existing.status,
         {
           publicChartBaseUrl:
             options.publicChartBaseUrl ?? getDefaultPublicChartingBaseUrl(),
@@ -1825,6 +1678,10 @@ export const __testOnly = {
   dailyClaimRestorePayload,
   getDailyClaimFence,
   dailyItemOperationKey,
+  isChartCurrent,
+  mergeRepairedDailyDraft,
+  resolveExistingDailyItemDraft,
+  processDailyItem,
   runPool,
   DAILY_CHART_CAPTURE_BUDGET_MS,
   MAX_NEWSLETTER_DAILY_ITEM_RETRIES,

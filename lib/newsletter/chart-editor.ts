@@ -91,7 +91,11 @@ export function parseFundamentalsNewsletterChartSpecFromFundState(
     fallback,
   )
   if (!parsed) return null
-  return { ...parsed, mode: 'fundamentals' }
+  return {
+    ...parsed,
+    mode: 'fundamentals',
+    editorState: JSON.parse(JSON.stringify(fundState)) as Record<string, unknown>,
+  }
 }
 
 export interface NewsletterPriceChartEditorResolution {
@@ -310,11 +314,12 @@ function readTimeRange(value: unknown): { startTime: number; endTime: number } |
 function buildDefaultPriceExportTimeRanges(
   range: string | undefined,
   interval: string | undefined,
+  nowMs = Date.now(),
 ): {
   viewportTimeRange: { startTime: number; endTime: number; visibleBars: number }
   dataTimeRange: { startTime: number; endTime: number }
 } {
-  const endTime = Date.now()
+  const endTime = nowMs
   const visibleRangeMs = rangeToApproxMs(range)
   const requestedVisibleBars = approximateVisibleBarsForRange(range, interval)
   const lookbackBars = newsletterPriceLookbackBars(range, requestedVisibleBars)
@@ -430,9 +435,6 @@ function completePriceExportSpec(
         ? source.companyName.trim()
         : defaultPriceExportTitle(options.symbol, source.interval)
   const exportOptions = {
-    displayWidth: options.displayWidth,
-    displayHeight: options.displayHeight,
-    exportScale: NEWSLETTER_PRICE_EXPORT_SCALE,
     visibleRange: 'current',
     pricePaneRatio: 0.76,
     chartTitle,
@@ -460,6 +462,12 @@ function completePriceExportSpec(
     showWatermark: true,
     watermarkText: 'The Intraday',
     ...existingExportOptions,
+    // Newsletter images have one physical contract. The export editor may
+    // retain every other visual choice, but caller-supplied canvas values must
+    // never turn a saved scene into an unbounded headless render.
+    displayWidth: options.displayWidth,
+    displayHeight: options.displayHeight,
+    exportScale: NEWSLETTER_PRICE_EXPORT_SCALE,
   }
   const displayWidth = Number(exportOptions.displayWidth)
   const displayHeight = Number(exportOptions.displayHeight)
@@ -519,7 +527,7 @@ function completePriceExportSpec(
 
 export function buildPriceExportEditorBaseSpec(
   spec: PriceNewsletterChartSpec,
-  options: { theme?: 'light' | 'dark' },
+  options: { theme?: 'light' | 'dark'; now?: Date | number },
 ): PriceChartExportSpec {
   const dimensions = getNewsletterChartRenderDimensions(spec)
   const symbol = (spec.symbol || '').trim().toUpperCase()
@@ -527,6 +535,12 @@ export function buildPriceExportEditorBaseSpec(
     throw new Error('Price newsletter chart spec is missing a symbol')
   }
   const theme = options.theme ?? 'light'
+  const nowMs =
+    options.now instanceof Date
+      ? options.now.getTime()
+      : typeof options.now === 'number'
+        ? options.now
+        : Date.now()
   // If a prior session already saved a chartExportSpec on this block, prefer
   // that as the editor's starting point so user edits round-trip. Backfill
   // missing render defaults so older lightweight specs regenerate the same
@@ -548,6 +562,7 @@ export function buildPriceExportEditorBaseSpec(
       typeof persisted.interval === 'string' && persisted.interval
         ? persisted.interval
         : spec.interval,
+      nowMs,
     )
     const viewportTimeRange = hasViewport
       ? persisted.viewportTimeRange
@@ -575,7 +590,11 @@ export function buildPriceExportEditorBaseSpec(
   // range plus contextual lookback bars. Without this, clicking an unsaved
   // draft chart opens the new export editor at a tighter zoom than the static
   // newsletter image that the user just clicked.
-  const timeRanges = buildDefaultPriceExportTimeRanges(spec.range, spec.interval)
+  const timeRanges = buildDefaultPriceExportTimeRanges(
+    spec.range,
+    spec.interval,
+    nowMs,
+  )
   return completePriceExportSpec(
     {
       symbol,
@@ -598,7 +617,7 @@ export function buildPriceExportEditorBaseSpec(
 
 export function resolveNewsletterPriceExportEditor(
   spec: PriceNewsletterChartSpec,
-  options: { theme?: 'light' | 'dark' } = {},
+  options: { theme?: 'light' | 'dark'; now?: Date | number } = {},
 ): NewsletterPriceExportEditorResolution {
   const baseSpec = buildPriceExportEditorBaseSpec(spec, options)
   return {

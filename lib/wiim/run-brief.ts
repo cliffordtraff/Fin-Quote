@@ -26,6 +26,12 @@ export interface RunWiimBriefOptions {
 export interface RunWiimBriefResult extends WiimRunSummary {
   runId: string | null
   rankedCandidateCount: number
+  /**
+   * The exact discovery-time candidates used by this run. Callers that build
+   * durable editorial work must consume this snapshot instead of refetching
+   * mutable market data after the run completes.
+   */
+  rankedCandidates: RankedWiimCandidate[]
 }
 
 export async function runWiimBrief(
@@ -92,6 +98,7 @@ export async function runWiimBrief(
     return {
       runId: null,
       rankedCandidateCount: rankedCandidates.length,
+      rankedCandidates,
       ...summary,
     }
   }
@@ -150,6 +157,7 @@ export async function runWiimBrief(
   return {
     runId,
     rankedCandidateCount: rankedCandidates.length,
+    rankedCandidates,
     ...summary,
   }
 }

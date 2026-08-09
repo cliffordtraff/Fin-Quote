@@ -9,6 +9,13 @@ const ACTIONABLE_STATUSES = new Set([
   'published',
 ])
 
+/**
+ * Persist this alongside every human decision. A future ranking change must
+ * never reinterpret yesterday's editorial judgment as if it came from the new
+ * algorithm.
+ */
+export const NEWSLETTER_SHORTLIST_ALGORITHM_VERSION = 'morning-shortlist-v1'
+
 function formatMove(value: number | null): string | null {
   if (value == null || !Number.isFinite(value)) return null
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`

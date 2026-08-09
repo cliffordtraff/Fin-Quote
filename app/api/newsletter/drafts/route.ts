@@ -5,19 +5,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   createBlankNewsletterDraft,
   createNewsletterDraft,
-  listNewsletterDrafts,
+  listNewsletterDraftArchivePage,
+  NewsletterDraftArchiveValidationError,
 } from '@/lib/newsletter/drafts'
 import {
   attachNewsletterDraftSessionCookie,
   resolveNewsletterDraftScope,
 } from '@/lib/newsletter/draft-session'
 import {
-  getDefaultChartingBaseUrl,
   getDefaultChartingBaseUrlForHost,
-  getDefaultPublicChartingBaseUrl,
   getDefaultPublicChartingBaseUrlForHost,
 } from '@/lib/newsletter/charting-platform-export'
-import type { NewsletterOptions } from '@/lib/newsletter/types'
+import type {
+  NewsletterDraftStatus,
+  NewsletterOptions,
+} from '@/lib/newsletter/types'
 
 const MAX_GENERATION_PROMPT_LENGTH = 500
 type DraftCreationMode = 'generate' | 'blank'
@@ -81,10 +83,42 @@ function toErrorResponse(error: unknown): NextResponse {
 export async function GET(request: NextRequest) {
   try {
     const { scope, createdSessionId } = await resolveNewsletterDraftScope(request)
-    const drafts = await listNewsletterDrafts(scope)
-    const response = NextResponse.json({ drafts })
+    if (process.env.NODE_ENV === 'production' && !scope.ownerId) {
+      return NextResponse.json(
+        { error: 'Sign in to view newsletter history.' },
+        { status: 401 },
+      )
+    }
+    const params = request.nextUrl.searchParams
+    const rawLimit = params.get('limit')
+    const pageSize = rawLimit == null ? undefined : Number(rawLimit)
+    const page = await listNewsletterDraftArchivePage(
+      scope,
+      {
+        search: params.get('q') ?? undefined,
+        status: (params.get('status') ?? undefined) as
+          | NewsletterDraftStatus
+          | 'all'
+          | undefined,
+        ticker: params.get('ticker') ?? undefined,
+        from: params.get('from') ?? undefined,
+        to: params.get('to') ?? undefined,
+        visibility: (params.get('archive') ?? undefined) as
+          | 'active'
+          | 'archived'
+          | 'all'
+          | undefined,
+        cursor: params.get('cursor') ?? undefined,
+        pageSize,
+      },
+      request.signal,
+    )
+    const response = NextResponse.json(page)
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
+    if (error instanceof NewsletterDraftArchiveValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return toErrorResponse(error)
   }
 }

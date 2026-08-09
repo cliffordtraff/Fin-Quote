@@ -1,8 +1,12 @@
 'use server'
 
 import { getProvider } from '@/lib/providers'
+import type { CandleRequestOptions } from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
-import { getSP500Losers } from './sp500-movers'
+import {
+  getSP500Losers,
+  getSP500LosersWithStatus,
+} from './sp500-movers'
 
 export interface SP500LoserSparklineData {
   symbol: string
@@ -13,13 +17,16 @@ export interface SP500LoserSparklineData {
 /**
  * Fetch intraday price data for top 4 S&P 500 losers
  */
-export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500LoserSparklineData[]; error?: string }> {
+async function loadSP500LoserSparklines(
+  loadLosers: typeof getSP500Losers,
+  candleOptions: CandleRequestOptions = {},
+): Promise<{ sparklines?: SP500LoserSparklineData[]; error?: string }> {
   try {
     // Get the S&P 500 losers (already filtered to S&P 500 stocks)
-    const losersResult = await getSP500Losers()
+    const losersResult = await loadLosers()
 
     if ('error' in losersResult || !losersResult.losers) {
-      return { sparklines: [] }
+      return { error: 'Failed to load S&P 500 losers' }
     }
 
     // Take top 4 S&P 500 losers
@@ -35,7 +42,16 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
     const sparklines: SP500LoserSparklineData[] = []
 
     for (const loser of top4) {
-      const intradayData = await provider.getIntraday(loser.symbol, 5, 'minute')
+      const intradayData = candleOptions.failureMode || candleOptions.signal
+        ? await provider.getIntraday(
+          loser.symbol,
+          5,
+          'minute',
+          undefined,
+          undefined,
+          candleOptions,
+        )
+        : await provider.getIntraday(loser.symbol, 5, 'minute')
 
       if (intradayData.length > 0) {
         // Get the most recent trading day's data
@@ -62,4 +78,15 @@ export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500Los
     console.error('Error fetching S&P 500 loser sparklines:', safeErrorMessage(error))
     return { error: 'Failed to load S&P 500 loser sparklines' }
   }
+}
+
+export async function getSP500LoserSparklines(): Promise<{ sparklines?: SP500LoserSparklineData[]; error?: string }> {
+  return loadSP500LoserSparklines(getSP500Losers)
+}
+
+export async function getSP500LoserSparklinesWithStatus(): Promise<{ sparklines?: SP500LoserSparklineData[]; error?: string }> {
+  return loadSP500LoserSparklines(
+    getSP500LosersWithStatus,
+    { failureMode: 'throw' },
+  )
 }

@@ -19,6 +19,15 @@ import {
   listEnabledNewsletterDailyScopes,
 } from '../daily-runs'
 import { resolveExistingRunTarget } from '../daily-target'
+import { normalizeNewsletterDraftDocument } from '../drafts'
+import {
+  buildNewsletterChartProvenance,
+  hashNewsletterChartScene,
+  materializeNewsletterChartScene,
+  NEWSLETTER_CHART_RENDERER_CONTRACT,
+} from '../chart-provenance'
+import { resolveChartingPlatformNewsletterChart } from '../charting-platform-export'
+import type { NewsletterDraftDocument } from '../types'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -217,6 +226,147 @@ describe('daily newsletter run targets', () => {
     expect(42_000 - __testOnly.DAILY_CHART_CAPTURE_BUDGET_MS).toBeGreaterThanOrEqual(
       12_000,
     )
+  })
+
+  it('uses immutable capture time instead of a recent chart rename for freshness', () => {
+    const chartSpec = {
+      mode: 'price' as const,
+      symbol: 'AAPL',
+      range: '1m' as const,
+      interval: 'D' as const,
+      chartType: 'candles' as const,
+    }
+    const currentCapture = {
+      id: 'chart-current',
+      ownerId: null,
+      sessionId: 'automation-session',
+      title: 'Apple price action',
+      symbol: 'AAPL',
+      chartSpec,
+      chartImageUrl: 'https://assets.example/aapl.png',
+      thumbnailUrl: 'https://assets.example/aapl.png',
+      chartExportUrl: 'https://charts.theintraday.com/export/aapl',
+      capturedAt: '2026-08-07T13:59:59.123456+00:00',
+      rendererContract: NEWSLETTER_CHART_RENDERER_CONTRACT,
+      sceneHash: hashNewsletterChartScene(chartSpec),
+      imageSha256: null,
+      createdAt: '2026-08-07T13:59:59.123456+00:00',
+      updatedAt: '2026-07-01T14:00:00.000Z',
+    }
+    const renamedOldChart = {
+      ...currentCapture,
+      capturedAt: '2026-07-01T14:00:00.000Z',
+      updatedAt: '2026-08-07T14:00:00.000Z',
+    }
+
+    expect(
+      __testOnly.isChartCurrent(renamedOldChart as never, '2026-08-07'),
+    ).toBe(false)
+    expect(
+      __testOnly.isChartCurrent(currentCapture as never, '2026-08-07'),
+    ).toBe(true)
+    expect(
+      __testOnly.isChartCurrent(
+        {
+          ...currentCapture,
+          capturedAt: 'legacy-or-missing',
+        } as never,
+        '2026-08-07',
+      ),
+    ).toBe(false)
+    expect(
+      __testOnly.isChartCurrent(
+        {
+          ...currentCapture,
+          rendererContract: 'legacy-reconstructed-v0',
+        } as never,
+        '2026-08-07',
+      ),
+    ).toBe(false)
+    expect(
+      __testOnly.isChartCurrent(
+        { ...currentCapture, sceneHash: '' } as never,
+        '2026-08-07',
+      ),
+    ).toBe(false)
+  })
+
+  it('keeps trusted provenance when an automated chart repair is normalized for save', () => {
+    const capturedAt = '2026-08-07T14:30:00.123456+00:00'
+    const publicChartBaseUrl = 'https://charts.theintraday.com'
+    const chartSpec = materializeNewsletterChartScene(
+      {
+        mode: 'price',
+        symbol: 'AAPL',
+        range: '1m',
+        interval: 'D',
+        chartType: 'candles',
+      },
+      capturedAt,
+    )
+    const chartImageUrl =
+      `https://example.supabase.co/storage/v1/object/public/newsletter-charts/immutable/aa/${'a'.repeat(64)}.png`
+    const chartExportUrl = resolveChartingPlatformNewsletterChart(chartSpec, {
+      chartBaseUrl: publicChartBaseUrl,
+      theme: 'light',
+    }).interactiveUrl
+    const chartProvenance = buildNewsletterChartProvenance({
+      source: 'automation',
+      capturedAt,
+      imageUrl: chartImageUrl,
+      interactiveUrl: chartExportUrl,
+      scene: chartSpec,
+    })
+    const repaired: NewsletterDraftDocument = {
+      ticker: 'AAPL',
+      format: 'single_stock',
+      featuredTickers: ['AAPL'],
+      generatedAt: capturedAt,
+      subjectLine: 'Apple market update',
+      introText: 'Apple is in focus.',
+      autoPickedStock: false,
+      blocks: [
+        {
+          id: 'block-1',
+          layoutId: 'chart_plus_commentary',
+          templateId: 'daily_wiim_catalyst',
+          selectionReason: 'Current Apple catalyst.',
+          heading: 'Apple price action',
+          body: '<p>Apple is in focus.</p>',
+          chartImageUrl,
+          chartAlt: 'Apple one-month price chart',
+          chartExportUrl,
+          chartSpec,
+          chartProvenance,
+          chartNeedsRegeneration: false,
+        },
+      ],
+    }
+    const existing: NewsletterDraftDocument = {
+      ...repaired,
+      blocks: [
+        {
+          ...repaired.blocks[0],
+          chartImageUrl: 'https://assets.example/legacy.png',
+          chartProvenance: undefined,
+          chartNeedsRegeneration: true,
+        },
+      ],
+    }
+
+    const merged = __testOnly.mergeRepairedDailyDraft(existing, repaired)
+    const normalized = normalizeNewsletterDraftDocument(
+      merged,
+      publicChartBaseUrl,
+    )
+
+    expect(merged.blocks[0].chartProvenance).toEqual(chartProvenance)
+    expect(normalized.blocks[0]).toMatchObject({
+      chartImageUrl,
+      chartExportUrl,
+      chartProvenance,
+      chartNeedsRegeneration: false,
+    })
   })
 })
 

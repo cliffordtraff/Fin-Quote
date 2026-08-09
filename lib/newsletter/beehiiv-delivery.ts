@@ -17,13 +17,13 @@ import {
 import {
   beginBeehiivSyncRemoteCall,
   claimBeehiivSyncOperation,
-  completeBeehiivSyncOperation,
   getBeehiivDelivery,
   getBeehiivIntegration,
   getBeehiivSyncOperation,
+  isNewsletterDraftSourceVersionCurrent,
+  persistBeehiivSyncReceipt,
   recordBeehiivSyncFailure,
   recordBeehiivSyncRemoteResult,
-  saveBeehiivDelivery,
   saveBeehiivPublication,
 } from '@/lib/beehiiv/store'
 import type {
@@ -47,8 +47,10 @@ import {
 
 export type BeehiivDeliveryConflictCode =
   | 'ambiguous_create'
+  | 'ambiguous_update'
   | 'busy'
   | 'draft_not_ready'
+  | 'draft_changed'
   | 'publication_mismatch'
   | 'post_not_draft'
   | 'asset_preflight_failed'
@@ -653,10 +655,27 @@ function beehiivSyncOperationMatches(input: {
   )
 }
 
-function isDefinitiveBeehiivCreateFailure(error: unknown): boolean {
+function isDefinitiveBeehiivRemoteFailure(error: unknown): boolean {
   return (
     error instanceof BeehiivReconnectRequiredError ||
     error instanceof BeehiivToolRejectedError
+  )
+}
+
+function ambiguousOperationConflict(
+  operation: BeehiivSyncOperationRecord,
+): BeehiivDeliveryConflictError {
+  if (operation.operationKind === 'update') {
+    return new BeehiivDeliveryConflictError(
+      'ambiguous_update',
+      operation.lastError ??
+        'A previous Beehiiv update may still finish remotely. Resolve that indeterminate update before syncing any further content.',
+    )
+  }
+  return new BeehiivDeliveryConflictError(
+    'ambiguous_create',
+    operation.lastError ??
+      'A previous Beehiiv create may have succeeded without returning a durable post ID. Resolve that draft before retrying.',
   )
 }
 
@@ -667,10 +686,29 @@ function recoveryConflict(): BeehiivDeliveryConflictError {
   )
 }
 
+function draftChangedConflict(): BeehiivDeliveryConflictError {
+  return new BeehiivDeliveryConflictError(
+    'draft_changed',
+    'The newsletter changed while Beehiiv sync was in flight. Beehiiv kept the saved version that started this sync; sync again to send the newer version.',
+  )
+}
+
+async function isOperationSourceDraftCurrent(
+  operation: BeehiivSyncOperationRecord,
+): Promise<boolean> {
+  if (!operation.sourceDraftUpdatedAt) return false
+  return isNewsletterDraftSourceVersionCurrent({
+    ownerId: operation.ownerId,
+    draftId: operation.draftId,
+    sourceDraftUpdatedAt: operation.sourceDraftUpdatedAt,
+  })
+}
+
 async function persistRecordedOperation(input: {
   scope: NewsletterDraftScope
   operation: BeehiivSyncOperationRecord
   leaseToken: string
+  mode?: BeehiivDeliveryMode
 }): Promise<{ delivery: BeehiivDeliveryRecord; mode: BeehiivDeliveryMode }> {
   const { operation } = input
   if (!operation.remotePostId || !operation.remoteEditorUrl) {
@@ -679,33 +717,42 @@ async function persistRecordedOperation(input: {
       'Beehiiv returned a draft but its durable identifiers were not recorded. Resolve the ambiguous sync before retrying.',
     )
   }
-  const delivery = await saveBeehiivDelivery({
-    ownerId: operation.ownerId,
-    draftId: operation.draftId,
-    publicationId: operation.publicationId,
-    postId: operation.remotePostId,
-    title: operation.title,
-    previewUrl: operation.remotePreviewUrl,
-    editorUrl: operation.remoteEditorUrl,
-    contentHash: operation.contentHash,
-  })
+  if (!operation.sourceDraftUpdatedAt) {
+    throw new Error(
+      'Beehiiv sync recovery is missing its source draft version.',
+    )
+  }
   const mode: BeehiivDeliveryMode =
-    operation.operationKind === 'create' ? 'created' : 'updated'
-  await appendNewsletterDraftEvent(input.scope, operation.draftId, {
-    type: mode === 'created' ? 'beehiiv_draft_created' : 'beehiiv_draft_synced',
-    metadata: {
-      beehiivPostId: operation.remotePostId,
-      beehiivEditorUrl: operation.remoteEditorUrl,
-      publicationId: operation.publicationId,
-      recoveryMarker: operation.operationKey,
-    },
-    dedupeKey: `beehiiv-sync:${operation.operationKey}`,
-  })
-  await completeBeehiivSyncOperation({
+    input.mode ??
+    (operation.operationKind === 'create' ? 'created' : 'updated')
+  if (mode !== 'unchanged') {
+    await appendNewsletterDraftEvent(input.scope, operation.draftId, {
+      type: mode === 'created' ? 'beehiiv_draft_created' : 'beehiiv_draft_synced',
+      metadata: {
+        beehiivPostId: operation.remotePostId,
+        beehiivEditorUrl: operation.remoteEditorUrl,
+        publicationId: operation.publicationId,
+        recoveryMarker: operation.operationKey,
+        contentHash: operation.contentHash,
+        sourceDraftUpdatedAt: operation.sourceDraftUpdatedAt,
+      },
+      dedupeKey: `beehiiv-sync:${operation.operationKey}`,
+    })
+  }
+  const delivery = await persistBeehiivSyncReceipt({
     ownerId: operation.ownerId,
     draftId: operation.draftId,
     leaseToken: input.leaseToken,
   })
+  if (!delivery) {
+    throw new BeehiivDeliveryConflictError(
+      'busy',
+      'This Beehiiv sync lease was superseded before its receipt could be persisted. Refresh and use the latest delivery state.',
+    )
+  }
+  if (!(await isOperationSourceDraftCurrent(operation))) {
+    throw draftChangedConflict()
+  }
   return { delivery, mode }
 }
 
@@ -844,6 +891,7 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
         operationKind: pending.operationKind,
         operationKey,
         contentHash,
+        sourceDraftUpdatedAt: beehiivExport.record.updatedAt,
         title,
         leaseToken,
       })
@@ -871,7 +919,123 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
         'Another Beehiiv sync is already recovering this newsletter.',
       )
     }
-    return { delivery: existing, mode: 'unchanged' }
+    const leaseToken = randomUUID()
+    const operationKind: BeehiivSyncOperationRecord['operationKind'] = 'update'
+    const operation = await claimBeehiivSyncOperation({
+      ownerId,
+      draftId: input.draftId,
+      publicationId: publication.id,
+      operationKind,
+      operationKey,
+      contentHash,
+      sourceDraftUpdatedAt: beehiivExport.record.updatedAt,
+      title,
+      leaseToken,
+    })
+    if (!operation) {
+      throw new BeehiivDeliveryConflictError(
+        'busy',
+        'Beehiiv receipt verification could not be claimed. Try again after the current request finishes.',
+      )
+    }
+    if (operation.syncState === 'remote_recorded') {
+      if (
+        beehiivSyncOperationMatches({
+          operation,
+          publicationId: publication.id,
+          operationKind,
+          operationKey,
+          contentHash,
+        }) &&
+        operation.leaseToken === leaseToken
+      ) {
+        return persistRecordedOperation({
+          scope: input.scope,
+          operation,
+          leaseToken,
+        })
+      }
+      if (
+        operation.publicationId === publication.id &&
+        operation.operationKey === operationKey &&
+        operation.contentHash === contentHash
+      ) {
+        throw new BeehiivDeliveryConflictError(
+          'busy',
+          'A Beehiiv remote result became ready for recovery. Retry this sync to finish recording it.',
+        )
+      }
+      throw recoveryConflict()
+    }
+    if (operation.syncState === 'ambiguous') {
+      throw ambiguousOperationConflict(operation)
+    }
+    if (operation.leaseToken !== leaseToken) {
+      throw new BeehiivDeliveryConflictError(
+        'busy',
+        'Another Beehiiv sync is already verifying this newsletter.',
+      )
+    }
+    if (
+      !beehiivSyncOperationMatches({
+        operation,
+        publicationId: publication.id,
+        operationKind,
+        operationKey,
+        contentHash,
+      })
+    ) {
+      throw recoveryConflict()
+    }
+
+    if (!(await isOperationSourceDraftCurrent(operation))) {
+      const conflict = draftChangedConflict()
+      await recordBeehiivSyncFailure({
+        ownerId,
+        draftId: input.draftId,
+        leaseToken,
+        state: 'failed',
+        error: conflict.message,
+      }).catch(() => undefined)
+      throw conflict
+    }
+
+    const currentDelivery = await getBeehiivDelivery(ownerId, input.draftId)
+    if (
+      !currentDelivery ||
+      currentDelivery.id !== existing.id ||
+      currentDelivery.publicationId !== existing.publicationId ||
+      currentDelivery.postId !== existing.postId ||
+      currentDelivery.contentHash !== contentHash
+    ) {
+      const conflict = new BeehiivDeliveryConflictError(
+        'busy',
+        'The Beehiiv receipt changed while this sync was being verified. Retry with the latest state.',
+      )
+      await recordBeehiivSyncFailure({
+        ownerId,
+        draftId: input.draftId,
+        leaseToken,
+        state: 'failed',
+        error: conflict.message,
+      }).catch(() => undefined)
+      throw conflict
+    }
+
+    const recorded = await recordBeehiivSyncRemoteResult({
+      ownerId,
+      draftId: input.draftId,
+      leaseToken,
+      postId: currentDelivery.postId,
+      previewUrl: currentDelivery.previewUrl,
+      editorUrl: currentDelivery.editorUrl,
+    })
+    return persistRecordedOperation({
+      scope: input.scope,
+      operation: recorded,
+      leaseToken,
+      mode: 'unchanged',
+    })
   }
 
   const operationKind = existing ? 'update' : 'create'
@@ -883,6 +1047,7 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
     operationKind,
     operationKey,
     contentHash,
+    sourceDraftUpdatedAt: beehiivExport.record.updatedAt,
     title,
     leaseToken,
   })
@@ -905,11 +1070,7 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
     throw recoveryConflict()
   }
   if (operation.syncState === 'ambiguous') {
-    throw new BeehiivDeliveryConflictError(
-      'ambiguous_create',
-      operation.lastError ??
-        'A previous Beehiiv create may have succeeded without returning a durable post ID. Resolve that draft before retrying.',
-    )
+    throw ambiguousOperationConflict(operation)
   }
   if (operation.leaseToken !== leaseToken) {
     throw new BeehiivDeliveryConflictError(
@@ -923,6 +1084,18 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
       operation,
       leaseToken,
     })
+  }
+
+  if (!(await isOperationSourceDraftCurrent(operation))) {
+    const conflict = draftChangedConflict()
+    await recordBeehiivSyncFailure({
+      ownerId,
+      draftId: input.draftId,
+      leaseToken,
+      state: 'failed',
+      error: conflict.message,
+    }).catch(() => undefined)
+    throw conflict
   }
 
   await beginBeehiivSyncRemoteCall({
@@ -966,8 +1139,7 @@ export async function deliverNewsletterDraftToBeehiiv(input: {
       draftId: input.draftId,
       leaseToken,
       state:
-        operationKind === 'create' &&
-        !isDefinitiveBeehiivCreateFailure(error)
+        !isDefinitiveBeehiivRemoteFailure(error)
           ? 'ambiguous'
           : 'failed',
       error: message,

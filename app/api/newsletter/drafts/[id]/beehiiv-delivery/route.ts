@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { BeehiivReconnectRequiredError } from '@/lib/beehiiv/client'
 import { getBeehiivDelivery } from '@/lib/beehiiv/store'
+import { beehiivDeliveryNeedsSync } from '@/lib/beehiiv/sync-freshness'
 import {
   BeehiivDeliveryConflictError,
   deliverNewsletterDraftToBeehiiv,
@@ -63,9 +64,14 @@ export async function GET(
         'Sign in before connecting or sending a draft to Beehiiv.',
       )
     }
-    await getNewsletterDraft(scope, id)
+    const record = await getNewsletterDraft(scope, id)
     const delivery = await getBeehiivDelivery(scope.ownerId, id)
-    const response = NextResponse.json({ delivery })
+    const response = NextResponse.json({
+      delivery,
+      needsSync: delivery
+        ? beehiivDeliveryNeedsSync(record.updatedAt, delivery)
+        : false,
+    })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
     return errorResponse(error)
@@ -85,7 +91,14 @@ export async function POST(
       draftId: id,
       host: request.headers.get('host'),
     })
-    const response = NextResponse.json(result)
+    const record = await getNewsletterDraft(scope, id)
+    const response = NextResponse.json({
+      ...result,
+      needsSync: beehiivDeliveryNeedsSync(
+        record.updatedAt,
+        result.delivery,
+      ),
+    })
     return attachNewsletterDraftSessionCookie(response, createdSessionId)
   } catch (error) {
     return errorResponse(error)

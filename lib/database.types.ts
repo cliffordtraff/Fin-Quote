@@ -9,6 +9,66 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      dashboard_chart_render_assets: {
+        Row: {
+          render_key: string
+          theme: string
+          setting_version: string
+          spec_hash: string
+          renderer_version: string
+          status: string
+          lease_token: string | null
+          lease_expires_at: string | null
+          storage_path: string | null
+          image_sha256: string | null
+          byte_size: number | null
+          attempt_count: number
+          attempt_window_started_at: string
+          retry_after: string | null
+          created_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          render_key: string
+          theme: string
+          setting_version: string
+          spec_hash: string
+          renderer_version: string
+          status: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          storage_path?: string | null
+          image_sha256?: string | null
+          byte_size?: number | null
+          attempt_count?: number
+          attempt_window_started_at?: string
+          retry_after?: string | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          render_key?: string
+          theme?: string
+          setting_version?: string
+          spec_hash?: string
+          renderer_version?: string
+          status?: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          storage_path?: string | null
+          image_sha256?: string | null
+          byte_size?: number | null
+          attempt_count?: number
+          attempt_window_started_at?: string
+          retry_after?: string | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Relationships: []
+      }
       company: {
         Row: {
           id: string
@@ -999,6 +1059,7 @@ export interface Database {
           preview_url: string | null
           editor_url: string
           content_hash: string
+          source_draft_updated_at: string | null
           lifecycle_status: string
           lifecycle_applied_status: string | null
           lifecycle_applied_at: string | null
@@ -1027,6 +1088,7 @@ export interface Database {
           preview_url?: string | null
           editor_url: string
           content_hash: string
+          source_draft_updated_at?: string | null
           lifecycle_status?: string
           lifecycle_applied_status?: string | null
           lifecycle_applied_at?: string | null
@@ -1054,6 +1116,7 @@ export interface Database {
           preview_url?: string | null
           editor_url?: string
           content_hash?: string
+          source_draft_updated_at?: string | null
           lifecycle_status?: string
           lifecycle_applied_status?: string | null
           lifecycle_applied_at?: string | null
@@ -1090,6 +1153,7 @@ export interface Database {
           operation_kind: string
           operation_key: string
           content_hash: string
+          source_draft_updated_at: string | null
           title: string
           sync_state: string
           remote_post_id: string | null
@@ -1111,6 +1175,7 @@ export interface Database {
           operation_kind: string
           operation_key: string
           content_hash: string
+          source_draft_updated_at?: string | null
           title: string
           sync_state?: string
           remote_post_id?: string | null
@@ -1132,6 +1197,7 @@ export interface Database {
           operation_kind?: string
           operation_key?: string
           content_hash?: string
+          source_draft_updated_at?: string | null
           title?: string
           sync_state?: string
           remote_post_id?: string | null
@@ -1237,6 +1303,33 @@ export interface Database {
             referencedColumns: ["id"]
           },
         ]
+      }
+      newsletter_draft_fork_requests: {
+        Row: {
+          owner_id: string
+          idempotency_key: string
+          source_draft_id: string
+          request_hash: string
+          created_draft_id: string
+          created_at: string
+        }
+        Insert: {
+          owner_id: string
+          idempotency_key: string
+          source_draft_id: string
+          request_hash: string
+          created_draft_id: string
+          created_at?: string
+        }
+        Update: {
+          owner_id?: string
+          idempotency_key?: string
+          source_draft_id?: string
+          request_hash?: string
+          created_draft_id?: string
+          created_at?: string
+        }
+        Relationships: []
       }
       newsletter_integrations: {
         Row: {
@@ -1396,6 +1489,132 @@ export interface Database {
           },
         ]
       }
+      newsletter_chart_library: {
+        Row: {
+          id: string
+          owner_id: string | null
+          session_id: string
+          title: string
+          symbol: string
+          chart_spec: Json
+          image_path: string
+          image_url: string
+          thumbnail_path: string | null
+          thumbnail_url: string | null
+          chart_export_url: string
+          scene_version: number
+          scene_hash: string
+          image_sha256: string | null
+          captured_at: string
+          renderer_contract: string
+          post_request_key_hash: string | null
+          post_request_fingerprint: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id?: string | null
+          session_id: string
+          title: string
+          symbol: string
+          chart_spec: Json
+          image_path: string
+          image_url: string
+          thumbnail_path?: string | null
+          thumbnail_url?: string | null
+          chart_export_url: string
+          scene_version?: number
+          scene_hash: string
+          image_sha256?: string | null
+          captured_at: string
+          renderer_contract: string
+          post_request_key_hash?: string | null
+          post_request_fingerprint?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          owner_id?: string | null
+          session_id?: string
+          title?: string
+          symbol?: string
+          chart_spec?: Json
+          image_path?: string
+          image_url?: string
+          thumbnail_path?: string | null
+          thumbnail_url?: string | null
+          chart_export_url?: string
+          scene_version?: number
+          scene_hash?: string
+          image_sha256?: string | null
+          captured_at?: string
+          renderer_contract?: string
+          post_request_key_hash?: string | null
+          post_request_fingerprint?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_chart_post_rate_events: {
+        Row: {
+          id: number
+          owner_id: string
+          admitted_at: string
+        }
+        Insert: {
+          id?: number
+          owner_id: string
+          admitted_at?: string
+        }
+        Update: {
+          id?: number
+          owner_id?: string
+          admitted_at?: string
+        }
+        Relationships: []
+      }
+      newsletter_chart_post_requests: {
+        Row: {
+          owner_id: string
+          idempotency_key: string
+          fingerprint: string
+          status: string
+          lease_token: string | null
+          lease_expires_at: string | null
+          result_receipt: Json | null
+          created_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          owner_id: string
+          idempotency_key: string
+          fingerprint: string
+          status: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          result_receipt?: Json | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          owner_id?: string
+          idempotency_key?: string
+          fingerprint?: string
+          status?: string
+          lease_token?: string | null
+          lease_expires_at?: string | null
+          result_receipt?: Json | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Relationships: []
+      }
       newsletter_drafts: {
         Row: {
           id: string
@@ -1407,6 +1626,14 @@ export interface Database {
           source_review_key: string | null
           beehiiv_url: string | null
           published_at: string | null
+          archived_at: string | null
+          format: string
+          featured_tickers: string[]
+          ticker_symbols: string[]
+          generated_at: string
+          source_market_date: string
+          block_count: number
+          attached_chart_count: number
           subject_line: string
           draft_json: Json
           preview_html: string
@@ -1423,6 +1650,14 @@ export interface Database {
           source_review_key?: string | null
           beehiiv_url?: string | null
           published_at?: string | null
+          archived_at?: string | null
+          format?: string
+          featured_tickers?: string[]
+          ticker_symbols?: string[]
+          generated_at: string
+          source_market_date?: string
+          block_count?: number
+          attached_chart_count?: number
           subject_line: string
           draft_json: Json
           preview_html: string
@@ -1430,6 +1665,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          id?: string
           owner_id?: string | null
           session_id?: string
           ticker?: string
@@ -1438,6 +1674,14 @@ export interface Database {
           source_review_key?: string | null
           beehiiv_url?: string | null
           published_at?: string | null
+          archived_at?: string | null
+          format?: string
+          featured_tickers?: string[]
+          ticker_symbols?: string[]
+          generated_at?: string
+          source_market_date?: string
+          block_count?: number
+          attached_chart_count?: number
           subject_line?: string
           draft_json?: Json
           preview_html?: string
@@ -1554,6 +1798,142 @@ export interface Database {
           updated_at?: string
         }
         Relationships: []
+      }
+      newsletter_editorial_shortlist_revisions: {
+        Row: {
+          id: string
+          run_id: string
+          revision: number
+          algorithm_version: string
+          baseline_fingerprint: string
+          actor_id: string | null
+          session_id: string | null
+          command_hash: string
+          idempotency_key: string
+          request_payload: Json
+          baseline_count: number
+          selected_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          run_id: string
+          revision: number
+          algorithm_version: string
+          baseline_fingerprint: string
+          actor_id?: string | null
+          session_id?: string | null
+          command_hash: string
+          idempotency_key: string
+          request_payload: Json
+          baseline_count: number
+          selected_count: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          run_id?: string
+          revision?: number
+          algorithm_version?: string
+          baseline_fingerprint?: string
+          actor_id?: string | null
+          session_id?: string | null
+          command_hash?: string
+          idempotency_key?: string
+          request_payload?: Json
+          baseline_count?: number
+          selected_count?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'newsletter_editorial_shortlist_revisions_run_id_fkey'
+            columns: ['run_id']
+            isOneToOne: false
+            referencedRelation: 'newsletter_daily_runs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      newsletter_editorial_shortlist_entries: {
+        Row: {
+          revision_id: string
+          item_id: string
+          baseline_position: number | null
+          selected_position: number | null
+          decision: string
+          reason_code: string | null
+          note: string | null
+          evidence_snapshot: Json
+          created_at: string
+        }
+        Insert: {
+          revision_id: string
+          item_id: string
+          baseline_position?: number | null
+          selected_position?: number | null
+          decision: string
+          reason_code?: string | null
+          note?: string | null
+          evidence_snapshot: Json
+          created_at?: string
+        }
+        Update: {
+          revision_id?: string
+          item_id?: string
+          baseline_position?: number | null
+          selected_position?: number | null
+          decision?: string
+          reason_code?: string | null
+          note?: string | null
+          evidence_snapshot?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'newsletter_editorial_shortlist_entries_revision_id_fkey'
+            columns: ['revision_id']
+            isOneToOne: false
+            referencedRelation: 'newsletter_editorial_shortlist_revisions'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      newsletter_editorial_shortlist_heads: {
+        Row: {
+          run_id: string
+          revision_id: string
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          run_id: string
+          revision_id: string
+          revision: number
+          updated_at?: string
+        }
+        Update: {
+          run_id?: string
+          revision_id?: string
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'newsletter_editorial_shortlist_heads_run_id_fkey'
+            columns: ['run_id']
+            isOneToOne: true
+            referencedRelation: 'newsletter_daily_runs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'newsletter_editorial_shortlist_heads_run_id_revision_id_revision_fkey'
+            columns: ['run_id', 'revision_id', 'revision']
+            isOneToOne: false
+            referencedRelation: 'newsletter_editorial_shortlist_revisions'
+            referencedColumns: ['run_id', 'id', 'revision']
+          },
+        ]
       }
       newsletter_daily_automation_runs: {
         Row: {
@@ -1874,6 +2254,82 @@ export interface Database {
         }
         Relationships: []
       }
+      stock_why_moving_review_bulk_operations: {
+        Row: {
+          idempotency_key: string
+          target_status: string
+          reviewer_id: string
+          request_hash: string
+          item_count: number
+          created_at: string
+        }
+        Insert: {
+          idempotency_key: string
+          target_status: string
+          reviewer_id: string
+          request_hash: string
+          item_count: number
+          created_at?: string
+        }
+        Update: {
+          idempotency_key?: string
+          target_status?: string
+          reviewer_id?: string
+          request_hash?: string
+          item_count?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      stock_why_moving_review_bulk_receipts: {
+        Row: {
+          operation_key: string
+          review_id: string
+          from_status: string
+          to_status: string
+          expected_updated_at: string
+          result_reviewed_at: string | null
+          result_updated_at: string
+          changed: boolean
+          created_at: string
+        }
+        Insert: {
+          operation_key: string
+          review_id: string
+          from_status: string
+          to_status: string
+          expected_updated_at: string
+          result_reviewed_at?: string | null
+          result_updated_at: string
+          changed: boolean
+          created_at?: string
+        }
+        Update: {
+          operation_key?: string
+          review_id?: string
+          from_status?: string
+          to_status?: string
+          expected_updated_at?: string
+          result_reviewed_at?: string | null
+          result_updated_at?: string
+          changed?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_why_moving_review_bulk_receipts_operation_key_fkey"
+            columns: ["operation_key"]
+            referencedRelation: "stock_why_moving_review_bulk_operations"
+            referencedColumns: ["idempotency_key"]
+          },
+          {
+            foreignKeyName: "stock_why_moving_review_bulk_receipts_review_id_fkey"
+            columns: ["review_id"]
+            referencedRelation: "stock_why_moving_reviews"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       stock_why_moving_reviews: {
         Row: {
           id: string
@@ -1886,6 +2342,12 @@ export interface Database {
           notes: string
           reviewer_id: string | null
           reviewed_at: string | null
+          candidate_snapshot: Json
+          catalyst_snapshot: Json
+          snapshot_state: string
+          discovery_run_id: string
+          first_seen_at: string
+          last_seen_at: string
           created_at: string
           updated_at: string
         }
@@ -1900,6 +2362,12 @@ export interface Database {
           notes?: string
           reviewer_id?: string | null
           reviewed_at?: string | null
+          candidate_snapshot?: Json
+          catalyst_snapshot?: Json
+          snapshot_state?: string
+          discovery_run_id?: string
+          first_seen_at?: string
+          last_seen_at?: string
           created_at?: string
           updated_at?: string
         }
@@ -1913,6 +2381,12 @@ export interface Database {
           notes?: string
           reviewer_id?: string | null
           reviewed_at?: string | null
+          candidate_snapshot?: Json
+          catalyst_snapshot?: Json
+          snapshot_state?: string
+          discovery_run_id?: string
+          first_seen_at?: string
+          last_seen_at?: string
           updated_at?: string
         }
         Relationships: []
@@ -2270,6 +2744,182 @@ export interface Database {
     }
     Views: {}
     Functions: {
+      acquire_newsletter_chart_post: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_fingerprint: string
+          p_lease_seconds?: number
+        }
+        Returns: Array<{
+          disposition: string
+          lease_token: string | null
+          result_receipt: Json | null
+          retry_after_seconds: number
+        }>
+      }
+      complete_newsletter_chart_post: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_fingerprint: string
+          p_lease_token: string
+          p_result_receipt: Json
+        }
+        Returns: Array<{
+          disposition: string
+          result_receipt: Json | null
+        }>
+      }
+      fail_newsletter_chart_post: {
+        Args: {
+          p_owner_id: string
+          p_idempotency_key: string
+          p_fingerprint: string
+          p_lease_token: string
+        }
+        Returns: Array<{
+          disposition: string
+        }>
+      }
+      acquire_dashboard_chart_render_asset: {
+        Args: {
+          p_render_key: string
+          p_theme: string
+          p_setting_version: string
+          p_spec_hash: string
+          p_renderer_version: string
+          p_lease_seconds?: number
+        }
+        Returns: Array<{
+          disposition: string
+          lease_token: string | null
+          storage_path: string | null
+          retry_after_seconds: number
+          attempt_count: number
+        }>
+      }
+      complete_dashboard_chart_render_asset: {
+        Args: {
+          p_render_key: string
+          p_lease_token: string
+          p_storage_path: string
+          p_image_sha256: string
+          p_byte_size: number
+        }
+        Returns: Array<{
+          disposition: string
+          storage_path: string | null
+        }>
+      }
+      fail_dashboard_chart_render_asset: {
+        Args: {
+          p_render_key: string
+          p_lease_token: string
+          p_retry_after_seconds?: number
+        }
+        Returns: boolean
+      }
+      invalidate_dashboard_chart_render_asset: {
+        Args: {
+          p_render_key: string
+          p_storage_path: string
+        }
+        Returns: boolean
+      }
+      save_newsletter_editorial_shortlist: {
+        Args: {
+          p_run_id: string
+          p_expected_revision: number
+          p_idempotency_key: string
+          p_algorithm_version: string
+          p_baseline_fingerprint: string
+          p_command_hash: string
+          p_actor_id: string | null
+          p_session_id: string | null
+          p_catalog_tokens: Json
+          p_entries: Json
+        }
+        Returns: Array<{
+          revision_id: string
+          revision: number
+          changed: boolean
+          created_at: string
+        }>
+      }
+      create_newsletter_draft_fork: {
+        Args: {
+          p_owner_id: string
+          p_source_draft_id: string
+          p_source_updated_at: string
+          p_session_id: string
+          p_idempotency_key: string
+          p_request_hash: string
+          p_draft_json: Json
+          p_preview_html: string
+        }
+        Returns: Database['public']['Tables']['newsletter_drafts']['Row'][]
+      }
+      bulk_transition_stock_why_moving_reviews: {
+        Args: {
+          p_target_status: string
+          p_items: Json
+          p_reviewer_id: string
+          p_idempotency_key: string
+        }
+        Returns: Array<{
+          id: string
+          status: string
+          reviewed_at: string | null
+          updated_at: string
+          changed: boolean
+        }>
+      }
+      ingest_stock_why_moving_review_candidates: {
+        Args: {
+          p_items: Json
+          p_seen_at: string
+          p_source_run_id: string
+        }
+        Returns: Database['public']['Tables']['stock_why_moving_reviews']['Row'][]
+      }
+      get_stock_why_moving_editorial_inbox_facets: {
+        Args: {
+          p_current_review_keys?: string[]
+          p_status?: string | null
+          p_session?: string | null
+          p_market_date?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+        }
+        Returns: Array<{
+          total_count: number
+          pending_count: number
+          needs_work_count: number
+          approved_count: number
+          dismissed_count: number
+        }>
+      }
+      list_stock_why_moving_editorial_inbox: {
+        Args: {
+          p_current_review_keys?: string[]
+          p_status?: string | null
+          p_session?: string | null
+          p_market_date?: string | null
+          p_date_from?: string | null
+          p_date_to?: string | null
+          p_cursor_bucket?: number | null
+          p_cursor_market_date?: string | null
+          p_cursor_first_seen_at?: string | null
+          p_cursor_id?: string | null
+          p_limit?: number
+        }
+        Returns: Array<
+          Database['public']['Tables']['stock_why_moving_reviews']['Row'] & {
+            sort_bucket: number
+          }
+        >
+      }
       claim_newsletter_daily_automation: {
         Args: {
           p_market_date: string
@@ -2381,6 +3031,49 @@ export interface Database {
         }
         Returns: Database['public']['Tables']['newsletter_beehiiv_sync_operations']['Row'][]
       }
+      claim_newsletter_beehiiv_sync_v2: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_publication_id: string
+          p_operation_kind: string
+          p_operation_key: string
+          p_content_hash: string
+          p_title: string
+          p_source_draft_updated_at: string
+          p_lease_token: string
+          p_lease_seconds?: number
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_sync_operations']['Row'][]
+      }
+      is_newsletter_draft_source_version_current: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_source_draft_updated_at: string
+        }
+        Returns: boolean
+      }
+      rebind_newsletter_beehiiv_delivery_source_version: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_publication_id: string
+          p_post_id: string
+          p_content_hash: string
+          p_expected_source_draft_updated_at: string | null
+          p_source_draft_updated_at: string
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
+      persist_newsletter_beehiiv_sync_receipt: {
+        Args: {
+          p_owner_id: string
+          p_draft_id: string
+          p_lease_token: string
+        }
+        Returns: Database['public']['Tables']['newsletter_beehiiv_deliveries']['Row'][]
+      }
       renew_newsletter_beehiiv_reconciliation: {
         Args: {
           p_owner_id: string
@@ -2433,6 +3126,20 @@ export interface Database {
           p_next_attempt_at: string
         }
         Returns: Database['public']['Tables']['newsletter_webhook_outbox']['Row'][]
+      }
+      bulk_set_newsletter_draft_archive_state: {
+        Args: {
+          p_owner_id: string
+          p_action: string
+          p_items: Json
+          p_idempotency_key: string
+        }
+        Returns: Array<{
+          id: string
+          archived_at: string | null
+          updated_at: string
+          changed: boolean
+        }>
       }
       generate_conversation_title: {
         Args: { conversation_id: string }

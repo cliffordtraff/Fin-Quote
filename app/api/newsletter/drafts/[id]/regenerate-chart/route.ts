@@ -6,6 +6,7 @@ import {
   NewsletterDraftConflictError,
   NewsletterDraftNotFoundError,
   NewsletterPublishedDraftImmutableError,
+  getNewsletterDraft,
   regenerateNewsletterDraftChart,
 } from '@/lib/newsletter/drafts'
 import {
@@ -17,6 +18,7 @@ import {
   getDefaultPublicChartingBaseUrlForHost,
 } from '@/lib/newsletter/charting-platform-export'
 import type { NewsletterDraftDocument } from '@/lib/newsletter/types'
+import { NewsletterCapturePathError } from '@/lib/newsletter/capture-output-path'
 
 function requireExpectedUpdatedAt(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -34,6 +36,9 @@ function toErrorResponse(error: unknown): NextResponse {
   }
   if (error instanceof NewsletterPublishedDraftImmutableError) {
     return NextResponse.json({ error: error.message }, { status: 409 })
+  }
+  if (error instanceof NewsletterCapturePathError) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
   const message =
@@ -75,6 +80,7 @@ export async function POST(
         chartBaseUrl: getDefaultChartingBaseUrlForHost(host),
         publicChartBaseUrl: getDefaultPublicChartingBaseUrlForHost(host),
         expectedUpdatedAt,
+        signal: request.signal,
       },
     )
 
@@ -83,6 +89,29 @@ export async function POST(
   } catch (error) {
     if (error instanceof Error && error.message === 'expectedUpdatedAt is required') {
       return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    if (
+      error instanceof NewsletterDraftConflictError ||
+      error instanceof NewsletterPublishedDraftImmutableError
+    ) {
+      try {
+        const { id } = await params
+        const { scope } = await resolveNewsletterDraftScope(request)
+        const latest = await getNewsletterDraft(scope, id)
+        return NextResponse.json(
+          {
+            code: 'draft_conflict',
+            error: error.message,
+            latest,
+          },
+          { status: 409 },
+        )
+      } catch {
+        return NextResponse.json(
+          { code: 'draft_conflict', error: error.message },
+          { status: 409 },
+        )
+      }
     }
     return toErrorResponse(error)
   }

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   order: vi.fn(),
   in: vi.fn(),
   range: vi.fn(),
+  abortSignal: vi.fn(),
+  then: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/service-role', () => ({
@@ -16,6 +18,7 @@ vi.mock('@/lib/supabase/service-role', () => ({
 
 import {
   BeehiivDeliveryListLimitError,
+  countBeehiivDeliveriesByLifecycle,
   listBeehiivDeliveries,
 } from '../store'
 
@@ -29,6 +32,7 @@ interface DeliveryRow {
   preview_url: string | null
   editor_url: string
   content_hash: string
+  source_draft_updated_at: string | null
   lifecycle_status: string
   lifecycle_applied_status: string | null
   lifecycle_applied_at: string | null
@@ -60,6 +64,7 @@ function deliveryRow(index: number, id = `delivery-${index}`): DeliveryRow {
     preview_url: null,
     editor_url: `https://app.beehiiv.com/posts/post-${index}`,
     content_hash: `hash-${index}`,
+    source_draft_updated_at: null,
     lifecycle_status: 'draft',
     lifecycle_applied_status: null,
     lifecycle_applied_at: null,
@@ -82,17 +87,22 @@ function deliveryRow(index: number, id = `delivery-${index}`): DeliveryRow {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.abortSignal.mockReset()
+  mocks.then.mockReset()
   const query = {
     eq: mocks.eq,
     order: mocks.order,
     in: mocks.in,
     range: mocks.range,
+    abortSignal: mocks.abortSignal,
+    then: mocks.then,
   }
   mocks.from.mockReturnValue({ select: mocks.select })
   mocks.select.mockReturnValue(query)
   mocks.eq.mockReturnValue(query)
   mocks.order.mockReturnValue(query)
   mocks.in.mockReturnValue(query)
+  mocks.abortSignal.mockReturnValue(query)
   mocks.createServiceRoleClient.mockReturnValue({ from: mocks.from })
 })
 
@@ -194,5 +204,80 @@ describe('listBeehiivDeliveries', () => {
     await expect(listBeehiivDeliveries('owner-1')).rejects.toThrow(
       'Failed to load Beehiiv deliveries: page query failed',
     )
+  })
+})
+
+describe('countBeehiivDeliveriesByLifecycle', () => {
+  it('loads fixed count-only facets without hydrating delivery rows', async () => {
+    const responses = [2, 3, 5, 7, 11].map((count) => ({
+      count,
+      data: null,
+      error: null,
+    }))
+    mocks.then.mockImplementation((onFulfilled, onRejected) =>
+      Promise.resolve(responses.shift()).then(onFulfilled, onRejected),
+    )
+    const controller = new AbortController()
+
+    await expect(
+      countBeehiivDeliveriesByLifecycle(
+        'owner-1',
+        controller.signal,
+      ),
+    ).resolves.toEqual({
+      draft: 2,
+      scheduled: 3,
+      published: 5,
+      archived: 7,
+      unknown: 11,
+    })
+
+    expect(mocks.select).toHaveBeenCalledTimes(5)
+    for (const call of mocks.select.mock.calls) {
+      expect(call).toEqual(['id', { count: 'exact', head: true }])
+    }
+    expect(mocks.eq.mock.calls.filter(([column]) => column === 'owner_id')).toEqual(
+      Array.from({ length: 5 }, () => ['owner_id', 'owner-1']),
+    )
+    expect(
+      mocks.eq.mock.calls
+        .filter(([column]) => column === 'lifecycle_status')
+        .map(([, status]) => status),
+    ).toEqual(['draft', 'scheduled', 'published', 'archived', 'unknown'])
+    expect(mocks.abortSignal).toHaveBeenCalledTimes(5)
+  })
+
+  it('fails closed when a lifecycle facet query fails', async () => {
+    const responses = [
+      { count: null, data: null, error: { message: 'count unavailable' } },
+      ...Array.from({ length: 4 }, () => ({
+        count: 0,
+        data: null,
+        error: null,
+      })),
+    ]
+    mocks.then.mockImplementation((onFulfilled, onRejected) =>
+      Promise.resolve(responses.shift()).then(onFulfilled, onRejected),
+    )
+
+    await expect(
+      countBeehiivDeliveriesByLifecycle('owner-1'),
+    ).rejects.toThrow(
+      'Failed to count draft Beehiiv deliveries: count unavailable',
+    )
+  })
+
+  it('does not start database work for an already-aborted request', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      countBeehiivDeliveriesByLifecycle(
+        'owner-1',
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(mocks.createServiceRoleClient).not.toHaveBeenCalled()
+    expect(mocks.from).not.toHaveBeenCalled()
   })
 })

@@ -26,6 +26,29 @@ export interface ProviderQuote {
   timestamp?: number // unix ms
 }
 
+/** Failure and cancellation controls shared by provider reads. */
+export interface ProviderRequestOptions {
+  /** Preserve cached transport while surfacing transient/malformed failures. */
+  failureMode?: 'legacy-empty' | 'throw'
+  /** Cancels only this provider request. */
+  signal?: AbortSignal
+}
+
+/** Controls whether a quote request may use framework/provider caches. */
+export interface QuoteRequestOptions extends ProviderRequestOptions {
+  /** `cached` preserves the provider's historical default behavior. */
+  freshness?: 'cached' | 'live'
+}
+
+/**
+ * Controls candle-read failure semantics without changing legacy callers.
+ *
+ * The default preserves each provider's historical empty-array fallback.
+ * Status-aware snapshot loaders opt into `throw` so an upstream outage cannot
+ * be mistaken for an authoritative HTTP-200 empty market window.
+ */
+export type CandleRequestOptions = ProviderRequestOptions
+
 /** A single OHLCV candle. */
 export interface ProviderCandle {
   /** ET-formatted date string for backward compat: "YYYY-MM-DD" or "YYYY-MM-DD HH:mm:ss" */
@@ -63,10 +86,16 @@ export type CandleTimespan = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'mo
 
 export interface MarketDataProvider {
   /** Fetch a single quote. Returns null when the symbol is not found. */
-  getQuote(symbol: string): Promise<ProviderQuote | null>
+  getQuote(
+    symbol: string,
+    options?: QuoteRequestOptions,
+  ): Promise<ProviderQuote | null>
 
   /** Fetch quotes for multiple symbols in a single call. */
-  getQuotes(symbols: string[]): Promise<ProviderQuote[]>
+  getQuotes(
+    symbols: string[],
+    options?: QuoteRequestOptions,
+  ): Promise<ProviderQuote[]>
 
   /**
    * Fetch intraday or custom-resolution candles.
@@ -82,6 +111,7 @@ export interface MarketDataProvider {
     timespan: CandleTimespan,
     from?: string,
     to?: string,
+    options?: CandleRequestOptions,
   ): Promise<ProviderCandle[]>
 
   /**
@@ -94,6 +124,7 @@ export interface MarketDataProvider {
     symbol: string,
     from: string,
     to?: string,
+    options?: CandleRequestOptions,
   ): Promise<ProviderCandle[]>
 
   /** Top gainers by percentage change. */
@@ -113,5 +144,9 @@ export interface MarketDataProvider {
    * @param symbol  Ticker
    * @param limit   Max number of articles (default: 5)
    */
-  getNews(symbol: string, limit?: number): Promise<ProviderNews[]>
+  getNews(
+    symbol: string,
+    limit?: number,
+    options?: ProviderRequestOptions,
+  ): Promise<ProviderNews[]>
 }

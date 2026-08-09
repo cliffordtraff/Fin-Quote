@@ -1,29 +1,30 @@
 import { NextResponse } from 'next/server'
-import { fetchFastMarketData } from '@/lib/fetch-market-data'
+import { getFastSnapshotBase } from '@/lib/fast-snapshot-base-cache'
+import { fastSectionHeaderName } from '@/lib/fast-snapshot-types'
 
-const TTL_MS = 15_000
-let cache: { at: number; data: any } | null = null
+const COMPLETE_CACHE_CONTROL =
+  'public, max-age=10, stale-while-revalidate=30'
+const DEGRADED_CACHE_CONTROL = 'no-store'
 
-export async function GET() {
-  const now = Date.now()
-  if (cache && now - cache.at < TTL_MS) {
-    return NextResponse.json(cache.data, {
-      headers: {
-        'Cache-Control': 'public, max-age=10, stale-while-revalidate=30',
-        'X-Cache': 'HIT',
-        'X-Snapshot': 'fast',
-      },
-    })
-  }
+export async function GET(request: Request) {
+  const snapshot = await getFastSnapshotBase(request.signal)
+  const complete = snapshot.failedSections.length === 0
 
-  const data = await fetchFastMarketData()
-  cache = { at: now, data }
-
-  return NextResponse.json(data, {
+  return NextResponse.json(snapshot.data, {
     headers: {
-      'Cache-Control': 'public, max-age=10, stale-while-revalidate=30',
-      'X-Cache': 'MISS',
+      'Cache-Control': complete
+        ? COMPLETE_CACHE_CONTROL
+        : DEGRADED_CACHE_CONTROL,
+      'X-Cache': snapshot.cacheStatus,
       'X-Snapshot': 'fast',
+      'X-Snapshot-Captured-At': snapshot.capturedAt,
+      ...(complete
+        ? {}
+        : {
+            'X-Snapshot-Degraded': snapshot.failedSections
+              .map(fastSectionHeaderName)
+              .join(','),
+          }),
     },
   })
 }

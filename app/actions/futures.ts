@@ -2,6 +2,11 @@
 
 // Always use FMP for futures — Massive plan doesn't include futures data
 import { FMPProvider } from '@/lib/providers/fmp'
+import type {
+  CandleRequestOptions,
+  ProviderQuote,
+  QuoteRequestOptions,
+} from '@/lib/providers/types'
 import { safeErrorMessage } from '@/lib/safe-logging'
 
 interface FutureData {
@@ -47,6 +52,23 @@ const ALL_FUTURES_SYMBOLS = [
   { symbol: 'RTY=F', fmpSymbol: 'RTYUSD', name: 'Russell 2000' },
 ]
 
+function hasCompleteFutureQuoteBatch(
+  quotes: ProviderQuote[],
+  expected: readonly { symbol: string; fmpSymbol: string }[],
+): boolean {
+  return quotes.length === expected.length && expected.every(({ symbol, fmpSymbol }) => {
+    const matches = quotes.filter((quote) =>
+      quote.symbol === fmpSymbol || quote.symbol === symbol,
+    )
+    if (matches.length !== 1) return false
+    const [quote] = matches
+    return Number.isFinite(quote.price) &&
+      quote.price !== 0 &&
+      Number.isFinite(quote.change) &&
+      Number.isFinite(quote.changesPercentage)
+  })
+}
+
 export async function getFuturesData() {
   const futuresSymbols = ALL_FUTURES_SYMBOLS
 
@@ -81,11 +103,22 @@ export async function getFuturesData() {
 /**
  * Fetch futures data with historical price data for charting
  */
-export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
+async function loadFuturesWithHistory(
+  quoteOptions: QuoteRequestOptions = {},
+  candleOptions: CandleRequestOptions = {},
+): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
   try {
     const provider = new FMPProvider()
     const symbols = FUTURES_SYMBOLS.map(f => f.fmpSymbol)
-    const quotes = await provider.getQuotes(symbols)
+    const quotes = quoteOptions.freshness || quoteOptions.failureMode || quoteOptions.signal
+      ? await provider.getQuotes(symbols, quoteOptions)
+      : await provider.getQuotes(symbols)
+    if (
+      quoteOptions.freshness === 'live' &&
+      !hasCompleteFutureQuoteBatch(quotes, FUTURES_SYMBOLS)
+    ) {
+      throw new Error('FMP returned an incomplete futures quote batch')
+    }
 
     // Calculate a from-date ~60 days back to cover 30 trading days
     const sixtyDaysAgo = new Date()
@@ -98,7 +131,9 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
         if (!quote) return null
 
         // Fetch daily historical data via provider
-        const candles = await provider.getHistoricalDaily(fmpSymbol, fromDate)
+        const candles = candleOptions.failureMode || candleOptions.signal
+          ? await provider.getHistoricalDaily(fmpSymbol, fromDate, undefined, candleOptions)
+          : await provider.getHistoricalDaily(fmpSymbol, fromDate)
 
         // Candles come newest-first; take 30, reverse for chronological order
         const priceHistory = candles.slice(0, 30).reverse().map(c => ({
@@ -134,10 +169,24 @@ export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: Fut
   }
 }
 
+export async function getFuturesWithHistory(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
+  return loadFuturesWithHistory()
+}
+
+export async function getFuturesWithHistoryWithStatus(): Promise<{ futuresWithHistory: FutureMarketData[] } | { error: string }> {
+  return loadFuturesWithHistory(
+    { freshness: 'live' },
+    { failureMode: 'throw' },
+  )
+}
+
 /**
  * Fetch futures data with YTD sparkline data
  */
-export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
+async function loadFuturesWithYTDSparkline(
+  quoteOptions: QuoteRequestOptions = {},
+  candleOptions: CandleRequestOptions = {},
+): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
   // Get start of year date
   const currentYear = new Date().getFullYear()
   const yearStart = `${currentYear}-01-01`
@@ -147,7 +196,15 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
   try {
     const provider = new FMPProvider()
     const symbols = futuresSymbols.map(f => f.fmpSymbol)
-    const quotes = await provider.getQuotes(symbols)
+    const quotes = quoteOptions.freshness || quoteOptions.failureMode || quoteOptions.signal
+      ? await provider.getQuotes(symbols, quoteOptions)
+      : await provider.getQuotes(symbols)
+    if (
+      quoteOptions.freshness === 'live' &&
+      !hasCompleteFutureQuoteBatch(quotes, futuresSymbols)
+    ) {
+      throw new Error('FMP returned an incomplete futures quote batch')
+    }
 
     const futuresData = await Promise.all(
       futuresSymbols.map(async ({ symbol, fmpSymbol, name }) => {
@@ -155,7 +212,9 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
         if (!quote) return null
 
         // Fetch YTD historical data via provider
-        const candles = await provider.getHistoricalDaily(fmpSymbol, yearStart)
+        const candles = candleOptions.failureMode || candleOptions.signal
+          ? await provider.getHistoricalDaily(fmpSymbol, yearStart, undefined, candleOptions)
+          : await provider.getHistoricalDaily(fmpSymbol, yearStart)
 
         // Candles come newest-first; reverse for chronological order
         const ytdPriceHistory = candles
@@ -190,4 +249,15 @@ export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDat
     console.error('Error fetching futures with YTD sparkline:', safeErrorMessage(error))
     return { error: 'Failed to load futures data' }
   }
+}
+
+export async function getFuturesWithYTDSparkline(): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
+  return loadFuturesWithYTDSparkline()
+}
+
+export async function getFuturesWithYTDSparklineWithStatus(): Promise<{ futures: FutureDataWithSparkline[] } | { error: string }> {
+  return loadFuturesWithYTDSparkline(
+    { freshness: 'live' },
+    { failureMode: 'throw' },
+  )
 }

@@ -2191,9 +2191,1085 @@ Strong engineers follow the interaction until it reaches truth:
   touch width, and reduced motion.
 
 The audit and remediation are complete, but that is deliberately not a claim
-that every interface is now perfect forever. The growing newsletter archive
-and editor still need a scalability pass, FMP still cannot supply true
+that every interface is now perfect forever. The newsletter archive and editor
+scalability pass is implemented and verified locally, but still awaits its
+coordinated database and application release. FMP still cannot supply true
 second-level replay, a real account-deletion workflow does not yet exist, and
 email placement still depends on reputation evidence outside this UI. Honest
 roadmaps preserve those edges. “Done” should mean the named contract was
 verified—not that the product has run out of things worth improving.
+
+---
+
+## August 7, 2026: The Newsletter Archive Got A Card Catalog
+
+The first newsletter archive behaved well when it held a handful of issues. It
+asked for every saved draft, including the full nested JSON document, and then
+painted one card for every result. That is the digital equivalent of asking a
+librarian to wheel every book in the building to the front desk before telling
+you which twenty-five match “AAPL.” It works beautifully during the tour and
+poorly after the library becomes useful.
+
+The scaling pass changes the archive into a real catalog. It also tightens the
+editor, chart, database, and Beehiiv boundaries around it. That wider scope is
+important: a fast list is not much of an improvement if opening an old issue
+silently changes its chart, a stale tab overwrites a publication update, or a
+retry archives half of a selection twice.
+
+The path now looks like this:
+
+```text
+archive controls in the URL
+  -> paged summary API
+  -> indexed newsletter_drafts columns
+  -> 25 lightweight cards + facet counts
+
+selected cards + their updated_at versions
+  -> server-only bulk RPC
+  -> one transaction + one event receipt per issue
+  -> reversible archive state
+
+editor document + expected updated_at
+  -> conflict-aware save/publication boundary
+  -> exact chart scene and immutable image provenance
+  -> Beehiiv lifecycle display
+```
+
+### An Archive Should Carry Index Cards, Not Every Book
+
+The database still keeps `draft_json` because the editor needs the whole
+issue. The archive does not. The new migration gives each draft a compact set
+of catalog fields: format, featured and searchable ticker symbols, generation
+time, block count, attached-chart count, and archive time. Saving a draft keeps
+those columns synchronized with the document. The archive API can therefore
+return subjects, statuses, tickers, dates, counts, and links without shipping
+the prose, chart state, source evidence, and every other nested field for all
+issues.
+
+The synchronization is enforced twice for a reason. Application writes send
+the compact fields explicitly, which keeps the intent visible in TypeScript.
+A database trigger then derives them again from `draft_json`, making the
+document authoritative and keeping an older application instance safe during
+a rolling release. An old writer can omit every new column; the trigger fills
+them before the new `NOT NULL` checks run. A caller also cannot forge a ticker
+index or block count that disagrees with the saved issue. This is the database
+version of a belt and suspenders: either one helps, but together they protect
+the awkward moment when two application versions overlap.
+
+This is denormalization with a job, not duplication for its own sake. The JSON
+is the book; the columns are the title card. A good engineer asks two questions
+before duplicating data:
+
+1. Which read becomes materially cheaper?
+2. Which write boundary guarantees that the copy cannot drift silently?
+
+Here, the answer is a summary-only archive query plus one normalization path
+for draft writes. Other callers that need only identity or workflow status use
+bounded summary lookups in chunks of 100 keys, rather than falling back to the
+old “load the library” helper.
+
+Each archive page contains 25 issues. The server asks for one extra row so it
+can answer “is there another page?” without running a second data query. The
+continuation token contains the last row's `(generated_at, id)` pair, and both
+fields are ordered descending. The timestamp expresses editorial chronology;
+the ID breaks a tie when two drafts share that timestamp.
+
+PostgreSQL timestamps can carry microseconds while JavaScript `Date` preserves
+only milliseconds. An early cursor decoder helpfully round-tripped the token
+through `Date`, turning `.123456` into `.123000` and creating a tiny interval
+of rows that the next page would skip. The decoder now accepts only a strict,
+injection-safe UTC timestamp shape and preserves its original precision. The
+archive also labels and displays issue dates in UTC, matching the server's UTC
+date-filter boundaries. A date picker and a card should never disagree about
+which calendar day an issue belongs to.
+
+That tie-breaker is not trivia. An offset such as “skip the first 25” becomes
+unstable when a new issue arrives between requests: rows can shift, causing a
+duplicate or a gap. A cursor says “continue strictly after this exact point in
+the ordering.” It remains meaningful while the front of the archive changes.
+The matching composite indexes let PostgreSQL follow the same route the API
+describes. Separate owner and owner-plus-status keyset indexes cover Active,
+Archived, and All visibility, while partial session indexes give anonymous
+draft archives the same path without scanning every other ownerless session.
+Subject and ticker trigram indexes cover both arms of substring search.
+EXPLAIN regressions prove those paths can emit the required ordering without
+returning to a growing sort.
+
+Search, status, ticker, date range, and active/archived visibility live in the
+URL. That makes a filtered archive reloadable, bookmarkable, and compatible
+with the browser's Back button. Search waits 350 milliseconds so typing a word
+does not fire a request for every keystroke. A newer request aborts the older
+one, which prevents a slow response for “AA” from replacing a later result for
+“AAPL.” Status and archive facet counts come from the same filter contract, so
+the controls explain what is available instead of guessing from the current
+page.
+
+The UI has distinct first-load, load-more, empty-filter, archived-view, and
+failure states. Cards use the browser's `content-visibility` optimization so
+loaded rows outside the viewport do not demand full layout work. This is a
+useful performance pattern: first reduce the bytes and row count at the server,
+then help the browser with the remaining work. CSS alone cannot rescue an
+unbounded database response.
+
+### Archive Is A Shelf; Delete Is A Shredder
+
+The archive deliberately does not offer bulk deletion. Archiving sets
+`archived_at`; restoring clears it. The issue, its publication evidence, its
+chart provenance, and its event history remain intact. The confirmation dialog
+calls the operation recoverable because language should describe the actual
+side effect, especially around valuable editorial work.
+
+Owner RLS still permits authenticated users to read their archive, but browser
+roles no longer receive direct insert, update, or delete privileges on drafts,
+chart evidence, or draft events. Those mutations already flow through server
+routes using the service role. Closing the unused browser path matters: an RLS
+policy can answer “whose row is this?” while still allowing its owner to bypass
+CAS, hard-delete a published issue, rewrite provenance, or forge a receipt.
+Authorization needs both row ownership and a precise command boundary.
+
+Bulk actions stop at 100 selected issues. That limit is enforced both in the
+interface and in the database function. It bounds row locks, event writes, and
+the size of a single mistake. When more than 100 loaded cards are present, the
+interface selects the first 100 and tells the operator to finish that batch
+before taking the next one.
+
+Every selected item travels with the `updated_at` value the operator saw. The
+RPC locks the requested rows in deterministic ID order and accepts the set only
+if every row still belongs to that owner and every version still matches. One
+stale item aborts the whole transaction. This is compare-and-swap, or CAS: “do
+this only if reality is still the version I inspected.” It prevents an archive
+click from erasing the significance of an edit or lifecycle update that landed
+a moment later.
+
+Retries needed another layer. The client creates an idempotency key for the
+logical bulk operation, and the database writes one deduplicated archive or
+restore event per draft. Repeating the exact request returns the current rows
+with `changed = false` instead of producing another mutation or another set of
+events. An advisory transaction lock serializes two simultaneous retries with
+the same owner, action, and key. If the database finds only some of the
+expected receipts, it fails closed; a partial receipt is evidence of an
+inconsistent history, not permission to guess.
+
+The first versions of this RPC exposed three wonderfully instructive race
+bugs:
+
+- checking versions before taking row locks left a window where another
+  transaction could update a draft between the check and the mutation;
+- reading retry receipts without serializing the idempotency key let a second
+  request observe the first request halfway through its work; and
+- returning a row snapshot captured before the update could perform the right
+  mutation while handing the caller an old `updated_at` token.
+
+The fixes were structural: lock before accepting the CAS set, take an advisory
+lock before inspecting receipts, and return the values from the update result
+instead of trusting an earlier snapshot. PostgreSQL revealed one more time
+trap: `now()` is fixed at transaction start. Two changes within one transaction
+could therefore keep the same optimistic-concurrency token. The draft trigger
+now uses `clock_timestamp()` and guarantees at least one microsecond beyond the
+previous value.
+
+The broader lesson is that transactions are necessary but not magical. You
+still have to decide what is locked, in what order, which observation the
+caller receives, and how a retry recognizes completed work.
+
+The migration itself briefly became an accidental writer. Its summary and
+provenance backfills were ordinary `UPDATE` statements, so the older generic
+`updated_at` triggers treated every historical row as freshly edited. That
+would have invalidated every open editor token, made healthy Beehiiv receipts
+look stale, and flattened chart-library recency to deployment time. The final
+migration disables only the two known timestamp triggers around their own
+backfills, immediately restores them, and tests both the preserved historical
+values and the re-enabled trigger state. Broadly disabling triggers would have
+hidden too much; naming the exact mechanism makes the exception reviewable.
+
+### A Browser Tab Is A Forking Timeline
+
+The editor now tells the operator whether the document is **Saved**,
+**Unsaved**, **Saving**, in **Conflict**, or **Published**. Those labels are not
+decoration; each corresponds to a different legal set of actions.
+
+A save captures both the document and the edit sequence that existed when the
+request began. If someone keeps typing while a slow save is in flight, the
+returning response advances the known server baseline but does not declare the
+newer local text saved. This fixes a classic race where “Save” appears to eat
+the edits made just after the click.
+
+The editor checks freshness when the window regains focus, when a hidden tab
+becomes visible, and every 60 seconds. The response itself carries an implicit
+version guard: if a save or newer baseline superseded the version that started
+the check, the late freshness response is ignored. Otherwise a clean editor
+can refresh automatically, while a dirty editor preserves its work and shows a
+conflict.
+
+Server updates and publication recording both require the exact
+`expectedUpdatedAt` version. Editor save and regeneration mismatches return a
+structured `409` with the latest durable record; publication mismatches reject
+the change and leave freshness checking to retrieve that record. The operator
+can then reload it or fork the preserved local document into a new draft.
+Forking intentionally clears
+server-owned publication metadata and produces editable draft status, while
+keeping the local prose, layout, and exact chart provenance. It is the software
+equivalent of photocopying your annotated page instead of scribbling over the
+edition already on the newsstand.
+
+The same snapshot rule now covers the less obvious long requests. Recording a
+publication, regenerating a whole issue, saving a chart capture, and creating a
+conflict fork can all finish after more typing or after another tab publishes.
+Each path compares the edit sequence it started with. A late response may
+advance the known server version, but it cannot erase newer text, trap it
+behind a newly read-only published record, or navigate to a fork that omitted
+the last keystrokes. Those outcomes become an explicit conflict with the local
+snapshot still available to fork. Concurrency bugs often hide in the “side
+buttons,” not only the main Save button.
+
+A returning published record is especially important. If a save began while
+the issue was editable but publication won before it returned, newer local
+typing cannot merely remain marked “unsaved”: the published state removes the
+ordinary Save button. The editor therefore enters the same explicit conflict
+and fork workflow, preserving the local document instead of trapping it behind
+a read-only edition.
+
+The chart drawer is a true modal boundary. It owns keyboard focus, traps Tab
+navigation, restores focus when it closes, and makes the editor beneath it
+inert. Its save keeps the opening database version for CAS, freezes iframe
+input while capture is pending, and advances its acknowledged edit sequence
+after each accepted save so a second save in the same session is not mistaken
+for a conflict. The parent still checks defensively: if local edits somehow
+advance while chart capture is running, it preserves that prose, merges only
+the server-trusted chart evidence into the forkable document, and surfaces the
+new server record as a conflict.
+
+The chart-library picker follows the same modal contract. This matters most
+while inserting a saved chart performs a full-document save: keyboard focus
+cannot wander into the editor underneath, and the Close action stays locked
+while the request owns that snapshot. The sequence check remains as a second
+line of defense. If newer local copy somehow exists when the response arrives,
+the recoverable document combines that copy with only the server-trusted chart
+image, labels, export URL, scene, provenance, and caption. A fork therefore
+contains both pieces of work instead of forcing the operator to choose which
+one to lose.
+
+There is a subtle mirror image of that rule: an edit-sequence difference does
+not always mean competing user input. A focus refresh can adopt the exact
+version that a slower publication or chart-library callback is about to
+return. When the `updatedAt` token is identical and the editor is still clean,
+the callback is an idempotent acknowledgement, not a conflict. Version tokens
+tell us whether reality differs; sequence counters tell us whether local work
+happened. Reliable clients consult both.
+
+Unsaved work also activates navigation and `beforeunload` guards. Once an issue
+is published, the rich-text editor and the rest of the document become truly
+read-only. The published view uses the editor's read-only rendering mode
+instead of injecting raw saved HTML into a mutable surface. “Published” is now
+an enforced state boundary, not merely a green badge.
+
+### A Chart Needs Both A Photograph And A Recipe
+
+Email needs a static image, while an editor needs enough state to reopen the
+interactive chart. Saving only the PNG is like keeping a cake without the
+recipe. Saving only loose chart parameters is like keeping a recipe that says
+“bake until it looks right” while the oven changes every week.
+
+Each chart now carries a provenance envelope containing:
+
+- the immutable image URL and, when available, its SHA-256 identity;
+- the interactive URL;
+- the fully materialized chart scene;
+- a canonical hash of that scene;
+- the capture timestamp and renderer contract; and
+- the chart-library source identity when one exists.
+
+“Materialized” is the important word. Price-chart ranges and fundamentals
+editor state are resolved at capture time, using one fixed timestamp, rather
+than recomputed later from mutable defaults such as “last month.” Canonical JSON
+sorts object keys before hashing, so semantically identical scenes receive the
+same digest regardless of insertion order. Renaming a library entry changes
+its label, not the captured scene it represents.
+
+Readiness now fails closed when provenance is missing, marked legacy, uses an
+old renderer contract, contains an incomplete scene, disagrees with the image
+or interactive URL, or fails the scene/image digest checks. The remedy is an
+explicit recapture. That may feel strict, but financial publishing should not
+quietly substitute “a plausible chart” for “the chart readers actually saw.”
+
+Provenance is server-owned evidence, not a client assertion. A browser may ask
+to use a chart-library item, but the server reloads that scoped row and checks
+its stored scene hash, image identity, capture time, and renderer contract.
+Changing a scene while submitting a freshly computed client hash does not make
+the old image truthful; it becomes legacy and needs regeneration. The same
+rule applies to historical library rows, which remain readable but cannot be
+laundered into current evidence by normalizing them again.
+
+Automation also measures chart freshness from immutable `capturedAt`, never
+the library row's mutable `updatedAt`. Renaming a two-month-old price chart
+today makes its label current, not its pixels. Legacy rows without a valid UTC
+capture timestamp fail closed and are recaptured; PostgreSQL's microsecond
+`+00:00` timestamp form is accepted without pretending the rename clock is
+evidence.
+
+Capture time alone is not sufficient evidence. A same-day row written by an
+older application can still carry a legacy renderer contract or a scene hash
+that does not match its stored chart. Daily automation now applies the same
+provenance verifier as the editor before reusing a library chart. When it
+repairs a draft, it copies the complete trusted provenance envelope—not just
+the new image URL and chart spec—so save normalization cannot immediately
+quarantine the repaired block again.
+
+Retries also separate **attempt identity** from **draft identity**. A new
+`startedAt` value is useful for fencing the current worker, but it must not
+make an editor's existing draft disappear. Daily retries reuse the item's
+scoped `draftId` after proving it belongs to the same run, item, and ticker;
+ordinary chart repair keeps the edited prose in that document. A source-entity
+quarantine is different: potentially invalid copy is left recoverable and a
+replacement is created instead of silently overwriting it.
+
+Catalyst repair learned a related lesson. Arrays are presentation order, not
+identity. Reordered blocks reconcile by stable library ID, then by a uniquely
+matched semantic role; ambiguous blocks stay quarantined rather than having
+commentary paired with the wrong chart by index. A new chart identity refreshes
+its automatic alt text and caption while preserving demonstrably customized
+headings. Whenever daily or catalyst automation changes the chart evidence
+behind a Ready issue, the status returns to Review. Approval belongs to the
+exact photograph-and-recipe pair the editor saw, not merely to the surrounding
+paragraphs.
+
+External assets can still be slow or unavailable. The embedded chart editor
+waits up to 12 seconds for its READY handshake, then presents a timeout with a
+retry and a direct-open route. An iframe load failure reaches the same honest
+state immediately. Chart-library thumbnails show loading, failure, retry, and
+an exact-chart link, so a broken preview does not make the underlying artifact
+unreachable. Timers and pending state requests are cleaned up when the drawer
+closes, which prevents a departed component from waking later and changing the
+next editor session.
+
+Filesystem paths need the same distrust as provenance. An early capture path
+used a client symbol and template ID inside a filename, then called `resolve`.
+`resolve` normalizes a path; it does not sandbox it, so an absolute component
+or enough `..` segments could escape the writable capture directory. Capture
+symbols now pass a strict market-symbol grammar, filenames use server-created
+entropy instead of client template IDs, and a second containment check proves
+the resolved PNG remains beneath the intended directory before the renderer
+runs. Validation plus containment is deliberate defense in depth: the first
+rule explains acceptable input, while the second protects the side effect if
+the filename recipe changes later.
+
+### Beehiiv Is Remote State, Not A Button Label
+
+Beehiiv owns the remote publication lifecycle. The editor now displays that
+truth as draft, scheduled, published, archived, or explicitly unknown, with
+the relevant dates, last reconciliation time, freshness description, provider
+link, and reconciliation error. A manual refresh asks the same lifecycle
+boundary for current state rather than inventing a separate shortcut.
+
+Scheduled, published, and archived issues have synchronization locked. That
+keeps a convenient “sync” button from mutating a remote object after the point
+where its audience-facing state demands more deliberate handling. Publication
+recording also passes the draft version it observed, so a lifecycle update
+cannot silently overwrite a concurrent editor save—and an editor cannot erase
+the lifecycle update with stale JSON.
+
+A completion timestamp is not proof of which content Beehiiv received. The
+user can save version two while a slow request is still sending version one;
+if the receipt merely says “finished after version two,” the interface can
+mistake stale remote content for a successful sync. Operations and delivery
+receipts therefore carry the exact `newsletter_drafts.updated_at` value used
+to build the payload. PostgreSQL compares that value at full timestamp
+precision before and after the remote call. If the draft changes in between,
+the remote receipt remains durable for recovery but is reported as needing
+sync instead of laundering old content into a green badge.
+
+Legacy receipts have no such proof, so they fail closed and require one safe
+resync. If the newer draft produces byte-identical Beehiiv content, the system
+can attach the newer source version without writing the same post again. A v2
+claim RPC adds this evidence while retaining the v1 signature for an older app
+during rollout, and compatibility triggers clear stale evidence if an old
+writer changes content. This is the integration equivalent of putting a serial
+number on a shipping manifest: “the truck left at 4:00” matters far less than
+knowing exactly which crate was on it.
+
+A network timeout after the remote-call boundary means **unknown**, not
+**failed**. Beehiiv may still apply that request after our process gives up.
+The operation therefore becomes ambiguity-fenced: even a successful retry of
+the same bytes cannot prove the original request has finished, so later,
+different content stays blocked until the indeterminate update is resolved
+with provider-side evidence. This is intentionally conservative. A green
+receipt beside content that might still be overwritten is worse than a clear
+manual-recovery stop.
+
+Leases protect work only when every side effect checks them. A stale worker
+once could wake after its lease expired, write an old delivery receipt, and
+discover only afterward that completing its operation was no longer allowed.
+Receipt persistence and operation completion now happen in one database RPC
+that locks the draft and owned `remote_recorded` operation before touching the
+delivery row. The same lock order coordinates manual publication: both legacy
+and source-aware sync claims first lock a still-ready draft, while publication
+locks the draft and rejects any claimed, remote-running, recorded, or
+ambiguous operation. Whichever boundary arrives second must observe the first;
+there is no missing-row gap in which both can believe they won.
+
+This is a recurring integration rule: display the remote system's state,
+record when you learned it, separate “unknown” from “not connected,” and make
+terminal or externally visible states narrow the set of allowed commands.
+
+### Tests Should Rehearse Growth And Bad Timing
+
+The archive regression fixture contains 257 issues and walks every cursor to
+prove that all IDs appear exactly once. Another loads 105 cards and proves the
+selection stops at 100. Tests cover URL filters, facets, empty states,
+load-more failure, retrying with the same idempotency key, refreshing after a
+stale bulk conflict, edits during a slow save, a late freshness response,
+structured conflict and fork behavior, published read-only rendering, chart
+READY timeout, thumbnail failure, and Beehiiv lifecycle locks.
+
+The database suite is equally important because a component test cannot prove
+row locks or function privileges. A clean local Supabase replay runs 35 focused
+archive assertions and 36 focused Beehiiv source-version assertions inside the
+full 191-assertion database suite. It checks
+owner scope, all-or-nothing CAS, duplicate input rejection, exact idempotent
+replay, partial-receipt failure, receipt collisions, restore behavior,
+monotonic versions, old-writer compatibility, authoritative summary triggers,
+server-only mutation privileges, and query-plan index coverage. It also proves
+that legacy Beehiiv evidence fails closed, v2 claims preserve the exact source
+version, and browser roles cannot call the version-check boundary. Database
+lint passes at error level, the replayed schema has no unexplained diff, and a manual
+two-session drill shows the first request changing the row while its concurrent
+retry returns unchanged with one event receipt.
+
+The final application suite runs 159 files and 882 tests. TypeScript passes,
+every changed JavaScript/TypeScript file passes ESLint with zero warnings, and
+the repository-wide lint exits with zero errors (its 196 warnings predate this
+package). The production build compiles the editor and API graph, generates all
+47 static pages, and keeps the only output noise to the repository's existing
+lint and Browserslist notices.
+
+One application-suite failure delivered a final lesson. Older “ready” draft
+fixtures had charts but no provenance, so the new readiness rule correctly
+rejected them. The right response was not to weaken production safety to keep
+the fixtures green. The fixtures were upgraded to create the same materialized
+scene and provenance that real generation now creates. Tests should model the
+contract; the contract should not be bent around yesterday's test shortcut.
+
+The production build and browser pass each found something unit tests had not.
+The first provenance implementation used Node's `crypto` module, but the
+client-side workflow bar imports the same readiness check. Webpack correctly
+refused to smuggle a Node-only module into the browser. The fix was a small
+isomorphic SHA-256 implementation, proven against empty, ASCII, Unicode, and
+multi-block standard vectors, so server publication and browser readiness use
+the same synchronous digest without weakening the check or adding a bulky
+polyfill.
+
+Then the real **Start blank** button returned 500 when
+`NEWSLETTER_PUBLIC_CHARTING_URL` was absent. A helper promising a *public*
+chart URL had quietly fallen back to `http://localhost:3001`; the email safety
+layer was right to reject it. Rendering and publishing are now separate lanes:
+local chart rendering still uses localhost, while stored and email-facing
+links default to `https://charts.theintraday.com`. The browser retest created,
+edited, saved, searched, archived, and restored a real local draft at desktop
+and mobile widths, verified the chart-library modal focus trap, reported no
+console warnings or errors, and removed that test artifact. A green component suite
+cannot replace following the actual button all the way through its route,
+storage boundary, and rendered result.
+
+### Release Truth: The Package Is Local Until It Is Promoted
+
+The code and migrations are implemented and locally verified. They have not
+been applied to the linked Supabase project, and the application has not been
+deployed. That distinction matters because the new archive query expects the
+new summary columns and the bulk endpoint expects the new RPC. Shipping only
+one half would turn a coherent local feature into a live incompatibility.
+
+The safe release has a deliberate order: inspect the linked migration dry run;
+apply `20260807090000_scale_newsletter_archive.sql` and then
+`20260807100000_track_beehiiv_sync_source_version.sql`; verify the ledger,
+schema, privileges, archive RPC, and Beehiiv v2 RPCs; promote the matching
+application build; then exercise desktop and mobile search, paging,
+archive/restore, conflict/fork, exact chart reopening, broken asset recovery,
+and Beehiiv lifecycle locks against real saved issues.
+
+Migration-first is not a stylistic preference. The new application selects and
+writes columns that do not exist beforehand, while the migration's compatibility
+triggers intentionally keep the old application working until promotion
+finishes. “Ship together” is too vague for an operator; “migration, verify,
+application, smoke test” is a sequence they can execute and recover from.
+
+That last paragraph is not ceremonial caution. Good engineers keep three
+claims separate: **implemented**, **verified in a controlled environment**, and
+**observed working in production**. This scaling pass has earned the first two.
+The release process must earn the third.
+
+## August 8, 2026: The Workstation Learned To Keep Its Own Memory
+
+The previous package made one newsletter issue safe to edit, archive, and
+deliver. The next audit asked a broader question: **what happens when the
+workstation itself has a long memory?**
+
+That question exposed a family of problems that looked unrelated at first.
+The Why Moved queue remembered only what happened to be in the latest mover
+response. The live dashboard polled a broad snapshot even though it displayed
+two fields. Newsletter Operations reread delivery history every 15 seconds.
+The chart library returned every full chart recipe at once. A public chart
+image could make many serverless isolates render the same expensive PNG. The
+real-time broker could accumulate listeners whose browsers had already left.
+
+They were all versions of the same architectural smell: **a temporary view was
+being asked to serve as durable state, and an unbounded collection was being
+treated like a small array.**
+
+### The Editorial Inbox Is A Ledger, Not A Reflection
+
+The old Why Moved admin page rebuilt its queue from today's current top movers.
+Imagine running a newsroom where the assignment board is actually a mirror
+pointed at the stock ticker. As soon as a symbol falls off the screen, its
+unfinished assignment vanishes too. An editor could not reliably return to
+yesterday's pending catalyst, because “pending” was not a stored fact.
+
+The new editorial inbox persists discovery. Morning automation takes the top
+ranked positive and negative movers, captures the candidate quote and the
+catalyst evidence it saw at that moment, and ingests that pair under a stable
+review key. `first_seen_at` records when the assignment entered the room;
+`last_seen_at` records rediscovery without rewriting the original evidence.
+Missing catalyst evidence is stored honestly as missing rather than silently
+replaced with whatever a later request happens to find.
+
+That immutability is important in financial editorial work. A current preview
+can help an editor understand what changed, but it must not rewrite the source
+material that justified an earlier approval. The UI therefore presents the
+captured evidence and current context as two different things. One answers
+“what did we review?” The other answers “what does the world look like now?”
+
+The inbox is paged by a deterministic cursor and can browse the operational
+backlog or historical statuses with date and session filters. Counts come from
+the complete matching set, not merely the rows mounted in React. Pending and
+needs-work assignments remain visible after the market tape moves on, while
+recently resolved work stays available for context.
+
+Bulk work has a deliberately narrow door. Up to 100 selected reviews can move
+among pending, needs-work, and dismissed states in one all-or-nothing database
+transaction. Every row carries its expected `updated_at` version, and every
+request carries an idempotency key. A stale row rejects the set; an exact retry
+returns the original receipts. Approval is excluded because approving evidence
+is an editorial judgment, not a housekeeping shortcut.
+
+This is how a queue becomes trustworthy: stable identity, immutable intake
+evidence, explicit state, compare-and-swap edits, and retry receipts. A list of
+objects happens to render similarly, but it does not offer the same promise.
+
+### Poll The Answer, Not The Whole Warehouse
+
+Several screens were spending work in proportion to everything the product had
+ever stored, even though their visible answers were small.
+
+The live dashboard is the clearest example. Its poll used the “fast” market
+snapshot, which invoked thirteen loaders. The component consumed gainers and
+losers. A purpose-built live-movers snapshot now calls exactly those two
+loaders, with the same short freshness window. In the measured fixture, loader
+invocations fell from 13 to 2 and the representative JSON response fell from
+5,100 bytes to 394 bytes. The optimization is not a clever cache; it is the
+more durable habit of asking the server for the shape the screen actually
+uses.
+
+Newsletter Operations had a similar problem with time instead of width. Every
+15-second poll could walk as many as 10,000 Beehiiv deliveries and hydrate
+draft JSON only to show 20 current-day rows. It now asks the indexed draft
+summary for current business-date IDs, loads deliveries only for those IDs,
+and computes lifetime lifecycle totals with five count-only queries. The
+current-day lookup uses a 101st row as a sentinel: more than 100 issues fails
+closed instead of displaying precise-looking partial totals.
+
+“Business date” needed its own column. A retry can generate an August 7 issue
+on August 8; `generated_at` tells us when the work happened, not which market
+session the issue describes. `source_market_date` is now a trigger-owned,
+indexed scalar derived from daily or catalyst source metadata, with an Eastern
+generated-time fallback for manual and legacy drafts. Its backfill preserves
+editor version tokens and does not make a no-op Beehiiv receipt look newly
+reconciled.
+
+The interactive chart library now follows the archive pattern rather than
+selecting every full chart scene. A summary-only API pages by
+`(updated_at, id)`, preserves PostgreSQL timestamp precision in its opaque
+cursor, supports scoped symbol/title search, and keeps the legacy full-list
+function intact for automation that genuinely needs complete chart specs.
+The home and picker load a bounded first page, cancel stale searches, append
+without duplicates, and lazy-load thumbnails. This distinction matters:
+changing a shared function's return type would have made the UI faster by
+quietly breaking daily and catalyst generation.
+
+The reusable rule is simple: before optimizing a query, write down the exact
+answer the caller needs. Summary callers should not pay for documents; one-day
+callers should not scan history; visible counts should either be exact or say
+they are truncated.
+
+Static imports deserve the same scrutiny as SQL. Newsletter Operations only
+needed a bounded read model every fifteen seconds, but its module also imported
+daily automation, local workers, chart generation, Puppeteer, and TypeScript.
+Next.js quite reasonably traced that whole graph into the GET server function:
+1,001 files and roughly 25.7 MiB for a small dashboard poll. The read model now
+lives in a side-effect-free module, while mutations use a separate authenticated
+action route. The GET trace is 57 files and 1.294 MiB; the heavy graph remains
+available only where it is actually needed. A compatibility POST redirect uses
+307 so older callers keep their method, body, cookies, and authorization.
+
+This is a useful serverless lesson: a function's deployable size is determined
+by its import graph, not by the number of lines executed on the happy path.
+Dynamic branching inside one route does not create a deployment boundary; a
+physical route/module boundary does.
+
+### Real-Time Connections Need Reservations Before They Need Cleanup
+
+The Massive websocket broker multiplexes provider data for many SSE clients.
+Its earlier cleanup happened after subscription setup. That left a narrow but
+real race: a browser could abort before the route installed its listener, then
+the asynchronous subscription would finish and leave a listener nobody could
+ever remove.
+
+The route now reserves capacity before returning the stream and treats cleanup
+as an idempotent operation that can be called from abort handling, stream
+cancel, or setup failure. Single- and multi-symbol routes deduplicate symbols,
+forward cancellation after every awaited boundary, and return a typed 503 with
+`Retry-After` when capacity is full. The broker bounds tickers, listeners per
+ticker, and total listeners, then evicts idle ticker state after its grace
+period. “We'll clean it up later” is not sufficient when “later” can race
+“create.” Reservation and cleanup are one lifecycle.
+
+Backfill also became capability-specific. The default FMP provider had been
+asked for second-level bars even though its fallback endpoint returned daily
+history. Filtering those midnight candles into a five-second window produced
+an empty `200`, which looked like valid live history. The route now says 501
+unless Massive second aggregates are configured, and the hooks expose that
+degraded backfill state instead of treating empty history as success.
+
+Massive aggregate pagination now follows authenticated, same-origin
+`next_url` pages under a deadline, page cap, and row cap. Adjacent-page
+timestamps are deduplicated and sorted. If a continuation fails or a bound is
+reached, the provider throws a typed incomplete-data error instead of returning
+a plausible prefix. A partial candle series is often more dangerous than a
+visible failure because charts rarely announce which half of history is
+missing.
+
+### A Public Chart URL Should Point To An Asset, Not Start A Factory
+
+Chart of the Day used to render on an anonymous GET. Process-local promise
+coalescing helped one server instance, but two serverless isolates could still
+call the headless renderer at the same time. Large responses were buffered
+before their size was checked, and a forwarded `Host: localhost` could
+influence the server-side render destination.
+
+The route now derives its renderer origin only from trusted server
+configuration, sends the renderer's shared authentication header, enforces a
+caller-side deadline and streaming byte limit, checks PNG dimensions before
+expensive transformation, and sanitizes upstream failures. Unknown query
+parameters are rejected so cache keys cannot be multiplied with meaningless
+variants.
+
+More importantly, PostgreSQL arbitrates one render owner across isolates. A
+canonical key combines the setting version, chart-spec hash, theme, and
+renderer contract. The winner receives a fenced lease, renders once, uploads a
+content-addressed PNG, and atomically publishes its immutable storage path.
+Other callers receive bounded retry guidance. Three failed attempts in a
+six-hour window trip a cooldown; the next window recovers automatically rather
+than bricking the chart forever. If the ready storage object was deleted, the
+exact pointer can be invalidated and repaired without allowing an arbitrary
+path to erase state.
+
+Successful requests now return a small 307 redirect to the shared immutable
+asset. One hundred waiters no longer each clone an eight-megabyte body in
+memory. The browser and CDN are good at serving files; a serverless function
+should not impersonate a file server merely because it created the file.
+
+### Admin Notes Needed Database Time And A Per-Row Outbox
+
+Evaluation annotations used to rewrite one deployment-local JSON file. That is
+fragile on a read-only serverless filesystem, loses work across instances, and
+makes concurrent edits a whole-file last-writer-wins contest.
+
+Annotations now live in the existing database table behind admin
+authorization. Each request mutates exactly one question with the server's
+`updated_at` as a compare-and-swap token. Browser time is never treated as
+database freshness. Two admins can edit different questions independently; a
+same-question conflict returns the durable winner while preserving the losing
+text for review.
+
+The React client needed the same rigor. One global debounce timer meant typing
+in question two could cancel question one's save. Per-question timers fixed
+that, but then out-of-order whole-file responses could regress another
+optimistic row. The save queue now merges by question ID, protects pending and
+in-flight rows, rebases a newer same-question edit onto the successful server
+token, and serializes it behind the first request. A failed request retains the
+exact unsaved row, attempts one bounded retry, and leaves a visible manual
+Retry action rather than silently clearing “Saving.” Switching evaluation
+files invalidates the old generation so an overlapping question ID cannot
+receive a late response from a different artifact.
+
+This bug family is a useful reminder: “debounced” is not the same as
+“serialized,” and “optimistic” is not the same as “durable.” A robust client
+needs an identity, a queue, a version token, and an explicit failure state.
+
+### Observability Must Live Outside The Work It Watches
+
+The dashboard-commentary cron previously returned HTTP 200 even when its own
+result said `complete: false`. The scheduler could therefore report success
+while the visible commentary remained incomplete. It now returns a failure
+status, and a separate health route checks whether the three commentary
+components are due and current. The production watchdog runs that check with
+`always()`, so a newsletter-health failure cannot skip commentary monitoring.
+
+Building the health route exposed a subtler deployment problem. It imported a
+clock from the large daily-automation module, and Next.js traced 1,270 files,
+including local credentials and newsletter artifacts, into a function that
+needed only the New York date and time. The market clock moved into a tiny,
+side-effect-free module. Output-file exclusions and a post-build trace verifier
+now provide defense in depth. The refreshed health trace contains only the
+small dependency graph and no forbidden local paths.
+
+This is why production builds belong in CI. TypeScript proves types; unit tests
+prove examples; neither shows what the deployment packager decided to copy.
+The build trace is part of the security boundary.
+
+### Read-Only Is An Authority Boundary, Not A Disabled Button
+
+The Morning Report intentionally has a public, read-only view of the configured
+automation run. The interface disabled editing, but the API originally returned
+the operator's complete object: database and provider IDs, Beehiiv editor and
+preview URLs, raw reconciliation errors, retry state, and private metadata. A
+disabled button is a presentation choice; it is not a data-access policy.
+
+The public response is now constructed field by field. It contains the copy,
+scores, counts, safe source links, chart presentation, and published lifecycle
+information needed to render the report. It never serializes internal IDs or
+operator-only details, and Beehiiv's public web URL appears only after a
+published lifecycle is confirmed. URLs must be public HTTPS destinations;
+private, loopback, credential-bearing, or ambiguous hosts are discarded. The
+client may create display-only keys after receipt, but those keys cannot reach
+mutations or editor routes.
+
+The subtle bug appeared one layer deeper during review. Projection initially
+happened only when the route executed its configured-owner fallback. The session
+cookie is intentionally unsigned, so a caller could choose the configured
+session value, make the first lookup succeed, and bypass that branch. The final
+rule is based on authority rather than control flow: full data requires a
+matching authenticated owner. Production cookie equality never establishes
+ownership. The anonymous local-development session remains editable because it
+is an explicit development workflow, not a production authorization mechanism.
+
+The same public boundary had a deployment-cost twin. Home needed one boolean—
+whether today's automation had produced a report—but imported the whole command
+engine to get it. Next.js traced 1,009 files and 25.81 MiB into `/`, including
+TypeScript, Puppeteer, local datasets, tests, scripts, and newsletter generation.
+A tiny reader now selects only `status,newsletter_generated_count`; the home
+trace is 72 files and 1.997 MiB. CI fails if the root trace is missing, exceeds
+150 files or 5 MiB, or regains any heavy/local path. A guard that silently skips
+the artifact it was meant to inspect is no guard at all, so the verifier also
+proves that it actually encountered the home trace.
+
+Both fixes share one principle: boundaries should be explicit in the shape of
+the code. A public DTO should not depend on remembering every secret field to
+remove, and a read-only route should not depend on a command module merely
+because the useful function happens to live there.
+
+### Polling Is A Lease, Not A Metronome
+
+Morning Review used to start another fetch every fifteen or sixty seconds
+whether the previous one had finished or not. That looks harmless on a whiteboard:
+draw a clock, draw an arrow, repeat. On a slow network it behaves more like
+several reporters calling the same source at once, then pinning whichever answer
+happens to arrive last. Hidden tabs kept calling, a report absent at page load
+was never discovered, and notifications ran as a second independent request.
+
+The client now owns one polling lease. It starts the next timeout only after the
+current run-and-notification cycle settles, cancels work when the page becomes
+hidden or unmounts, refreshes immediately on focus, and assigns a generation to
+every request so an ignored abort cannot install stale data. Manual generation
+and delivery actions invalidate the passive generation before applying their
+result. Selection is retained only while the same run still contains the same
+actionable items.
+
+The server boundary was made equally literal. GET uses a small read-only module;
+POST work lives behind a separate authenticated action route, with a 307 bridge
+for old callers that must retain method, body, and cookies. The Morning Review
+GET trace fell from 998 files and 26.45 MiB to 56 files and 1.27 MiB. A branch
+inside one file would not have achieved that—the bundler follows imports, not
+our intentions.
+
+### Editorial Judgment Became Evidence Instead Of Ephemeral UI State
+
+The old “recommended first” list was useful, but amnesiac. Every refresh ran the
+algorithm again and forgot whether an editor accepted it, removed a weak story,
+promoted a better catalyst, or added an issue the model missed. Trying to improve
+ranking from that interface would have been like training a chef from plates
+after the diners' notes were thrown away.
+
+The new editorial shortlist is an append-only decision ledger. Each revision
+stores the algorithm version, exact presented baseline, bounded catalog tokens,
+final selected order, explicit human intents, structured reason codes, optional
+notes, and immutable evidence for every baseline or selected issue. A small head
+row identifies the current revision; old revisions remain readable. Individual
+queue-item cleanup cannot punch holes in history, while intentional whole-run or
+account erasure cascades the complete ledger rather than leaving orphaned actor
+data.
+
+One design lesson arrived early: a final array cannot reveal human intent. If an
+editor drags A from first to fifth, B through E move mechanically. Calling all
+five rows “overrides” would demand five reasons for one action and poison the
+learning set. The UI therefore records the endpoint the editor actually moved,
+and the domain verifies relative order among items that remain in both lists.
+Removing A may shift B from absolute position two to one, but it does not invent
+a promotion. Reordering and then restoring the original permutation cleans the
+stale move intent.
+
+The save boundary treats retries and concurrency as first-class data. A command
+hash covers scope, expected revision, presented catalog, selection, and normalized
+intents. The database takes a per-run advisory lock, resolves an exact idempotent
+replay before consulting mutable automation state, locks the run, items, drafts,
+and delivery evidence, checks the head revision, and inserts the revision,
+entries, and new head atomically. A lost response can be retried after automation
+has changed; the original receipt still wins. Reusing the key for different
+content fails closed. If another editor advanced the head, a late replay returns
+both its original receipt identity and the current head so the interface never
+rolls backward.
+
+Several bugs made the integrity rule sharper. The first client version rendered
+the parent report snapshot but saved a separately fetched presentation; a poll
+between those reads could make durable evidence claim the editor saw text that
+was never on screen. GET, PUT, and conflict responses now carry the exact hydrated
+run beside the presentation, and the editor renders that pinned snapshot. A
+browser-safe canonical evidence module lets client and server compare identical
+hashes without importing filesystem or service-role code into React. A complete
+conflict snapshot is applied only when its run, presentation, head, and revision
+agree; a partial conflict performs a fresh GET. Reset, remove/re-add, stale
+candidate, evidence drift, slow-save, and uncertain-retry paths all have focused
+regressions.
+
+This ledger deliberately does **not** auto-tune ranking yet. Good learning systems
+first collect trustworthy labels, examine whether the sample spans enough market
+sessions, and distinguish correlation from editorial preference. A future ranking
+change must use a new algorithm version so yesterday's judgment is never rewritten
+as feedback on tomorrow's model.
+
+### The Admin Page Stopped Carrying The Printing Press
+
+The Why Moved inbox needed a few scalar draft labels and four editorial commands.
+It nevertheless arrived in production carrying the entire newsletter workshop:
+chart capture, Puppeteer, the TypeScript runtime, local datasets, generation
+scripts, and test fixtures. Imagine asking the receptionist for one envelope and
+making them wheel the printing press to the front desk. The page function traced
+1,004 files and 28.64 MB before it rendered a single review row.
+
+The repair was architectural rather than cosmetic. The page now reads draft
+summaries through a Supabase-only module whose query projects exactly the scalar
+fields the inbox displays. Browser commands use explicit authenticated HTTP
+routes. Ordinary review saves, bounded bulk transitions, current-catalyst preview,
+and market capture each have a small route boundary; only approval imports the
+chart and newsletter automation engine it genuinely needs. Authentication runs
+before body parsing, cookie-backed mutations reject cross-site origins, bodies are
+bounded and validated, CAS conflicts remain 409s, idempotency keys survive bulk
+retries, and every response is private and uncached.
+
+The server render was flattened at the same time. After the admin gate, mover
+discovery starts while search parameters resolve. The global historical facets do
+not depend on current movers, so they begin as soon as filters are known. The inbox
+waits only for the candidate keys it actually needs, and draft linkage begins as
+soon as the loaded page supplies review keys instead of waiting for unrelated
+facets. This is what useful concurrency looks like: not launching everything at
+once, but drawing the dependency graph honestly and removing invented arrows.
+
+The resulting page trace is 61 files and 1.54 MB, down 943 files and 27.10 MB
+(93.9% and 94.6%). Routine command routes are roughly 1.4–1.55 MB. The deliberate
+approval boundary remains 994 files because it really performs chart and draft
+automation. A fail-closed build policy proves the page trace exists, caps it at
+150 files and 5 MB, and rejects any return of command actions, generation code,
+Puppeteer, OpenAI, TypeScript, datasets, scripts, VCS state, or local artifacts.
+The lesson is the same as the Morning Review split: bundlers follow physical
+imports, not comments that say a function is “read only.”
+
+### A Five-Second Clock Cannot Refresh Sixty-Second Data
+
+Live Dashboard used to look faster than it really was. The browser asked for a
+quote every five seconds, but the quote route allowed a CDN to reuse it for
+thirty seconds and FMP allowed Next.js to reuse the upstream response for sixty.
+It was like checking a wall clock every five seconds while someone only moved
+the hands once a minute: the polling was real, but the freshness promise was
+not.
+
+The provider interface now makes freshness explicit. Existing callers keep the
+cached default; the live quote route deliberately asks for a live read and a
+cancellation signal. FMP uses `cache: 'no-store'` for that request. Massive
+threads the same contract through stock snapshots, indices, futures contract
+resolution, and FMP fallback. A missing symbol or a genuine empty provider
+response may become `404`; rate limits, network failures, malformed payloads,
+and aborted work remain errors. Cancellation never quietly starts a fallback,
+because replacing a canceled request with more work is the opposite of
+canceling it.
+
+Coalescing needed its own authority model. If the first browser's AbortSignal
+owned a shared provider request, closing that tab would cancel the quote for
+every other waiter. The route instead creates one internal four-second lease per
+symbol. HTTP callers may stop waiting independently; the shared lease has its
+own AbortController, deadline, 100-key pending cap, and 500-entry access-order
+LRU. Success is timestamped at completion. A timed-out lease releases only its
+own map entry, and a late provider response cannot delete or populate a newer
+lease. The CDN receives a matching four-second freshness window; every error is
+`no-store`.
+
+The same lifecycle now governs intraday candles. Interval input is an integer
+from one through thirty, completed data must name the requested symbol, the LRU
+and pending maps have hard caps, and a twelve-second deadline prevents one
+hundred hung upstream calls from pinning the process forever. On the client,
+recursive timeouts start only after the prior request settles. Hidden tabs,
+focus changes, symbol and timeframe switches, replay, streaming, and unmount all
+retire the old generation. A ticker switch clears the old chart immediately, so
+a failed MSFT request can never leave AAPL's price wearing an MSFT label.
+
+Three review bugs made the phrase “validate provider data” much more concrete.
+First, provider mappers filled missing numeric fields with zero, which could
+turn an incomplete response into a believable `$0` quote and cache it. Second,
+aliasing could relabel an upstream `NQUSD` response as `ES=F`, defeating a later
+symbol check. Third, a front-month lookup for ES could cache `NQZ26` for an
+hour, after which every layer agreed on the wrong contract. Live validation now
+checks the raw ticker before aliasing, checks the delivery-month contract family
+before resolver-cache admission, and rejects the missing-price zero sentinel.
+It deliberately accepts a finite negative price: crude-oil futures have traded
+below zero, and a financial system should not erase an uncomfortable real value
+merely because a simplistic validator assumed prices are always positive.
+
+The engineering lesson is broader than market data. A refresh interval is only
+the outermost clock. Provider caches, CDNs, in-process caches, pending promises,
+fallbacks, and UI generations all participate in the freshness contract. If
+those clocks and identities disagree, “live” becomes a styling word. If they
+agree—and failure is visible rather than fabricated—the interface can make a
+promise a trader is entitled to trust.
+
+### A Fork Is A Receipt, Not Just Another Insert
+
+Forking an old newsletter looks like a simple copy operation until the network
+drops after PostgreSQL commits. The browser cannot know whether it should retry
+or whether retrying will create a twin. The original implementation also looked
+up the source before checking for a replay, which meant a perfectly valid retry
+could fail after the source was archived or deleted. It was asking yesterday's
+document for permission to remember something the database had already done.
+
+The repaired path gives every fork a stable idempotency key and a hash of the
+exact requested snapshot. PostgreSQL takes an advisory lock and records the new
+draft, creation event, and durable fork receipt in one transaction. An exact
+retry resolves the receipt before consulting mutable source state. Reusing the
+same key for different content returns a conflict, and replaying a receipt whose
+created draft was later deleted fails closed instead of silently manufacturing a
+replacement. The local JSON fallback mirrors the same rule with a single atomic
+rename, so development does not teach a weaker mental model than production.
+
+The HTTP edge is intentionally boring: source IDs must be UUIDs, content type
+must really be JSON, the body is streamed through a one-megabyte ceiling, object
+depth and collection sizes are bounded, prototype-pollution keys are rejected,
+and validation errors happen before storage. “Validate input” is not one schema
+call after `request.json()` has already allocated an unbounded attacker-controlled
+object; it is a budget enforced while bytes are still arriving.
+
+### Unsaved Work Belongs To The Boundary That Can Replace It
+
+Several editor bugs shared a family resemblance. A publication URL could be
+dirty while the parent believed the document was clean. A focus refresh could
+install a newer published record over that local URL. Morning Review could key a
+new run over an editorial shortlist whose unsaved decisions lived inside a child
+component. The child knew something precious existed, while the parent owned the
+button, poll, or identity change capable of destroying it.
+
+The fix was not another scattered `window.confirm`. Child editors now report a
+small, keyed dirty-state contract synchronously through refs. Parent components
+include that state in unload and navigation guards, freshness reconciliation,
+status labels, and identity rollover. Passive refreshes defer a replacement run;
+interactive replacements ask explicitly; saving or resetting applies the
+deferred snapshot. Structured `409` responses preserve both the latest server
+record and the exact attempted document, so conflict recovery never turns into
+“try to remember what you wrote.”
+
+This is a useful React design heuristic: state should live where it is edited,
+but the fact that it is dangerous to discard must reach every boundary that can
+replace it. A ref-backed notification closes the tiny interval before a state
+render or effect, which is exactly where focus and cross-tab races like to hide.
+
+### A Modal Is A Tiny Temporary Application
+
+The final accessibility pass treated dialogs as more than dark rectangles.
+Opening a destructive confirmation now moves focus to a safe action, traps Tab
+and Shift+Tab, locks background scrolling, marks the background inert, closes on
+Escape only when safe, and restores focus to the invoking control. If success
+removes that control, focus lands on a stable page heading rather than falling
+back to the browser chrome. Mutation failures remain inside the active dialog as
+alerts; persistent live regions sit outside inert subtrees. Expanded preview and
+chart editing are mutually exclusive, so two focus managers can never compete
+under stacked overlays.
+
+These details are not decorative polish. Keyboard focus is the user's cursor.
+Deleting its destination without choosing the next one is the accessibility
+equivalent of deleting a mouse pointer. Alerts, polite status regions, labelled
+fields, and accessible copy controls similarly turn background saves, retries,
+and failures into state a screen-reader user can actually observe.
+
+### Expensive Rendering Needs An Admission Desk
+
+The chart collection POST can launch a browser renderer, so it now behaves like
+a scarce compute boundary rather than an ordinary form endpoint. Requests need a
+strict idempotency key and a normalized content fingerprint. Matching in-flight
+work coalesces, successful replies receive a bounded replay window, changed
+content under the same key conflicts, and failures free the key for a safe retry.
+Per-owner, global, and rolling-window limits cap physical work; a timed-out
+renderer keeps occupying its physical slot until it really settles, preventing
+an upstream process that ignores cancellation from turning timeouts into an
+unbounded queue. Request and response bodies, error diagnostics, origins, UUIDs,
+and CORS headers are all bounded or allowlisted at the shared route boundary.
+
+The distinction between logical and physical completion matters. A caller may
+stop waiting, but a Puppeteer process can still be alive. Releasing capacity at
+the moment the promise shown to the caller times out would make the limiter an
+optimistic counter rather than a resource fence.
+
+The in-process desk is only a courtesy; serverless instances do not share
+memory. Production therefore puts the real admission ledger in PostgreSQL.
+Every authenticated save claims an owner-scoped fenced lease that lasts 180
+seconds—longer than the route's 120-second physical lifetime. Completion and
+failure require both the current token and an unexpired lease. Successful
+receipts and abandoned requests are cleaned in bounded batches after 24 hours,
+while rolling rate events have their own global cleanup.
+
+A save also derives one deterministic chart UUID and a full SHA-256 request-key
+hash from the owner and idempotency key. The chart row stores that identity and
+the content fingerprint under a unique index. If PostgreSQL committed the chart
+but the response vanished, the retry finds and validates the existing row
+before opening a browser or uploading another image. Changed content under the
+same key conflicts. Durable replay receipts are size-, depth-, URL-, timestamp-,
+symbol-, chart-spec-, and digest-validated before the application trusts them.
+This is the exactly-once lesson in concrete form: a receipt helps, but the
+durable side effect itself must also be addressable by the request identity.
+
+### Release Order Is An Executable Part Of The Design
+
+This package adds durable contracts, not merely components. Its migration
+order is therefore explicit:
+
+1. `20260807090000_scale_newsletter_archive.sql`
+2. `20260807100000_track_beehiiv_sync_source_version.sql`
+3. `20260808090000_durable_why_moved_editorial_inbox.sql`
+4. `20260808100000_durable_dashboard_chart_render_assets.sql`
+5. `20260808110000_scale_newsletter_chart_library_listing.sql`
+6. `20260808120000_denormalize_newsletter_draft_market_date.sql`
+7. `20260808130000_persist_newsletter_editorial_shortlists.sql`
+8. `20260809090000_atomic_newsletter_draft_forks.sql`
+9. `20260809100000_durable_newsletter_chart_post_admission.sql`
+10. verify schema, privileges, RPCs, indexes, receipts, fork replay, chart-save
+    lease fencing and duplicate recovery, and shortlist history;
+11. promote the matching application; then run authenticated smoke tests.
+
+Migration-first matters because the new application reads new scalars and
+calls new RPCs. Compatibility triggers keep old application instances valid
+during the overlap and preserve historical editor timestamps during derived
+backfills. Application-first would turn a planned rollout into missing-column
+errors.
+
+The frozen release candidate passed 250 Vitest files / 1,644 tests, TypeScript,
+repository lint with zero errors (177 non-blocking legacy warnings), a 49-page
+production build, all 114 guarded server traces, and 10 pgTAP files / 369
+assertions. The home trace deliberately permits only the public 150 KB S&P
+constituent projection required by its catalyst feed; every other `/data/` path
+remains forbidden. The larger lesson is worth keeping here: a serious
+engineering pass does not end when the happy-path feature works. It follows
+growth, cancellation, concurrency, packaging, retries, and release order until
+each layer tells the same story.

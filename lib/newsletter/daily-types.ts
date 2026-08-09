@@ -130,6 +130,8 @@ export interface NewsletterDailyRunItem {
   candidateMetadata: Record<string, unknown>
   draftId: string | null
   draftStatus: NewsletterDraftStatus | null
+  /** Exact draft CAS token when the read model hydrated a durable draft. */
+  draftUpdatedAt?: string | null
   chartId: string | null
   chartImageUrl: string | null
   subjectLine: string | null

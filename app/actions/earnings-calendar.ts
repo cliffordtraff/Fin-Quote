@@ -1,12 +1,25 @@
 'use server'
 
+import {
+  CATALYST_CALENDAR_EARNINGS_LIMIT,
+  getCatalystWeek,
+  getCurrentCatalystWeek,
+  isDateKey,
+  type EarningsSession,
+} from '@/lib/catalyst-calendar'
+import { readBoundedProviderJson } from '@/lib/catalyst-provider-response'
 import { safeErrorMessage } from '@/lib/safe-logging'
+import {
+  getSP500Constituent,
+  isSP500,
+  normalizeSP500Symbol,
+} from '@/lib/sp500'
 
 export interface EarningsData {
   symbol: string
   name: string
   date: string
-  time: 'bmo' | 'amc' | 'dmh' | null  // before market open, after market close, during market hours
+  time: EarningsSession
   fiscalDateEnding: string
   eps: number | null
   epsEstimated: number | null
@@ -16,257 +29,232 @@ export interface EarningsData {
 
 export interface EarningsCalendarResult {
   earnings: EarningsData[]
-  totalCount: number  // Total companies reporting (before filtering)
+  totalCount: number
 }
 
-export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
+export type EarningsCalendarLoadResult =
+  | EarningsCalendarResult
+  | { error: string }
+
+export interface CatalystEarningsCalendarResult extends EarningsCalendarResult {
+  truncated: boolean
+}
+
+export type CatalystEarningsCalendarLoadResult =
+  | CatalystEarningsCalendarResult
+  | { error: string }
+
+const DASHBOARD_EARNINGS_LIMIT = 10
+const MAX_PROVIDER_ROWS = 5_000
+const MAX_PROVIDER_RESPONSE_BYTES = 2 * 1024 * 1024
+const PROVIDER_TIMEOUT_MS = 6_000
+const SYMBOL_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,14}$/
+const MAX_DATE_LENGTH = 32
+
+const MEGA_CAP_SYMBOLS = new Set([
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'GOOG', 'AMZN', 'META', 'BRK.B', 'LLY', 'AVGO',
+  'TSLA', 'WMT', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'ORCL', 'COST', 'HD',
+])
+
+type LoadMode = 'dashboard' | 'calendar'
+type ProviderRow = Record<string, unknown>
+
+function isRecord(value: unknown): value is ProviderRow {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function nullableFiniteNumber(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === '') return null
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function normalizedDate(value: unknown, allowEmpty = false): string | null {
+  if ((value === null || value === undefined || value === '') && allowEmpty) return ''
+  if (typeof value !== 'string' || value.length > MAX_DATE_LENGTH) return null
+  const date = value.trim()
+  return isDateKey(date) ? date : null
+}
+
+function normalizedSession(value: unknown): EarningsSession | undefined {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'bmo' || normalized === 'amc' || normalized === 'dmh'
+    ? normalized
+    : undefined
+}
+
+function parseEligibleRow(row: ProviderRow): EarningsData | null {
+  if (typeof row.symbol !== 'string') return null
+  const rawSymbol = row.symbol.trim().toUpperCase()
+  if (!SYMBOL_PATTERN.test(rawSymbol)) return null
+
+  const canonicalSymbol = normalizeSP500Symbol(rawSymbol)
+  if (!canonicalSymbol || !isSP500(canonicalSymbol)) return null
+
+  const date = normalizedDate(row.date)
+  const fiscalDateEnding = normalizedDate(row.fiscalDateEnding, true)
+  const time = normalizedSession(row.time)
+  const eps = nullableFiniteNumber(row.eps)
+  const epsEstimated = nullableFiniteNumber(row.epsEstimated)
+  const revenue = nullableFiniteNumber(row.revenue)
+  const revenueEstimated = nullableFiniteNumber(row.revenueEstimated)
+
+  if (
+    date === null ||
+    fiscalDateEnding === null ||
+    time === undefined ||
+    eps === undefined ||
+    epsEstimated === undefined ||
+    revenue === undefined ||
+    revenueEstimated === undefined
+  ) {
+    return null
+  }
+
+  return {
+    symbol: canonicalSymbol,
+    name: getSP500Constituent(canonicalSymbol)?.name ?? canonicalSymbol,
+    date,
+    time,
+    fiscalDateEnding,
+    eps,
+    epsEstimated,
+    revenue,
+    revenueEstimated,
+  }
+}
+
+function sessionRank(session: EarningsSession): number {
+  if (session === 'bmo') return 0
+  if (session === 'dmh') return 1
+  if (session === 'amc') return 2
+  return 3
+}
+
+function chronologicalSort(left: EarningsData, right: EarningsData): number {
+  const dateOrder = left.date.localeCompare(right.date, 'en-US')
+  if (dateOrder !== 0) return dateOrder
+  const sessionOrder = sessionRank(left.time) - sessionRank(right.time)
+  if (sessionOrder !== 0) return sessionOrder
+  return left.symbol.localeCompare(right.symbol, 'en-US')
+}
+
+function parseProviderRows(value: unknown): EarningsData[] | null {
+  if (!Array.isArray(value) || value.length > MAX_PROVIDER_ROWS) return null
+
+  const parsed: EarningsData[] = []
+  const byCatalyst = new Map<string, EarningsData>()
+  for (const candidate of value) {
+    if (!isRecord(candidate) || typeof candidate.symbol !== 'string') return null
+
+    const normalized = candidate.symbol.trim().toUpperCase()
+    if (!SYMBOL_PATTERN.test(normalized)) return null
+    if (!isSP500(normalized)) continue
+
+    const earning = parseEligibleRow(candidate)
+    if (!earning) return null
+    const key = `${earning.date}|${earning.symbol}`
+    const previous = byCatalyst.get(key)
+    if (previous) {
+      if (JSON.stringify(previous) !== JSON.stringify(earning)) return null
+      continue
+    }
+    byCatalyst.set(key, earning)
+    parsed.push(earning)
+  }
+
+  return parsed
+}
+
+function selectDashboardEarnings(earnings: EarningsData[]): EarningsData[] {
+  const megaCaps: EarningsData[] = []
+  const others: EarningsData[] = []
+
+  for (const earning of earnings) {
+    if (MEGA_CAP_SYMBOLS.has(earning.symbol)) megaCaps.push(earning)
+    else others.push(earning)
+  }
+
+  megaCaps.sort(chronologicalSort)
+  others.sort(chronologicalSort)
+
+  return [
+    ...megaCaps.slice(0, DASHBOARD_EARNINGS_LIMIT),
+    ...others.slice(0, Math.max(0, DASHBOARD_EARNINGS_LIMIT - megaCaps.length)),
+  ].slice(0, DASHBOARD_EARNINGS_LIMIT).sort(chronologicalSort)
+}
+
+async function loadEarningsCalendar(
+  mode: LoadMode,
+  referenceTime?: string,
+): Promise<EarningsCalendarLoadResult> {
   const apiKey = process.env.FMP_API_KEY
   if (!apiKey) {
     console.error('FMP_API_KEY not set')
-    return { earnings: [], totalCount: 0 }
+    return { error: 'FMP_API_KEY not set' }
   }
 
   try {
-    // Get earnings for the upcoming week (Mon-Fri)
-    // On weekends, show next week. On weekdays, show current week.
-    const today = new Date()
-    const dayOfWeek = today.getDay() // 0 = Sunday, 1 = Monday, etc.
-
-    // Calculate Monday of the relevant week
-    const monday = new Date(today)
-    if (dayOfWeek === 0) {
-      // Sunday: show upcoming week (tomorrow is Monday)
-      monday.setDate(today.getDate() + 1)
-    } else if (dayOfWeek === 6) {
-      // Saturday: show upcoming week (Monday is 2 days away)
-      monday.setDate(today.getDate() + 2)
-    } else {
-      // Weekday: show current week's Monday
-      monday.setDate(today.getDate() - (dayOfWeek - 1))
-    }
-
-    // Calculate Friday of that week
-    const friday = new Date(monday)
-    friday.setDate(monday.getDate() + 4)
-
-    const fromDate = monday.toISOString().split('T')[0]
-    const toDate = friday.toISOString().split('T')[0]
-
+    const week = mode === 'calendar'
+      ? getCurrentCatalystWeek(referenceTime ?? '')
+      : getCatalystWeek()
+    if (!week) return { error: 'Failed to fetch earnings calendar' }
+    const toDate = mode === 'calendar' ? week.toDate : week.businessToDate
     const response = await fetch(
-      `https://financialmodelingprep.com/api/v3/earning_calendar?from=${fromDate}&to=${toDate}&apikey=${apiKey}`,
-      { next: { revalidate: 300 } }
+      `https://financialmodelingprep.com/api/v3/earning_calendar?from=${week.fromDate}&to=${toDate}&apikey=${apiKey}`,
+      {
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      },
     )
 
     if (!response.ok) {
       console.error('Failed to fetch earnings calendar:', response.status)
-      return { earnings: [], totalCount: 0 }
+      return { error: 'Failed to fetch earnings calendar' }
     }
 
-    const data = await response.json()
+    const providerEarnings = parseProviderRows(
+      await readBoundedProviderJson(response, MAX_PROVIDER_RESPONSE_BYTES),
+    )
+    if (!providerEarnings) {
+      console.error('Invalid earnings calendar response')
+      return { error: 'Failed to fetch earnings calendar' }
+    }
 
-    // S&P 500 constituents (as of Jan 2026)
-    const sp500Symbols = new Set([
-      'AAPL', 'ABBV', 'ABT', 'ACN', 'ADBE', 'ADI', 'ADM', 'ADP', 'ADSK', 'AEE',
-      'AEP', 'AES', 'AFL', 'AIG', 'AIZ', 'AJG', 'AKAM', 'ALB', 'ALGN', 'ALK',
-      'ALL', 'ALLE', 'AMAT', 'AMCR', 'AMD', 'AME', 'AMGN', 'AMP', 'AMT', 'AMZN',
-      'ANET', 'ANSS', 'AON', 'AOS', 'APA', 'APD', 'APH', 'APTV', 'ARE', 'ATO',
-      'AVB', 'AVGO', 'AVY', 'AWK', 'AXON', 'AXP', 'AZO', 'BA', 'BAC', 'BALL',
-      'BAX', 'BBWI', 'BBY', 'BDX', 'BEN', 'BF.B', 'BG', 'BIIB', 'BIO', 'BK',
-      'BKNG', 'BKR', 'BLDR', 'BLK', 'BMY', 'BR', 'BRK.B', 'BRO', 'BSX', 'BWA',
-      'BX', 'BXP', 'C', 'CAG', 'CAH', 'CARR', 'CAT', 'CB', 'CBOE', 'CBRE',
-      'CCI', 'CCL', 'CDNS', 'CDW', 'CE', 'CEG', 'CF', 'CFG', 'CHD', 'CHRW',
-      'CHTR', 'CI', 'CINF', 'CL', 'CLX', 'CMA', 'CMCSA', 'CME', 'CMG', 'CMI',
-      'CMS', 'CNC', 'CNP', 'COF', 'COO', 'COP', 'COR', 'COST', 'CPAY', 'CPB',
-      'CPRT', 'CPT', 'CRL', 'CRM', 'CSCO', 'CSGP', 'CSX', 'CTAS', 'CTLT', 'CTRA',
-      'CTSH', 'CTVA', 'CVS', 'CVX', 'CZR', 'D', 'DAL', 'DD', 'DE', 'DECK',
-      'DFS', 'DG', 'DGX', 'DHI', 'DHR', 'DIS', 'DLR', 'DLTR', 'DOC', 'DOV',
-      'DOW', 'DPZ', 'DRI', 'DTE', 'DUK', 'DVA', 'DVN', 'DXCM', 'EA', 'EBAY',
-      'ECL', 'ED', 'EFX', 'EG', 'EIX', 'EL', 'ELV', 'EMN', 'EMR', 'ENPH',
-      'EOG', 'EPAM', 'EQIX', 'EQR', 'EQT', 'ES', 'ESS', 'ETN', 'ETR', 'ETSY',
-      'EVRG', 'EW', 'EXC', 'EXPD', 'EXPE', 'EXR', 'F', 'FANG', 'FAST', 'FCX',
-      'FDS', 'FDX', 'FE', 'FFIV', 'FI', 'FICO', 'FIS', 'FITB', 'FLT', 'FMC',
-      'FOX', 'FOXA', 'FRT', 'FSLR', 'FTNT', 'FTV', 'GD', 'GDDY', 'GE', 'GEHC',
-      'GEN', 'GEV', 'GILD', 'GIS', 'GL', 'GLW', 'GM', 'GNRC', 'GOOG', 'GOOGL',
-      'GPC', 'GPN', 'GRMN', 'GS', 'GWW', 'HAL', 'HAS', 'HBAN', 'HCA', 'HD',
-      'HES', 'HIG', 'HII', 'HLT', 'HOLX', 'HON', 'HPE', 'HPQ', 'HRL', 'HSIC',
-      'HST', 'HSY', 'HUBB', 'HUM', 'HWM', 'IBM', 'ICE', 'IDXX', 'IEX', 'IFF',
-      'ILMN', 'INCY', 'INTC', 'INTU', 'INVH', 'IP', 'IPG', 'IQV', 'IR', 'IRM',
-      'ISRG', 'IT', 'ITW', 'IVZ', 'J', 'JBHT', 'JBL', 'JCI', 'JKHY', 'JNJ',
-      'JNPR', 'JPM', 'K', 'KDP', 'KEY', 'KEYS', 'KHC', 'KIM', 'KLAC', 'KMB',
-      'KMI', 'KMX', 'KO', 'KR', 'KVUE', 'L', 'LDOS', 'LEN', 'LH', 'LHX',
-      'LIN', 'LKQ', 'LLY', 'LMT', 'LNT', 'LOW', 'LRCX', 'LULU', 'LUV', 'LVS',
-      'LW', 'LYB', 'LYV', 'MA', 'MAA', 'MAR', 'MAS', 'MCD', 'MCHP', 'MCK',
-      'MCO', 'MDLZ', 'MDT', 'MET', 'META', 'MGM', 'MHK', 'MKC', 'MKTX', 'MLM',
-      'MMC', 'MMM', 'MNST', 'MO', 'MOH', 'MOS', 'MPC', 'MPWR', 'MRK', 'MRNA',
-      'MRO', 'MS', 'MSCI', 'MSFT', 'MSI', 'MTB', 'MTCH', 'MTD', 'MU', 'NCLH',
-      'NDAQ', 'NDSN', 'NEE', 'NEM', 'NFLX', 'NI', 'NKE', 'NOC', 'NOW', 'NRG',
-      'NSC', 'NTAP', 'NTRS', 'NUE', 'NVDA', 'NVR', 'NWS', 'NWSA', 'NXPI', 'O',
-      'ODFL', 'OKE', 'OMC', 'ON', 'ORCL', 'ORLY', 'OTIS', 'OXY', 'PANW', 'PARA',
-      'PAYC', 'PAYX', 'PCAR', 'PCG', 'PEG', 'PEP', 'PFE', 'PFG', 'PG', 'PGR',
-      'PH', 'PHM', 'PKG', 'PLD', 'PM', 'PNC', 'PNR', 'PNW', 'PODD', 'POOL',
-      'PPG', 'PPL', 'PRU', 'PSA', 'PSX', 'PTC', 'PWR', 'PYPL', 'QCOM', 'QRVO',
-      'RCL', 'REG', 'REGN', 'RF', 'RJF', 'RL', 'RMD', 'ROK', 'ROL', 'ROP',
-      'ROST', 'RSG', 'RTX', 'RVTY', 'SBAC', 'SBUX', 'SCHW', 'SHW', 'SJM', 'SLB',
-      'SMCI', 'SNA', 'SNPS', 'SO', 'SOLV', 'SPG', 'SPGI', 'SRE', 'STE', 'STLD',
-      'STT', 'STX', 'STZ', 'SWK', 'SWKS', 'SYF', 'SYK', 'SYY', 'T', 'TAP',
-      'TDG', 'TDY', 'TECH', 'TEL', 'TER', 'TFC', 'TFX', 'TGT', 'TJX', 'TMO',
-      'TMUS', 'TPR', 'TRGP', 'TRMB', 'TROW', 'TRV', 'TSCO', 'TSLA', 'TSN', 'TT',
-      'TTWO', 'TXN', 'TXT', 'TYL', 'UAL', 'UBER', 'UDR', 'UHS', 'ULTA', 'UNH',
-      'UNP', 'UPS', 'URI', 'USB', 'V', 'VFC', 'VICI', 'VLO', 'VLTO', 'VMC',
-      'VRSK', 'VRSN', 'VRTX', 'VST', 'VTR', 'VTRS', 'VZ', 'WAB', 'WAT', 'WBA',
-      'WBD', 'WDC', 'WEC', 'WELL', 'WFC', 'WM', 'WMB', 'WMT', 'WRB', 'WRK',
-      'WST', 'WTW', 'WY', 'WYNN', 'XEL', 'XOM', 'XYL', 'YUM', 'ZBH', 'ZBRA', 'ZTS'
-    ])
+    const earnings = providerEarnings.filter(
+      (earning) => earning.date >= week.fromDate && earning.date <= toDate,
+    )
+    const totalCount = earnings.length
+    const selected = mode === 'calendar'
+      ? earnings.sort(chronologicalSort).slice(0, CATALYST_CALENDAR_EARNINGS_LIMIT)
+      : selectDashboardEarnings(earnings)
 
-    // Top 20 S&P 500 companies by market cap (these should always be shown if reporting)
-    const megaCapSymbols = new Set([
-      'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'GOOG', 'AMZN', 'META', 'BRK.B', 'LLY', 'AVGO',
-      'TSLA', 'WMT', 'JPM', 'V', 'UNH', 'XOM', 'MA', 'ORCL', 'COST', 'HD'
-    ])
-
-    // Filter to S&P 500 stocks only
-    const sp500Earnings = Array.isArray(data)
-      ? data.filter((item: any) => sp500Symbols.has(item.symbol))
-      : []
-
-    const totalCount = sp500Earnings.length
-
-    // Separate mega-cap and other S&P 500 earnings
-    const megaCapEarnings = sp500Earnings.filter((item: any) => megaCapSymbols.has(item.symbol))
-    const otherEarnings = sp500Earnings.filter((item: any) => !megaCapSymbols.has(item.symbol))
-
-    // Prioritize mega-caps, then fill remaining slots with others (max 10 total)
-    const maxDisplay = 10
-    const combined = [
-      ...megaCapEarnings.slice(0, maxDisplay),
-      ...otherEarnings.slice(0, Math.max(0, maxDisplay - megaCapEarnings.length))
-    ].slice(0, maxDisplay)
-
-    // Sort by date
-    combined.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-    const filtered = combined.map((item: any) => ({
-      symbol: item.symbol,
-      name: getCompanyName(item.symbol),
-      date: item.date,
-      time: item.time || null,
-      fiscalDateEnding: item.fiscalDateEnding,
-      eps: item.eps,
-      epsEstimated: item.epsEstimated,
-      revenue: item.revenue,
-      revenueEstimated: item.revenueEstimated,
-    }))
-
-    return { earnings: filtered, totalCount }
+    return { earnings: selected, totalCount }
   } catch (error) {
     console.error('Error fetching earnings calendar:', safeErrorMessage(error))
-    return { earnings: [], totalCount: 0 }
+    return { error: 'Failed to fetch earnings calendar' }
   }
 }
 
-// Simple mapping for S&P 500 company names
-function getCompanyName(symbol: string): string {
-  const names: Record<string, string> = {
-    'AAPL': 'Apple', 'ABBV': 'AbbVie', 'ABT': 'Abbott', 'ACN': 'Accenture', 'ADBE': 'Adobe',
-    'ADI': 'Analog Devices', 'ADM': 'ADM', 'ADP': 'ADP', 'ADSK': 'Autodesk', 'AEE': 'Ameren',
-    'AEP': 'AEP', 'AES': 'AES', 'AFL': 'Aflac', 'AIG': 'AIG', 'AIZ': 'Assurant',
-    'AJG': 'Arthur J Gallagher', 'AKAM': 'Akamai', 'ALB': 'Albemarle', 'ALGN': 'Align Tech', 'ALK': 'Alaska Air',
-    'ALL': 'Allstate', 'ALLE': 'Allegion', 'AMAT': 'Applied Materials', 'AMCR': 'Amcor', 'AMD': 'AMD',
-    'AME': 'Ametek', 'AMGN': 'Amgen', 'AMP': 'Ameriprise', 'AMT': 'American Tower', 'AMZN': 'Amazon',
-    'ANET': 'Arista Networks', 'ANSS': 'Ansys', 'AON': 'Aon', 'AOS': 'A.O. Smith', 'APA': 'APA Corp',
-    'APD': 'Air Products', 'APH': 'Amphenol', 'APTV': 'Aptiv', 'ARE': 'Alexandria RE', 'ATO': 'Atmos Energy',
-    'AVB': 'AvalonBay', 'AVGO': 'Broadcom', 'AVY': 'Avery Dennison', 'AWK': 'American Water', 'AXON': 'Axon',
-    'AXP': 'American Express', 'AZO': 'AutoZone', 'BA': 'Boeing', 'BAC': 'Bank of America', 'BALL': 'Ball Corp',
-    'BAX': 'Baxter', 'BBWI': 'Bath & Body Works', 'BBY': 'Best Buy', 'BDX': 'Becton Dickinson', 'BEN': 'Franklin Resources',
-    'BG': 'Bunge', 'BIIB': 'Biogen', 'BIO': 'Bio-Rad', 'BK': 'BNY Mellon', 'BKNG': 'Booking Holdings',
-    'BKR': 'Baker Hughes', 'BLDR': 'Builders FirstSource', 'BLK': 'BlackRock', 'BMY': 'Bristol-Myers', 'BR': 'Broadridge',
-    'BRK.B': 'Berkshire Hathaway', 'BRO': 'Brown & Brown', 'BSX': 'Boston Scientific', 'BWA': 'BorgWarner', 'BX': 'Blackstone',
-    'BXP': 'BXP', 'C': 'Citigroup', 'CAG': 'Conagra', 'CAH': 'Cardinal Health', 'CARR': 'Carrier',
-    'CAT': 'Caterpillar', 'CB': 'Chubb', 'CBOE': 'Cboe', 'CBRE': 'CBRE', 'CCI': 'Crown Castle',
-    'CCL': 'Carnival', 'CDNS': 'Cadence', 'CDW': 'CDW', 'CE': 'Celanese', 'CEG': 'Constellation Energy',
-    'CF': 'CF Industries', 'CFG': 'Citizens Financial', 'CHD': 'Church & Dwight', 'CHRW': 'C.H. Robinson', 'CHTR': 'Charter',
-    'CI': 'Cigna', 'CINF': 'Cincinnati Financial', 'CL': 'Colgate-Palmolive', 'CLX': 'Clorox', 'CMA': 'Comerica',
-    'CMCSA': 'Comcast', 'CME': 'CME Group', 'CMG': 'Chipotle', 'CMI': 'Cummins', 'CMS': 'CMS Energy',
-    'CNC': 'Centene', 'CNP': 'CenterPoint', 'COF': 'Capital One', 'COO': 'Cooper Companies', 'COP': 'ConocoPhillips',
-    'COR': 'Cencora', 'COST': 'Costco', 'CPAY': 'Corpay', 'CPB': "Campbell's", 'CPRT': 'Copart',
-    'CPT': 'Camden Property', 'CRL': 'Charles River', 'CRM': 'Salesforce', 'CSCO': 'Cisco', 'CSGP': 'CoStar',
-    'CSX': 'CSX', 'CTAS': 'Cintas', 'CTLT': 'Catalent', 'CTRA': 'Coterra', 'CTSH': 'Cognizant',
-    'CTVA': 'Corteva', 'CVS': 'CVS Health', 'CVX': 'Chevron', 'CZR': 'Caesars', 'D': 'Dominion',
-    'DAL': 'Delta Air Lines', 'DD': 'DuPont', 'DE': 'Deere', 'DECK': 'Deckers', 'DFS': 'Discover',
-    'DG': 'Dollar General', 'DGX': 'Quest Diagnostics', 'DHI': 'D.R. Horton', 'DHR': 'Danaher', 'DIS': 'Disney',
-    'DLR': 'Digital Realty', 'DLTR': 'Dollar Tree', 'DOC': 'Healthpeak', 'DOV': 'Dover', 'DOW': 'Dow',
-    'DPZ': "Domino's", 'DRI': "Darden", 'DTE': 'DTE Energy', 'DUK': 'Duke Energy', 'DVA': 'DaVita',
-    'DVN': 'Devon Energy', 'DXCM': 'DexCom', 'EA': 'Electronic Arts', 'EBAY': 'eBay', 'ECL': 'Ecolab',
-    'ED': 'Con Edison', 'EFX': 'Equifax', 'EG': 'Everest Group', 'EIX': 'Edison Intl', 'EL': 'Estée Lauder',
-    'ELV': 'Elevance Health', 'EMN': 'Eastman Chemical', 'EMR': 'Emerson', 'ENPH': 'Enphase', 'EOG': 'EOG Resources',
-    'EPAM': 'EPAM', 'EQIX': 'Equinix', 'EQR': 'Equity Residential', 'EQT': 'EQT', 'ES': 'Eversource',
-    'ESS': 'Essex Property', 'ETN': 'Eaton', 'ETR': 'Entergy', 'ETSY': 'Etsy', 'EVRG': 'Evergy',
-    'EW': 'Edwards Lifesciences', 'EXC': 'Exelon', 'EXPD': 'Expeditors', 'EXPE': 'Expedia', 'EXR': 'Extra Space',
-    'F': 'Ford', 'FANG': 'Diamondback', 'FAST': 'Fastenal', 'FCX': 'Freeport-McMoRan', 'FDS': 'FactSet',
-    'FDX': 'FedEx', 'FE': 'FirstEnergy', 'FFIV': 'F5', 'FI': 'Fiserv', 'FICO': 'FICO',
-    'FIS': 'FIS', 'FITB': 'Fifth Third', 'FLT': 'FleetCor', 'FMC': 'FMC', 'FOX': 'Fox Corp',
-    'FOXA': 'Fox Corp', 'FRT': 'Federal Realty', 'FSLR': 'First Solar', 'FTNT': 'Fortinet', 'FTV': 'Fortive',
-    'GD': 'General Dynamics', 'GDDY': 'GoDaddy', 'GE': 'GE Aerospace', 'GEHC': 'GE HealthCare', 'GEN': 'Gen Digital',
-    'GEV': 'GE Vernova', 'GILD': 'Gilead', 'GIS': 'General Mills', 'GL': 'Globe Life', 'GLW': 'Corning',
-    'GM': 'General Motors', 'GNRC': 'Generac', 'GOOG': 'Alphabet', 'GOOGL': 'Alphabet', 'GPC': 'Genuine Parts',
-    'GPN': 'Global Payments', 'GRMN': 'Garmin', 'GS': 'Goldman Sachs', 'GWW': 'Grainger', 'HAL': 'Halliburton',
-    'HAS': 'Hasbro', 'HBAN': 'Huntington', 'HCA': 'HCA Healthcare', 'HD': 'Home Depot', 'HES': 'Hess',
-    'HIG': 'Hartford', 'HII': 'Huntington Ingalls', 'HLT': 'Hilton', 'HOLX': 'Hologic', 'HON': 'Honeywell',
-    'HPE': 'HPE', 'HPQ': 'HP', 'HRL': 'Hormel', 'HSIC': 'Henry Schein', 'HST': 'Host Hotels',
-    'HSY': "Hershey's", 'HUBB': 'Hubbell', 'HUM': 'Humana', 'HWM': 'Howmet', 'IBM': 'IBM',
-    'ICE': 'ICE', 'IDXX': 'Idexx', 'IEX': 'IDEX', 'IFF': 'IFF', 'ILMN': 'Illumina',
-    'INCY': 'Incyte', 'INTC': 'Intel', 'INTU': 'Intuit', 'INVH': 'Invitation Homes', 'IP': 'Intl Paper',
-    'IPG': 'IPG', 'IQV': 'IQVIA', 'IR': 'Ingersoll Rand', 'IRM': 'Iron Mountain', 'ISRG': 'Intuitive Surgical',
-    'IT': 'Gartner', 'ITW': 'Illinois Tool Works', 'IVZ': 'Invesco', 'J': 'Jacobs', 'JBHT': 'J.B. Hunt',
-    'JBL': 'Jabil', 'JCI': 'Johnson Controls', 'JKHY': 'Jack Henry', 'JNJ': 'Johnson & Johnson', 'JNPR': 'Juniper',
-    'JPM': 'JPMorgan Chase', 'K': "Kellanova", 'KDP': 'Keurig Dr Pepper', 'KEY': 'KeyCorp', 'KEYS': 'Keysight',
-    'KHC': 'Kraft Heinz', 'KIM': 'Kimco Realty', 'KLAC': 'KLA', 'KMB': 'Kimberly-Clark', 'KMI': 'Kinder Morgan',
-    'KMX': 'CarMax', 'KO': 'Coca-Cola', 'KR': 'Kroger', 'KVUE': 'Kenvue', 'L': 'Loews',
-    'LDOS': 'Leidos', 'LEN': 'Lennar', 'LH': 'LabCorp', 'LHX': 'L3Harris', 'LIN': 'Linde',
-    'LKQ': 'LKQ', 'LLY': 'Eli Lilly', 'LMT': 'Lockheed Martin', 'LNT': 'Alliant Energy', 'LOW': "Lowe's",
-    'LRCX': 'Lam Research', 'LULU': 'Lululemon', 'LUV': 'Southwest', 'LVS': 'Las Vegas Sands', 'LW': 'Lamb Weston',
-    'LYB': 'LyondellBasell', 'LYV': 'Live Nation', 'MA': 'Mastercard', 'MAA': 'Mid-America Apt', 'MAR': 'Marriott',
-    'MAS': 'Masco', 'MCD': "McDonald's", 'MCHP': 'Microchip', 'MCK': 'McKesson', 'MCO': "Moody's",
-    'MDLZ': 'Mondelez', 'MDT': 'Medtronic', 'MET': 'MetLife', 'META': 'Meta', 'MGM': 'MGM Resorts',
-    'MHK': 'Mohawk', 'MKC': 'McCormick', 'MKTX': 'MarketAxess', 'MLM': 'Martin Marietta', 'MMC': 'Marsh McLennan',
-    'MMM': '3M', 'MNST': 'Monster Beverage', 'MO': 'Altria', 'MOH': 'Molina', 'MOS': 'Mosaic',
-    'MPC': 'Marathon Petroleum', 'MPWR': 'Monolithic Power', 'MRK': 'Merck', 'MRNA': 'Moderna', 'MRO': 'Marathon Oil',
-    'MS': 'Morgan Stanley', 'MSCI': 'MSCI', 'MSFT': 'Microsoft', 'MSI': 'Motorola', 'MTB': 'M&T Bank',
-    'MTCH': 'Match Group', 'MTD': 'Mettler-Toledo', 'MU': 'Micron', 'NCLH': 'Norwegian Cruise', 'NDAQ': 'Nasdaq',
-    'NDSN': 'Nordson', 'NEE': 'NextEra', 'NEM': 'Newmont', 'NFLX': 'Netflix', 'NI': 'NiSource',
-    'NKE': 'Nike', 'NOC': 'Northrop Grumman', 'NOW': 'ServiceNow', 'NRG': 'NRG Energy', 'NSC': 'Norfolk Southern',
-    'NTAP': 'NetApp', 'NTRS': 'Northern Trust', 'NUE': 'Nucor', 'NVDA': 'NVIDIA', 'NVR': 'NVR',
-    'NWS': 'News Corp', 'NWSA': 'News Corp', 'NXPI': 'NXP', 'O': 'Realty Income', 'ODFL': 'Old Dominion',
-    'OKE': 'Oneok', 'OMC': 'Omnicom', 'ON': 'ON Semi', 'ORCL': 'Oracle', 'ORLY': "O'Reilly Auto",
-    'OTIS': 'Otis', 'OXY': 'Occidental', 'PANW': 'Palo Alto Networks', 'PARA': 'Paramount', 'PAYC': 'Paycom',
-    'PAYX': 'Paychex', 'PCAR': 'Paccar', 'PCG': 'PG&E', 'PEG': 'PSEG', 'PEP': 'PepsiCo',
-    'PFE': 'Pfizer', 'PFG': 'Principal', 'PG': 'Procter & Gamble', 'PGR': 'Progressive', 'PH': 'Parker Hannifin',
-    'PHM': 'PulteGroup', 'PKG': 'Packaging Corp', 'PLD': 'Prologis', 'PM': 'Philip Morris', 'PNC': 'PNC',
-    'PNR': 'Pentair', 'PNW': 'Pinnacle West', 'PODD': 'Insulet', 'POOL': 'Pool Corp', 'PPG': 'PPG',
-    'PPL': 'PPL', 'PRU': 'Prudential', 'PSA': 'Public Storage', 'PSX': 'Phillips 66', 'PTC': 'PTC',
-    'PWR': 'Quanta', 'PYPL': 'PayPal', 'QCOM': 'Qualcomm', 'QRVO': 'Qorvo', 'RCL': 'Royal Caribbean',
-    'REG': 'Regency Centers', 'REGN': 'Regeneron', 'RF': 'Regions', 'RJF': 'Raymond James', 'RL': 'Ralph Lauren',
-    'RMD': 'ResMed', 'ROK': 'Rockwell', 'ROL': 'Rollins', 'ROP': 'Roper', 'ROST': "Ross Stores",
-    'RSG': 'Republic Services', 'RTX': 'RTX', 'RVTY': 'Revvity', 'SBAC': 'SBA Communications', 'SBUX': 'Starbucks',
-    'SCHW': 'Schwab', 'SHW': 'Sherwin-Williams', 'SJM': 'J.M. Smucker', 'SLB': 'SLB', 'SMCI': 'Super Micro',
-    'SNA': 'Snap-on', 'SNPS': 'Synopsys', 'SO': 'Southern Co', 'SOLV': 'Solventum', 'SPG': 'Simon Property',
-    'SPGI': 'S&P Global', 'SRE': 'Sempra', 'STE': 'Steris', 'STLD': 'Steel Dynamics', 'STT': 'State Street',
-    'STX': 'Seagate', 'STZ': 'Constellation Brands', 'SWK': 'Stanley Black & Decker', 'SWKS': 'Skyworks', 'SYF': 'Synchrony',
-    'SYK': 'Stryker', 'SYY': 'Sysco', 'T': 'AT&T', 'TAP': 'Molson Coors', 'TDG': 'TransDigm',
-    'TDY': 'Teledyne', 'TECH': 'Bio-Techne', 'TEL': 'TE Connectivity', 'TER': 'Teradyne', 'TFC': 'Truist',
-    'TFX': 'Teleflex', 'TGT': 'Target', 'TJX': 'TJX', 'TMO': 'Thermo Fisher', 'TMUS': 'T-Mobile',
-    'TPR': 'Tapestry', 'TRGP': 'Targa Resources', 'TRMB': 'Trimble', 'TROW': 'T. Rowe Price', 'TRV': 'Travelers',
-    'TSCO': 'Tractor Supply', 'TSLA': 'Tesla', 'TSN': 'Tyson Foods', 'TT': 'Trane', 'TTWO': 'Take-Two',
-    'TXN': 'Texas Instruments', 'TXT': 'Textron', 'TYL': 'Tyler Tech', 'UAL': 'United Airlines', 'UBER': 'Uber',
-    'UDR': 'UDR', 'UHS': 'Universal Health', 'ULTA': 'Ulta Beauty', 'UNH': 'UnitedHealth', 'UNP': 'Union Pacific',
-    'UPS': 'UPS', 'URI': 'United Rentals', 'USB': 'US Bancorp', 'V': 'Visa', 'VFC': 'VF Corp',
-    'VICI': 'Vici Properties', 'VLO': 'Valero', 'VLTO': 'Veralto', 'VMC': 'Vulcan Materials', 'VRSK': 'Verisk',
-    'VRSN': 'VeriSign', 'VRTX': 'Vertex', 'VST': 'Vistra', 'VTR': 'Ventas', 'VTRS': 'Viatris',
-    'VZ': 'Verizon', 'WAB': 'Wabtec', 'WAT': 'Waters', 'WBA': 'Walgreens', 'WBD': 'Warner Bros',
-    'WDC': 'Western Digital', 'WEC': 'WEC Energy', 'WELL': 'Welltower', 'WFC': 'Wells Fargo', 'WM': 'Waste Management',
-    'WMB': 'Williams', 'WMT': 'Walmart', 'WRB': 'W.R. Berkley', 'WRK': 'WestRock', 'WST': 'West Pharma',
-    'WTW': 'WTW', 'WY': 'Weyerhaeuser', 'WYNN': 'Wynn Resorts', 'XEL': 'Xcel Energy', 'XOM': 'Exxon Mobil',
-    'XYL': 'Xylem', 'YUM': 'Yum! Brands', 'ZBH': 'Zimmer Biomet', 'ZBRA': 'Zebra', 'ZTS': 'Zoetis'
+/** Compact, priority-weighted feed used by the dashboard and briefs. */
+export async function fetchEarningsCalendarWithStatus(): Promise<EarningsCalendarLoadResult> {
+  return loadEarningsCalendar('dashboard')
+}
+
+/** Chronological, bounded week feed used only by the full Catalyst Calendar. */
+export async function fetchEarningsCalendarForCatalystCalendar(
+  referenceTime: string,
+): Promise<CatalystEarningsCalendarLoadResult> {
+  const result = await loadEarningsCalendar('calendar', referenceTime)
+  if ('error' in result) return result
+  return {
+    ...result,
+    truncated: result.totalCount > CATALYST_CALENDAR_EARNINGS_LIMIT,
   }
-  return names[symbol] || symbol
+}
+
+export async function fetchEarningsCalendar(): Promise<EarningsCalendarResult> {
+  const result = await fetchEarningsCalendarWithStatus()
+  return 'error' in result ? { earnings: [], totalCount: 0 } : result
 }

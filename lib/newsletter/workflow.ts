@@ -10,6 +10,8 @@ import {
 } from './delivery-quality'
 import { isNewsletterSourceEntityMatch } from './source-integrity'
 import { isDailySourceFresh } from './daily-selection'
+import { isPriceNewsletterChartSpec } from './chart-spec'
+import { isNewsletterChartProvenanceCurrent } from './chart-provenance'
 
 export interface NewsletterWorkflowStage {
   id: NewsletterDraftStatus
@@ -204,6 +206,35 @@ export function getNewsletterDraftReadiness(
         blockId: block.id,
         label: `Capture a final chart for ${sectionLabel}.`,
       })
+    }
+
+    if (hasUsableChartImage(block.chartImageUrl)) {
+      const provenance = block.chartProvenance
+      const scene = provenance?.scene
+      const hasExactScene = scene
+        ? isPriceNewsletterChartSpec(scene)
+          ? Boolean(
+              scene.chartExportSpec?.viewportTimeRange &&
+                scene.chartExportSpec?.dataTimeRange,
+            )
+          : Boolean(scene.editorState)
+        : false
+      if (
+        !provenance ||
+        provenance.source === 'legacy' ||
+        !isNewsletterChartProvenanceCurrent(provenance, {
+          imageUrl: block.chartImageUrl,
+          interactiveUrl: block.chartExportUrl,
+          scene: block.chartSpec,
+        }) ||
+        !hasExactScene
+      ) {
+        issues.push({
+          id: `block-${block.id}-chart-provenance`,
+          blockId: block.id,
+          label: `Recapture ${sectionLabel} so its immutable image and exact editable chart scene stay paired.`,
+        })
+      }
     }
 
     if (

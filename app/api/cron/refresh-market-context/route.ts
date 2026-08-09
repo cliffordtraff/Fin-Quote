@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 240
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getNewsletterAutomationClock } from '@/lib/newsletter/daily-automation'
+import { getNewsletterAutomationClock } from '@/lib/newsletter/automation-clock'
 import { refreshDashboardCommentary } from '@/lib/refresh-dashboard-commentary'
 
 function isAuthorized(request: NextRequest): boolean {
@@ -55,5 +55,10 @@ export async function GET(request: NextRequest) {
       : undefined,
     clock,
     ...result,
+  }, {
+    // The scheduler and pg_net must be able to distinguish a durable partial
+    // result from a successful refresh. Later attempts remain idempotent and
+    // retry only the missing components.
+    status: result.complete ? 200 : 503,
   })
 }

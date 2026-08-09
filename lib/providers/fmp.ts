@@ -12,7 +12,18 @@ import type {
   ProviderCandle,
   ProviderNews,
   CandleTimespan,
+  CandleRequestOptions,
+  ProviderRequestOptions,
+  QuoteRequestOptions,
 } from './types'
+import {
+  ProviderQuoteSymbolMismatchError,
+  providerQuoteSymbolsMatch,
+} from './quote-errors'
+import {
+  normalizeMarketSymbol,
+  toFmpMarketSymbol,
+} from '@/lib/market-symbol'
 
 const FMP_BASE = 'https://financialmodelingprep.com/api'
 const FMP_FUTURES_SYMBOLS: Record<string, string> = {
@@ -33,7 +44,8 @@ function getApiKey(): string {
 }
 
 function toFmpRequestSymbol(symbol: string): string {
-  return FMP_FUTURES_SYMBOLS[symbol] ?? symbol
+  const normalized = normalizeMarketSymbol(symbol)
+  return FMP_FUTURES_SYMBOLS[normalized] ?? toFmpMarketSymbol(normalized)
 }
 
 const easternPartsFormatter = new Intl.DateTimeFormat('en-US', {
@@ -131,6 +143,64 @@ function mapCandle(raw: Record<string, unknown>): ProviderCandle | null {
   return { date, timestampMs, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function boundedNewsLimit(limit: number): number {
+  return Number.isFinite(limit)
+    ? Math.min(25, Math.max(1, Math.trunc(limit)))
+    : 5
+}
+
+function isStrictFmpNewsItem(value: unknown, symbol: string): boolean {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.symbol === 'string' &&
+    normalizeMarketSymbol(value.symbol) === symbol &&
+    typeof value.title === 'string' &&
+    value.title.trim().length > 0 &&
+    typeof value.url === 'string' &&
+    value.url.trim().length > 0 &&
+    typeof value.publishedDate === 'string' &&
+    typeof value.site === 'string' &&
+    (value.text === undefined || typeof value.text === 'string') &&
+    (value.image === undefined || value.image === null || typeof value.image === 'string')
+  )
+}
+
+function mapFmpCandlePayload(
+  payload: unknown,
+  kind: 'intraday' | 'historical',
+  strict: boolean,
+): ProviderCandle[] {
+  let rawCandles: unknown[]
+
+  if (kind === 'intraday') {
+    if (!Array.isArray(payload)) {
+      if (strict) throw new Error('FMP returned an invalid intraday candle payload')
+      return []
+    }
+    rawCandles = payload
+  } else {
+    const historical = isRecord(payload) ? payload.historical : undefined
+    if (!Array.isArray(historical)) {
+      if (strict) throw new Error('FMP returned an invalid historical candle payload')
+      return []
+    }
+    rawCandles = historical
+  }
+
+  const candles = rawCandles.map((raw) =>
+    isRecord(raw) ? mapCandle(raw) : null,
+  )
+  if (strict && candles.some((candle) => candle === null)) {
+    throw new Error(`FMP returned an invalid ${kind} candle payload`)
+  }
+
+  return candles.filter((candle): candle is ProviderCandle => candle !== null)
+}
+
 /** Map FMP timespan names to endpoint path segments. */
 function fmpCandleEndpoint(multiplier: number, timespan: CandleTimespan): string {
   // FMP uses separate endpoint paths rather than a generic multiplier+timespan
@@ -157,33 +227,146 @@ function fmpCandleEndpoint(multiplier: number, timespan: CandleTimespan): string
 export class FMPProvider implements MarketDataProvider {
   // ---- Quotes ----
 
-  async getQuote(symbol: string): Promise<ProviderQuote | null> {
+  async getQuote(
+    symbol: string,
+    options: QuoteRequestOptions = {},
+  ): Promise<ProviderQuote | null> {
+    options.signal?.throwIfAborted()
     const key = getApiKey()
-    const requestSymbol = toFmpRequestSymbol(symbol)
-    const res = await fetch(`${FMP_BASE}/v3/quote/${encodeURIComponent(requestSymbol)}?apikey=${key}`, {
-      next: { revalidate: 60 },
-    })
-    if (!res.ok) return null
+    const callerSymbol = normalizeMarketSymbol(symbol)
+    const requestSymbol = toFmpRequestSymbol(callerSymbol)
+    const requestInit: RequestInit = options.freshness === 'live'
+      ? { cache: 'no-store', signal: options.signal }
+      : { next: { revalidate: 60 }, signal: options.signal }
+    const res = await fetch(
+      `${FMP_BASE}/v3/quote/${encodeURIComponent(requestSymbol)}?apikey=${key}`,
+      requestInit,
+    )
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (res.status === 404) return null
+      if (options.freshness === 'live') {
+        throw new Error(`FMP quote request failed with status ${res.status}`)
+      }
+      return null
+    }
 
-    const data: unknown[] = await res.json()
+    const data: unknown = await res.json()
+    options.signal?.throwIfAborted()
     if (!Array.isArray(data) || data.length === 0) return null
+    const raw = data[0]
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      if (options.freshness === 'live') {
+        throw new Error('FMP returned an invalid quote payload')
+      }
+      return null
+    }
 
-    return mapQuote(data[0] as Record<string, unknown>)
+    const rawSymbol = typeof raw.symbol === 'string' ? raw.symbol : ''
+    if (!providerQuoteSymbolsMatch(rawSymbol, requestSymbol)) {
+      const mismatch = new ProviderQuoteSymbolMismatchError(
+        'FMP',
+        requestSymbol,
+        rawSymbol,
+      )
+      if (options.freshness === 'live') throw mismatch
+      console.error(`[fmp] ${mismatch.message}`)
+      return null
+    }
+
+    const quote = mapQuote(raw as Record<string, unknown>)
+    if (
+      !quote.symbol ||
+      !Number.isFinite(quote.price) ||
+      quote.price === 0 ||
+      !Number.isFinite(quote.change) ||
+      !Number.isFinite(quote.changesPercentage)
+    ) {
+      if (options.freshness === 'live') {
+        throw new Error('FMP returned an invalid quote payload')
+      }
+      return null
+    }
+
+    // Never leak FMP's futures or class-share aliases through the provider API.
+    return { ...quote, symbol: callerSymbol }
   }
 
-  async getQuotes(symbols: string[]): Promise<ProviderQuote[]> {
+  async getQuotes(
+    symbols: string[],
+    options: QuoteRequestOptions = {},
+  ): Promise<ProviderQuote[]> {
+    options.signal?.throwIfAborted()
     if (symbols.length === 0) return []
     const key = getApiKey()
-    const joined = symbols.map(s => encodeURIComponent(toFmpRequestSymbol(s))).join(',')
-    const res = await fetch(`${FMP_BASE}/v3/quote/${joined}?apikey=${key}`, {
-      next: { revalidate: 60 },
+    const callerSymbols = symbols.map(normalizeMarketSymbol)
+    const requestSymbols = callerSymbols.map(toFmpRequestSymbol)
+    const joined = requestSymbols.map(encodeURIComponent).join(',')
+    const throwOnFailure = options.freshness === 'live' || options.failureMode === 'throw'
+    const requestInit: RequestInit = options.freshness === 'live'
+      ? { cache: 'no-store', signal: options.signal }
+      : { next: { revalidate: 60 }, signal: options.signal }
+    const res = await fetch(
+      `${FMP_BASE}/v3/quote/${joined}?apikey=${key}`,
+      requestInit,
+    )
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (throwOnFailure) {
+        throw new Error(`FMP batch quote request failed with status ${res.status}`)
+      }
+      return []
+    }
+
+    const data: unknown = await res.json()
+    options.signal?.throwIfAborted()
+    if (!Array.isArray(data)) {
+      if (throwOnFailure) {
+        throw new Error('FMP returned an invalid batch quote payload')
+      }
+      return []
+    }
+
+    const quotes = data.map((raw) =>
+      mapQuote(
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? raw as Record<string, unknown>
+          : {},
+      ),
+    )
+    if (options.freshness === 'live') {
+      const matchedRequestIndexes = new Set<number>()
+      const isComplete = quotes.length === requestSymbols.length && quotes.every((quote) => {
+        const matchingIndexes = requestSymbols.flatMap((requestSymbol, index) =>
+          providerQuoteSymbolsMatch(quote.symbol, requestSymbol) ? [index] : [],
+        )
+        if (
+          matchingIndexes.length !== 1 ||
+          matchedRequestIndexes.has(matchingIndexes[0])
+        ) {
+          return false
+        }
+        matchedRequestIndexes.add(matchingIndexes[0])
+        return (
+          Number.isFinite(quote.price) &&
+          quote.price !== 0 &&
+          Number.isFinite(quote.change) &&
+          Number.isFinite(quote.changesPercentage)
+        )
+      }) && matchedRequestIndexes.size === requestSymbols.length
+      if (!isComplete) {
+        throw new Error('FMP returned an invalid batch quote payload')
+      }
+    }
+
+    return quotes.map((quote) => {
+      const requestIndex = requestSymbols.findIndex((requestSymbol) =>
+        providerQuoteSymbolsMatch(quote.symbol, requestSymbol)
+      )
+      return requestIndex < 0
+        ? quote
+        : { ...quote, symbol: callerSymbols[requestIndex] }
     })
-    if (!res.ok) return []
-
-    const data: unknown[] = await res.json()
-    if (!Array.isArray(data)) return []
-
-    return data.map(d => mapQuote(d as Record<string, unknown>))
   }
 
   // ---- Candles (intraday / custom resolution) ----
@@ -194,7 +377,10 @@ export class FMPProvider implements MarketDataProvider {
     timespan: CandleTimespan,
     from?: string,
     to?: string,
+    options: CandleRequestOptions = {},
   ): Promise<ProviderCandle[]> {
+    options.signal?.throwIfAborted()
+    const strict = options.failureMode === 'throw'
     const key = getApiKey()
     const endpoint = fmpCandleEndpoint(multiplier, timespan)
     const isDaily = endpoint === 'historical-price-full'
@@ -205,19 +391,29 @@ export class FMPProvider implements MarketDataProvider {
     if (to) url += `&to=${to}`
 
     const revalidate = timespan === 'minute' ? 10 : timespan === 'hour' ? 300 : 3600
-    const res = await fetch(url, { next: { revalidate } })
-    if (!res.ok) return []
+    const res = await fetch(url, {
+      next: { revalidate },
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (strict) {
+        throw new Error(`FMP intraday candle request failed with status ${res.status}`)
+      }
+      return []
+    }
 
-    const json = await res.json()
+    const json: unknown = await res.json()
+    options.signal?.throwIfAborted()
 
-    // FMP intraday endpoints return arrays directly; daily returns { historical: [] }
-    const rawArray: unknown[] = isDaily
-      ? (json?.historical ?? [])
-      : Array.isArray(json) ? json : []
-
-    return rawArray
-      .map(r => mapCandle(r as Record<string, unknown>))
-      .filter((c): c is ProviderCandle => c !== null)
+    // FMP intraday endpoints return arrays directly; daily/custom resolution
+    // returns { historical: [] }. An empty array is authoritative only after
+    // that enclosing HTTP-200 payload shape has been validated.
+    return mapFmpCandlePayload(
+      json,
+      isDaily ? 'historical' : 'intraday',
+      strict,
+    )
   }
 
   // ---- Candles (historical daily) ----
@@ -226,21 +422,30 @@ export class FMPProvider implements MarketDataProvider {
     symbol: string,
     from: string,
     to?: string,
+    options: CandleRequestOptions = {},
   ): Promise<ProviderCandle[]> {
+    options.signal?.throwIfAborted()
+    const strict = options.failureMode === 'throw'
     const key = getApiKey()
     const requestSymbol = toFmpRequestSymbol(symbol)
     let url = `${FMP_BASE}/v3/historical-price-full/${encodeURIComponent(requestSymbol)}?apikey=${key}&from=${from}`
     if (to) url += `&to=${to}`
 
-    const res = await fetch(url, { next: { revalidate: 3600 } })
-    if (!res.ok) return []
+    const res = await fetch(url, {
+      next: { revalidate: 3600 },
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (strict) {
+        throw new Error(`FMP historical candle request failed with status ${res.status}`)
+      }
+      return []
+    }
 
-    const json = await res.json()
-    const rawArray: unknown[] = json?.historical ?? []
-
-    return rawArray
-      .map(r => mapCandle(r as Record<string, unknown>))
-      .filter((c): c is ProviderCandle => c !== null)
+    const json: unknown = await res.json()
+    options.signal?.throwIfAborted()
+    return mapFmpCandlePayload(json, 'historical', strict)
   }
 
   // ---- Gainers / Losers ----
@@ -290,25 +495,53 @@ export class FMPProvider implements MarketDataProvider {
 
   // ---- News ----
 
-  async getNews(symbol: string, limit = 5): Promise<ProviderNews[]> {
+  async getNews(
+    symbol: string,
+    limit = 5,
+    options: ProviderRequestOptions = {},
+  ): Promise<ProviderNews[]> {
+    options.signal?.throwIfAborted()
+    const strict = options.failureMode === 'throw'
     const key = getApiKey()
+    const callerSymbol = normalizeMarketSymbol(symbol)
+    const requestSymbol = toFmpRequestSymbol(callerSymbol)
+    const safeLimit = boundedNewsLimit(limit)
     const res = await fetch(
-      `${FMP_BASE}/v3/stock_news?tickers=${encodeURIComponent(symbol)}&limit=${limit}&apikey=${key}`,
-      { next: { revalidate: 300 } },
+      `${FMP_BASE}/v3/stock_news?tickers=${encodeURIComponent(requestSymbol)}&limit=${safeLimit}&apikey=${key}`,
+      { next: { revalidate: 300 }, signal: options.signal },
     )
-    if (!res.ok) return []
+    options.signal?.throwIfAborted()
+    if (!res.ok) {
+      if (strict) {
+        throw new Error(`FMP news request failed with status ${res.status}`)
+      }
+      return []
+    }
 
-    const data: unknown[] = await res.json()
-    if (!Array.isArray(data)) return []
+    const data: unknown = await res.json()
+    options.signal?.throwIfAborted()
+    if (!Array.isArray(data)) {
+      if (strict) throw new Error('FMP returned an invalid news payload')
+      return []
+    }
+    if (strict && data.some((item) => !isStrictFmpNewsItem(item, callerSymbol))) {
+      throw new Error('FMP returned an invalid news payload')
+    }
 
-    return data.map((item: any) => ({
-      title: item.title ?? '',
-      text: item.text ?? '',
-      url: item.url ?? '',
-      image: item.image ?? null,
-      publishedDate: item.publishedDate ?? '',
-      site: item.site ?? '',
-      symbol: item.symbol ?? symbol,
-    }))
+    return data.slice(0, safeLimit).flatMap((item: any) => {
+      const rawSymbol = typeof item?.symbol === 'string'
+        ? normalizeMarketSymbol(item.symbol)
+        : callerSymbol
+      if (rawSymbol !== callerSymbol) return []
+      return [{
+        title: item.title ?? '',
+        text: item.text ?? '',
+        url: item.url ?? '',
+        image: item.image ?? null,
+        publishedDate: item.publishedDate ?? '',
+        site: item.site ?? '',
+        symbol: callerSymbol,
+      }]
+    })
   }
 }

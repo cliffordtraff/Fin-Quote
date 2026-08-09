@@ -1063,7 +1063,7 @@ export default function NewsletterOperations() {
       setNotice(null)
       setError(null)
       try {
-        const response = await fetch('/api/newsletter/operations', {
+        const response = await fetch('/api/newsletter/operations/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1101,7 +1101,7 @@ export default function NewsletterOperations() {
     setNotice(null)
     setError(null)
     try {
-      const response = await fetch('/api/newsletter/operations', {
+      const response = await fetch('/api/newsletter/operations/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reconcile_beehiiv' }),
