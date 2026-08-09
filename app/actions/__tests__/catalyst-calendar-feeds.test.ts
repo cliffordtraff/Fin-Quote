@@ -110,6 +110,22 @@ describe('full catalyst earnings feed', () => {
     })
   })
 
+  it('accepts a provider-wide week above 5,000 rows while keeping the S&P feed bounded', async () => {
+    const providerWideRows = Array.from({ length: 6_000 }, (_, index) => ({
+      symbol: `N${index}`,
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([
+      ...providerWideRows,
+      earningsRow('AAPL'),
+    ])))
+
+    await expect(fetchEarningsCalendarForCatalystCalendar(REFERENCE_TIME)).resolves.toEqual({
+      earnings: [expect.objectContaining({ symbol: 'AAPL' })],
+      totalCount: 1,
+      truncated: false,
+    })
+  })
+
   it('fails closed before buffering a provider body declared above the byte cap', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', {
       headers: { 'content-length': String(2 * 1024 * 1024 + 1) },
