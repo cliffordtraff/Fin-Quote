@@ -149,8 +149,8 @@ function parseProviderRows(value: unknown): EarningsData[] | null {
     if (!isRecord(candidate) || typeof candidate.symbol !== 'string') return null
 
     const normalized = candidate.symbol.trim().toUpperCase()
-    if (!SYMBOL_PATTERN.test(normalized)) return null
     if (!isSP500(normalized)) continue
+    if (!SYMBOL_PATTERN.test(normalized)) return null
 
     const earning = parseEligibleRow(candidate)
     if (!earning) return null
