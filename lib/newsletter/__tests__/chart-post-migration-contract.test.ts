@@ -40,8 +40,9 @@ describe('durable newsletter chart admission migration contract', () => {
   it('fixes the lease at 180 seconds and refreshes time after every global lock wait', () => {
     const acquire = functionBody('acquire_newsletter_chart_post')
     expect(acquire).toMatch(
-      /lease_duration integer := pg_catalog\.greatest\(\s*180,/,
+      /lease_duration integer := greatest\(\s*180,\s*least\(coalesce\(/,
     )
+    expect(migration).not.toContain('pg_catalog.coalesce')
     for (const name of [
       'acquire_newsletter_chart_post',
       'complete_newsletter_chart_post',
