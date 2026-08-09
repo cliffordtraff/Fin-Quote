@@ -131,9 +131,9 @@ DECLARE
   -- The fence must outlive the route's complete 120-second invocation, not
   -- merely its 55-second logical caller deadline. Keep the parameter in the
   -- stable RPC signature, but never allow a caller to shorten this fence.
-  lease_duration integer := pg_catalog.greatest(
+  lease_duration integer := greatest(
     180,
-    pg_catalog.least(pg_catalog.coalesce(p_lease_seconds, 180), 180)
+    least(coalesce(p_lease_seconds, 180), 180)
   );
   claimed_token uuid := pg_catalog.gen_random_uuid();
   request_row public.newsletter_chart_post_requests%ROWTYPE;
@@ -142,9 +142,9 @@ DECLARE
   recent_for_owner integer;
 BEGIN
   IF p_owner_id IS NULL
-    OR pg_catalog.coalesce(p_idempotency_key, '') !~
+    OR coalesce(p_idempotency_key, '') !~
       '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'
-    OR pg_catalog.coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$' THEN
+    OR coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',
       MESSAGE = 'Invalid newsletter chart post admission identity';
@@ -219,9 +219,9 @@ BEGIN
         'in_progress'::text,
         NULL::uuid,
         NULL::jsonb,
-        pg_catalog.greatest(
+        greatest(
           1,
-          pg_catalog.least(
+          least(
             10,
             pg_catalog.ceil(
               pg_catalog.date_part(
@@ -354,14 +354,14 @@ DECLARE
   request_row public.newsletter_chart_post_requests%ROWTYPE;
 BEGIN
   IF p_owner_id IS NULL
-    OR pg_catalog.coalesce(p_idempotency_key, '') !~
+    OR coalesce(p_idempotency_key, '') !~
       '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'
-    OR pg_catalog.coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$'
+    OR coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$'
     OR p_lease_token IS NULL
     OR p_result_receipt IS NULL
     OR pg_catalog.jsonb_typeof(p_result_receipt) <> 'object'
     OR pg_catalog.octet_length(p_result_receipt::text) NOT BETWEEN 2 AND 524288
-    OR pg_catalog.coalesce(p_result_receipt ->> 'id', '') !~
+    OR coalesce(p_result_receipt ->> 'id', '') !~
       '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     OR pg_catalog.jsonb_typeof(p_result_receipt -> 'ownerId')
       IS DISTINCT FROM 'string'
@@ -373,7 +373,7 @@ BEGIN
       IS DISTINCT FROM 'string'
     OR pg_catalog.char_length(p_result_receipt ->> 'title') NOT BETWEEN 1 AND 120
     OR pg_catalog.char_length(p_result_receipt ->> 'symbol') NOT BETWEEN 1 AND 24
-    OR pg_catalog.coalesce(p_result_receipt ->> 'symbol', '') !~
+    OR coalesce(p_result_receipt ->> 'symbol', '') !~
       '^[A-Z0-9]+([.-][A-Z0-9]+)*$'
     OR pg_catalog.jsonb_typeof(p_result_receipt -> 'chartSpec')
       IS DISTINCT FROM 'object'
@@ -392,22 +392,22 @@ BEGIN
       IS DISTINCT FROM 'string'
     OR pg_catalog.char_length(p_result_receipt ->> 'chartExportUrl') NOT BETWEEN 8 AND 8192
     OR p_result_receipt ->> 'chartExportUrl' !~ '^https?://'
-    OR pg_catalog.coalesce(p_result_receipt ->> 'capturedAt', '') !~
+    OR coalesce(p_result_receipt ->> 'capturedAt', '') !~
       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
     OR pg_catalog.jsonb_typeof(p_result_receipt -> 'rendererContract')
       IS DISTINCT FROM 'string'
     OR pg_catalog.char_length(p_result_receipt ->> 'rendererContract') NOT BETWEEN 1 AND 128
-    OR pg_catalog.coalesce(p_result_receipt ->> 'sceneHash', '') !~
+    OR coalesce(p_result_receipt ->> 'sceneHash', '') !~
       '^[0-9a-f]{64}$'
     OR (
       pg_catalog.jsonb_typeof(p_result_receipt -> 'imageSha256')
         IS DISTINCT FROM 'null'
-      AND pg_catalog.coalesce(p_result_receipt ->> 'imageSha256', '') !~
+      AND coalesce(p_result_receipt ->> 'imageSha256', '') !~
         '^[0-9a-f]{64}$'
     )
-    OR pg_catalog.coalesce(p_result_receipt ->> 'createdAt', '') !~
+    OR coalesce(p_result_receipt ->> 'createdAt', '') !~
       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
-    OR pg_catalog.coalesce(p_result_receipt ->> 'updatedAt', '') !~
+    OR coalesce(p_result_receipt ->> 'updatedAt', '') !~
       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',
@@ -476,9 +476,9 @@ DECLARE
   request_row public.newsletter_chart_post_requests%ROWTYPE;
 BEGIN
   IF p_owner_id IS NULL
-    OR pg_catalog.coalesce(p_idempotency_key, '') !~
+    OR coalesce(p_idempotency_key, '') !~
       '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'
-    OR pg_catalog.coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$'
+    OR coalesce(p_fingerprint, '') !~ '^[0-9a-f]{64}$'
     OR p_lease_token IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',

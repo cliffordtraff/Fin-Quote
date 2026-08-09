@@ -50,9 +50,13 @@ This architecture means the LLM can never hallucinate a stock price. It can only
 
 **The lesson here:** When accuracy matters more than convenience, put guardrails around your AI. It's more work upfront, but you'll sleep better.
 
-### Server Actions: The Best Part of Next.js 15
+### Server Actions And Route Handlers: Two Doors For Different Traffic
 
-The entire backend runs on Next.js Server Actions. No separate API server. No Express app. Just `'use server'` at the top of a file and you're writing backend code that the frontend can call like a function.
+The application does not need a separate Express server, but it no longer
+pretends every server boundary is the same. Next.js Server Actions are the
+pleasant door for trusted server-rendered reads and tightly coupled UI work:
+put `'use server'` at the top of a file and React can call typed server code
+without maintaining a second client SDK.
 
 ```typescript
 // app/actions/financials.ts
@@ -70,11 +74,20 @@ Then in your React component:
 const data = await getFinancialsByMetric('AAPL', 'revenue', 5)
 ```
 
-No fetch calls. No API routes. No CORS. It just works.
+That is one door. Route handlers are the other. They own SSE streams, browser
+commands that need cancellation, bounded public market-data APIs, explicit
+CORS/origin policy, webhook verification, cache headers, and compatibility
+redirects between read and write modules. The distinction became a deployment
+tool too: a tiny polling GET must not statically import the Puppeteer and
+newsletter-generation graph used by a mutation simply because both happen to
+concern the same screen.
 
-We have 55+ server actions handling everything from market data to insider trades. The pattern is dead simple: one action per data type, clear input validation, typed returns.
-
-**Caveat we learned the hard way:** Server Actions are great until you need to stream. The chatbot uses SSE (Server-Sent Events) through a traditional API route because Server Actions can't stream responses mid-execution.
+We still have dozens of server actions for financials, market data, and
+internal composition. The rule is no longer “no fetch calls.” It is “choose
+the boundary whose HTTP, lifecycle, and bundle semantics match the job.” The
+chatbot and live market feeds use SSE routes because an answer must arrive in
+pieces. Newsletter and review commands use bounded authenticated routes because
+the browser needs abort, conflict, and retry behavior it can observe.
 
 ### Supabase: PostgreSQL with Superpowers
 
@@ -95,19 +108,32 @@ The interesting table is `filing_chunks` with pgvector embeddings. We chunk SEC 
 
 ## The Parts That Make It Work
 
-### Market Dashboard: The Art of Real-Time Data
+### Market Dashboard: The Art of Honest Freshness
 
 The homepage is a market dashboard showing indexes, sectors, gainers, losers, and more. The challenge? Making it feel "live" without hammering the APIs.
 
-**Solution: ISR + Client Polling**
+**Solution: ISR + independently timed snapshots**
 
 ```typescript
 export const revalidate = 60 // ISR: regenerate every 60 seconds
 ```
 
-Next.js ISR (Incremental Static Regeneration) rebuilds the page every 60 seconds server-side. But during market hours, that's not fast enough. So we added client-side polling that fetches fresh data every 30 seconds.
+Next.js ISR (Incremental Static Regeneration) supplies an immediate first
+render. After hydration, the browser treats freshness as three clocks rather
+than one decorative timestamp. The four-section fast snapshot refreshes on a
+serialized 60-second cadence. Slow catalysts and cross-asset data refresh on
+their own path and can be requested manually. Initial global quotes retain the
+time at which that initial envelope was loaded. The UI names these clocks
+`fastCapturedAt`, `slowCapturedAt`, and `globalLoadedAt` because data captured
+at different moments should never borrow another section's newer label.
 
-The result: First load is instant (pre-rendered), then it stays fresh. We're not hitting FMP's API on every page view—just once per minute on the server.
+Every snapshot carries source capture time and section-level failure
+provenance. A successful empty list is real information; a failed section is
+omitted so it cannot erase a healthy value already on screen. Slow
+last-known-good sections keep their original timestamps, and an older response
+cannot overwrite a newer render even if it wins the network race. The former
+combined snapshot API is retired; `/fast`, `/slow`, and `/live-movers` each ask
+only for the data their caller actually uses.
 
 **The sparkline charts** were surprisingly tricky. We're using `lightweight-charts` for the main charts and canvas-based mini-charts for the index cards. The commit history tells the story:
 
@@ -761,16 +787,19 @@ producing a mysteriously empty panel.
 
 ---
 
-## What's Next
+## Where Current Work Lives
 
-The branch structure tells you where this is going:
+Branch names are archaeology, not a roadmap. The canonical plan now lives in
+[`docs/CURRENT_ROADMAP.md`](docs/CURRENT_ROADMAP.md). The immediate themes are
+shipping the migration-first local package, earning a healthy newsletter
+sending reputation, wiring the real external alert receiver, and turning the
+browser-local watchlist into one account-synced ordered list without sacrificing
+anonymous use. Research depth should then build on the catalyst history and
+calendar rather than creating another parallel surface.
 
-- `insider-db-implementation` - Currently active, adding comprehensive insider trading
-- `feature/premarket-afterhours-scanner` - Extended hours trading
-- `feature/active-learning-review` - Learning from incorrect answers to improve prompts
-- `Watchlist-Header` - User watchlists
-
-The goal is to become a legitimate alternative to expensive data terminals—not by matching Bloomberg feature-for-feature, but by focusing on what retail investors actually need.
+The goal is still to become a legitimate alternative to expensive data
+terminals—not by matching Bloomberg feature-for-feature, but by making a
+smaller set of investor workflows unusually trustworthy.
 
 ---
 
@@ -2814,6 +2843,31 @@ by its import graph, not by the number of lines executed on the happy path.
 Dynamic branching inside one route does not create a deployment boundary; a
 physical route/module boundary does.
 
+### One Screen Can Tell Time With Three Clocks
+
+The broader Market Overview repair applied the same boundedness rule to time.
+Fast prices, slow research, and initial global quotes do not share a capture
+moment, so the browser no longer paints one `Date.now()` across all three. The
+server emits typed envelopes with capture timestamps and a known list of failed
+sections. Complete fast snapshots live for fifteen seconds; slow snapshots can
+reuse a five-minute base while preserving the oldest contributing section's
+real capture time. Degraded responses are `no-store`, and failed fields are
+omitted rather than filled with convincing-looking empty arrays.
+
+Both server caches own their work instead of borrowing the first caller's
+AbortSignal. One shared fan-out has an eight-second logical deadline,
+completion-based TTL, caller detachment, a hard allowance for abort-ignoring
+physical work, and identity fences against late settlement. Runtime parsers
+enforce exact fixed panels for stocks, indexes, and rates while allowing real
+dynamic lists to be empty. The browser uses recursive post-settlement timers,
+visibility and focus gates, per-kind generations, and capture-time comparisons;
+an old response cannot erase data, clear a warning, or move a freshness clock
+backward merely because it arrived last.
+
+This distinction is easy to miss in dashboards: “we received a response now”
+is not the same statement as “the provider captured these facts now.” Honest
+software keeps both timestamps and displays the one the user actually means.
+
 ### Real-Time Connections Need Reservations Before They Need Cleanup
 
 The Massive websocket broker multiplexes provider data for many SSE clients.
@@ -2845,6 +2899,35 @@ reached, the provider throws a typed incomplete-data error instead of returning
 a plausible prefix. A partial candle series is often more dangerous than a
 visible failure because charts rarely announce which half of history is
 missing.
+
+### Live First, History Second
+
+Pulse made one further lifecycle correction: live data should not wait behind
+history. Each SSE connection now opens before its backfill request. Historical
+candles merge underneath the stream, and the newer session candle wins a
+timestamp collision. Strict browser-safe parsers require the requested symbol,
+coherent finite OHLC values, bounded dates and volumes, at most 4,000 input rows,
+and at most 500 retained rows. A malformed or wrong-symbol payload is ignored
+without poisoning the same-symbol last-known-good state.
+
+Backfill itself is a reserved resource. The client has an eight-second deadline;
+the route owns a seven-second provider lease, same-key coalescing, a sixteen-job
+physical cap, detached callers, and typed `503`/`504` responses. A timed-out
+provider that ignores cancellation keeps its slot until it really settles, and
+its late rows cannot overwrite a replacement generation. Massive receives the
+exact epoch-millisecond window rather than an entire calendar day, which avoids
+rejecting an ordinary liquid one-second session merely because the provider
+returned more history than the screen requested.
+
+The React hooks treat visibility as part of the subscription. Hiding or
+unmounting closes SSE and aborts backfill; returning visible starts one fresh
+session. Focus and visibility events share a monotonic 250-millisecond
+suppression window so separate browser tasks cannot open duplicate streams.
+Pulse Text's four-symbol day-candle fan-out is physically serialized as well:
+the next timer begins only after the prior transport settles, while each symbol
+retains its own last-good series. This is the core live-data rule: connect the
+present promptly, merge history cautiously, and give every transport one
+unambiguous owner.
 
 ### A Public Chart URL Should Point To An Asset, Not Start A Factory
 
@@ -3138,6 +3221,71 @@ those clocks and identities disagree, “live” becomes a styling word. If they
 agree—and failure is visible rather than fabricated—the interface can make a
 promise a trader is entitled to trust.
 
+### A Timeout Is Not A Delisting
+
+Stock admission had made a dangerous category error: a registry outage could
+become `false`, then a valid company looked “not found” for thirty minutes. The
+resolver now returns three states—`valid`, `not_found`, and `unavailable`—and
+only the first two are cacheable. Invalid grammar and an authoritative database
+miss may produce a 404. Transport failure does not. During a registry outage,
+the page admits a symbol only through a separately bounded overview-plus-profile
+confirmation; heavy financial fan-out waits until that identity is established.
+Both admission layers count physical work that ignored cancellation, so repeated
+logical timeouts cannot manufacture more outstanding provider calls.
+
+Class shares supplied the memorable edge case. The product speaks canonical
+`BRK.B`, the FMP registry may store `BRK-B`, and blindly relabeling provider
+output can turn somebody else's quote into Berkshire. One central alias
+boundary now queries both database forms, converts to the vendor form only at
+the provider edge, and verifies the raw upstream ticker before returning to the
+canonical symbol. Futures are rejected before the stock registry is touched.
+
+Search follows the same truth model. The full US registry is primary; a
+nonempty S&P result during a primary outage is visibly degraded, while an empty
+S&P subset cannot prove that a small-cap company does not exist. Dot/dash
+queries are symmetric, malformed nonempty rows are failures, and the public
+route owns a four-second, thirty-two-operation physical admission desk with
+same-query coalescing. The browser preserves typed spaces, validates the whole
+response, and fences late work. `/api/search-tickers` is retired in favor of
+this one bounded contract.
+
+### A Catalyst Should Leave A Trail
+
+The daily “why it moved” generator had already been writing useful evidence to
+`stock_summaries`; the stock page showed only today's sentence and left every
+prior day dormant. Catalyst History turns that accumulated work into a product
+without another model call. Its public reader selects at most 48 current-config
+rows, validates bounded text and safe source URLs, keeps the newest valid row
+per market date, and returns at most ten dates under a four-second deadline.
+`ready`, `empty`, and `unavailable` are different outcomes.
+
+The timeline sits behind Suspense after stock admission, so history cannot hold
+the essential price page hostage. Empty history disappears; an outage is
+nonfatal; and the current fallback banner is suppressed only when its normalized
+text exactly duplicates the newest generated entry. Morning Review ticker links
+land directly on `#catalyst-history`, turning an editorial card into the front
+door of a durable company narrative. This is a good data-flywheel pattern: let
+work the system already performs become more valuable with every run.
+
+### Calendars Are Time-Zone Programs In Disguise
+
+The old `/calendar` route promised a calendar but rendered only international
+market sessions. It now places a real Monday-through-Sunday New York catalyst
+calendar above those sessions. One server reference instant pins both earnings
+and economic requests to the same week. Provider wall times are converted with
+the actual EST/EDT offset; nonexistent spring-forward times are rejected,
+fall-back ambiguity resolves deterministically, and event ordering is BMO,
+market hours, then AMC.
+
+Each feed owns a six-second transport deadline, a two-megabyte streamed body
+ceiling, a 5,000-row raw cap, strict row validation, and a 100-item page cap.
+The UI discloses qualifying totals and truncation rather than presenting a full
+week as if it were complete. A failed feed does not erase the healthy one or
+the preserved International Sessions view; a legitimate empty response remains
+authoritative. Day and event-type filters start on the first upcoming active
+day, and S&P earnings link back to stock research. Dashboard callers keep their
+smaller independent limits of ten earnings and twelve macro events.
+
 ### A Fork Is A Receipt, Not Just Another Insert
 
 Forking an old newsletter looks like a simple copy operation until the network
@@ -3223,12 +3371,28 @@ the moment the promise shown to the caller times out would make the limiter an
 optimistic counter rather than a resource fence.
 
 The in-process desk is only a courtesy; serverless instances do not share
-memory. Production therefore puts the real admission ledger in PostgreSQL.
-Every authenticated save claims an owner-scoped fenced lease that lasts 180
-seconds—longer than the route's 120-second physical lifetime. Completion and
-failure require both the current token and an unexpired lease. Successful
-receipts and abandoned requests are cleaned in bounded batches after 24 hours,
-while rolling rate events have their own global cleanup.
+memory. Production therefore puts the real admission ledger in PostgreSQL
+behind service-role-only, `SECURITY DEFINER` acquire, complete, and fail RPCs.
+A global advisory lock makes the limits real across isolates: two active jobs
+per owner, four globally, and twelve new keys per owner in ten minutes. The
+acquire call has its own eight-second database deadline. Every authenticated
+save receives a fenced lease fixed at 180 seconds—longer than the route's
+120-second invocation maximum and its 55-second logical caller budget.
+Completion and failure use fresh eight-second persistence signals and require
+both the current token and an unexpired lease. Successful receipts and
+abandoned requests are cleaned in bounded batches after 24 hours, while rolling
+rate events have their own bounded cleanup.
+
+The HTTP caller does not own the physical save. Closing the tab detaches that
+waiter; Next's `after()` registers settlement within the function lifecycle. A
+late real success still completes its receipt, an ordinary render failure may
+release only its current fence, and an ambiguous completion remains fenced for
+replay instead of reopening duplicate work. In anonymous local development, a
+new mutation scope first returns a cookie-bearing `428` and asks the browser to
+retry the same idempotency key before the body is read or any side effect begins.
+Production anonymous callers remain `401`. `after()` is a request-lifecycle
+extension, not an immortal background worker, which is why the route maximum
+and lease are deliberately ordered.
 
 A save also derives one deterministic chart UUID and a full SHA-256 request-key
 hash from the owner and idempotency key. The chart row stores that identity and
@@ -3264,12 +3428,14 @@ during the overlap and preserve historical editor timestamps during derived
 backfills. Application-first would turn a planned rollout into missing-column
 errors.
 
-The frozen release candidate passed 250 Vitest files / 1,644 tests, TypeScript,
-repository lint with zero errors (177 non-blocking legacy warnings), a 49-page
-production build, all 114 guarded server traces, and 10 pgTAP files / 369
-assertions. The home trace deliberately permits only the public 150 KB S&P
-constituent projection required by its catalyst feed; every other `/data/` path
-remains forbidden. The larger lesson is worth keeping here: a serious
+The application release candidate passed 250 Vitest files / 1,644 tests,
+TypeScript, repository lint with zero errors (177 non-blocking legacy warnings),
+a 49-page production build, and all 114 guarded server traces. A clean database
+reset replayed every migration through `20260809100000`, including the final
+chart-admission contract, and all 10 pgTAP files / 369 assertions passed. The
+home trace policy deliberately permits only the public 150 KB S&P constituent
+projection required by its catalyst feed and rejects every other `/data/` path
+in that function. The larger lesson is worth keeping here: a serious
 engineering pass does not end when the happy-path feature works. It follows
 growth, cancellation, concurrency, packaging, retries, and release order until
 each layer tells the same story.

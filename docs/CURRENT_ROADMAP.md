@@ -1,14 +1,14 @@
-# Fin Quote Current Roadmap
+# The Intraday Current Roadmap
 
 Last audited: August 9, 2026
 
-This is the canonical product and engineering roadmap for Fin Quote. Older plan
-files remain useful as implementation history, but they do not override this
-document.
+This is the canonical product and engineering roadmap for The Intraday (the
+repository still carries its original Fin Quote name). Older plan files remain
+useful as implementation history, but they do not override this document.
 
 ## Product Direction
 
-Fin Quote is a daily market-research and publishing workstation. Its core loop
+The Intraday is a daily market-research and publishing workstation. Its core loop
 is:
 
 1. Let the weekday automation build and verify the Morning Report.
@@ -29,9 +29,10 @@ is:
 | 4 | Mid-Morning Brief | `/dashboard/mid-morning-brief` | Opening-session delta from the morning baseline |
 | 5 | Catalyst review | `/admin/why-moved` | Editorial QA for top-mover explanations |
 | 6 | Newsletter editor | `/newsletter/editor` | Draft, review, export, and publish workflow |
-| 7 | Stock and workspace views | `/stock/[symbol]`, `/workspace/*` | Research and chart drilldown |
-| 8 | Newsletter chart library | `/newsletter/charts` | Reusable captured charts and editable specs |
-| 9 | Market Overview | `/dashboard` | Broader market context and supporting data |
+| 7 | Stock and workspace views | `/stock/[symbol]`, `/workspace/*` | Research, catalyst history, and chart drilldown |
+| 8 | Catalyst Calendar | `/calendar` | Weekly earnings and economic planning with global sessions |
+| 9 | Newsletter chart library | `/newsletter/charts` | Reusable captured charts and editable specs |
+| 10 | Market Overview | `/dashboard` | Broader market context and supporting data |
 
 ## August 6 Production Evidence
 
@@ -250,7 +251,7 @@ then promote the application and run the smoke tests. Compatibility triggers
 and the versioned Beehiiv claim RPC keep the old application valid during that
 overlap; the new application must not be promoted first.
 
-## August 8 Durable Workstation And Bounded Data Pass — Locally Complete, Release Pending
+## August 8–9 Durable Workstation And Bounded Data Pass — Locally Complete, Release Pending
 
 The follow-on audit addressed the largest holes beyond a single newsletter
 editor session:
@@ -279,6 +280,36 @@ editor session:
   validated before aliases are applied or the one-hour resolver cache is
   written; missing zero-price payloads fail closed while legitimate negative
   commodity prices remain valid;
+- Market Overview now preserves the provenance of each refresh instead of
+  stamping one receipt time across the page. Fast, slow, and initial global
+  data have separate capture clocks; failed fields are omitted, successful
+  empties remain authoritative, last-known-good slow sections retain their
+  original timestamp, and older responses cannot overwrite newer state or
+  clear a warning. The old combined snapshot endpoint is retired in favor of
+  the bounded `/fast`, `/slow`, and `/live-movers` contracts;
+- stock pages distinguish an authoritative missing symbol from registry
+  unavailability. Validation and outage-confirmation leases cap physical work,
+  provider fan-out waits for admission, derivatives cannot enter the stock
+  surface, and class-share aliases such as `BRK.B`/`BRK-B` are verified at the
+  database and provider boundaries. Stock search now has alias-aware strict
+  result validation, explicit degraded fallback semantics, a bounded shared
+  admission layer, and a real browser deadline; `/api/search-tickers` is
+  retired in favor of `/api/search-stocks`;
+- Pulse opens live SSE before history, validates exact-symbol coherent candles,
+  and merges late backfill below newer stream data. Hidden, focus, symbol, and
+  unmount transitions fence whole sessions. Backfill uses exact epoch windows,
+  client/server deadlines, same-key coalescing, a 16-job physical cap, and
+  retains timed-out abort-ignoring work until actual settlement;
+- stock research now exposes a nonblocking Catalyst History built from the
+  summaries the daily workflow already stores. The reader is capped at 48
+  source rows and ten market dates, validates current-config evidence and safe
+  sources, and keeps `ready`, `empty`, and `unavailable` distinct. Morning
+  Review ticker links land on the history timeline;
+- `/calendar` is now a true New York-week Catalyst Calendar above the preserved
+  global sessions view. Both feeds share one reference instant, convert
+  BMO/market-hours/AMC times across EST and EDT, reject malformed/nonexistent
+  wall times, bound provider bytes/rows/time, disclose 100-item truncation, and
+  preserve the healthy feed when its sibling fails;
 - Newsletter Operations no longer scans as many as 10,000 Beehiiv deliveries
   and full draft documents every 15 seconds. It queries indexed current-date
   draft IDs, filters delivery hydration to those IDs, computes lifetime facets
@@ -352,14 +383,18 @@ editor session:
   conflicts, cross-tab refreshes, and morning-shortlist rollover all preserve
   the user's exact unsaved attempt;
 - newsletter chart POSTs now have a strict idempotency contract, bounded JSON,
-  owner/global/rolling-window admission limits, coalesced in-flight work, a
-  bounded replay LRU, honest physical-slot accounting after timeout, generic
-  bounded diagnostics, and cancellation threaded through the renderer.
-  Production admission is PostgreSQL-authoritative across isolates: 180-second
-  fenced leases outlive the 120-second route, deterministic owner/key chart IDs
-  and a unique hashed request link recover committed-but-lost inserts without a
-  duplicate, replay receipts are strictly bounded and validated, and admission
-  state is retained and cleaned under an explicit 24-hour policy; and
+  coalesced in-flight work, bounded diagnostics, and caller-independent
+  cancellation. Production admission is PostgreSQL-authoritative across
+  isolates: service-role-only fenced RPCs enforce two active jobs per owner,
+  four globally, and twelve new keys per ten minutes. An eight-second acquire
+  deadline precedes a 55-second logical render budget; fresh eight-second
+  completion/failure signals, Next `after()`, a 120-second route maximum, and a
+  fixed 180-second lease let a disconnected caller stop waiting without losing
+  a real late success. Deterministic owner/key chart IDs and a unique hashed
+  request link recover committed-but-lost inserts without a duplicate. A new
+  anonymous development session receives a cookie-bearing `428` before any side
+  effect, replay receipts are bounded and validated, and admission state is
+  cleaned under an explicit 24-hour policy; and
 - the final React/accessibility review made asynchronous state observable and
   destructive flows keyboard-complete: labelled controls, alerts and polite
   status regions, mutually exclusive overlays, focus containment, inert
@@ -376,10 +411,10 @@ and authenticated smoke tests.
 
 Final local verification is green on the settled tree:
 
-- a clean shadow replay and local migration apply reached
-  `20260809100000`; all 10 pgTAP files / 369 assertions passed, schema lint found
-  no errors, schema diff found no drift, and the local migration ledger matches
-  every version;
+- a clean local database reset replayed every migration through
+  `20260809100000`, including the final chart-admission contract, and all 10
+  pgTAP files / 369 assertions passed. No linked migration or remote database
+  command was run;
 - the full Vitest run passed 250 files / 1,644 tests; TypeScript passed; the
   repository lint completed with 0 errors (177 non-blocking warnings); and
   `git diff --check` passed;
@@ -419,14 +454,40 @@ Final local verification is green on the settled tree:
   library, operations market-date totals, shortlist accept/remove/reorder and
   stale-revision recovery, and slow or failed chart assets
   against real saved issues.
+- Exercise chart POST admission explicitly: an exact idempotency replay, changed
+  payload under the same key, owner/global capacity responses, the anonymous
+  development `428` retry, and a disconnected caller whose late physical save
+  is recovered from the durable receipt. Observe expired leases, replay rate,
+  owner/global saturation, and rolling-rate rejection instead of inferring
+  those paths from ordinary chart creation.
 - Confirm that an old published issue reopens the exact captured scene and
   image, and that scheduled, published, and archived Beehiiv issues remain
   synchronization-locked.
 - Watch archive-query latency, facet latency, conflict frequency, and bulk-RPC
-  replay failures as the issue count grows; add indexes or operational signals
-  from measured evidence rather than guesses.
+  replay failures as the issue count grows; also watch chart lease expiry,
+  duplicate-recovery conflicts, and admission saturation. Add indexes or
+  operational signals from measured evidence rather than guesses.
 
-### P2: Finish External Alerting
+### P2: Sync The Watchlist Without Splitting Its Identity
+
+- Keep anonymous users on the existing browser-local ordered list. For signed-in
+  users, make the existing one-row `watchlists` record the canonical account
+  list with `NULL` meaning product defaults and an empty array meaning an
+  intentional empty list. Do not dual-write the unused normalized tab/item
+  model.
+- Add migration-first, auth-derived CAS and idempotency RPCs with an exact
+  20-equity-symbol invariant, durable replay receipts, one-time bounded legacy
+  import, and conflict results. Ship behind a feature flag until live legacy
+  row shapes and external writers have been inventoried.
+- Treat browser state as a bounded offline cache, not a second authority:
+  preserve anonymous state across sign-in/out, fence account switches and stale
+  responses, serialize writes, retry lost receipts, and require an explicit
+  choice when two devices reorder the same shared symbols.
+- Replace per-symbol custom quote fan-out with one bounded batch endpoint. Pulse
+  should stream only the selected symbol; Catalyst Calendar should filter its
+  already-loaded events client-side, adding no provider calls.
+
+### P3: Finish External Alerting
 
 - Choose the actual operational receiver.
 - Configure `NEWSLETTER_ALERT_WEBHOOK_URL` and a dedicated
@@ -435,7 +496,7 @@ Final local verification is green on the settled tree:
   outbox records delivery.
 - Define who responds to late, failed, and stuck-delivery alerts.
 
-### P3: Learn From Editorial Decisions
+### P4: Learn From Editorial Decisions
 
 - Analyze the new versioned shortlist ledger before changing ranking: compare
   algorithm recommendations with accepted, removed, added, and intentionally
@@ -445,14 +506,11 @@ Final local verification is green on the settled tree:
   so historical judgment is never reinterpreted.
 - Measure backlog age, needs-work recurrence, dismissal reasons, and which
   discovery signals lead to approved/published issues before changing ranking.
-- Add earnings and calendar context beside reviewed catalysts without
-  overwriting the immutable discovery snapshot.
+- Use the new calendar and catalyst-history foundations to show relevant context
+  beside reviewed catalysts without overwriting immutable discovery evidence.
 
-### P4: Research Depth And Surface Consolidation
+### P5: Research Depth And Surface Consolidation
 
-- Decide whether the browser-local Market Overview watchlist should sync into
-  Pulse Today for signed-in users without creating a second watchlist model.
-- Add earnings and calendar context beside reviewed catalysts.
 - Consolidate experimental chart routes after their useful behavior is
   absorbed into the primary surfaces.
 - Continue the same desktop/mobile audit on secondary admin and experimental
@@ -460,7 +518,7 @@ Final local verification is green on the settled tree:
 - Decide whether replay should remain an explicitly Massive-only capability or
   gain a clearly labeled lower-resolution fallback for FMP.
 
-### P5: Complete The Account Lifecycle If The Product Needs It
+### P6: Complete The Account Lifecycle If The Product Needs It
 
 - If users need self-service deletion, build a server-owned erasure workflow
   with recent authentication, explicit scope, retention rules, confirmation,
@@ -468,7 +526,7 @@ Final local verification is green on the settled tree:
 - Until that contract exists, keep the honest sign-out language and do not
   imply that authentication data or saved research was deleted.
 
-### P6: Restore Market Internals With Real Data
+### P7: Restore Market Internals With Real Data
 
 - Choose a licensed, reproducible source for advance/decline and breadth
   history.
@@ -486,6 +544,11 @@ Final local verification is green on the settled tree:
 - Old dashboard layout experiments are reference material, not parallel
   products.
 - Hidden feature-flag navigation for Pulse Today is retired.
+- The combined `/api/market-snapshot` endpoint returns `410`; callers use
+  `/api/market-snapshot/fast`, `/slow`, or `/live-movers` according to the
+  actual data they consume.
+- `/api/search-tickers` returns `410`; `/api/search-stocks` is the one bounded,
+  alias-aware stock-search contract.
 - Public schema mutation/debug tooling is retired; schema changes belong in
   reviewed migrations and operator-only workflows.
 - The random-data Market Internals prototype is retired. Its route is a
