@@ -121,7 +121,7 @@ describe('NewsletterBeehiivPanel', () => {
     window.dispatchEvent(new Event('focus'))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Refresh' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6))
   })
 
