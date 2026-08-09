@@ -98,8 +98,9 @@ describe('full catalyst earnings feed', () => {
     })
   })
 
-  it('treats a valid non-S&P response as an authoritative empty feed', async () => {
+  it('ignores non-S&P provider symbol formats and returns an authoritative empty feed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([
+      { symbol: 'ARE&M.BO' },
       { symbol: 'NOTSP' },
     ])))
 
