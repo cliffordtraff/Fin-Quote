@@ -190,10 +190,14 @@ function rangeToFromDate(range: PriceRange): string {
   return fromDate.toISOString().split('T')[0]
 }
 
-export async function getPrices(params: PriceParams): Promise<{
+export async function getPrices(
+  params: PriceParams,
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
   error: string | null
 }> {
+  options?.signal?.throwIfAborted()
   const { symbol } = params
   let { from, to } = params
   const { range } = params
@@ -240,7 +244,12 @@ export async function getPrices(params: PriceParams): Promise<{
       actualTo = undefined // No upper bound
     }
 
-    const candles = await provider.getHistoricalDaily(symbol, actualFrom, actualTo)
+    const candles = await provider.getHistoricalDaily(
+      symbol,
+      actualFrom,
+      actualTo,
+      { signal: options?.signal },
+    )
 
     if (candles.length === 0) {
       return { data: null, error: 'No price data available for the requested range' }
@@ -266,6 +275,7 @@ export async function getPrices(params: PriceParams): Promise<{
 
     return { data: filteredData, error: null }
   } catch (err) {
+    if (options?.signal?.aborted) throw options.signal.reason ?? err
     console.error(`Error fetching ${symbol} prices:`, err)
     return {
       data: null,
@@ -275,11 +285,14 @@ export async function getPrices(params: PriceParams): Promise<{
 }
 
 // Backward-compatible alias for existing code
-export async function getAaplPrices(params: Omit<PriceParams, 'symbol'>): Promise<{
+export async function getAaplPrices(
+  params: Omit<PriceParams, 'symbol'>,
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> | null
   error: string | null
 }> {
-  return getPrices({ ...params, symbol: 'AAPL' })
+  return getPrices({ ...params, symbol: 'AAPL' }, options)
 }
 
 // New function for timeframe-based price fetching

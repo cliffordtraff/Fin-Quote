@@ -3,6 +3,7 @@
 import type { ChartConfig } from './chart'
 
 export type Message = {
+  id?: string
   role: 'user' | 'assistant'
   content: string
   timestamp: string

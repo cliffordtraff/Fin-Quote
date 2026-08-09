@@ -1,14 +1,17 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { createPublicDatabaseClient } from '@/lib/supabase/public'
 
 // Safe, purpose-built tool for fetching recent SEC filings
 // This is designed to be called by server code (e.g., an LLM routing step) and returns
 // a minimal, predictable shape for easy prompting and display.
-export async function getRecentFilings(params: {
-  ticker: string // Stock ticker symbol (e.g., 'AAPL', 'MSFT')
-  limit?: number // number of most recent filings to fetch
-}): Promise<{
+export async function getRecentFilings(
+  params: {
+    ticker: string // Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+    limit?: number // number of most recent filings to fetch
+  },
+  options?: { signal?: AbortSignal },
+): Promise<{
   data: Array<{
     filing_type: string
     filing_date: string
@@ -19,6 +22,7 @@ export async function getRecentFilings(params: {
   }> | null
   error: string | null
 }> {
+  options?.signal?.throwIfAborted()
   const { ticker } = params
   const requestedLimit = params.limit ?? 5
 
@@ -26,14 +30,17 @@ export async function getRecentFilings(params: {
   const safeLimit = Math.min(Math.max(requestedLimit, 1), 10)
 
   try {
-    const supabase = await createServerClient()
+    const supabase = createPublicDatabaseClient({ signal: options?.signal })
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('filings')
       .select('filing_type, filing_date, period_end_date, fiscal_year, fiscal_quarter, document_url')
       .eq('ticker', ticker)
       .order('filing_date', { ascending: false })
       .limit(safeLimit)
+    if (options?.signal) query = query.abortSignal(options.signal)
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Error fetching filings:', error)
@@ -42,6 +49,7 @@ export async function getRecentFilings(params: {
 
     return { data: data ?? [], error: null }
   } catch (err) {
+    if (options?.signal?.aborted) throw options.signal.reason ?? err
     console.error('Unexpected error (getRecentFilings):', err)
     return {
       data: null,

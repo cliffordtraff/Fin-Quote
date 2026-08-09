@@ -40,8 +40,12 @@ export type QueryLogInput = {
  * becoming a directly invokable Server Action, while the service client makes
  * the trusted write independent of the caller's row-level permissions.
  */
-export async function logQuery(data: QueryLogInput): Promise<string | null> {
+export async function logQuery(
+  data: QueryLogInput,
+  options?: { signal?: AbortSignal },
+): Promise<string | null> {
   try {
+    options?.signal?.throwIfAborted()
     const supabase = createServiceRoleClient()
 
     // gpt-5-nano pricing used by the existing cost dashboard.
@@ -68,7 +72,7 @@ export async function logQuery(data: QueryLogInput): Promise<string | null> {
       totalCost += data.embeddingTokens * 0.02 / 1_000_000
     }
 
-    const { data: insertedData, error } = await supabase
+    let query = supabase
       .from('query_logs')
       .insert({
         user_id: data.userId,
@@ -110,7 +114,8 @@ export async function logQuery(data: QueryLogInput): Promise<string | null> {
         total_cost_usd: totalCost > 0 ? totalCost : null,
       })
       .select('id')
-      .single()
+    if (options?.signal) query = query.abortSignal(options.signal)
+    const { data: insertedData, error } = await query.single()
 
     if (error) {
       console.error('Failed to log query:', error)
@@ -119,6 +124,9 @@ export async function logQuery(data: QueryLogInput): Promise<string | null> {
 
     return insertedData?.id ?? null
   } catch (error) {
+    if (options?.signal?.aborted) {
+      throw options.signal.reason ?? error
+    }
     console.error('Failed to log query (unexpected error):', error)
     return null
   }

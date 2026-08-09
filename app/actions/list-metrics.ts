@@ -44,8 +44,12 @@ export interface ListMetricsResult {
  * // Get only valuation metrics
  * const { data } = await listMetrics({ category: 'Valuation' })
  */
-export async function listMetrics(params?: ListMetricsParams): Promise<ListMetricsResult> {
+export async function listMetrics(
+  params?: ListMetricsParams,
+  options?: { signal?: AbortSignal },
+): Promise<ListMetricsResult> {
   try {
+    options?.signal?.throwIfAborted()
     let metrics = catalogData as MetricCatalogEntry[]
 
     // Filter by category if specified
@@ -65,6 +69,7 @@ export async function listMetrics(params?: ListMetricsParams): Promise<ListMetri
       error: null
     }
   } catch (err) {
+    if (options?.signal?.aborted) throw options.signal.reason ?? err
     console.error('Failed to load metrics catalog:', err)
     return {
       data: null,

@@ -81,6 +81,10 @@ CREATE TEMP TABLE authorization_service_only_tables (
 INSERT INTO authorization_service_only_tables (table_name)
 VALUES
   ('account_watchlist_sync_receipts'),
+  ('chatbot_conversation_command_receipts'),
+  ('chatbot_deleted_conversations'),
+  ('chatbot_request_admissions'),
+  ('chatbot_request_rate_events'),
   ('dashboard_chart_of_day_settings'),
   ('evaluation_annotations'),
   ('filing_chunks'),
@@ -265,7 +269,6 @@ CREATE TEMP TABLE authorization_expected_owner_privileges (
 INSERT INTO authorization_expected_owner_privileges (table_name, privilege_name)
 SELECT table_name, privilege_name
 FROM unnest(ARRAY[
-  'conversations',
   'docs',
   'newsletter_daily_settings',
   'watchlist_items',
@@ -273,10 +276,6 @@ FROM unnest(ARRAY[
   'watchlist_tabs'
 ]) AS managed(table_name)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) AS wanted(privilege_name)
-UNION ALL
-SELECT table_name, privilege_name
-FROM unnest(ARRAY['messages']) AS managed(table_name)
-CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'DELETE']) AS wanted(privilege_name)
 UNION ALL
 SELECT table_name, privilege_name
 FROM unnest(ARRAY[
@@ -389,7 +388,20 @@ SELECT is(
 );
 
 SELECT ok(
-  NOT has_table_privilege('authenticated', 'public.messages', 'UPDATE')
+  NOT has_table_privilege('authenticated', 'public.conversations', 'SELECT')
+    AND NOT has_any_column_privilege(
+      'authenticated', 'public.conversations', 'SELECT'
+    )
+    AND NOT has_table_privilege('authenticated', 'public.conversations', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.conversations', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.conversations', 'DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.messages', 'SELECT')
+    AND NOT has_any_column_privilege(
+      'authenticated', 'public.messages', 'SELECT'
+    )
+    AND NOT has_table_privilege('authenticated', 'public.messages', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.messages', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.messages', 'DELETE')
     AND NOT has_any_column_privilege('authenticated', 'public.messages', 'UPDATE')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_chart_library', 'INSERT')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_chart_library', 'UPDATE')
@@ -533,8 +545,13 @@ SELECT is(
     WHERE namespace.nspname = 'public'
       AND procedure.prokind = 'f'
       AND owner_role.rolname = 'postgres'
-      AND procedure.proname <> 'generate_conversation_title'
       AND procedure.oid NOT IN (
+        'public.delete_chatbot_conversation(uuid,bigint,text,text)'::regprocedure,
+        'public.list_chatbot_conversations(timestamptz,uuid,integer)'::regprocedure,
+        'public.get_chatbot_conversation_page(uuid,timestamptz,uuid,integer)'::regprocedure,
+        'public.resolve_owned_chatbot_request_admission(text,text)'::regprocedure,
+        'public.preflight_chatbot_conversation_turn(uuid,bigint)'::regprocedure,
+        'public.commit_chatbot_turn_and_complete_request(uuid,bigint,text,text,text,text,jsonb,text[],jsonb,text,uuid)'::regprocedure,
         'public.read_primary_watchlist()'::regprocedure,
         'public.sync_primary_watchlist(text,text[],bigint,text)'::regprocedure
       )
@@ -579,7 +596,7 @@ SELECT ok(
     'public.generate_conversation_title(uuid)',
     'EXECUTE'
   )
-    AND has_function_privilege(
+    AND NOT has_function_privilege(
       'authenticated',
       'public.generate_conversation_title(uuid)',
       'EXECUTE'
@@ -589,7 +606,56 @@ SELECT ok(
       'public.generate_conversation_title(uuid)',
       'EXECUTE'
     ),
-  'conversation title execution is limited to authenticated and service roles'
+  'legacy conversation title execution is retired from browser roles'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.commit_chatbot_conversation_turn(uuid,bigint,text,text,text,text,jsonb,text[],jsonb)',
+    'EXECUTE'
+  )
+    AND NOT has_function_privilege(
+      'authenticated',
+      'public.commit_chatbot_conversation_turn(uuid,bigint,text,text,text,text,jsonb,text[],jsonb)',
+      'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+      'anon',
+      'public.delete_chatbot_conversation(uuid,bigint,text,text)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.delete_chatbot_conversation(uuid,bigint,text,text)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.list_chatbot_conversations(timestamptz,uuid,integer)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.get_chatbot_conversation_page(uuid,timestamptz,uuid,integer)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.resolve_owned_chatbot_request_admission(text,text)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.preflight_chatbot_conversation_turn(uuid,bigint)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.commit_chatbot_turn_and_complete_request(uuid,bigint,text,text,text,text,jsonb,text[],jsonb,text,uuid)',
+      'EXECUTE'
+    ),
+  'authenticated conversation access is limited to bounded auth.uid and lease-fenced RPCs'
 );
 
 SELECT ok(
@@ -644,6 +710,15 @@ SELECT is(
         SELECT 1
         FROM pg_trigger AS trigger
         WHERE trigger.tgfoid = procedure.oid
+      )
+      AND procedure.oid NOT IN (
+        'public.chatbot_idempotency_key_is_current(text,timestamptz)'::regprocedure,
+        'public.commit_chatbot_conversation_turn(uuid,bigint,text,text,text,text,jsonb,text[],jsonb)'::regprocedure,
+        'public.list_chatbot_conversations(timestamptz,uuid,integer)'::regprocedure,
+        'public.get_chatbot_conversation_page(uuid,timestamptz,uuid,integer)'::regprocedure,
+        'public.resolve_owned_chatbot_request_admission(text,text)'::regprocedure,
+        'public.preflight_chatbot_conversation_turn(uuid,bigint)'::regprocedure,
+        'public.commit_chatbot_turn_and_complete_request(uuid,bigint,text,text,text,text,jsonb,text[],jsonb,text,uuid)'::regprocedure
       )
       AND NOT has_function_privilege('service_role', procedure.oid, 'EXECUTE')
   ),
@@ -837,27 +912,29 @@ SET LOCAL ROLE authenticated;
 SELECT is(
   (
     SELECT count(*)
-    FROM public.conversations
+    FROM public.list_chatbot_conversations(NULL, NULL, 50)
     WHERE id IN (
       '92000000-0000-0000-0000-000000000001'::uuid,
       '92000000-0000-0000-0000-000000000002'::uuid
     )
   ),
   1::bigint,
-  'authenticated user sees only their conversation'
+  'authenticated user lists only their conversation through the bounded RPC'
 );
 
 SELECT is(
   (
     SELECT count(*)
-    FROM public.messages
-    WHERE id IN (
+    FROM public.get_chatbot_conversation_page(
+      '92000000-0000-0000-0000-000000000001', NULL, NULL, 50
+    )
+    WHERE message_id IN (
       '93000000-0000-0000-0000-000000000001'::uuid,
       '93000000-0000-0000-0000-000000000002'::uuid
     )
   ),
   1::bigint,
-  'authenticated user sees only messages in their conversation'
+  'authenticated user reads only their messages through the bounded RPC'
 );
 
 SELECT is(
@@ -879,8 +956,8 @@ SELECT is(
       '92000000-0000-0000-0000-000000000001'::uuid
     )$$
   ),
-  'owner A first message',
-  'authenticated user can generate a title from their own first message'
+  '__authorization_denied__',
+  'legacy title helper cannot be executed through the authenticated Data API'
 );
 
 SELECT isnt(
@@ -894,12 +971,12 @@ SELECT isnt(
 );
 
 SELECT ok(
-  pg_temp.authorization_mutation_succeeded(
+  NOT pg_temp.authorization_mutation_succeeded(
     $$UPDATE public.conversations
       SET title = 'owner A updated title'
       WHERE id = '92000000-0000-0000-0000-000000000001'::uuid$$
   ),
-  'authenticated user can update their conversation'
+  'authenticated user cannot bypass the conversation RPC with a direct update'
 );
 
 SELECT ok(

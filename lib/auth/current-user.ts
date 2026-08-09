@@ -1,11 +1,19 @@
+import type { User } from '@supabase/supabase-js'
 import {
-  isAuthSessionMissingError,
-  type User,
-} from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/server'
+  RequestAuthenticationRequiredError,
+  RequestAuthenticationUnavailableError,
+  resolveAuthenticatedRequest,
+  type AuthenticatedRequestContext,
+  type AuthenticatedRequestOptions,
+  type RequestAuthenticationReason,
+} from '@/lib/supabase/server'
 
 export class AuthenticationRequiredError extends Error {
-  constructor(message = 'You must be signed in to continue.') {
+  constructor(
+    message = 'You must be signed in to continue.',
+    public readonly reason: RequestAuthenticationReason = 'missing',
+    public readonly expiresAt?: number,
+  ) {
     super(message)
     this.name = 'AuthenticationRequiredError'
   }
@@ -19,25 +27,40 @@ export class AuthenticationUnavailableError extends Error {
 }
 
 export async function requireCurrentUser(
-  options: { signal?: AbortSignal } = {},
+  options: AuthenticatedRequestOptions = {},
 ): Promise<User> {
-  const supabase = await createClient({ signal: options.signal })
-  let result: Awaited<ReturnType<typeof supabase.auth.getUser>>
   try {
-    result = await supabase.auth.getUser()
+    return (await resolveAuthenticatedRequest(options)).user
   } catch (error) {
     if (options.signal?.aborted) throw error
+    if (error instanceof RequestAuthenticationRequiredError) {
+      throw new AuthenticationRequiredError(
+        undefined,
+        error.reason,
+        error.expiresAt,
+      )
+    }
+    if (error instanceof RequestAuthenticationUnavailableError) {
+      throw new AuthenticationUnavailableError()
+    }
     throw new AuthenticationUnavailableError()
   }
+}
 
-  const { data: { user }, error } = result
-  if (error) {
-    if (isAuthSessionMissingError(error)) throw new AuthenticationRequiredError()
+export async function requireCurrentUserContext(
+  options: AuthenticatedRequestOptions = {},
+): Promise<AuthenticatedRequestContext> {
+  try {
+    return await resolveAuthenticatedRequest(options)
+  } catch (error) {
+    if (options.signal?.aborted) throw error
+    if (error instanceof RequestAuthenticationRequiredError) {
+      throw new AuthenticationRequiredError(
+        undefined,
+        error.reason,
+        error.expiresAt,
+      )
+    }
     throw new AuthenticationUnavailableError()
   }
-
-  if (!user) {
-    throw new AuthenticationRequiredError()
-  }
-  return user
 }
