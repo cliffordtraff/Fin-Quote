@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 import WorkspaceIframe from '@/components/WorkspaceIframe'
 import WorkspaceFooter from '@/components/WorkspaceFooter'
 import { TimezoneProvider } from '@/lib/timezone-context'
+import { CurrentUserProvider } from '@/components/CurrentUserProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -68,15 +69,17 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} min-h-full bg-cream-100 dark:bg-gray-950`}>
         <ThemeProvider>
-          <TimezoneProvider>
-            {children}
-            <Suspense fallback={null}>
-              <WorkspaceIframe />
-            </Suspense>
-            <Suspense fallback={null}>
-              <WorkspaceFooter />
-            </Suspense>
-          </TimezoneProvider>
+          <CurrentUserProvider>
+            <TimezoneProvider>
+              {children}
+              <Suspense fallback={null}>
+                <WorkspaceIframe />
+              </Suspense>
+              <Suspense fallback={null}>
+                <WorkspaceFooter />
+              </Suspense>
+            </TimezoneProvider>
+          </CurrentUserProvider>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />

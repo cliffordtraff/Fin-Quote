@@ -9,6 +9,57 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      account_watchlist_sync_receipts: {
+        Row: {
+          receipt_id: number
+          user_id: string
+          idempotency_key: string
+          request_hash: string
+          request_payload: Json
+          request_mode: string
+          request_symbols: string[] | null
+          expected_revision: number | null
+          result_disposition: string
+          result_symbols: string[] | null
+          result_revision: number
+          result_sync_initialized_at: string
+          result_dropped_symbols: string[]
+          created_at: string
+        }
+        Insert: {
+          receipt_id?: number
+          user_id: string
+          idempotency_key: string
+          request_hash: string
+          request_payload: Json
+          request_mode: string
+          request_symbols?: string[] | null
+          expected_revision?: number | null
+          result_disposition: string
+          result_symbols?: string[] | null
+          result_revision: number
+          result_sync_initialized_at: string
+          result_dropped_symbols?: string[]
+          created_at?: string
+        }
+        Update: {
+          receipt_id?: number
+          user_id?: string
+          idempotency_key?: string
+          request_hash?: string
+          request_payload?: Json
+          request_mode?: string
+          request_symbols?: string[] | null
+          expected_revision?: number | null
+          result_disposition?: string
+          result_symbols?: string[] | null
+          result_revision?: number
+          result_sync_initialized_at?: string
+          result_dropped_symbols?: string[]
+          created_at?: string
+        }
+        Relationships: []
+      }
       dashboard_chart_render_assets: {
         Row: {
           render_key: string
@@ -2521,6 +2572,36 @@ export interface Database {
         }
         Relationships: []
       }
+      watchlists: {
+        Row: {
+          user_id: string
+          tabs: Json
+          active_tab_index: number
+          updated_at: string
+          symbols: string[] | null
+          revision: number
+          sync_initialized_at: string | null
+        }
+        Insert: {
+          user_id: string
+          tabs?: Json
+          active_tab_index?: number
+          updated_at?: string
+          symbols?: string[] | null
+          revision?: number
+          sync_initialized_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          tabs?: Json
+          active_tab_index?: number
+          updated_at?: string
+          symbols?: string[] | null
+          revision?: number
+          sync_initialized_at?: string | null
+        }
+        Relationships: []
+      }
       evaluation_annotations: {
         Row: {
           id: string
@@ -2744,6 +2825,37 @@ export interface Database {
     }
     Views: {}
     Functions: {
+      account_watchlist_initialize_locked: {
+        Args: { p_owner_id: string }
+        Returns: Database['public']['Tables']['watchlists']['Row']
+      }
+      is_canonical_primary_watchlist_symbols: {
+        Args: { p_symbols: string[] }
+        Returns: boolean
+      }
+      read_primary_watchlist: {
+        Args: Record<PropertyKey, never>
+        Returns: Array<{
+          symbols: string[] | null
+          revision: number
+          sync_initialized_at: string
+        }>
+      }
+      sync_primary_watchlist: {
+        Args: {
+          p_mode: string
+          p_symbols: string[] | null
+          p_expected_revision: number | null
+          p_idempotency_key: string
+        }
+        Returns: Array<{
+          disposition: string
+          symbols: string[] | null
+          revision: number
+          sync_initialized_at: string
+          dropped_symbols: string[]
+        }>
+      }
       acquire_newsletter_chart_post: {
         Args: {
           p_owner_id: string

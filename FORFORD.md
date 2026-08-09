@@ -3497,3 +3497,63 @@ It is the ability to let production reveal a bounded truth, repair only the
 owned cause, and then collect evidence at every layer—ledger, tests, deployment,
 health, logs, and off-site schedule—without pretending an optional or human
 step happened when it did not.
+
+---
+
+## One Watchlist, Two Kinds Of Memory
+
+The Market Overview already had a useful little watchlist, but it remembered
+like a notebook left beside one particular browser. That is perfect for an
+anonymous visitor: no account ceremony, no database dependency, and no privacy
+surprise. It is frustrating for a signed-in reader who arranges a list on a
+laptop and then opens the site on a phone.
+
+The account-watchlist package keeps both virtues by refusing to invent two
+competing products. Anonymous users still use the versioned browser-local list.
+After authentication, the same controls attach to one canonical ordered array
+on the existing `watchlists` row. `NULL` means “use the product defaults”; an
+empty array means “I deliberately want no symbols.” That tiny distinction is
+easy to erase with an innocent fallback expression, and doing so would make an
+empty watchlist mysteriously refill itself.
+
+Saving is treated like handing a numbered claim ticket to a coat room. The
+browser supplies the revision it last saw and an idempotency key. PostgreSQL
+locks the owner row, compares the revision, writes at most 20 normalized equity
+symbols, and stores a bounded receipt. If the response disappears after the
+commit, the same ticket returns the original result instead of applying the
+reorder twice. If another device has already changed the list, the server
+returns a conflict and the UI keeps the attempted order visible. Browser
+storage is now a bounded offline cache, not a second authority quietly fighting
+the database.
+
+Existing users presented a second migration problem: several historical
+watchlist shapes exist. The first authenticated read performs a one-time,
+locked, bounded import. It prefers the active JSON list and can fall back to the
+old normalized tab/item records, keeping only the first 20 valid unique equity
+symbols. It never starts an endless dual-write relationship with those legacy
+tables. A bridge should help everyone cross the river; it should not become a
+second river to maintain.
+
+Custom quote loading also moved from “one request per missing ticker” to one
+same-origin batch. The boundary checks content type and body size, caps symbols
+and physical work, validates the whole equity set against the stock registry,
+and fails closed when that registry is unavailable. A caller abort detaches
+only that caller; it does not cancel resolver work another request may share.
+
+Two release bugs reinforced why packaging is part of correctness. First, the
+repository's unanchored `Watchlist/` ignore rule also hid
+`app/api/watchlist/` on a case-insensitive filesystem. The routes existed and
+their tests passed, but Git would have omitted them. Anchoring the rule to the
+root export directory made the real application routes visible to review.
+Second, the clean database replay caught `pg_catalog.coalesce(...)` in the new
+migration. PostgreSQL's `COALESCE` is special SQL syntax, not a namespaced
+function. Correcting all nine calls turned a locally plausible migration into
+one that actually replays from zero.
+
+The release candidate now passes 187 focused account/watchlist tests and the
+complete 270-file / 1,823-test Vitest suite, TypeScript, repository lint with
+zero errors (166 pre-existing warnings), a 49-unit production build, 116
+guarded server traces, and all 12 pgTAP files / 406 assertions after a clean
+database reset through `20260809130000`. The feature remains deliberately
+flagged until that migration is applied ahead of the matching application.
+That order is not operational trivia; it is part of the design.

@@ -1,36 +1,30 @@
 'use client'
 
-import { useState, useRef, useEffect, useId, useMemo } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+import { signOutAccountSession } from '@/app/actions/account-settings'
+import { useCurrentUser } from '@/components/CurrentUserProvider'
+import { parseAccountSettingsMutationResult } from '@/lib/account-settings-contract'
 
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [user, setUser] = useState<User | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const currentUserIdRef = useRef<string | null>(null)
+  const currentAccessTokenRef = useRef<string | null>(null)
   const menuId = useId()
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
+  const { accessToken, retry, status, user } = useCurrentUser()
+  currentUserIdRef.current = user?.id ?? null
+  currentAccessTokenRef.current = accessToken
 
-  // Fetch user on mount
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-    }
-    getUser()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase.auth])
+    setIsOpen(false)
+    setLoading(false)
+    setError('')
+  }, [status, user?.id])
 
   // Close the disclosure from pointer, keyboard, or route-level interactions.
   useEffect(() => {
@@ -57,23 +51,76 @@ export default function UserMenu() {
   }, [isOpen])
 
   const handleLogout = async () => {
+    const expectedUserId = currentUserIdRef.current
+    const expectedAccessToken = currentAccessTokenRef.current
+    if (!expectedUserId || !expectedAccessToken) return
     setLoading(true)
     setError('')
     try {
-      const { error: signOutError } = await supabase.auth.signOut()
-      if (signOutError) throw signOutError
-      // Page will auto-update via onAuthStateChange listener
+      const result = parseAccountSettingsMutationResult(
+        await signOutAccountSession({
+          expectedUserId,
+          accessToken: expectedAccessToken,
+        }),
+      )
+      if (
+        currentUserIdRef.current !== expectedUserId
+        || currentAccessTokenRef.current !== expectedAccessToken
+      ) return
+      if (result.status !== 'updated') {
+        setError(result.message)
+        return
+      }
       setIsOpen(false)
-    } catch (error) {
-      console.error('Logout error:', error)
-      setError(error instanceof Error ? error.message : 'Failed to sign out')
+      retry()
+      router.replace('/')
+      router.refresh()
+    } catch {
+      if (
+        currentUserIdRef.current === expectedUserId
+        && currentAccessTokenRef.current === expectedAccessToken
+      ) {
+        setError('Failed to sign out. Please try again.')
+      }
     } finally {
-      setLoading(false)
+      if (
+        currentUserIdRef.current === expectedUserId
+        && currentAccessTokenRef.current === expectedAccessToken
+      ) setLoading(false)
     }
   }
 
+  if (status === 'loading') {
+    return (
+      <button
+        type="button"
+        disabled
+        className="flex h-10 w-10 cursor-wait items-center justify-center rounded-lg text-gray-400 opacity-70 dark:text-gray-500"
+        aria-label="Checking account status"
+      >
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+      </button>
+    )
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <button
+        type="button"
+        onClick={retry}
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+        title="Account status unavailable. Retry"
+        aria-label="Account status unavailable. Retry"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+        </svg>
+      </button>
+    )
+  }
+
   // If no user, show a clickable icon that goes to login
-  if (!user) {
+  if (status === 'signed_out' || !user) {
     return (
       <button
         type="button"

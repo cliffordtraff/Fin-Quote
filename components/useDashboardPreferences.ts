@@ -7,28 +7,46 @@ import {
   parseDashboardPreferences,
   type DashboardPreferences,
 } from '@/lib/dashboard/preferences'
+import { normalizeWatchlistSymbols } from '@/lib/dashboard/watchlist-contract'
 
 export function useDashboardPreferences() {
   const [preferences, setPreferences] = useState<DashboardPreferences>(
     DEFAULT_DASHBOARD_PREFERENCES,
   )
   const [loaded, setLoaded] = useState(false)
+  const [storageError, setStorageError] = useState(false)
 
   useEffect(() => {
-    setPreferences(
-      parseDashboardPreferences(
+    const readPreferences = (raw: string | null) => {
+      setPreferences(parseDashboardPreferences(raw))
+    }
+    try {
+      readPreferences(
         window.localStorage.getItem(DASHBOARD_PREFERENCES_STORAGE_KEY),
-      ),
-    )
+      )
+    } catch {
+      setStorageError(true)
+    }
     setLoaded(true)
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== DASHBOARD_PREFERENCES_STORAGE_KEY) return
+      readPreferences(event.newValue)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   useEffect(() => {
     if (!loaded) return
-    window.localStorage.setItem(
-      DASHBOARD_PREFERENCES_STORAGE_KEY,
-      JSON.stringify(preferences),
-    )
+    try {
+      window.localStorage.setItem(
+        DASHBOARD_PREFERENCES_STORAGE_KEY,
+        JSON.stringify(preferences),
+      )
+    } catch {
+      setStorageError(true)
+    }
   }, [loaded, preferences])
 
   const setPreference = useCallback(
@@ -36,10 +54,20 @@ export function useDashboardPreferences() {
       key: Key,
       value: DashboardPreferences[Key],
     ) => {
-      setPreferences((current) => ({ ...current, [key]: value }))
+      setPreferences((current) => {
+        if (key === 'watchlistSymbols') {
+          return {
+            ...current,
+            watchlistSymbols: value === null
+              ? null
+              : normalizeWatchlistSymbols(value),
+          }
+        }
+        return { ...current, [key]: value }
+      })
     },
     [],
   )
 
-  return { preferences, setPreference }
+  return { preferences, setPreference, loaded, storageError }
 }

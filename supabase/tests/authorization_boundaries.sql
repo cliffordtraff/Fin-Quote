@@ -12,6 +12,7 @@ CREATE TEMP TABLE authorization_service_managed_tables (
 
 INSERT INTO authorization_service_managed_tables (table_name)
 VALUES
+  ('account_watchlist_sync_receipts'),
   ('analyst_estimates'),
   ('bars_daily'),
   ('bars_minute'),
@@ -79,6 +80,7 @@ CREATE TEMP TABLE authorization_service_only_tables (
 
 INSERT INTO authorization_service_only_tables (table_name)
 VALUES
+  ('account_watchlist_sync_receipts'),
   ('dashboard_chart_of_day_settings'),
   ('evaluation_annotations'),
   ('filing_chunks'),
@@ -268,8 +270,7 @@ FROM unnest(ARRAY[
   'newsletter_daily_settings',
   'watchlist_items',
   'watchlist_settings',
-  'watchlist_tabs',
-  'watchlists'
+  'watchlist_tabs'
 ]) AS managed(table_name)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) AS wanted(privilege_name)
 UNION ALL
@@ -283,7 +284,8 @@ FROM unnest(ARRAY[
   'newsletter_daily_run_items',
   'newsletter_daily_runs',
   'newsletter_draft_events',
-  'newsletter_drafts'
+  'newsletter_drafts',
+  'watchlists'
 ]) AS managed(table_name)
 CROSS JOIN unnest(ARRAY['SELECT']) AS wanted(privilege_name);
 
@@ -399,7 +401,12 @@ SELECT ok(
     AND NOT has_table_privilege('authenticated', 'public.newsletter_drafts', 'UPDATE')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_drafts', 'DELETE')
     AND NOT has_table_privilege('authenticated', 'public.newsletter_notifications', 'INSERT')
-    AND NOT has_table_privilege('authenticated', 'public.newsletter_notifications', 'DELETE'),
+    AND NOT has_table_privilege('authenticated', 'public.newsletter_notifications', 'DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.watchlists', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.watchlists', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.watchlists', 'DELETE')
+    AND NOT has_any_column_privilege('authenticated', 'public.watchlists', 'INSERT')
+    AND NOT has_any_column_privilege('authenticated', 'public.watchlists', 'UPDATE'),
   'authenticated lacks mutations not used by owner-facing workflows'
 );
 
@@ -527,10 +534,43 @@ SELECT is(
       AND procedure.prokind = 'f'
       AND owner_role.rolname = 'postgres'
       AND procedure.proname <> 'generate_conversation_title'
+      AND procedure.oid NOT IN (
+        'public.read_primary_watchlist()'::regprocedure,
+        'public.sync_primary_watchlist(text,text[],bigint,text)'::regprocedure
+      )
       AND has_function_privilege('authenticated', procedure.oid, 'EXECUTE')
   ),
   0::bigint,
-  'authenticated can execute no public function except the owner-safe title helper'
+  'authenticated can execute only explicitly owner-safe public helpers'
+);
+
+SELECT ok(
+  NOT has_function_privilege(
+    'anon',
+    'public.read_primary_watchlist()',
+    'EXECUTE'
+  )
+    AND has_function_privilege(
+      'authenticated',
+      'public.read_primary_watchlist()',
+      'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+      'anon',
+      'public.sync_primary_watchlist(text,text[],bigint,text)',
+      'EXECUTE'
+    )
+    AND has_function_privilege(
+      'authenticated',
+      'public.sync_primary_watchlist(text,text[],bigint,text)',
+      'EXECUTE'
+    )
+    AND NOT has_function_privilege(
+      'authenticated',
+      'public.account_watchlist_initialize_locked(uuid)',
+      'EXECUTE'
+    ),
+  'authenticated watchlist access is limited to auth.uid-scoped RPCs'
 );
 
 SELECT ok(

@@ -456,24 +456,26 @@ Final production verification is green on the settled head:
   secret exist. Its current absence is an intentional warning, not unhealthy
   core automation.
 
-### P2: Sync The Watchlist Without Splitting Its Identity
+### P2: Promote And Observe Account Watchlist Sync
 
-- Keep anonymous users on the existing browser-local ordered list. For signed-in
-  users, make the existing one-row `watchlists` record the canonical account
-  list with `NULL` meaning product defaults and an empty array meaning an
-  intentional empty list. Do not dual-write the unused normalized tab/item
-  model.
-- Add migration-first, auth-derived CAS and idempotency RPCs with an exact
-  20-equity-symbol invariant, durable replay receipts, one-time bounded legacy
-  import, and conflict results. Ship behind a feature flag until live legacy
-  row shapes and external writers have been inventoried.
-- Treat browser state as a bounded offline cache, not a second authority:
-  preserve anonymous state across sign-in/out, fence account switches and stale
-  responses, serialize writes, retry lost receipts, and require an explicit
-  choice when two devices reorder the same shared symbols.
-- Replace per-symbol custom quote fan-out with one bounded batch endpoint. Pulse
-  should stream only the selected symbol; Catalyst Calendar should filter its
-  already-loaded events client-side, adding no provider calls.
+- The implementation is complete behind `NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC`:
+  anonymous lists remain browser-local; signed-in lists use the existing
+  one-row `watchlists` record; `NULL` still means product defaults and an empty
+  array still means intentionally empty.
+- Migration `20260809130000` adds auth-derived read/CAS RPCs, an exact
+  20-equity-symbol invariant, durable idempotency receipts, conflict results,
+  and a one-time locked import from the bounded legacy shapes. It does not
+  dual-write the old normalized tab/item model.
+- The client preserves anonymous state across account transitions, fences stale
+  sessions and account switches, serializes mutations, retries uncertain
+  receipts, and surfaces cross-device conflicts instead of silently choosing a
+  winner.
+- Custom symbols use one same-origin bounded quote batch. Pulse continues to
+  stream only its selected symbol, and Catalyst Calendar keeps filtering its
+  already-loaded events client-side.
+- Apply the migration before the flagged application build, verify live legacy
+  row shapes and browser-role grants, then observe conflict, retry, quote-load,
+  and import behavior before changing the 20-symbol bound.
 
 ### P3: Finish External Alerting
 

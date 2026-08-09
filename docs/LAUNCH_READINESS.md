@@ -54,6 +54,7 @@ settled deployment window contains no error-level or 5xx logs.
 | Supabase baseline convergence | Complete | All linked package migrations through `20260809120000` align; the second push dry run was empty |
 | Newsletter reliability follow-up | Deployed and smoke-tested | Four migrations, production application deployment, protected cron probes, and live health checks passed |
 | Durable workstation package | Deployed and verified | PRs #16–#19 merged; ten linked migrations are aligned; final hosted gates passed 250 files / 1,646 tests, 11 pgTAP files / 372 assertions, 49 build units, and 114 verified traces |
+| Account watchlist sync | Release candidate verified locally | Migration `20260809130000` replays from zero; 187 focused tests and the complete 270-file / 1,823-test suite, TypeScript, lint, production build, 116 trace checks, and 12 pgTAP files / 406 assertions pass. The feature remains gated by `NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC` until migration-first promotion. |
 | Source/entity integrity | Verified in production | MTCH was rebuilt from Match Group's SEC filing; the active draft contains no Huya or “Triple Match 3D” text |
 | Automation lease fencing | Deployed | Writes require the current token and an unexpired database lease; pgTAP expiry/takeover regressions pass 56/56 |
 | Terminal notification receipts | Verified in production | Daily and mid-morning terminal notifications each have a durable applied receipt with no last error |
@@ -318,6 +319,34 @@ Steps 1–8 describe the earlier baseline release.
 7. Observed real `event=schedule` watchdog run 31319998523 succeed on exact
    deployed head `7faff05`. No `workflow_dispatch` run was substituted for
    this proof.
+
+## Account Watchlist Release Candidate
+
+The next migration-first package makes the existing compact Market Overview
+watchlist account-aware without creating a second watchlist product. Anonymous
+readers retain the versioned browser-local list. A verified signed-in account
+uses one ordered `watchlists.symbols` value, with `NULL` preserving product
+defaults and an empty array preserving an intentional empty list.
+
+The database owns synchronization through auth-derived read and compare-and-
+swap RPCs. Writes carry an expected revision and stable idempotency key, while
+bounded receipts make an exact retry return the original result. A one-time,
+locked legacy import prefers the current JSON list and can fall back to the old
+tab/item model without dual-writing it. Browser roles can read only their row;
+all mutation goes through the two scoped RPCs. The quote companion route is
+same-origin, JSON- and byte-bounded, validates every equity symbol against the
+stock registry, caps physical work, and batches the custom symbols.
+
+Local evidence is green after correcting one migration-only defect caught by a
+full reset: `COALESCE` is PostgreSQL syntax, not a schema-qualified
+`pg_catalog` function. The entire history now replays through
+`20260809130000`, and all 12 pgTAP files / 406 assertions pass. The application
+passes 187 focused account/watchlist tests and the complete 270-file / 1,823-
+test Vitest suite, TypeScript, ESLint with zero errors (166 pre-existing
+warnings), a 49-unit production build, and 116 server build trace checks.
+Promotion still follows the safe order: apply and verify the migration, enable
+the flag for the matching build, then merge and smoke the account and watchlist
+paths.
 
 ## Remaining Risks
 
