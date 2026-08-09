@@ -12,6 +12,7 @@ import SectorHeatmap from '@/components/SectorHeatmap'
 import StocksTable from '@/components/StocksTable'
 import TopGainerSparklines from '@/components/TopGainerSparklines'
 import TopInsiderTrades from '@/components/TopInsiderTrades'
+import { useAccountWatchlist } from '@/components/useAccountWatchlist'
 import { useDashboardPreferences } from '@/components/useDashboardPreferences'
 import type { MarketTrendsBullet } from '@/app/actions/market-trends-responses'
 import type { AllMarketData } from '@/lib/market-types'
@@ -119,7 +120,12 @@ export default function MarketDashboardSunday({
   initialRenderedAt,
 }: MarketDashboardSundayProps) {
   const { timezone } = useTimezone()
-  const { preferences, setPreference } = useDashboardPreferences()
+  const { preferences, setPreference, loaded: preferencesLoaded } = useDashboardPreferences()
+  const accountWatchlist = useAccountWatchlist({
+    localSymbols: preferences.watchlistSymbols,
+    localLoaded: preferencesLoaded,
+    onLocalSymbolsChange: (symbols) => setPreference('watchlistSymbols', symbols),
+  })
   const {
     data,
     freshness,
@@ -180,7 +186,6 @@ export default function MarketDashboardSunday({
     freshness.fastDegradedSections.length > 0 ? ' · partial' : ''
   const slowPartialLabel =
     freshness.slowDegradedSections.length > 0 ? ' · partial' : ''
-
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-gray-200 pb-5 dark:border-gray-800">
@@ -281,8 +286,14 @@ export default function MarketDashboardSunday({
           />
           <StocksTable
             stocks={stocks}
-            symbols={preferences.watchlistSymbols}
-            onSymbolsChange={(symbols) => setPreference('watchlistSymbols', symbols)}
+            symbols={accountWatchlist.symbols}
+            onSymbolsChange={accountWatchlist.setSymbols}
+            editingDisabled={!accountWatchlist.canEdit}
+            syncStatus={accountWatchlist.status}
+            syncMessage={accountWatchlist.message}
+            syncCacheAvailable={accountWatchlist.cacheAvailable}
+            syncCanRetry={accountWatchlist.canRetry}
+            onSyncRetry={accountWatchlist.retry}
           />
         </div>
       </section>

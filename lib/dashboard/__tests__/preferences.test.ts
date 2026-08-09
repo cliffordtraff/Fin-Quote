@@ -13,14 +13,14 @@ describe('parseDashboardPreferences', () => {
   it('normalizes persisted symbols and layout preferences', () => {
     expect(parseDashboardPreferences(JSON.stringify({
       version: 1,
-      watchlistSymbols: [' tsla ', 'AAPL', 'TSLA', 'not valid!'],
+      watchlistSymbols: [' tsla ', 'BRK-B', 'AAPL', 'TSLA', 'ES=F', 'not valid!'],
       moverSession: 'afterhours',
       crossAssetExpanded: true,
       flowsExpanded: true,
       sp500MoversExpanded: false,
     }))).toEqual({
       version: 1,
-      watchlistSymbols: ['TSLA', 'AAPL'],
+      watchlistSymbols: ['TSLA', 'BRK.B', 'AAPL'],
       moverSession: 'afterhours',
       crossAssetExpanded: true,
       flowsExpanded: true,

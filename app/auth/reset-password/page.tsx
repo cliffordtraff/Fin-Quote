@@ -1,201 +1,246 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { updateAccountPassword } from '@/app/actions/account-settings'
+import { useCurrentUser } from '@/components/CurrentUserProvider'
+import { parseAccountSettingsMutationResult } from '@/lib/account-settings-contract'
+
+interface PasswordDraft {
+  userId: string
+  password: string
+  confirmation: string
+}
+
+function CenteredCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-cream-100 px-4 dark:bg-gray-900">
+      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg dark:bg-gray-800">
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function ResetPasswordPage() {
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [validSession, setValidSession] = useState<boolean | null>(null)
-
   const router = useRouter()
-  const supabase = createClient()
+  const { accessToken, retry, status, user } = useCurrentUser()
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null)
+  const currentAccessTokenRef = useRef<string | null>(accessToken)
+  currentUserIdRef.current = user?.id ?? null
+  currentAccessTokenRef.current = accessToken
+
+  const [draft, setDraft] = useState<PasswordDraft | null>(null)
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null)
+  const [error, setError] = useState<{ userId: string; message: string } | null>(null)
+  const [successUserId, setSuccessUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    // Check if user arrived via reset password link (has valid session)
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setValidSession(!!session)
-    }
-    checkSession()
-
-    // Listen for auth events (password recovery)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setValidSession(true)
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase.auth])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
+    if (status !== 'authenticated' || !user || !accessToken) {
+      setDraft(null)
+      setPendingUserId(null)
+      setError(null)
+      setSuccessUserId(null)
       return
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
-      setLoading(false)
+    setDraft({ userId: user.id, password: '', confirmation: '' })
+    setPendingUserId(null)
+    setError(null)
+    setSuccessUserId(null)
+  }, [accessToken, status, user])
+
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-cream-100 dark:bg-gray-900">
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-b-2 border-sage-600"
+          aria-label="Checking password recovery session"
+        />
+      </div>
+    )
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <CenteredCard>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Recovery session unavailable</h1>
+          <p role="alert" className="mt-3 text-gray-600 dark:text-gray-400">
+            We could not safely verify the account for this password change. No password was changed.
+          </p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-6 w-full rounded-lg bg-sage-600 px-4 py-3 font-medium text-white hover:bg-sage-700"
+          >
+            Retry session check
+          </button>
+        </div>
+      </CenteredCard>
+    )
+  }
+
+  if (status === 'signed_out' || !user || !accessToken) {
+    return (
+      <CenteredCard>
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30" aria-hidden="true">
+            <span className="text-2xl text-red-600 dark:text-red-400">!</span>
+          </div>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Invalid or Expired Link</h1>
+          <p className="mb-6 text-gray-600 dark:text-gray-400">
+            This password reset link is invalid or has expired. Please request a new one.
+          </p>
+          <Link href="/auth/forgot-password" className="inline-block w-full rounded-lg bg-sage-600 px-4 py-3 text-center font-medium text-white hover:bg-sage-700">
+            Request New Link
+          </Link>
+          <Link href="/auth" className="mt-4 block text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+            Back to sign in
+          </Link>
+        </div>
+      </CenteredCard>
+    )
+  }
+
+  const activeDraft = draft?.userId === user.id ? draft : null
+  const activeError = error?.userId === user.id ? error.message : null
+  const isPending = pendingUserId === user.id
+  const isSuccess = successUserId === user.id
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeDraft || isPending) return
+    const expectedUserId = activeDraft.userId
+    const expectedAccessToken = accessToken
+    setError(null)
+
+    if (activeDraft.password !== activeDraft.confirmation) {
+      setError({ userId: expectedUserId, message: 'Passwords do not match.' })
+      return
+    }
+    if (Array.from(activeDraft.password).length < 6) {
+      setError({ userId: expectedUserId, message: 'Password must be at least 6 characters.' })
       return
     }
 
+    setPendingUserId(expectedUserId)
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      })
-      if (error) throw error
-      setSuccess(true)
-    } catch (err: any) {
-      setError(err.message || 'Failed to update password')
+      const result = parseAccountSettingsMutationResult(await updateAccountPassword({
+        expectedUserId,
+        accessToken: expectedAccessToken,
+        password: activeDraft.password,
+      }))
+      if (
+        currentUserIdRef.current !== expectedUserId
+        || currentAccessTokenRef.current !== expectedAccessToken
+      ) return
+      if (result.status !== 'updated') {
+        setError({ userId: expectedUserId, message: result.message })
+        return
+      }
+      setDraft({ userId: expectedUserId, password: '', confirmation: '' })
+      setSuccessUserId(expectedUserId)
+    } catch {
+      if (
+        currentUserIdRef.current === expectedUserId
+        && currentAccessTokenRef.current === expectedAccessToken
+      ) {
+        setError({
+          userId: expectedUserId,
+          message: 'Password recovery is temporarily unavailable.',
+        })
+      }
     } finally {
-      setLoading(false)
+      if (
+        currentUserIdRef.current === expectedUserId
+        && currentAccessTokenRef.current === expectedAccessToken
+      ) {
+        setPendingUserId((current) => current === expectedUserId ? null : current)
+      }
     }
   }
 
-  // Loading state while checking session
-  if (validSession === null) {
+  if (isSuccess) {
     return (
-      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sage-600"></div>
-      </div>
-    )
-  }
-
-  // Invalid/expired link
-  if (!validSession) {
-    return (
-      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
-            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Invalid or Expired Link</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              This password reset link is invalid or has expired. Please request a new one.
-            </p>
-            <Link
-              href="/auth/forgot-password"
-              className="inline-block w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 font-medium transition-colors text-center"
-            >
-              Request New Link
-            </Link>
-            <Link
-              href="/auth"
-              className="block mt-4 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            >
-              Back to sign in
-            </Link>
+      <CenteredCard>
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30" aria-hidden="true">
+            <span className="text-2xl text-green-600 dark:text-green-400">✓</span>
           </div>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Password Updated</h1>
+          <p role="status" className="mb-6 text-gray-600 dark:text-gray-400">
+            Your password has been updated for the verified account.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="w-full rounded-lg bg-sage-600 px-4 py-3 font-medium text-white hover:bg-sage-700"
+          >
+            Continue to App
+          </button>
         </div>
-      </div>
-    )
-  }
-
-  // Success state
-  if (success) {
-    return (
-      <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Password Updated!</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Your password has been successfully updated. You can now sign in with your new password.
-            </p>
-            <button
-              onClick={() => router.push('/')}
-              className="w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 font-medium transition-colors"
-            >
-              Continue to App
-            </button>
-          </div>
-        </div>
-      </div>
+      </CenteredCard>
     )
   }
 
   return (
-    <div className="min-h-screen bg-cream-100 dark:bg-gray-900 flex items-center justify-center px-4">
+    <div className="flex min-h-screen items-center justify-center bg-cream-100 px-4 dark:bg-gray-900">
       <div className="w-full max-w-md">
-        {/* Logo/Title */}
-        <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold text-gray-900 dark:text-white">
-            The Intraday
-          </Link>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Set your new password
-          </p>
+        <div className="mb-8 text-center">
+          <Link href="/" className="text-3xl font-bold text-gray-900 dark:text-white">The Intraday</Link>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Set a new password for {user.email ?? 'your verified account'}.</p>
         </div>
-
-        {/* Reset Form */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Create new password</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Your new password must be at least 6 characters long.
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded-lg bg-white p-8 shadow-lg dark:bg-gray-800" aria-busy={isPending}>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Create new password</h1>
+          <p className="mb-6 text-gray-600 dark:text-gray-400">Your new password must be at least 6 characters long.</p>
+          <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                New Password
-              </label>
+              <label htmlFor="recovery-password" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
               <input
+                id="recovery-password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                autoComplete="new-password"
+                value={activeDraft?.password ?? ''}
+                onChange={(event) => setDraft((current) => current?.userId === user.id
+                  ? { ...current, password: event.target.value }
+                  : current)}
+                disabled={!activeDraft || isPending}
                 required
                 minLength={6}
-                placeholder="••••••••"
+                maxLength={512}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-sage-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Confirm New Password
-              </label>
+              <label htmlFor="recovery-password-confirmation" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm New Password</label>
               <input
+                id="recovery-password-confirmation"
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                autoComplete="new-password"
+                value={activeDraft?.confirmation ?? ''}
+                onChange={(event) => setDraft((current) => current?.userId === user.id
+                  ? { ...current, confirmation: event.target.value }
+                  : current)}
+                disabled={!activeDraft || isPending}
                 required
                 minLength={6}
-                placeholder="••••••••"
+                maxLength={512}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-sage-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
-
-            {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
+            {activeError && (
+              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                {activeError}
+              </p>
             )}
-
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-sage-600 text-white py-3 px-4 rounded-lg hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              disabled={!activeDraft || isPending || !activeDraft.password || !activeDraft.confirmation}
+              className="w-full rounded-lg bg-sage-600 px-4 py-3 font-medium text-white hover:bg-sage-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? 'Updating...' : 'Update Password'}
+              {isPending ? 'Updating…' : 'Update Password'}
             </button>
           </form>
         </div>

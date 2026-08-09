@@ -9,6 +9,12 @@ const mocks = vi.hoisted(() => ({
     return null
   }),
   setPreference: vi.fn(),
+  setAccountSymbols: vi.fn(),
+  retryAccountWatchlist: vi.fn(),
+  stocksTable: vi.fn((props: unknown) => {
+    void props
+    return null
+  }),
 }))
 
 vi.mock('@/lib/hooks/use-dashboard-market-snapshots', () => ({
@@ -34,6 +40,21 @@ vi.mock('@/components/useDashboardPreferences', () => ({
       sp500MoversExpanded: false,
     },
     setPreference: mocks.setPreference,
+    loaded: true,
+  }),
+}))
+
+vi.mock('@/components/useAccountWatchlist', () => ({
+  useAccountWatchlist: () => ({
+    symbols: ['MSFT'],
+    source: 'account',
+    status: 'uncertain',
+    message: 'The save may have completed.',
+    cacheAvailable: true,
+    canEdit: false,
+    canRetry: true,
+    setSymbols: mocks.setAccountSymbols,
+    retry: mocks.retryAccountWatchlist,
   }),
 }))
 
@@ -47,7 +68,9 @@ vi.mock('@/components/MarketInsights', () => ({ default: () => null }))
 vi.mock('@/components/MarketSessions', () => ({ default: () => null }))
 vi.mock('@/components/MarketTrendsCombined', () => ({ default: () => null }))
 vi.mock('@/components/SectorHeatmap', () => ({ default: () => null }))
-vi.mock('@/components/StocksTable', () => ({ default: () => null }))
+vi.mock('@/components/StocksTable', () => ({
+  default: (props: unknown) => mocks.stocksTable(props),
+}))
 vi.mock('@/components/TopGainerSparklines', () => ({ default: () => null }))
 vi.mock('@/components/TopInsiderTrades', () => ({ default: () => null }))
 
@@ -153,5 +176,14 @@ describe('MarketDashboardSunday freshness labels', () => {
       initialCaptureTimes,
       '2026-08-09T12:30:00.000Z',
     )
+    expect(mocks.stocksTable).toHaveBeenCalledWith(expect.objectContaining({
+      symbols: ['MSFT'],
+      onSymbolsChange: mocks.setAccountSymbols,
+      editingDisabled: true,
+      syncStatus: 'uncertain',
+      syncCanRetry: true,
+      onSyncRetry: mocks.retryAccountWatchlist,
+    }))
   })
+
 })

@@ -109,13 +109,25 @@ versioned preferences remember the watchlist order, mover session, and expanded
 sections without requiring sign-in. The watchlist supports adding, removing,
 dragging, keyboard reordering, and restrained unusual-move markers.
 
+When `NEXT_PUBLIC_ENABLE_WATCHLIST_SYNC=true`, signed-in users keep that same
+ordered list across devices. Anonymous users remain browser-local. The server
+accepts at most 20 normalized equity symbols, uses revision-based conflict
+checks plus idempotency receipts for safe retries, and imports legacy watchlist
+data once without treating `NULL` (product defaults) as the same thing as an
+intentional empty list. Custom quotes use one bounded same-origin batch route
+instead of one public request per ticker.
+
 Relevant files:
 
 - `components/MarketDashboardSunday.tsx`
 - `components/CatalystTimeline.tsx`
 - `components/StocksTable.tsx`
+- `components/useAccountWatchlist.ts`
 - `components/useDashboardPreferences.ts`
+- `lib/dashboard/account-watchlist-client.ts`
+- `lib/dashboard/account-watchlist-store.ts`
 - `lib/dashboard/preferences.ts`
+- `supabase/migrations/20260809130000_account_watchlist_sync.sql`
 
 ## Key Routes
 
