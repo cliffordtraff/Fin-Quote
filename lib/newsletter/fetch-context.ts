@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { getProvider } from '@/lib/providers'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { filterToSP500, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
+import {
+  filterToSP500,
+  getSP500Constituent,
+  isSP500,
+  normalizeSP500Symbol,
+  SP500_SYMBOLS,
+} from '@/lib/sp500'
 import type {
   NewsletterContext,
   NewsletterFinancialPoint,
@@ -476,6 +482,94 @@ export async function recordPick(result: StockPickerResult): Promise<void> {
 // Market context fetcher (for AI stock picker)
 // ---------------------------------------------------------------------------
 
+const MARKET_CANDIDATE_POOL_TARGET = 50
+const FMP_QUOTE_BATCH_SIZE = 100
+
+interface FmpQuoteCandidate {
+  symbol?: unknown
+  name?: unknown
+  price?: unknown
+  change?: unknown
+  changesPercentage?: unknown
+}
+
+function finiteNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function mapFmpQuoteCandidate(value: unknown): StockCandidate | null {
+  if (!value || typeof value !== 'object') return null
+  const quote = value as FmpQuoteCandidate
+  if (typeof quote.symbol !== 'string') return null
+  const symbol = normalizeSP500Symbol(quote.symbol)
+  const price = finiteNumber(quote.price)
+  if (!symbol || !isSP500(symbol) || price <= 0) return null
+
+  return {
+    symbol,
+    name:
+      typeof quote.name === 'string' && quote.name.trim()
+        ? quote.name
+        : (getSP500Constituent(symbol)?.name ?? symbol),
+    price,
+    change: finiteNumber(quote.change),
+    changesPercentage: finiteNumber(quote.changesPercentage),
+  }
+}
+
+function fmpQuoteSymbol(symbol: string): string {
+  return getSP500Constituent(symbol)?.alternate_symbols?.fmp ?? symbol
+}
+
+/**
+ * FMP's top-50 actives/gainers/losers feeds can occasionally contain almost
+ * no S&P 500 names before the opening bell. Batch quotes provide a bounded,
+ * current-universe fallback so a thin movers feed cannot stop the newsletter.
+ */
+async function fetchSP500QuoteCandidates(
+  apiKey: string,
+): Promise<StockCandidate[]> {
+  const symbols = Array.from(SP500_SYMBOLS, fmpQuoteSymbol)
+  const batches = Array.from(
+    { length: Math.ceil(symbols.length / FMP_QUOTE_BATCH_SIZE) },
+    (_, index) =>
+      symbols.slice(
+        index * FMP_QUOTE_BATCH_SIZE,
+        (index + 1) * FMP_QUOTE_BATCH_SIZE,
+      ),
+  )
+  const results = await Promise.allSettled(
+    batches.map(async (batch) => {
+      const response = await fetch(
+        `https://financialmodelingprep.com/api/v3/quote/${batch.join(',')}?apikey=${apiKey}`,
+      )
+      if (!response.ok) return []
+      const data = await response.json()
+      if (!Array.isArray(data)) return []
+      return data.flatMap((entry) => {
+        const candidate = mapFmpQuoteCandidate(entry)
+        return candidate ? [candidate] : []
+      })
+    }),
+  )
+
+  const deduplicated = new Map<string, StockCandidate>()
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue
+    for (const candidate of result.value) {
+      deduplicated.set(candidate.symbol, candidate)
+    }
+  }
+
+  return Array.from(deduplicated.values()).sort(
+    (left, right) =>
+      Math.abs(right.changesPercentage) -
+        Math.abs(left.changesPercentage) ||
+      left.symbol.localeCompare(right.symbol),
+  )
+}
+
 /**
  * Fetch most-active stocks from FMP, merge with earnings & gainers/losers,
  * filter to S&P 500, and gather news.
@@ -570,6 +664,16 @@ export async function fetchMarketContext(): Promise<MarketContext> {
       }
     } catch {
       // Non-fatal: earnings candidates just won't have quote data
+    }
+  }
+
+  if (candidateMap.size < MARKET_CANDIDATE_POOL_TARGET) {
+    const supplementalCandidates = await fetchSP500QuoteCandidates(apiKey)
+    for (const candidate of supplementalCandidates) {
+      if (!candidateMap.has(candidate.symbol)) {
+        candidateMap.set(candidate.symbol, candidate)
+      }
+      if (candidateMap.size >= MARKET_CANDIDATE_POOL_TARGET) break
     }
   }
 

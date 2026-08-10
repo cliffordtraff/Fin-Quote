@@ -3413,6 +3413,33 @@ symbol-, chart-spec-, and digest-validated before the application trusts them.
 This is the exactly-once lesson in concrete form: a receipt helps, but the
 durable side effect itself must also be addressable by the request identity.
 
+### The Premarket List That Shrunk To Eight
+
+On August 10, 2026, the production watchdog reported that the morning
+newsletter had failed. GitHub Actions was only the smoke alarm. The actual fire
+started at 5:00 AM ET, when Financial Modeling Prep returned healthy HTTP 200
+responses but its top-50 actives, gainers, and losers lists contained only eight
+usable S&P 500 names. Candidate collection requires at least thirty names, so
+the automation retried twice and correctly stopped before inventing a report
+from an undersized sample.
+
+This was a useful failure because nothing was technically “down.” A green
+provider response can still carry data that is too narrow for the job. Movers
+feeds are like the chalkboard outside a restaurant: they highlight what is
+interesting, but they are not the pantry. The repair keeps those high-signal
+feeds first, then—only when the combined pool is below fifty—fetches the current
+S&P 500 quote universe in bounded batches of one hundred. It ranks those
+supplemental quotes by absolute percentage move, preserves the original movers,
+deduplicates canonical ticker aliases such as `BRK.B`/`BRK-B`, and stops adding
+names once the pool reaches fifty. Individual batch failures are tolerated; the
+existing thirty-name safety gate remains the final authority.
+
+The regression test recreates the seven-name version of the incident and proves
+that the fallback produces fifty unique candidates without losing the original
+names. The engineering lesson is broader than newsletters: validate the shape
+and sufficiency of successful upstream data, and keep a bounded universe source
+behind ranking feeds whose membership can change dramatically with the clock.
+
 ### Release Order Is An Executable Part Of The Design
 
 This package adds durable contracts, not merely components. Its migration
