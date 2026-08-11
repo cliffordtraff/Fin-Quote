@@ -482,8 +482,19 @@ export async function recordPick(result: StockPickerResult): Promise<void> {
 // Market context fetcher (for AI stock picker)
 // ---------------------------------------------------------------------------
 
-const MARKET_CANDIDATE_POOL_TARGET = 50
+/**
+ * The daily newsletter selects up to 50 candidates (and defaults to 40) after a
+ * quality gate that drops anything without fresh, entity-matched evidence. A
+ * pool of 50 therefore demanded a ~80% pass rate and could never satisfy the
+ * gate once FMP's movers feeds thinned out. Healthy days historically produced
+ * 130-150 candidates, so target that instead. This costs no extra requests:
+ * fetchSP500QuoteCandidates already quotes the whole S&P 500 universe, and the
+ * target only decides how many of those results are retained.
+ */
+const MARKET_CANDIDATE_POOL_TARGET = 150
 const FMP_QUOTE_BATCH_SIZE = 100
+const NEWS_COVERAGE_TARGET = 60
+const NEWS_TICKERS_PER_REQUEST = 15
 
 interface FmpQuoteCandidate {
   symbol?: unknown
@@ -683,16 +694,38 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     throw new Error('No S&P 500 stocks found in candidate pool')
   }
 
-  // Fetch news for top 15 candidates by absolute % move (cap for URL length)
-  const newsSymbols = [...candidates]
+  // Fetch news in fixed-size batches by absolute % move. A candidate needs two
+  // relevant stories to escape the `watch_only` classification, so covering
+  // only the top 15 starved the pool the moment it stopped being movers-driven.
+  // Batch size stays at 15 to keep both the URL bounded and the per-request
+  // article budget (limit=50) from being spread too thin across tickers.
+  const rankedNewsSymbols = [...candidates]
     .sort((a, b) => Math.abs(b.changesPercentage) - Math.abs(a.changesPercentage))
-    .slice(0, 15)
+    .slice(0, NEWS_COVERAGE_TARGET)
     .map((c) => c.symbol)
-    .join(',')
+  const newsBatches = Array.from(
+    { length: Math.ceil(rankedNewsSymbols.length / NEWS_TICKERS_PER_REQUEST) },
+    (_, index) =>
+      rankedNewsSymbols.slice(
+        index * NEWS_TICKERS_PER_REQUEST,
+        (index + 1) * NEWS_TICKERS_PER_REQUEST,
+      ),
+  )
 
-  const newsUrl = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${newsSymbols}&limit=50&apikey=${apiKey}`
-  const newsRes = await fetch(newsUrl)
-  const newsData = newsRes.ok ? await newsRes.json() : []
+  // A failed batch is non-fatal: those candidates simply stay unenriched.
+  const newsResults = await Promise.allSettled(
+    newsBatches.map(async (batch) => {
+      const response = await fetch(
+        `https://financialmodelingprep.com/api/v3/stock_news?tickers=${batch.join(',')}&limit=50&apikey=${apiKey}`,
+      )
+      if (!response.ok) return []
+      const data = await response.json()
+      return Array.isArray(data) ? data : []
+    }),
+  )
+  const newsData = newsResults.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value : [],
+  )
 
   // Group news by symbol, cap at 5 per stock
   const newsBySymbol: Record<string, StockNewsItem[]> = {}

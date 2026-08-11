@@ -312,4 +312,32 @@ describe('daily newsletter automation', () => {
       __testOnly.assertMappedNewsletterDailyRuns(['missing-child'], []),
     ).toThrow(NewsletterDailyTerminalReconciliationError)
   })
+
+  it('treats a thin candidate universe as an editorial exception, not a retryable stage error', () => {
+    // Retrying cannot manufacture stories the market did not produce, so this
+    // must not burn the stage-error budget and strand the run in `failed`
+    // (which pins the health endpoint at 503 for the rest of the day).
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'newsletters',
+        'Only 16 candidates passed the current-news quality gate; 40 are required for this run.',
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps genuine stage failures on the retry path', () => {
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'newsletters',
+        'Could not load WIIM candidates: connection reset',
+      ),
+    ).toBe(false)
+    // Same message from a different stage is not the editorial shortfall.
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'summaries',
+        'Only 16 candidates passed the current-news quality gate; 40 are required for this run.',
+      ),
+    ).toBe(false)
+  })
 })

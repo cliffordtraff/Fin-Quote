@@ -62,6 +62,20 @@ const NEWSLETTER_BATCH_SIZE = 3
 const MAX_SOURCE_ATTEMPTS = 2
 const MAX_STAGE_ERRORS = 3
 
+/**
+ * A thin candidate universe is an editorial condition, not a broken pipeline:
+ * retrying cannot manufacture stories that the market did not produce. Treating
+ * it as a stage error burned through the retry budget and left the run terminal
+ * `failed`, which pinned /api/health/newsletter at 503 for the rest of the day.
+ */
+function isNewsletterQualityGateShortfall(
+  stage: NewsletterDailyAutomationStage,
+  message: string,
+): boolean {
+  return stage === 'newsletters' &&
+    /^Only \d+ candidates passed the current-news quality gate; \d+ are required for this run\.$/.test(message)
+}
+
 type AutomationRow =
   Database['public']['Tables']['newsletter_daily_automation_runs']['Row']
 
@@ -1597,6 +1611,30 @@ export async function advanceNewsletterDailyAutomation(input: {
     }
     const failedStage = current.stage
     const message = error instanceof Error ? error.message : String(error)
+    if (isNewsletterQualityGateShortfall(failedStage, message)) {
+      const completedAt = new Date().toISOString()
+      current = await updateRun(current.id, leaseToken, {
+        status: 'partial',
+        stage: 'completed',
+        last_error: message,
+        completed_at: completedAt,
+        metadata_json: {
+          ...current.metadata,
+          exceptionRequired: 'approved_daily_candidate_set',
+          exceptionRecordedAt: completedAt,
+          lastFailureStage: failedStage,
+        } as Json,
+      }, AbortSignal.timeout(5_000))
+      try {
+        current = await ensureNewsletterDailyTerminalNotification(
+          current,
+          AbortSignal.timeout(5_000),
+        )
+      } catch {
+        // A later scheduled invocation will retry the terminal notification.
+      }
+      return { claimed: true, action: 'quality-gate-exception-required', run: current }
+    }
     const stageErrors = stringNumberMap(current.metadata.stageErrorCounts)
     const stageErrorCount = (stageErrors[failedStage] ?? 0) + 1
     stageErrors[failedStage] = stageErrorCount
@@ -1636,6 +1674,7 @@ export async function advanceNewsletterDailyAutomation(input: {
 
 export const __testOnly = {
   aggregateNewsletterDailyTerminalState,
+  isNewsletterQualityGateShortfall,
   assertMappedNewsletterDailyRuns,
   hasNewsletterDailyTerminalDrift,
   mapRow,

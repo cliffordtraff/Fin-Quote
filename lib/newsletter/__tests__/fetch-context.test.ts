@@ -105,12 +105,75 @@ describe('newsletter market context', () => {
 
     expect(fetchMock).toHaveBeenCalled()
     expect(quoteRequests.length).toBeGreaterThan(1)
-    expect(context.candidates).toHaveLength(50)
+    expect(context.candidates).toHaveLength(150)
     expect(new Set(context.candidates.map(({ symbol }) => symbol)).size).toBe(
-      50,
+      150,
     )
     expect(context.candidates.map(({ symbol }) => symbol)).toEqual(
       expect.arrayContaining(actives.map(({ symbol }) => symbol)),
     )
+  })
+
+  it('enriches news well beyond the top movers so a filler-heavy pool is not stuck on watch_only', async () => {
+    const actives = ['AAPL', 'CCL', 'INTC'].map((symbol, index) => ({
+      symbol,
+      name: symbol,
+      price: 100 + index,
+      change: index / 10,
+      changesPercentage: index / 10,
+    }))
+    const newsTickers: string[][] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/stock_market/actives')) return jsonResponse(actives)
+      if (url.includes('/stock_news')) {
+        const tickers = new URL(url).searchParams.get('tickers') ?? ''
+        const batch = tickers.split(',').filter(Boolean)
+        newsTickers.push(batch)
+        return jsonResponse(
+          batch.map((symbol) => ({
+            symbol,
+            title: `${symbol} headline`,
+            text: 'body',
+            url: `https://example.com/${symbol}`,
+            publishedDate: '2026-08-11',
+            site: 'example',
+          })),
+        )
+      }
+      if (
+        url.includes('/stock_market/gainers') ||
+        url.includes('/stock_market/losers') ||
+        url.includes('/earning_calendar')
+      ) {
+        return jsonResponse([])
+      }
+      if (url.includes('/api/v3/quote/')) {
+        const symbols = url.split('/api/v3/quote/')[1].split('?')[0].split(',')
+        return jsonResponse(
+          symbols.map((symbol, index) => ({
+            symbol,
+            name: `Company ${symbol}`,
+            price: 50 + index,
+            change: index % 2 === 0 ? index : -index,
+            changesPercentage: index % 2 === 0 ? index : -index,
+          })),
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const context = await fetchMarketContext()
+
+    // Batched rather than a single 15-ticker request.
+    expect(newsTickers.length).toBeGreaterThan(1)
+    const covered = newsTickers.flat()
+    expect(covered.length).toBe(60)
+    expect(new Set(covered).size).toBe(60)
+    // Every request stays inside the per-request ticker budget.
+    for (const batch of newsTickers) {
+      expect(batch.length).toBeLessThanOrEqual(15)
+    }
+    expect(Object.keys(context.newsBySymbol).length).toBe(60)
   })
 })
