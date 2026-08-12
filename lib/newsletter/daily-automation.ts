@@ -76,6 +76,12 @@ function isNewsletterQualityGateShortfall(
     /^Only \d+ candidates passed the current-news quality gate; \d+ are required for this run\.$/.test(message)
 }
 
+function requiresApprovedDailyCandidateSetException(
+  metadata: Record<string, unknown>,
+): boolean {
+  return metadata.exceptionRequired === 'approved_daily_candidate_set'
+}
+
 type AutomationRow =
   Database['public']['Tables']['newsletter_daily_automation_runs']['Row']
 
@@ -1282,6 +1288,27 @@ async function notifyNewsletterMorningCompletion(
         : `session:${scope.sessionId}`
       const dailyRunId = runIds[scopeKey]
       if (!dailyRunId) {
+        if (requiresApprovedDailyCandidateSetException(run.metadata)) {
+          await createNewsletterNotification(scope, {
+            marketDate: run.marketDate,
+            type: 'morning_completed',
+            severity: 'warning',
+            title: 'Morning report needs an editorial exception',
+            message: run.lastError ??
+              'The report did not meet the configured candidate threshold. Review and approve a date-scoped candidate set before creating a draft.',
+            actionUrl: '/newsletter/morning-review',
+            metadata: {
+              automationRunId: run.id,
+              exceptionRequired: run.metadata.exceptionRequired,
+              candidateCount: run.candidateCount,
+              summaryGeneratedCount: run.summaryGeneratedCount,
+              deliveryIntent: 'none',
+            },
+            dedupeKey: `morning-exception-required:${run.marketDate}`,
+            signal,
+          })
+          return
+        }
         throw new Error(`Missing newsletter run for ${scopeKey}.`)
       }
       const dailyRun = await getNewsletterDailyRun(scope, dailyRunId, signal)
@@ -1680,6 +1707,7 @@ export const __testOnly = {
   mapRow,
   stringNumberMap,
   newsletterRunIds,
+  requiresApprovedDailyCandidateSetException,
   retryableStage,
   loadFinvizCoverage,
   buildWhyMovedDiscoveriesFromWiim,

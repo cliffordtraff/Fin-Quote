@@ -100,6 +100,20 @@ describe('daily newsletter automation', () => {
     ).toEqual({ 'owner:1': 'run-1' })
   })
 
+  it('allows a terminal notification without a child run only for the approved editorial exception', () => {
+    expect(
+      __testOnly.requiresApprovedDailyCandidateSetException({
+        exceptionRequired: 'approved_daily_candidate_set',
+      }),
+    ).toBe(true)
+    expect(__testOnly.requiresApprovedDailyCandidateSetException({})).toBe(false)
+    expect(
+      __testOnly.requiresApprovedDailyCandidateSetException({
+        exceptionRequired: 'anything_else',
+      }),
+    ).toBe(false)
+  })
+
   it('turns the persisted WIIM snapshot into a durable two-sided editorial inbox', () => {
     const rankedCandidates = [
       ['AAA', 12, 'Alpha', 'found'],
