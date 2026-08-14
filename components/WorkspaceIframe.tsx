@@ -189,7 +189,7 @@ function syncWorkspaceState(
 }
 
 export default function WorkspaceIframe() {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? '/'
   const router = useRouter()
   const searchParams = useSearchParams()
   const { theme } = useTheme()
@@ -214,7 +214,7 @@ export default function WorkspaceIframe() {
   const isWorkspaceRoute = workspaceMode !== null
   const requestedTheme: ThemeMode = theme === 'dark' ? 'dark' : 'light'
   const routeSymbol = useMemo(() => {
-    return normalizeSymbol(searchParams.get('symbol') || getStockRouteSymbol(pathname))
+    return normalizeSymbol(searchParams?.get('symbol') || getStockRouteSymbol(pathname))
   }, [pathname, searchParams])
   const chartingUrl = process.env.NEXT_PUBLIC_CHARTING_URL?.trim() || ''
   const chartingOrigin = useMemo(() => getOrigin(chartingUrl), [chartingUrl])
@@ -378,7 +378,11 @@ export default function WorkspaceIframe() {
         pendingSearchMessageRef.current = null
         setSearchOverlayActive(false)
         if (!symbol) return
-        router.push(buildSymbolDestination(pathname, searchParams, symbol))
+        router.push(buildSymbolDestination(
+          pathname,
+          searchParams ?? new URLSearchParams(),
+          symbol,
+        ))
         return
       }
 

@@ -28,14 +28,14 @@ function AuthPageContent() {
   const [message, setMessage] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = resolveAuthRedirect(searchParams.get('redirect'))
+  const redirectTo = resolveAuthRedirect(searchParams?.get('redirect'))
   const supabase = createClient()
 
   // Show error from callback if present
-  const callbackError = searchParams.get('error')
+  const callbackError = searchParams?.get('error')
 
   // Check if coming from signup link
-  const isSignUpParam = searchParams.get('signup') === 'true'
+  const isSignUpParam = searchParams?.get('signup') === 'true'
   if (isSignUpParam && !isSignUp) {
     setIsSignUp(true)
   }

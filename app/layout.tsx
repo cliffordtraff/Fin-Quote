@@ -13,9 +13,11 @@ import { CurrentUserProvider } from '@/components/CurrentUserProvider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'The Intraday | Market Dashboard, Stock Analysis, and Charting Workspace',
+  metadataBase: new URL('https://markets.theintraday.com'),
+  title: 'The Intraday Markets | Market Dashboard, Stock Analysis, and Charting Workspace',
   description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
-  applicationName: 'The Intraday',
+  applicationName: 'The Intraday Markets',
+  alternates: { canonical: '/' },
   keywords: [
     'stocks',
     'market dashboard',
@@ -25,14 +27,14 @@ export const metadata: Metadata = {
     'insider trading',
   ],
   openGraph: {
-    title: 'The Intraday',
+    title: 'The Intraday Markets',
     description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
     siteName: 'The Intraday',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'The Intraday',
+    title: 'The Intraday Markets',
     description: 'Real-time market dashboards, stock research, financial metrics, charting workspace, and AI-assisted analysis.',
   },
 }

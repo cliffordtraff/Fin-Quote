@@ -390,7 +390,7 @@ ${blockHtml}
                   This newsletter is for informational purposes only and does not constitute investment advice.
                 </p>
                 <p style="margin:0 0 12px 0;font-size:11px;color:${BRAND.textMuted};">
-                  <a href="https://theintraday.com" style="color:${BRAND.sage500};text-decoration:underline;">theintraday.com</a>
+                  <a href="https://markets.theintraday.com" style="color:${BRAND.sage500};text-decoration:underline;">markets.theintraday.com</a>
                 </p>
                 <p data-preview-only="true" style="margin:0;font-size:11px;color:${BRAND.textMuted};line-height:1.5;border-top:1px solid ${BRAND.cream300};padding-top:12px;">
                   Preview only — not sendable HTML. Sync the reviewed draft to Beehiiv so the verified sender address, subscription preferences, and one-click unsubscribe controls are added automatically.

@@ -16,7 +16,7 @@
  *   npx tsx scripts/capture-chart.ts --spec <base64> --out chart.png
  *
  *   # With custom base URL (defaults to http://localhost:3000)
- *   npx tsx scripts/capture-chart.ts --spec <base64> --base-url https://theintraday.com
+ *   npx tsx scripts/capture-chart.ts --spec <base64> --base-url https://markets.theintraday.com
  *
  * Prerequisites:
  *   npm install puppeteer  (or: npx puppeteer install)

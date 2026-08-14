@@ -45,8 +45,8 @@ export function decodeChartSpec(encoded: string): ChartExportSpec | null {
  *   buildExportUrl({ stocks: ['AAPL'], metrics: ['revenue', 'net_income'] })
  *   → "/charts/export?spec=eyJzdG9ja3MiOlsiQUFQTCJdLCJtZXRyaWNzIjpbInJldmVudWUiLCJuZXRfaW5jb21lIl19"
  *
- *   buildExportUrl(spec, 'https://theintraday.com')
- *   → "https://theintraday.com/charts/export?spec=..."
+ *   buildExportUrl(spec, 'https://markets.theintraday.com')
+ *   → "https://markets.theintraday.com/charts/export?spec=..."
  */
 export function buildExportUrl(spec: ChartExportSpec, baseUrl = ''): string {
   const encoded = encodeChartSpec(spec)

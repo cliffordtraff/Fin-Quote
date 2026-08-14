@@ -3652,3 +3652,29 @@ newsletter health route returned HTTP `200`, health reported `healthy`, and
 the exact deployment window contained zero error-level and zero 5xx log
 entries. The smoke test did not submit a model request and no newsletter
 canary was sent.
+
+---
+
+## The Brand Became A Building, Not A Single Room
+
+The public `theintraday.com` address is now the front door for The Intraday's
+independent trading-community research business. This market application did
+not disappear; it moved into its own clearly labeled room at
+`markets.theintraday.com`. The charting engine remains next door at
+`charts.theintraday.com`.
+
+That separation matters operationally. The root website can now evolve as a
+focused editorial and affiliate product without inheriting market-data costs,
+authentication state, or newsletter jobs. The market app keeps its own
+metadata, OAuth callback, host-only cookies, cron endpoints, and chart embed
+origin. Think of it as moving a busy workshop behind the storefront: customers
+still know it belongs to The Intraday, but sawdust no longer lands on the sales
+counter.
+
+The migration order is deliberate: establish and verify the markets hostname,
+move automated callers and authentication, then reassign the root domain. A
+new Supabase migration recreates the automation functions with the markets
+hostname, while the public site retains redirects for old stock, dashboard,
+newsletter, and account URLs. This avoids the classic domain-cutover mistake
+where the homepage looks correct but background jobs quietly call the wrong
+application.

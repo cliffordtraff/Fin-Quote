@@ -283,9 +283,9 @@ function EmptyArchiveState({
 
 export default function NewsletterDraftsHome() {
   const router = useRouter()
-  const pathname = usePathname()
+  const pathname = usePathname() ?? '/newsletter/editor'
   const searchParams = useSearchParams()
-  const searchParamsString = searchParams.toString()
+  const searchParamsString = searchParams?.toString() ?? ''
   const [filters, setFilters] = useState<ArchiveFilters>(() =>
     readFilters(new URLSearchParams(searchParamsString)),
   )

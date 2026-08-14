@@ -439,7 +439,7 @@ export default function Navigation() {
             </button>
 
             <p className="min-w-0 flex-1 truncate px-3 text-xs font-semibold text-gray-600 dark:text-gray-300">
-              {activeItem?.label ?? 'Explore The Intraday'}
+              {activeItem?.label ?? 'Explore The Intraday Markets'}
             </p>
           </div>
 

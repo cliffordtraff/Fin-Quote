@@ -31,7 +31,7 @@ export default function Logo({ size = 'md', showText = true, href = '/' }: LogoP
       </div>
       {showText && (
         <span className={`${sizes[size].text} font-medium text-gray-900 dark:text-white`}>
-          The Intraday
+          The Intraday Markets
         </span>
       )}
     </div>

@@ -8,9 +8,9 @@ const iframeWindow = { postMessage } as unknown as Window
 function expectedHostOrigin() {
   try {
     const origin = new URL(window.location.href).origin
-    return origin === 'null' ? 'https://theintraday.com' : origin
+    return origin === 'null' ? 'https://markets.theintraday.com' : origin
   } catch {
-    return 'https://theintraday.com'
+    return 'https://markets.theintraday.com'
   }
 }
 

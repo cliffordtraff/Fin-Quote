@@ -14,7 +14,7 @@
  * Usage:
  *   npx tsx scripts/generate-newsletter.ts                    # AI picks stock
  *   npx tsx scripts/generate-newsletter.ts --ticker AAPL      # Manual override
- *   npx tsx scripts/generate-newsletter.ts --ticker MSFT --base-url https://theintraday.com
+ *   npx tsx scripts/generate-newsletter.ts --ticker MSFT --base-url https://markets.theintraday.com
  *   npx tsx scripts/generate-newsletter.ts --output-dir ./newsletters
  */
 

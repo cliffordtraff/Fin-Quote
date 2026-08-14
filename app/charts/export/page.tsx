@@ -45,16 +45,16 @@ function ChartExportContent() {
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [embedViewportHeight, setEmbedViewportHeight] = useState(520)
-  const isEmbedded = searchParams.get('embed') === 'true'
-  const hideBranding = searchParams.get('hideBranding') === 'true'
-  const autoSize = searchParams.get('autosize') === 'true'
+  const isEmbedded = searchParams?.get('embed') === 'true'
+  const hideBranding = searchParams?.get('hideBranding') === 'true'
+  const autoSize = searchParams?.get('autosize') === 'true'
   const isAutoSizedEmbed = isEmbedded && autoSize
-  const requestedTheme = searchParams.get('theme') === 'dark' ? 'dark' : 'light'
+  const requestedTheme = searchParams?.get('theme') === 'dark' ? 'dark' : 'light'
   const isDarkTheme = requestedTheme === 'dark'
 
   // Parse spec from URL (stable across renders since URL doesn't change)
   const spec = useMemo(
-    () => parseSpecFromParams(searchParams),
+    () => searchParams ? parseSpecFromParams(searchParams) : null,
     [searchParams]
   )
 
@@ -351,7 +351,7 @@ function ChartExportContent() {
       {!hideBranding && (
         <div className={footerClassName}>
           <span className={`${isEmbedded ? 'text-[10px]' : 'text-base'} ${subtitleTextClass}`}>
-            The Intraday &middot; theintraday.com
+            The Intraday Markets &middot; markets.theintraday.com
           </span>
         </div>
       )}

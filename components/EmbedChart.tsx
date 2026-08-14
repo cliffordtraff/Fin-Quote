@@ -7,7 +7,7 @@ interface EmbedChartProps {
 }
 
 const DEFAULT_CHARTING_URL = 'https://charts.theintraday.com'
-const DEFAULT_HOST_ORIGIN = 'https://theintraday.com'
+const DEFAULT_HOST_ORIGIN = 'https://markets.theintraday.com'
 const READY_TIMEOUT_MS = 12_000
 const LOCAL_READY_TIMEOUT_MS = 5_000
 const PM_VERSION = 1

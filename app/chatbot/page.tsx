@@ -213,7 +213,7 @@ function AskPageContent() {
   const [showFinancialsModal, setShowFinancialsModal] = useState(false)
   const supabase = createClient()
   const authFenceRef = useRef<ChatbotClientAuthFence | null>(null)
-  const requestedConversationId = searchParams.get('id')
+  const requestedConversationId = searchParams?.get('id')
   const authenticatedUserId = user?.id ?? null
   const requestedHistoryScope = !authResolved
     ? 'auth:pending'

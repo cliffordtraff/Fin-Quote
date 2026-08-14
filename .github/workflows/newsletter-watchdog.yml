@@ -24,7 +24,7 @@ jobs:
           NEWSLETTER_HEALTH_URL: ${{ vars.NEWSLETTER_HEALTH_URL }}
         run: |
           set -euo pipefail
-          health_url="${NEWSLETTER_HEALTH_URL:-https://www.theintraday.com/api/health/newsletter}"
+          health_url="${NEWSLETTER_HEALTH_URL:-https://markets.theintraday.com/api/health/newsletter}"
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
@@ -65,7 +65,7 @@ jobs:
           DASHBOARD_COMMENTARY_HEALTH_URL: ${{ vars.DASHBOARD_COMMENTARY_HEALTH_URL }}
         run: |
           set -euo pipefail
-          health_url="${DASHBOARD_COMMENTARY_HEALTH_URL:-https://www.theintraday.com/api/health/dashboard-commentary}"
+          health_url="${DASHBOARD_COMMENTARY_HEALTH_URL:-https://markets.theintraday.com/api/health/dashboard-commentary}"
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
