@@ -1,6 +1,6 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
@@ -18,7 +18,10 @@ import {
   markNewsletterCronResponseFailed,
   withNewsletterCronHeartbeat,
 } from '@/lib/newsletter/cron-observability'
-import { getNewsletterAutomationStageBudget } from '@/lib/newsletter/automation-lease'
+import {
+  getNewsletterAutomationStageBudget,
+  NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS,
+} from '@/lib/newsletter/automation-lease'
 import { listEnabledNewsletterDailyScopes } from '@/lib/newsletter/daily-runs'
 
 function isAuthorized(request: NextRequest): boolean {
@@ -101,7 +104,13 @@ async function runAuthorizedNewsletterDaily(
         request.signal,
       )
       if (reconciliation.hasDrift) {
-        const stageBudgetMs = getNewsletterAutomationStageBudget(requestDeadlineAt)
+        const stageBudgetMs = getNewsletterAutomationStageBudget(
+          requestDeadlineAt,
+          Date.now(),
+          existing.stage === 'finviz'
+            ? NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS
+            : undefined,
+        )
         if (stageBudgetMs == null) {
           const reason =
             'Insufficient request budget remains to safely reconcile terminal newsletter state'
@@ -270,7 +279,13 @@ async function runAuthorizedNewsletterDaily(
         run: existing,
       })
     }
-    const stageBudgetMs = getNewsletterAutomationStageBudget(requestDeadlineAt)
+    const stageBudgetMs = getNewsletterAutomationStageBudget(
+      requestDeadlineAt,
+      Date.now(),
+      existing?.stage === 'finviz'
+        ? NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS
+        : undefined,
+    )
     if (stageBudgetMs == null) {
       const reason =
         'Insufficient request budget remains to safely start an automation stage'

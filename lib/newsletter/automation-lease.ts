@@ -1,6 +1,7 @@
 export const NEWSLETTER_AUTOMATION_LEASE_SECONDS = 60
 export const NEWSLETTER_AUTOMATION_LEASE_RENEW_INTERVAL_MS = 10_000
 export const NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS = 42_000
+export const NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS = 100_000
 export const NEWSLETTER_CRON_REQUEST_RESERVE_MS = 10_000
 export const NEWSLETTER_AUTOMATION_MIN_STAGE_BUDGET_MS = 12_000
 
@@ -12,12 +13,13 @@ export const NEWSLETTER_AUTOMATION_MIN_STAGE_BUDGET_MS = 12_000
 export function getNewsletterAutomationStageBudget(
   deadlineAt: number,
   now = Date.now(),
+  maximumBudgetMs = NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
 ): number | null {
   const available = Math.floor(
     deadlineAt - now - NEWSLETTER_CRON_REQUEST_RESERVE_MS,
   )
   if (available < NEWSLETTER_AUTOMATION_MIN_STAGE_BUDGET_MS) return null
-  return Math.min(NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS, available)
+  return Math.min(Math.max(1, maximumBudgetMs), available)
 }
 
 export class NewsletterAutomationLeaseLostError extends Error {

@@ -34,6 +34,7 @@ import { selectNewsletterRecommendedIssues } from './shortlist'
 import {
   NEWSLETTER_AUTOMATION_LEASE_SECONDS,
   NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+  NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS,
   NewsletterAutomationLeaseLostError,
   NewsletterAutomationStageBudgetError,
   runWithNewsletterAutomationLease,
@@ -56,9 +57,9 @@ export { hasFinishedNewsletterMorningReport } from './morning-report-readiness'
 export { getNewsletterDailyAutomationRun }
 
 const TABLE = 'newsletter_daily_automation_runs'
-const FINVIZ_BATCH_SIZE = 2
-const FINVIZ_INTER_REQUEST_PAUSE_MS = 10_000
-const FINVIZ_INTER_REQUEST_JITTER_MS = 6_000
+const FINVIZ_BATCH_SIZE = 4
+const FINVIZ_INTER_REQUEST_PAUSE_MS = 8_000
+const FINVIZ_INTER_REQUEST_JITTER_MS = 4_000
 const FINVIZ_CIRCUIT_COOLDOWN_MS = 45 * 60 * 1_000
 const FINVIZ_MAX_CIRCUIT_TRIPS = 2
 const FINVIZ_DAILY_REQUEST_BUDGET = 550
@@ -1787,12 +1788,15 @@ export async function advanceNewsletterDailyAutomation(input: {
   }
 
   let current = claimed
+  const maximumStageBudgetMs = current.stage === 'finviz'
+    ? NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS
+    : NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS
   const stageBudgetMs = Math.max(
     1,
     Math.min(
-      NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+      maximumStageBudgetMs,
       Math.floor(
-        input.stageBudgetMs ?? NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
+        input.stageBudgetMs ?? maximumStageBudgetMs,
       ),
     ),
   )
@@ -1996,6 +2000,9 @@ export async function advanceNewsletterDailyAutomation(input: {
 }
 
 export const __testOnly = {
+  finvizBatchSize: FINVIZ_BATCH_SIZE,
+  finvizInterRequestPauseMs: FINVIZ_INTER_REQUEST_PAUSE_MS,
+  finvizInterRequestJitterMs: FINVIZ_INTER_REQUEST_JITTER_MS,
   aggregateNewsletterDailyTerminalState,
   isNewsletterQualityGateShortfall,
   assertMappedNewsletterDailyRuns,
