@@ -20,6 +20,26 @@ At its core, the platform does three things:
 
 ## The Architecture (Or: Why We Made These Choices)
 
+### Full-Market WIIM Collection: Slow Beats Clever
+
+Finviz coverage uses a slow morning conveyor rather than burst traffic. The
+daily cron begins at 3:15 AM New York time and advances once per minute. Each
+Finviz invocation fetches at most two symbols sequentially, with 10–16 seconds
+between them, and each symbol gets one physical HTTP attempt per invocation.
+The queue is the reverse of editorial rank so quiet names are handled first and
+the likely newsletter stories are freshest near the 8:00 AM deadline. Progress
+and the physical request count are checkpointed before every request; the run
+has a hard 550-request daily ceiling.
+
+A shared circuit breaker stops the entire conveyor on a 403, 429, recognizable
+access challenge, or a batch of repeated unrecognized failures. It waits 45
+minutes and permits one canary request. A second trip opens the breaker for the
+rest of that run. The worker never rotates proxies or tries to evade access
+controls: incomplete coverage is safer than escalating traffic after Finviz
+signals that it wants requests to stop.
+
+This distinction matters. A parent run can intentionally end as `partial` when it does not meet the configured quality threshold. That is not a migration failure and it does not mean a newsletter was sent. It means the system chose caution. The approved daily candidate-set exception supports a human-approved, date-scoped draft for such a day without quietly lowering the global threshold. It records the source run and explicit candidate IDs, creates a draft only, and leaves Beehiiv scheduling and delivery to an explicit later decision.
+
 ### The Two-Step LLM Flow: Teaching AI to Be Honest
 
 Here's the central problem with AI chatbots that answer financial questions: **LLMs lie.** Not maliciously—they're just really confident about things they made up. Ask GPT about Apple's 2023 revenue and it'll give you a number. It might even be close. But "close" doesn't cut it in finance.

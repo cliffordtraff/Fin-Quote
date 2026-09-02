@@ -1,4 +1,7 @@
-import { getStockWhyMovingData, peekStockWhyMovingCache } from '@/lib/stock-why-moving'
+import {
+  getStockWhyMovingDataOutcome,
+  peekStockWhyMovingCache,
+} from '@/lib/stock-why-moving'
 
 export type WarmProfile = 'gentle' | 'balanced' | 'aggressive'
 
@@ -69,6 +72,7 @@ export interface WarmSymbolOptions {
   forceRefresh: boolean
   perSymbolPauseMs: number
   jitterMs: number
+  liveAttempts?: number
   pass?: 1 | 2
   signal?: AbortSignal
 }
@@ -167,17 +171,24 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
     }
   }
 
-  const result = await getStockWhyMovingData(symbol, {
+  const outcome = await getStockWhyMovingDataOutcome(symbol, {
     forceRefresh: options.forceRefresh,
+    maxLiveAttempts: options.liveAttempts,
     signal: options.signal,
   })
   options.signal?.throwIfAborted()
+  const result = outcome.result
+  const liveErrorMessage = outcome.liveErrorMessage ?? null
   const liveResult: WarmResult = {
     symbol,
-    status: result.status,
+    status: liveErrorMessage ? 'error' : result.status,
     displayText: result.displayText,
-    errorMessage: result.errorMessage,
-    source: 'live',
+    errorMessage: liveErrorMessage ?? result.errorMessage,
+    source:
+      outcome.disposition === 'fresh_cache' ||
+      outcome.disposition === 'stale_fallback'
+        ? 'cache'
+        : 'live',
     pass,
   }
 

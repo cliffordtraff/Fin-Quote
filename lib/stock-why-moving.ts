@@ -24,6 +24,18 @@ export interface StockWhyMovingResult {
   errorMessage: string | null
 }
 
+export type StockWhyMovingLoadDisposition =
+  | 'fresh_cache'
+  | 'live'
+  | 'stale_fallback'
+  | 'live_error'
+
+export interface StockWhyMovingLoadOutcome {
+  result: StockWhyMovingResult
+  disposition: StockWhyMovingLoadDisposition
+  liveErrorMessage?: string | null
+}
+
 interface FinvizWhyMovingPayload {
   id?: number
   ticker?: string
@@ -104,6 +116,14 @@ function isLikelyFinvizQuotePage(html: string): boolean {
   const hasFeatureFlags = html.includes('featureFlags')
 
   return hasQuoteTitle && (hasFinvizBranding || hasWhyMovingFeature || hasFeatureFlags)
+}
+
+function isLikelyFinvizAccessChallenge(html: string): boolean {
+  const normalized = html.toLowerCase()
+  return normalized.includes('just a moment') ||
+    normalized.includes('access denied') ||
+    normalized.includes('cf-chl-') ||
+    normalized.includes('captcha')
 }
 
 function sleep(ms: number, signal?: AbortSignal) {
@@ -407,11 +427,13 @@ async function writeCachedWhyMoving(
 async function fetchFinvizWhyMoving(
   symbol: string,
   signal?: AbortSignal,
+  maxAttempts = 3,
 ): Promise<StockWhyMovingRecord> {
   const normalized = normalizeSymbol(symbol)
   const sourceUrl = buildFinvizQuoteUrl(normalized)
+  const attemptLimit = Math.max(1, Math.min(3, Math.floor(maxAttempts)))
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < attemptLimit; attempt += 1) {
     signal?.throwIfAborted()
     const fetchedAt = new Date().toISOString()
 
@@ -429,7 +451,35 @@ async function fetchFinvizWhyMoving(
       })
 
       if (!response.ok) {
-        if (attempt < 2) {
+        if (response.body) {
+          try {
+            await response.body.cancel(
+              new Error(`Finviz returned HTTP ${response.status}.`),
+            )
+          } catch {
+            // The response has already settled; preserve the original status.
+          }
+        }
+        signal?.throwIfAborted()
+        if (response.status === 403 || response.status === 429) {
+          return {
+            symbol: normalized,
+            status: 'error',
+            displayText: null,
+            headline: null,
+            summary: null,
+            bulletPoints: [],
+            sentiment: null,
+            source: null,
+            sourceTimestamp: null,
+            isCatalyst: null,
+            sourceUrl,
+            fetchedAt,
+            errorMessage: `Finviz blocking response ${response.status}`,
+            rawPayload: null,
+          }
+        }
+        if (attempt < attemptLimit - 1) {
           await sleep(250 * (attempt + 1), signal)
           continue
         }
@@ -454,6 +504,24 @@ async function fetchFinvizWhyMoving(
 
       const html = await response.text()
       signal?.throwIfAborted()
+      if (isLikelyFinvizAccessChallenge(html)) {
+        return {
+          symbol: normalized,
+          status: 'error',
+          displayText: null,
+          headline: null,
+          summary: null,
+          bulletPoints: [],
+          sentiment: null,
+          source: null,
+          sourceTimestamp: null,
+          isCatalyst: null,
+          sourceUrl,
+          fetchedAt,
+          errorMessage: 'Finviz access challenge detected',
+          rawPayload: null,
+        }
+      }
       const parsed = parseFinvizWhyMovingHtml(html)
 
       if (!parsed) {
@@ -476,7 +544,7 @@ async function fetchFinvizWhyMoving(
           }
         }
 
-        if (attempt < 2) {
+        if (attempt < attemptLimit - 1) {
           await sleep(250 * (attempt + 1), signal)
           continue
         }
@@ -529,7 +597,7 @@ async function fetchFinvizWhyMoving(
       }
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error
-      if (attempt < 2) {
+      if (attempt < attemptLimit - 1) {
         await sleep(250 * (attempt + 1), signal)
         continue
       }
@@ -571,43 +639,94 @@ async function fetchFinvizWhyMoving(
   }
 }
 
-export async function getStockWhyMovingData(
+function selectNewestUsableCachedRecord(
+  records: Array<StockWhyMovingRecord | null>,
+): StockWhyMovingRecord | null {
+  return records.reduce<StockWhyMovingRecord | null>((selected, record) => {
+    if (!record || record.status === 'error') return selected
+    if (!selected) return record
+    const selectedAt = Date.parse(selected.fetchedAt)
+    const recordAt = Date.parse(record.fetchedAt)
+    if (!Number.isFinite(recordAt)) return selected
+    if (!Number.isFinite(selectedAt) || recordAt > selectedAt) return record
+    if (
+      recordAt === selectedAt &&
+      record.status === 'found' &&
+      selected.status !== 'found'
+    ) {
+      return record
+    }
+    return selected
+  }, null)
+}
+
+export async function getStockWhyMovingDataOutcome(
   symbol: string,
-  options?: { forceRefresh?: boolean; signal?: AbortSignal }
-): Promise<StockWhyMovingResult> {
+  options?: {
+    forceRefresh?: boolean
+    maxLiveAttempts?: number
+    signal?: AbortSignal
+  }
+): Promise<StockWhyMovingLoadOutcome> {
   options?.signal?.throwIfAborted()
   const normalized = normalizeSymbol(symbol)
-  const inMemoryCached = readInMemoryWhyMoving(normalized)
-
-  if (!options?.forceRefresh && inMemoryCached && isFreshRecord(inMemoryCached)) {
-    return stripRawPayload(inMemoryCached)
-  }
-
   const cached = await readCachedWhyMoving(normalized, options?.signal)
   options?.signal?.throwIfAborted()
+  const inMemoryCached = readInMemoryWhyMoving(normalized)
+  const fallbackCached = selectNewestUsableCachedRecord([inMemoryCached, cached])
 
-  if (!options?.forceRefresh && cached && isFreshRecord(cached)) {
-    writeInMemoryWhyMoving(cached)
-    return stripRawPayload(cached)
+  if (!options?.forceRefresh && fallbackCached && isFreshRecord(fallbackCached)) {
+    writeInMemoryWhyMoving(fallbackCached)
+    return {
+      result: stripRawPayload(fallbackCached),
+      disposition: 'fresh_cache',
+      liveErrorMessage: null,
+    }
   }
 
-  const fallbackCached = cached ?? inMemoryCached
-  const live = await fetchFinvizWhyMoving(normalized, options?.signal)
+  const live = await fetchFinvizWhyMoving(
+    normalized,
+    options?.signal,
+    options?.maxLiveAttempts,
+  )
   options?.signal?.throwIfAborted()
 
   if (live.status === 'error') {
     if (fallbackCached) {
-      return stripRawPayload(fallbackCached)
+      return {
+        result: stripRawPayload(fallbackCached),
+        disposition: 'stale_fallback',
+        liveErrorMessage: live.errorMessage,
+      }
     }
 
-    writeInMemoryWhyMoving(live)
-    await writeCachedWhyMoving(live, options?.signal)
-    options?.signal?.throwIfAborted()
-    return stripRawPayload(live)
+    // Transport, cancellation, and parse failures are not authoritative
+    // market facts. Return the typed error to the caller, but never harden it
+    // into either the process cache or the service-role-backed table.
+    return {
+      result: stripRawPayload(live),
+      disposition: 'live_error',
+      liveErrorMessage: live.errorMessage,
+    }
   }
 
   writeInMemoryWhyMoving(live)
   await writeCachedWhyMoving(live, options?.signal)
   options?.signal?.throwIfAborted()
-  return stripRawPayload(live)
+  return {
+    result: stripRawPayload(live),
+    disposition: 'live',
+    liveErrorMessage: null,
+  }
+}
+
+export async function getStockWhyMovingData(
+  symbol: string,
+  options?: {
+    forceRefresh?: boolean
+    maxLiveAttempts?: number
+    signal?: AbortSignal
+  }
+): Promise<StockWhyMovingResult> {
+  return (await getStockWhyMovingDataOutcome(symbol, options)).result
 }

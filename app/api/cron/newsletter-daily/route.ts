@@ -242,7 +242,7 @@ async function runAuthorizedNewsletterDaily(
     if (!window.shouldRun && !force) {
       const reason = window.hasEnded
         ? 'Morning recovery window ended at noon ET'
-        : `Automation begins at ${window.startHour}:00 AM ET`
+        : `Automation begins at ${window.startHour}:${String(window.startMinute).padStart(2, '0')} AM ET`
       logNewsletterCron({
         job: 'daily',
         event: 'run-skipped',

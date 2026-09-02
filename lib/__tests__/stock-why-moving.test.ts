@@ -118,6 +118,57 @@ describe('isFreshWhyMovingResult', () => {
 })
 
 describe('stock why-moving cancellation', () => {
+  it.each([403, 429])('does not retry a Finviz blocking response (%s)', async (status) => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getStockWhyMovingData('BLOCKED', { forceRefresh: true }),
+    ).resolves.toMatchObject({
+      status: 'error',
+      errorMessage: `Finviz blocking response ${status}`,
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not retry a recognizable access-challenge page', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('<html><title>Just a moment...</title><div>cf-chl-test</div></html>'),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getStockWhyMovingData('CHALLENGE', { forceRefresh: true }),
+    ).resolves.toMatchObject({
+      status: 'error',
+      errorMessage: 'Finviz access challenge detected',
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('allows the conveyor to limit a symbol to one physical attempt', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 503 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getStockWhyMovingData('ONEPASS', {
+        forceRefresh: true,
+        maxLiveAttempts: 1,
+      }),
+    ).resolves.toMatchObject({ status: 'error' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('interrupts an in-flight Finviz attempt when the stage lease aborts', async () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')
