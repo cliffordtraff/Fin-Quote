@@ -440,7 +440,7 @@ describe('newsletter daily cron route', () => {
     )
   })
 
-  it('allows four sequential Finviz requests to finish without a timeout', () => {
+  it('allows six sequential Finviz requests to finish without a timeout', () => {
     expect(maxDuration).toBe(120)
   })
 })

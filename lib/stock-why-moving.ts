@@ -279,7 +279,9 @@ function toCacheInsert(record: StockWhyMovingRecord): CacheInsert {
     source: record.source,
     source_timestamp: record.sourceTimestamp,
     is_catalyst: record.isCatalyst,
-    raw_payload: record.rawPayload,
+    // Production intentionally rejects stored provider documents. Retain only
+    // the bounded display projection used by downstream WIIM consumers.
+    raw_payload: null,
     source_url: record.sourceUrl,
     error_message: record.errorMessage,
     fetched_at: record.fetchedAt,
@@ -287,8 +289,21 @@ function toCacheInsert(record: StockWhyMovingRecord): CacheInsert {
 }
 
 function stripRawPayload(record: StockWhyMovingRecord): StockWhyMovingResult {
-  const { rawPayload: _rawPayload, ...result } = record
-  return result
+  return {
+    symbol: record.symbol,
+    status: record.status,
+    displayText: record.displayText,
+    headline: record.headline,
+    summary: record.summary,
+    bulletPoints: [...record.bulletPoints],
+    sentiment: record.sentiment,
+    source: record.source,
+    sourceTimestamp: record.sourceTimestamp,
+    isCatalyst: record.isCatalyst,
+    sourceUrl: record.sourceUrl,
+    fetchedAt: record.fetchedAt,
+    errorMessage: record.errorMessage,
+  }
 }
 
 function isFreshRecord(record: StockWhyMovingRecord): boolean {
@@ -735,4 +750,8 @@ export async function getStockWhyMovingData(
   }
 ): Promise<StockWhyMovingResult> {
   return (await getStockWhyMovingDataOutcome(symbol, options)).result
+}
+
+export const __testOnly = {
+  toCacheInsert,
 }

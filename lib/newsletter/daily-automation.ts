@@ -57,9 +57,9 @@ export { hasFinishedNewsletterMorningReport } from './morning-report-readiness'
 export { getNewsletterDailyAutomationRun }
 
 const TABLE = 'newsletter_daily_automation_runs'
-const FINVIZ_BATCH_SIZE = 4
+const FINVIZ_BATCH_SIZE = 6
 const FINVIZ_INTER_REQUEST_PAUSE_MS = 8_000
-const FINVIZ_INTER_REQUEST_JITTER_MS = 4_000
+const FINVIZ_INTER_REQUEST_JITTER_MS = 2_000
 const FINVIZ_CIRCUIT_COOLDOWN_MS = 45 * 60 * 1_000
 const FINVIZ_MAX_CIRCUIT_TRIPS = 2
 const FINVIZ_DAILY_REQUEST_BUDGET = 550

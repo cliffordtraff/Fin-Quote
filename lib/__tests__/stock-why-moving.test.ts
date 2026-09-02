@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  __testOnly,
   buildFinvizQuoteUrl,
   buildWhyMovingDisplayText,
   isFreshWhyMovingResult,
@@ -25,6 +26,27 @@ describe('buildFinvizQuoteUrl', () => {
 })
 
 describe('stock-why-moving parser', () => {
+  it('stores only the bounded display projection', () => {
+    const insert = __testOnly.toCacheInsert({
+      symbol: 'AAPL',
+      status: 'found',
+      displayText: 'Apple moved after an earnings update.',
+      headline: 'Apple earnings update',
+      summary: 'A bounded summary.',
+      bulletPoints: ['One bounded point.'],
+      sentiment: 'good',
+      source: 'news_summary',
+      sourceTimestamp: '2026-09-02T12:00:00.000Z',
+      isCatalyst: true,
+      sourceUrl: 'https://finviz.com/quote.ashx?t=AAPL&p=d',
+      fetchedAt: '2026-09-02T12:00:00.000Z',
+      errorMessage: null,
+      rawPayload: { providerDocument: 'must not be retained' },
+    })
+
+    expect(insert.raw_payload).toBeNull()
+  })
+
   it('parses the embedded Finviz why-moving payload', () => {
     const html = `
       <html>
