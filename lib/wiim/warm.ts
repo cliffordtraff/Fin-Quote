@@ -1,4 +1,7 @@
-import { getStockWhyMovingData, peekStockWhyMovingCache } from '@/lib/stock-why-moving'
+import {
+  getStockWhyMovingDataOutcome,
+  peekStockWhyMovingCache,
+} from '@/lib/stock-why-moving'
 
 export type WarmProfile = 'gentle' | 'balanced' | 'aggressive'
 
@@ -48,6 +51,8 @@ export interface WarmResult {
   symbol: string
   status: WarmResultStatus
   displayText: string | null
+  sourceTimestamp?: string | null
+  fetchedAt?: string | null
   errorMessage: string | null
   source: 'cache' | 'live' | 'none'
   pass: 1 | 2
@@ -69,6 +74,7 @@ export interface WarmSymbolOptions {
   forceRefresh: boolean
   perSymbolPauseMs: number
   jitterMs: number
+  liveAttempts?: number
   pass?: 1 | 2
   signal?: AbortSignal
 }
@@ -160,6 +166,8 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
         symbol,
         status: 'skipped_fresh',
         displayText: cached.result.displayText,
+        sourceTimestamp: cached.result.sourceTimestamp,
+        fetchedAt: cached.result.fetchedAt,
         errorMessage: null,
         source: 'cache',
         pass,
@@ -167,17 +175,26 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
     }
   }
 
-  const result = await getStockWhyMovingData(symbol, {
+  const outcome = await getStockWhyMovingDataOutcome(symbol, {
     forceRefresh: options.forceRefresh,
+    maxLiveAttempts: options.liveAttempts,
     signal: options.signal,
   })
   options.signal?.throwIfAborted()
+  const result = outcome.result
+  const liveErrorMessage = outcome.liveErrorMessage ?? null
   const liveResult: WarmResult = {
     symbol,
-    status: result.status,
+    status: liveErrorMessage ? 'error' : result.status,
     displayText: result.displayText,
-    errorMessage: result.errorMessage,
-    source: 'live',
+    sourceTimestamp: result.sourceTimestamp,
+    fetchedAt: result.fetchedAt,
+    errorMessage: liveErrorMessage ?? result.errorMessage,
+    source:
+      outcome.disposition === 'fresh_cache' ||
+      outcome.disposition === 'stale_fallback'
+        ? 'cache'
+        : 'live',
     pass,
   }
 

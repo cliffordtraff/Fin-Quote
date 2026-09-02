@@ -23,6 +23,59 @@ function news(publishedDate: string) {
 }
 
 describe('generated stock why moving JSON parsing', () => {
+  it('uses Finviz as a discovery lead while requiring independent support', () => {
+    const prompt = __testOnly.buildPrompt({
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      summaryDate: '2026-09-02',
+      quote: null,
+      finvizLead: {
+        symbol: 'AAPL',
+        status: 'found',
+        displayText: 'Apple moved after a product report.',
+        headline: 'Apple product report',
+        summary: 'A product report provided the morning lead.',
+        bulletPoints: ['Product report'],
+        sentiment: 'positive',
+        source: 'Example',
+        sourceTimestamp: '2026-09-02T10:00:00.000Z',
+        isCatalyst: true,
+        sourceUrl: 'https://finviz.com/quote.ashx?t=AAPL',
+        fetchedAt: '2026-09-02T10:05:00.000Z',
+        errorMessage: null,
+      },
+      news: [news('2026-09-02T10:00:00.000Z')],
+    })
+
+    expect(prompt).toContain('Finviz lead:')
+    expect(prompt).toContain('Apple product report')
+    expect(prompt).toContain('not independent confirmation')
+    expect(prompt).toContain('If the lead is unsupported')
+  })
+
+  it('rejects a stale Finviz lead even when it was fetched recently', () => {
+    expect(
+      __testOnly.isFreshFinvizLead(
+        {
+          symbol: 'AAPL',
+          status: 'found',
+          displayText: 'An old catalyst',
+          headline: 'Old catalyst',
+          summary: null,
+          bulletPoints: [],
+          sentiment: null,
+          source: 'Example',
+          sourceTimestamp: '2026-08-30T12:00:00.000Z',
+          isCatalyst: true,
+          sourceUrl: 'https://finviz.com/quote.ashx?t=AAPL',
+          fetchedAt: '2026-09-02T12:00:00.000Z',
+          errorMessage: null,
+        },
+        Date.parse('2026-09-02T12:00:00.000Z'),
+      ),
+    ).toBe(false)
+  })
+
   it('parses clean JSON responses', () => {
     const parsed = __testOnly.parseJsonObject(`{
       "summary": "Shares rose after earnings beat.",

@@ -193,19 +193,19 @@ describe('newsletter cron health evaluation', () => {
     expect(
       __testOnly.isJobExpectedNow(
         'daily',
-        new Date('2026-08-10T08:00:00.000Z'),
+        new Date('2026-08-10T07:00:00.000Z'),
       ),
     ).toBe(false)
     expect(
       __testOnly.isJobExpectedNow(
         'daily',
-        new Date('2026-08-10T08:01:59.999Z'),
+        new Date('2026-08-10T07:00:59.999Z'),
       ),
     ).toBe(false)
     expect(
       __testOnly.isJobExpectedNow(
         'daily',
-        new Date('2026-08-10T08:02:00.000Z'),
+        new Date('2026-08-10T07:01:00.000Z'),
       ),
     ).toBe(true)
     expect(
@@ -298,17 +298,17 @@ describe('newsletter cron health evaluation', () => {
       webhook_outbox: {
         job_name: 'webhook_outbox',
         status: 'succeeded',
-        started_at: '2026-08-10T07:59:30.000Z',
-        completed_at: '2026-08-10T07:59:35.000Z',
+        started_at: '2026-08-10T06:59:30.000Z',
+        completed_at: '2026-08-10T06:59:35.000Z',
       },
     }
     const atWindowStart = evaluateNewsletterCronHealth(
       rows,
-      new Date('2026-08-10T08:00:00.000Z'),
+      new Date('2026-08-10T07:00:00.000Z'),
     )
     const afterGrace = evaluateNewsletterCronHealth(
       rows,
-      new Date('2026-08-10T08:02:00.000Z'),
+      new Date('2026-08-10T07:01:00.000Z'),
     )
 
     expect(atWindowStart.status).toBe('healthy')

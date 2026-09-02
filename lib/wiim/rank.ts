@@ -29,6 +29,31 @@ function daysBetween(iso: string | null | undefined, now = Date.now()): number |
   return hours == null ? null : round2(hours / 24)
 }
 
+function finvizFreshnessMinutes(
+  candidate: WiimCandidateInput,
+  now = Date.now(),
+): number | null {
+  const observedAt = candidate.whyMoving?.sourceTimestamp ??
+    candidate.whyMoving?.fetchedAt
+  if (!observedAt) return null
+  const timestamp = Date.parse(observedAt)
+  if (!Number.isFinite(timestamp)) return null
+  return Math.round((now - timestamp) / (1000 * 60))
+}
+
+function hasFreshFinvizEvidence(
+  candidate: WiimCandidateInput,
+  now = Date.now(),
+): boolean {
+  const freshness = finvizFreshnessMinutes(candidate, now)
+  return Boolean(
+    candidate.whyMoving?.displayText &&
+    freshness != null &&
+    freshness >= -5 &&
+    freshness <= 24 * 60,
+  )
+}
+
 function hasDirectionalMismatch(candidate: WiimCandidateInput): boolean {
   const catalyst = candidate.whyMoving?.displayText?.toLowerCase() ?? ''
   if (!catalyst) return false
@@ -52,7 +77,11 @@ function relevantNews(candidate: WiimCandidateInput) {
 }
 
 function pickHeadline(candidate: WiimCandidateInput): string {
-  if (candidate.whyMoving?.headline && !hasDirectionalMismatch(candidate)) return candidate.whyMoving.headline
+  if (
+    candidate.whyMoving?.headline &&
+    hasFreshFinvizEvidence(candidate) &&
+    !hasDirectionalMismatch(candidate)
+  ) return candidate.whyMoving.headline
   const article = relevantNews(candidate)[0]
   if (article?.title) return article.title
 
@@ -62,9 +91,14 @@ function pickHeadline(candidate: WiimCandidateInput): string {
 
 function buildWhyItMatters(candidate: WiimCandidateInput): string {
   const move = `${candidate.changesPercentage >= 0 ? '+' : ''}${round2(candidate.changesPercentage)}%`
+  const finvizText = candidate.whyMoving?.displayText
 
-  if (candidate.whyMoving?.displayText && !hasDirectionalMismatch(candidate)) {
-    return `${candidate.symbol} is moving ${move}. Finviz points to ${candidate.whyMoving.displayText}.`
+  if (
+    finvizText &&
+    hasFreshFinvizEvidence(candidate) &&
+    !hasDirectionalMismatch(candidate)
+  ) {
+    return `${candidate.symbol} is moving ${move}. Finviz points to ${finvizText}.`
   }
 
   if (candidate.earningsReport) {
@@ -98,7 +132,9 @@ function buildStateLabel(candidate: WiimCandidateInput): RankedWiimCandidate['st
 function hasStrongEditorialSetup(candidate: WiimCandidateInput): boolean {
   const moveAbs = Math.abs(candidate.changesPercentage)
   const news = relevantNews(candidate)
-  const finvizText = candidate.whyMoving?.displayText?.toLowerCase() ?? ''
+  const finvizText = hasFreshFinvizEvidence(candidate)
+    ? candidate.whyMoving?.displayText?.toLowerCase() ?? ''
+    : ''
   const hasEarnings = Boolean(candidate.earningsReport)
   const hasFreshNewsDepth = news.length >= 2
   const looksLikeCorporateFluff = /(opens bookings|culinary program|launches|announces program|unveils|introduces)/.test(finvizText)
@@ -121,17 +157,17 @@ function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
   const now = Date.now()
   const news = relevantNews(candidate)
   const earningsRecencyHours = candidate.earningsReport?.hoursAgo ?? null
-  const finvizFreshnessMinutes = candidate.whyMoving?.fetchedAt
-    ? Math.round((now - new Date(candidate.whyMoving.fetchedAt).getTime()) / (1000 * 60))
-    : null
+  const finvizFreshness = finvizFreshnessMinutes(candidate, now)
   const recentPickAgeDays = candidate.recentPick?.pickedAt
     ? daysBetween(candidate.recentPick.pickedAt, now)
     : null
 
   const moveAbs = Math.abs(candidate.changesPercentage)
   const hasFreshEarnings = candidate.earningsReport ? Math.abs(candidate.earningsReport.hoursAgo) <= 36 : false
-  const finvizText = candidate.whyMoving?.displayText?.toLowerCase() ?? ''
-  const hasFreshFinviz = Boolean(candidate.whyMoving?.displayText && finvizFreshnessMinutes != null && finvizFreshnessMinutes <= 240)
+  const hasFreshFinviz = hasFreshFinvizEvidence(candidate, now)
+  const finvizText = hasFreshFinviz
+    ? candidate.whyMoving?.displayText?.toLowerCase() ?? ''
+    : ''
   const hasStrongHeadline = news.length >= 2
   const mismatchPenalty = hasDirectionalMismatch(candidate) ? -10 : 0
   const fluffPenalty = /(opens bookings|culinary program|launches|announces program|unveils|introduces)/.test(finvizText) ? -8 : 0
@@ -143,7 +179,7 @@ function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
     earnings: hasFreshEarnings ? 18 - Math.min(Math.abs(candidate.earningsReport!.hoursAgo), 36) / 3 : 0,
     finviz: hasFreshFinviz ? 8 : 0,
     novelty: candidate.recentPick ? -14 : 8,
-    catalystBonus: (candidate.whyMoving?.isCatalyst ? 3 : 0) + hardCatalystBonus + (hasStrongHeadline ? 4 : 0) + (moveAbs >= 6 ? 3 : 0) + mismatchPenalty + fluffPenalty,
+    catalystBonus: (hasFreshFinviz && candidate.whyMoving?.isCatalyst ? 3 : 0) + hardCatalystBonus + (hasStrongHeadline ? 4 : 0) + (moveAbs >= 6 ? 3 : 0) + mismatchPenalty + fluffPenalty,
   }
 
   return {
@@ -153,8 +189,8 @@ function buildSignals(candidate: WiimCandidateInput): WiimCandidateSignals {
     newsCount: news.length,
     hasEarnings: Boolean(candidate.earningsReport),
     earningsRecencyHours,
-    hasFinvizCatalyst: Boolean(candidate.whyMoving?.displayText),
-    finvizFreshnessMinutes,
+    hasFinvizCatalyst: hasFreshFinviz,
+    finvizFreshnessMinutes: finvizFreshness,
     wasRecentlyPicked: Boolean(candidate.recentPick),
     recentPickAgeDays,
     sentiment: candidate.whyMoving?.sentiment ?? null,
@@ -178,12 +214,13 @@ function buildSourceRefs(candidate: WiimCandidateInput): RankedWiimCandidate['so
     })
   }
 
-  if (candidate.whyMoving?.displayText) {
+  const whyMoving = candidate.whyMoving
+  if (whyMoving?.displayText && hasFreshFinvizEvidence(candidate)) {
     refs.push({
       kind: 'finviz',
-      label: candidate.whyMoving.displayText,
-      url: candidate.whyMoving.sourceUrl,
-      publishedAt: candidate.whyMoving.sourceTimestamp,
+      label: whyMoving.displayText,
+      url: whyMoving.sourceUrl,
+      publishedAt: whyMoving.sourceTimestamp,
     })
   }
 

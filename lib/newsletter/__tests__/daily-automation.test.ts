@@ -8,11 +8,14 @@ import {
 } from '../daily-automation'
 
 describe('daily newsletter automation', () => {
-  it('runs from 5:00 through 7:59 AM New York time', () => {
+  it('runs the collection window from 3:15 through 7:59 AM New York time', () => {
     expect(
-      getNewsletterAutomationClock(
-        new Date('2026-07-30T09:00:00.000Z'),
-      ).isCollectionWindow,
+      getNewsletterAutomationClock(new Date('2026-07-30T07:14:00.000Z'))
+        .isCollectionWindow,
+    ).toBe(false)
+    expect(
+      getNewsletterAutomationClock(new Date('2026-07-30T07:15:00.000Z'))
+        .isCollectionWindow,
     ).toBe(true)
     expect(
       getNewsletterAutomationClock(
@@ -54,10 +57,10 @@ describe('daily newsletter automation', () => {
 
   it('treats generation hour as a ready-by deadline with recovery', () => {
     const beforeStart = getNewsletterAutomationClock(
-      new Date('2026-07-30T08:59:00.000Z'),
+      new Date('2026-07-30T07:14:00.000Z'),
     )
     const onTime = getNewsletterAutomationClock(
-      new Date('2026-07-30T09:00:00.000Z'),
+      new Date('2026-07-30T07:15:00.000Z'),
     )
     const late = getNewsletterAutomationClock(
       new Date('2026-07-30T12:15:00.000Z'),
@@ -65,7 +68,8 @@ describe('daily newsletter automation', () => {
 
     expect(getNewsletterAutomationWindow(beforeStart, [8])).toMatchObject({
       readyByHour: 8,
-      startHour: 5,
+      startHour: 3,
+      startMinute: 15,
       shouldRun: false,
       isLate: false,
     })
@@ -98,6 +102,123 @@ describe('daily newsletter automation', () => {
         ignored: 3,
       }),
     ).toEqual({ 'owner:1': 'run-1' })
+  })
+
+  it('crawls low-priority Finviz names first while preserving missing queue entries', () => {
+    expect(
+      __testOnly.orderFinvizRetryableSymbols(
+        ['HIGH', 'MID', 'LOW', 'NEW'],
+        ['LOW', 'MID', 'HIGH'],
+      ),
+    ).toEqual(['LOW', 'MID', 'HIGH', 'NEW'])
+  })
+
+  it('keeps all-company coverage separate from the bounded editorial summary scope', () => {
+    const candidates = Array.from({ length: 503 }, (_, index) => ({
+      ticker: `S${index + 1}`,
+      candidateType: index < 25 ? 'newsletter' : 'watch_only',
+      signals: {
+        hasFinvizCatalyst: index < 25,
+        hasEarnings: false,
+        hasNews: index < 50,
+      },
+    }))
+
+    const selected = __testOnly.selectEditorialSummarySymbols(
+      candidates as never,
+    )
+
+    expect(selected).toHaveLength(80)
+    expect(selected.slice(0, 25)).toEqual(
+      Array.from({ length: 25 }, (_, index) => `S${index + 1}`),
+    )
+    expect(selected).not.toContain('S503')
+  })
+
+  it('maps each Finviz request into an auditable daily coverage row', () => {
+    const run = {
+      id: '60000000-0000-4000-8000-000000000001',
+      marketDate: '2026-09-02',
+      startedAt: '2026-09-02T07:15:00.000Z',
+      createdAt: '2026-09-02T07:15:00.000Z',
+    }
+    expect(__testOnly.buildFinvizSnapshotRow(run as never, {
+      symbol: 'AAPL',
+      status: 'found',
+      displayText: 'Apple catalyst',
+      sourceTimestamp: '2026-09-02T07:10:00.000Z',
+      fetchedAt: '2026-09-02T07:16:00.000Z',
+      errorMessage: null,
+      source: 'live',
+      pass: 1,
+    })).toMatchObject({
+      run_id: run.id,
+      symbol: 'AAPL',
+      status: 'catalyst',
+      catalyst_text: 'Apple catalyst',
+      source_timestamp: '2026-09-02T07:10:00.000Z',
+    })
+    expect(__testOnly.buildFinvizSnapshotRow(run as never, {
+      symbol: 'MSFT',
+      status: 'error',
+      displayText: null,
+      errorMessage: 'Finviz access challenge detected',
+      source: 'none',
+      pass: 1,
+    })).toMatchObject({
+      symbol: 'MSFT',
+      status: 'error',
+      catalyst_text: null,
+      error_text: 'Finviz access challenge detected',
+    })
+  })
+
+  it('recognizes blocking responses and opens a canary only after cooldown', () => {
+    const blocked = {
+      status: 'error',
+      errorMessage: 'Finviz blocking response 429',
+    }
+    expect(__testOnly.isFinvizBlockingResult(blocked as never)).toBe(true)
+
+    const circuit = __testOnly.readFinvizCircuitState({
+      mode: 'cooldown',
+      tripCount: 1,
+      reason: 'Finviz blocking response 429',
+      resumeAt: '2026-07-30T08:00:00.000Z',
+    })
+    expect(
+      __testOnly.shouldRunFinvizCanary(
+        circuit,
+        Date.parse('2026-07-30T07:59:59.000Z'),
+      ),
+    ).toBe(false)
+    expect(
+      __testOnly.shouldRunFinvizCanary(
+        circuit,
+        Date.parse('2026-07-30T08:00:00.000Z'),
+      ),
+    ).toBe(true)
+  })
+
+  it('recognizes the narrow quality-gate exception without treating other failures as exceptions', () => {
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'newsletters',
+        'Only 29 candidates passed the current-news quality gate; 40 are required for this run.',
+      ),
+    ).toBe(true)
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'summaries',
+        'Only 29 candidates passed the current-news quality gate; 40 are required for this run.',
+      ),
+    ).toBe(false)
+    expect(
+      __testOnly.isNewsletterQualityGateShortfall(
+        'newsletters',
+        'Database migration failed.',
+      ),
+    ).toBe(false)
   })
 
   it('allows a terminal notification without a child run only for the approved editorial exception', () => {

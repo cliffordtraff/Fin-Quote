@@ -190,6 +190,16 @@ function formatDateTime(value: string | null): string {
   }).format(parsed)
 }
 
+function automationSummaryTotal(
+  automation: NewsletterDailyAutomationRun | PublicNewsletterMorningAutomation,
+): number {
+  if (!('metadata' in automation)) return automation.candidateCount
+  const value = Number(automation.metadata.summaryScopeCount)
+  return Number.isSafeInteger(value) && value > 0
+    ? value
+    : automation.candidateCount
+}
+
 function matchesFilter(item: NewsletterDailyRunItem, filter: QueueFilter) {
   if (filter === 'all') return true
   if (filter === 'generated') {
@@ -1342,7 +1352,7 @@ export default function NewsletterMorningReview() {
               </div>
               <div>
                 <p className="font-semibold">
-                  {automation.summaryGeneratedCount}/{automation.candidateCount}
+                  {automation.summaryGeneratedCount}/{automationSummaryTotal(automation)}
                 </p>
                 <p className="opacity-70">Generated</p>
               </div>

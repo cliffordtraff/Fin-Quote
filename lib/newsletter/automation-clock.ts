@@ -4,6 +4,7 @@ import {
 } from '@/lib/market-calendar'
 
 const DEFAULT_READY_BY_HOUR = 8
+const MORNING_SWEEP_LEAD_MINUTES = 4 * 60 + 45
 const RECOVERY_END_HOUR = 12
 
 export interface NewsletterAutomationClock {
@@ -21,6 +22,7 @@ export interface NewsletterAutomationClock {
 export interface NewsletterAutomationWindow {
   readyByHour: number
   startHour: number
+  startMinute: number
   shouldRun: boolean
   isLate: boolean
   hasEnded: boolean
@@ -61,7 +63,8 @@ export function getNewsletterAutomationClock(
     isWeekday,
     isTradingDay,
     holidayName,
-    isCollectionWindow: isTradingDay && hour >= 5 && hour < 8,
+    isCollectionWindow:
+      isTradingDay && hour * 60 + minute >= 3 * 60 + 15 && hour < 8,
     isMorningReportWindow:
       isTradingDay && hour >= 5 && hour < RECOVERY_END_HOUR,
   }
@@ -78,17 +81,22 @@ export function getNewsletterAutomationWindow(
     normalized.length > 0
       ? Math.min(...normalized)
       : DEFAULT_READY_BY_HOUR
-  const startHour = Math.max(0, readyByHour - 3)
+  const startMinuteOfDay = Math.max(
+    0,
+    readyByHour * 60 - MORNING_SWEEP_LEAD_MINUTES,
+  )
+  const startHour = Math.floor(startMinuteOfDay / 60)
+  const startMinute = startMinuteOfDay % 60
   const minuteOfDay = clock.hour * 60 + clock.minute
-  const startMinute = startHour * 60
   const deadlineMinute = readyByHour * 60
   const endMinute = RECOVERY_END_HOUR * 60
   return {
     readyByHour,
     startHour,
+    startMinute,
     shouldRun:
       clock.isTradingDay &&
-      minuteOfDay >= startMinute &&
+      minuteOfDay >= startMinuteOfDay &&
       minuteOfDay < endMinute,
     isLate:
       clock.isTradingDay &&

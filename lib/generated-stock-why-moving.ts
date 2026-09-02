@@ -4,8 +4,11 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchTickerNews } from '@/lib/newsletter/fetch-context'
 import { getProvider, type ProviderNews, type ProviderQuote } from '@/lib/providers'
 import { getSP500Constituent, isSP500, normalizeSP500Symbol } from '@/lib/sp500'
-import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
 import { isNewsletterSourceEntityMatch } from '@/lib/newsletter/source-integrity'
+import {
+  peekStockWhyMovingCache,
+  type StockWhyMovingResult,
+} from '@/lib/stock-why-moving'
 import {
   WIIM_SUMMARY_CONFIG_VERSION,
   WIIM_SUMMARY_MAX_CHARACTERS,
@@ -17,6 +20,9 @@ export {
   WIIM_SUMMARY_MAX_CHARACTERS,
   WIIM_SUMMARY_NEWS_LOOKBACK_DAYS,
 } from '@/lib/wiim-summary-config'
+
+const FINVIZ_LEAD_MAX_AGE_MS = 24 * 60 * 60 * 1_000
+const FINVIZ_LEAD_FUTURE_TOLERANCE_MS = 5 * 60 * 1_000
 
 const SEC_NEWS_FORMS = new Set(['8-K', '10-Q', '10-K', '6-K'])
 
@@ -42,6 +48,7 @@ export interface GeneratedWhyMovingSummary {
   noSummaryReason: string | null
   model: string
   quote: ProviderQuote | null
+  finvizLead: StockWhyMovingResult | null
   news: ProviderNews[]
   selectedSourceIndex: number | null
 }
@@ -419,6 +426,7 @@ function buildPrompt(input: {
   name: string
   summaryDate: string
   quote: ProviderQuote | null
+  finvizLead: StockWhyMovingResult | null
   news: ProviderNews[]
 }) {
   const newsBrief = input.news.slice(0, 16).map((item, index) => ({
@@ -429,9 +437,23 @@ function buildPrompt(input: {
     text: item.text?.slice(0, item.site === 'SEC' ? 2_000 : 500) || '',
   }))
 
+  const finvizLead = input.finvizLead
+    ? {
+        headline: input.finvizLead.headline,
+        summary: input.finvizLead.summary,
+        bulletPoints: input.finvizLead.bulletPoints,
+        source: input.finvizLead.source,
+        sourceTimestamp: input.finvizLead.sourceTimestamp,
+        fetchedAt: input.finvizLead.fetchedAt,
+        isCatalyst: input.finvizLead.isCatalyst,
+      }
+    : null
+
   return `You write concise "Why Is It Moving" summaries for S&P 500 stocks.
 
-Use only the quote and news context below. Do not use Finviz.
+Use the Finviz lead to identify the likely editorial angle, then verify every
+factual claim against the numbered news or SEC context. Finviz is discovery
+context, not independent confirmation.
 Return strict JSON:
 {
   "summary": string | null,
@@ -448,6 +470,8 @@ Rules:
 - The quote is the provider's latest regular-session quote and may not include extended-hours trading.
 - Do not say shares rose, fell, gained, slipped, or otherwise infer current direction from that quote. State the supported event and why it matters.
 - Use only news published within the supplied seven-day window. Never revive an older event from memory.
+- Prefer a concrete Finviz lead when a numbered source independently supports it.
+- Never copy Finviz wording. If the lead is unsupported by the numbered sources, ignore it.
 - Prefer concrete timely catalysts: earnings, guidance, analyst action, deal, regulatory/legal, product launch, management change, capital return, or sector/macro read-through.
 - If there is no clear catalyst in the provided context, set summary to null and no_summary_reason to "no_clear_catalyst".
 - If the price move is small and the news is generic, set summary to null and no_summary_reason to "quiet_tape".
@@ -464,8 +488,22 @@ Quote: ${input.quote ? JSON.stringify({
     changesPercentage: input.quote.changesPercentage,
     volume: input.quote.volume ?? null,
   }) : 'unavailable'}
+Finviz lead: ${finvizLead ? JSON.stringify(finvizLead) : 'unavailable'}
 News: ${JSON.stringify(newsBrief)}
 `
+}
+
+function isFreshFinvizLead(
+  result: StockWhyMovingResult | null | undefined,
+  now = Date.now(),
+): result is StockWhyMovingResult {
+  if (result?.status !== 'found' || !result.displayText) return false
+  const observedAt = result.sourceTimestamp ?? result.fetchedAt
+  const timestamp = Date.parse(observedAt)
+  if (!Number.isFinite(timestamp)) return false
+  const age = now - timestamp
+  return age >= -FINVIZ_LEAD_FUTURE_TOLERANCE_MS &&
+    age <= FINVIZ_LEAD_MAX_AGE_MS
 }
 
 export async function generateStockWhyMovingSummary(input: {
@@ -493,10 +531,14 @@ export async function generateStockWhyMovingSummary(input: {
   // relaxing the seven-day freshness or entity-validation gates below.
   const newsFetchLimit = 20
 
-  const [quote, news] = await Promise.all([
+  const [quote, news, cachedFinviz] = await Promise.all([
     provider.getQuote(symbol).catch(() => null),
     provider.getNews(symbol, newsFetchLimit).catch(() => []),
+    peekStockWhyMovingCache(symbol).catch(() => null),
   ])
+  const finvizLead = isFreshFinvizLead(cachedFinviz?.result)
+    ? cachedFinviz.result
+    : null
   const entityMatchedPrimaryNews = filterEntityMatchedSummaryNews(
     news,
     symbol,
@@ -561,7 +603,14 @@ export async function generateStockWhyMovingSummary(input: {
   const response = await openai.responses.create(
     {
       model,
-      input: buildPrompt({ symbol, name, summaryDate, quote, news: timelyNews }),
+      input: buildPrompt({
+        symbol,
+        name,
+        summaryDate,
+        quote,
+        finvizLead,
+        news: timelyNews,
+      }),
     },
     { signal: input.signal },
   )
@@ -606,6 +655,7 @@ export async function generateStockWhyMovingSummary(input: {
     noSummaryReason,
     model,
     quote,
+    finvizLead,
     news: timelyNews,
     selectedSourceIndex: summaryText ? selectedSourceIndex : null,
   }
@@ -654,6 +704,18 @@ export async function storeGeneratedWhyMovingSummary(
       reason_type: summary.reasonType,
       selected_source_index: summary.selectedSourceIndex,
       quote: summary.quote,
+      finviz_lead: summary.finvizLead
+        ? {
+            headline: summary.finvizLead.headline,
+            summary: summary.finvizLead.summary,
+            bulletPoints: summary.finvizLead.bulletPoints,
+            source: summary.finvizLead.source,
+            sourceTimestamp: summary.finvizLead.sourceTimestamp,
+            fetchedAt: summary.finvizLead.fetchedAt,
+            isCatalyst: summary.finvizLead.isCatalyst,
+            sourceUrl: summary.finvizLead.sourceUrl,
+          }
+        : null,
       candidate_pool: summary.news.map((item) => ({
         title: item.title,
         publisher: item.site,
@@ -712,6 +774,8 @@ export async function getGeneratedStockWhyMovingData(symbol: string): Promise<St
 }
 
 export const __testOnly = {
+  buildPrompt,
+  isFreshFinvizLead,
   normalizeSummaryText,
   parseJsonObject,
   decodeSecHtml,

@@ -276,6 +276,48 @@ export interface Database {
         }
         Relationships: []
       }
+      finviz_catalyst_snapshots: {
+        Row: {
+          id: number
+          run_id: string
+          run_label: string | null
+          summary_date: string
+          symbol: string
+          status: string
+          catalyst_text: string | null
+          source_timestamp: string | null
+          error_text: string | null
+          run_started_at: string
+          scraped_at: string
+        }
+        Insert: {
+          id?: number
+          run_id: string
+          run_label?: string | null
+          summary_date: string
+          symbol: string
+          status: string
+          catalyst_text?: string | null
+          source_timestamp?: string | null
+          error_text?: string | null
+          run_started_at: string
+          scraped_at?: string
+        }
+        Update: {
+          id?: number
+          run_id?: string
+          run_label?: string | null
+          summary_date?: string
+          symbol?: string
+          status?: string
+          catalyst_text?: string | null
+          source_timestamp?: string | null
+          error_text?: string | null
+          run_started_at?: string
+          scraped_at?: string
+        }
+        Relationships: []
+      }
       financials_std: {
         Row: {
           id: string

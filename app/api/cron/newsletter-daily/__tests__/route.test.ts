@@ -57,7 +57,8 @@ const clock = {
 
 const window = {
   readyByHour: 8,
-  startHour: 5,
+  startHour: 3,
+  startMinute: 15,
   shouldRun: true,
   isLate: false,
   hasEnded: false,

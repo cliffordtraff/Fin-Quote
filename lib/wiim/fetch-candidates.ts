@@ -72,18 +72,23 @@ async function fetchRecentWhyMovingBySymbol(symbols: string[]): Promise<Map<stri
 
   try {
     const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-    const { data, error } = await supabase
-      .from('stock_why_moving_cache')
-      .select('symbol, status, display_text, headline, summary, bullet_points, sentiment, source, source_timestamp, is_catalyst, source_url, fetched_at, error_message')
-      .in('symbol', filteredSymbols)
-      .eq('status', 'found')
-      .gte('fetched_at', since)
+    const rows: StockWhyMovingCacheRow[] = []
+    for (let index = 0; index < filteredSymbols.length; index += 100) {
+      const batch = filteredSymbols.slice(index, index + 100)
+      const { data, error } = await supabase
+        .from('stock_why_moving_cache')
+        .select('symbol, status, display_text, headline, summary, bullet_points, sentiment, source, source_timestamp, is_catalyst, source_url, fetched_at, error_message')
+        .in('symbol', batch)
+        .eq('status', 'found')
+        .gte('fetched_at', since)
 
-    if (error || !Array.isArray(data)) return new Map()
+      if (error || !Array.isArray(data)) return new Map()
+      rows.push(...(data as StockWhyMovingCacheRow[]))
+    }
 
     return new Map(
-      data.flatMap((row) => {
-        const mapped = mapWhyMovingRow(row as StockWhyMovingCacheRow)
+      rows.flatMap((row) => {
+        const mapped = mapWhyMovingRow(row)
         const canonical = normalizeSP500Symbol(mapped.symbol)
         if (!canonical || !isSP500(canonical)) {
           return []

@@ -71,7 +71,7 @@ describe('rankWiimCandidates', () => {
           bulletPoints: [],
           sentiment: 'positive',
           source: 'finviz',
-          sourceTimestamp: '2026-08-06T14:00:00Z',
+          sourceTimestamp: new Date().toISOString(),
           isCatalyst: true,
           sourceUrl: 'https://finviz.com/quote.ashx?t=MTCH',
           fetchedAt: new Date().toISOString(),
@@ -83,6 +83,39 @@ describe('rankWiimCandidates', () => {
     expect(ranked[0]?.headline).toBe(
       'Match Group lifts outlook after quarterly results',
     )
+  })
+
+  it('does not let a stale Finviz catalyst drive the current headline', () => {
+    const ranked = rankWiimCandidates([
+      candidate({
+        news: [{
+          title: 'Apple reports a current product update',
+          text: 'Apple announced the update today.',
+          url: 'https://example.com/apple-current',
+          publishedDate: new Date().toISOString(),
+          site: 'Example',
+        }],
+        whyMoving: {
+          symbol: 'AAPL',
+          status: 'found',
+          displayText: 'Apple moved after an old event',
+          headline: 'Apple old-event headline',
+          summary: null,
+          bulletPoints: [],
+          sentiment: 'positive',
+          source: 'finviz',
+          sourceTimestamp: '2026-08-01T14:00:00Z',
+          isCatalyst: true,
+          sourceUrl: 'https://finviz.com/quote.ashx?t=AAPL',
+          fetchedAt: new Date().toISOString(),
+          errorMessage: null,
+        },
+      }),
+    ])
+
+    expect(ranked[0]?.headline).toBe('Apple reports a current product update')
+    expect(ranked[0]?.signals.hasFinvizCatalyst).toBe(false)
+    expect(ranked[0]?.sourceRefs.map((source) => source.kind)).not.toContain('finviz')
   })
 
   it('does not rank non-S&P 500 candidates even when they reach the ranker', () => {

@@ -178,14 +178,14 @@ const STALE_AFTER_MS: Record<NewsletterCronJob, number> = {
 // These mirror the pg_cron schedules. At the first tick of a window, give the
 // invocation one complete cron period to persist its heartbeat before alerting.
 const CRON_PERIOD_MS: Record<NewsletterCronJob, number> = {
-  daily: 2 * 60_000,
+  daily: 60_000,
   mid_morning: 2 * 60_000,
   beehiiv_reconciliation: 60_000,
   webhook_outbox: 5 * 60_000,
 }
 
 const WINDOW_START_HOUR_UTC: Partial<Record<NewsletterCronJob, number>> = {
-  daily: 8,
+  daily: 7,
   mid_morning: 14,
   beehiiv_reconciliation: 12,
 }
@@ -253,15 +253,16 @@ function isJobExpectedNow(job: NewsletterCronJob, now: Date): boolean {
   if (job === 'webhook_outbox') return true
   if (!isWeekdayUtc(now)) return false
   const hour = now.getUTCHours()
+  const windowStartHour = WINDOW_START_HOUR_UTC[job]
+  if (windowStartHour == null) return false
   const inWindow =
     job === 'daily'
-      ? hour >= 8 && hour <= 17
+      ? hour >= windowStartHour && hour <= 17
       : job === 'mid_morning'
-        ? hour >= 14 && hour <= 17
-        : hour >= 12 && hour <= 23
+        ? hour >= windowStartHour && hour <= 17
+        : hour >= windowStartHour && hour <= 23
   if (!inWindow) return false
 
-  const windowStartHour = WINDOW_START_HOUR_UTC[job]
   if (hour !== windowStartHour) return true
 
   const windowStartedAt = new Date(now)

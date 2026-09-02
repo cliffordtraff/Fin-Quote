@@ -482,16 +482,6 @@ export async function recordPick(result: StockPickerResult): Promise<void> {
 // Market context fetcher (for AI stock picker)
 // ---------------------------------------------------------------------------
 
-/**
- * The daily newsletter selects up to 50 candidates (and defaults to 40) after a
- * quality gate that drops anything without fresh, entity-matched evidence. A
- * pool of 50 therefore demanded a ~80% pass rate and could never satisfy the
- * gate once FMP's movers feeds thinned out. Healthy days historically produced
- * 130-150 candidates, so target that instead. This costs no extra requests:
- * fetchSP500QuoteCandidates already quotes the whole S&P 500 universe, and the
- * target only decides how many of those results are retained.
- */
-const MARKET_CANDIDATE_POOL_TARGET = 150
 const FMP_QUOTE_BATCH_SIZE = 100
 const NEWS_COVERAGE_TARGET = 60
 const NEWS_TICKERS_PER_REQUEST = 15
@@ -534,9 +524,9 @@ function fmpQuoteSymbol(symbol: string): string {
 }
 
 /**
- * FMP's top-50 actives/gainers/losers feeds can occasionally contain almost
- * no S&P 500 names before the opening bell. Batch quotes provide a bounded,
- * current-universe fallback so a thin movers feed cannot stop the newsletter.
+ * Fetch a current quote snapshot for the complete S&P 500 security universe.
+ * The index contains 503 listed symbols because several companies have more
+ * than one included share class.
  */
 async function fetchSP500QuoteCandidates(
   apiKey: string,
@@ -582,11 +572,10 @@ async function fetchSP500QuoteCandidates(
 }
 
 /**
- * Fetch most-active stocks from FMP, merge with earnings & gainers/losers,
- * filter to S&P 500, and gather news.
- *
- * On quiet days (fewer than 3 candidates with >2% moves), widens the
- * candidate pool from top 10 to top 20 actives.
+ * Fetch all S&P 500 quote candidates, preserve mover/earnings context, and
+ * gather focused news for the largest moves. The complete quote universe is
+ * persisted downstream so WIIM and Finviz coverage do not depend on a vendor's
+ * top-movers lists.
  */
 export async function fetchMarketContext(): Promise<MarketContext> {
   const apiKey = process.env.FMP_API_KEY
@@ -678,14 +667,24 @@ export async function fetchMarketContext(): Promise<MarketContext> {
     }
   }
 
-  if (candidateMap.size < MARKET_CANDIDATE_POOL_TARGET) {
-    const supplementalCandidates = await fetchSP500QuoteCandidates(apiKey)
-    for (const candidate of supplementalCandidates) {
-      if (!candidateMap.has(candidate.symbol)) {
-        candidateMap.set(candidate.symbol, candidate)
-      }
-      if (candidateMap.size >= MARKET_CANDIDATE_POOL_TARGET) break
+  const fullUniverseCandidates = await fetchSP500QuoteCandidates(apiKey)
+  for (const candidate of fullUniverseCandidates) {
+    if (!candidateMap.has(candidate.symbol)) {
+      candidateMap.set(candidate.symbol, candidate)
     }
+  }
+
+  const missingSymbols = Array.from(SP500_SYMBOLS).filter(
+    (symbol) => !candidateMap.has(symbol),
+  )
+  for (const symbol of missingSymbols) {
+    candidateMap.set(symbol, {
+      symbol,
+      name: getSP500Constituent(symbol)?.name ?? symbol,
+      price: 0,
+      change: 0,
+      changesPercentage: 0,
+    })
   }
 
   const candidates = Array.from(candidateMap.values())
