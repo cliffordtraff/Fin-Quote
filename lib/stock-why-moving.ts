@@ -76,7 +76,13 @@ function createSupabaseClient(key?: string) {
 }
 
 function getSupabasePublic() {
-  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  // Server-side refreshes need to read the cache after its Data API access was
+  // locked down. Prefer the service role when it is available; browser-facing
+  // callers still fall back to the public key and remain subject to RLS.
+  return createSupabaseClient(
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  )
 }
 
 function getSupabaseAdmin() {
