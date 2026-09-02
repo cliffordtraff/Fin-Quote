@@ -4,6 +4,7 @@ import {
   buildFinancialPoints,
   fetchMarketContext,
 } from '@/lib/newsletter/fetch-context'
+import { SP500_SYMBOLS } from '@/lib/sp500'
 
 const ORIGINAL_FMP_API_KEY = process.env.FMP_API_KEY
 
@@ -58,7 +59,7 @@ describe('newsletter market context', () => {
     }
   })
 
-  it('fills a thin premarket movers feed from current S&P 500 batch quotes', async () => {
+  it('fills a thin premarket movers feed with the complete S&P 500 quote universe', async () => {
     const actives = ['AAPL', 'CCL', 'INTC', 'NVDA', 'PLTR', 'SMCI', 'TTD'].map(
       (symbol, index) => ({
         symbol,
@@ -105,9 +106,9 @@ describe('newsletter market context', () => {
 
     expect(fetchMock).toHaveBeenCalled()
     expect(quoteRequests.length).toBeGreaterThan(1)
-    expect(context.candidates).toHaveLength(150)
+    expect(context.candidates).toHaveLength(SP500_SYMBOLS.size)
     expect(new Set(context.candidates.map(({ symbol }) => symbol)).size).toBe(
-      150,
+      SP500_SYMBOLS.size,
     )
     expect(context.candidates.map(({ symbol }) => symbol)).toEqual(
       expect.arrayContaining(actives.map(({ symbol }) => symbol)),

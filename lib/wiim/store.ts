@@ -56,28 +56,32 @@ export async function storeWiimCandidates(
 ) {
   if (candidates.length === 0) return
 
-  const supabase = createSupabaseWriteClient()
-  let query = supabase.from('wiim_run_candidates').insert(
-    candidates.map((candidate) => ({
-      wiim_run_id: runId,
-      rank: candidate.rank,
-      ticker: candidate.ticker,
-      theme: candidate.theme,
-      headline: candidate.headline,
-      why_it_matters: candidate.whyItMatters,
-      confidence_score: candidate.confidenceScore,
-      candidate_type: candidate.candidateType,
-      state_label: candidate.stateLabel,
-      signals_json: candidate.signals as unknown as Json,
-      source_refs_json: candidate.sourceRefs as unknown as Json,
-      metadata_json: candidate.metadata as unknown as Json,
-    })),
-  )
-  if (signal) query = query.abortSignal(signal)
-  const { error } = await query
+  const rows = candidates.map((candidate) => ({
+    wiim_run_id: runId,
+    rank: candidate.rank,
+    ticker: candidate.ticker,
+    theme: candidate.theme,
+    headline: candidate.headline,
+    why_it_matters: candidate.whyItMatters,
+    confidence_score: candidate.confidenceScore,
+    candidate_type: candidate.candidateType,
+    state_label: candidate.stateLabel,
+    signals_json: candidate.signals as unknown as Json,
+    source_refs_json: candidate.sourceRefs as unknown as Json,
+    metadata_json: candidate.metadata as unknown as Json,
+  }))
 
-  if (error) {
-    throw new Error(`Failed to store WIIM candidates: ${error.message}`)
+  const supabase = createSupabaseWriteClient()
+  for (let index = 0; index < rows.length; index += 100) {
+    let query = supabase
+      .from('wiim_run_candidates')
+      .insert(rows.slice(index, index + 100))
+    if (signal) query = query.abortSignal(signal)
+    const { error } = await query
+
+    if (error) {
+      throw new Error(`Failed to store WIIM candidates: ${error.message}`)
+    }
   }
 }
 
