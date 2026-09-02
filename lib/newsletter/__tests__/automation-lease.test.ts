@@ -92,7 +92,7 @@ describe('newsletter automation lease heartbeat', () => {
     ).toBeLessThanOrEqual(60_000)
   })
 
-  it('keeps the four-symbol Finviz stage inside the 120-second route budget', () => {
+  it('keeps the six-symbol Finviz stage inside the 120-second route budget', () => {
     expect(
       NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS +
         NEWSLETTER_CRON_REQUEST_RESERVE_MS,
