@@ -677,10 +677,14 @@ export async function fetchMarketContext(): Promise<MarketContext> {
   const missingSymbols = Array.from(SP500_SYMBOLS).filter(
     (symbol) => !candidateMap.has(symbol),
   )
-  if (missingSymbols.length > 0) {
-    throw new Error(
-      `Only ${candidateMap.size} of ${SP500_SYMBOLS.size} S&P 500 symbols returned usable quotes; missing ${missingSymbols.join(', ')}`,
-    )
+  for (const symbol of missingSymbols) {
+    candidateMap.set(symbol, {
+      symbol,
+      name: getSP500Constituent(symbol)?.name ?? symbol,
+      price: 0,
+      change: 0,
+      changesPercentage: 0,
+    })
   }
 
   const candidates = Array.from(candidateMap.values())

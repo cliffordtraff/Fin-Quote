@@ -177,4 +177,54 @@ describe('newsletter market context', () => {
     }
     expect(Object.keys(context.newsBySymbol).length).toBe(60)
   })
+
+  it('keeps the full crawl universe when one provider quote is missing', async () => {
+    const missingSymbol = Array.from(SP500_SYMBOLS).at(-1)!
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes('/stock_market/actives')) {
+        return jsonResponse([{
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          price: 200,
+          change: 1,
+          changesPercentage: 0.5,
+        }])
+      }
+      if (
+        url.includes('/stock_market/gainers') ||
+        url.includes('/stock_market/losers') ||
+        url.includes('/earning_calendar') ||
+        url.includes('/stock_news')
+      ) return jsonResponse([])
+      if (url.includes('/api/v3/quote/')) {
+        const symbols = url
+          .split('/api/v3/quote/')[1]
+          .split('?')[0]
+          .split(',')
+          .filter((symbol) => symbol !== missingSymbol)
+        return jsonResponse(symbols.map((symbol) => ({
+          symbol,
+          name: `Company ${symbol}`,
+          price: 100,
+          change: 0,
+          changesPercentage: 0,
+        })))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const context = await fetchMarketContext()
+    const placeholder = context.candidates.find(
+      ({ symbol }) => symbol === missingSymbol,
+    )
+
+    expect(context.candidates).toHaveLength(SP500_SYMBOLS.size)
+    expect(placeholder).toMatchObject({
+      symbol: missingSymbol,
+      price: 0,
+      change: 0,
+      changesPercentage: 0,
+    })
+  })
 })

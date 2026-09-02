@@ -62,7 +62,10 @@ const FINVIZ_INTER_REQUEST_JITTER_MS = 6_000
 const FINVIZ_CIRCUIT_COOLDOWN_MS = 45 * 60 * 1_000
 const FINVIZ_MAX_CIRCUIT_TRIPS = 2
 const FINVIZ_DAILY_REQUEST_BUDGET = 550
-const SUMMARY_BATCH_SIZE = 4
+const FINVIZ_MIN_EDITORIAL_COVERAGE = 30
+const SUMMARY_SCOPE_LIMIT = 100
+const SUMMARY_SCOPE_MINIMUM = 80
+const SUMMARY_BATCH_SIZE = 6
 const NEWSLETTER_BATCH_SIZE = 3
 const MAX_SOURCE_ATTEMPTS = 2
 const MAX_STAGE_ERRORS = 3
@@ -251,6 +254,94 @@ function waitWithSignal(ms: number, signal: AbortSignal): Promise<void> {
     }
     signal.addEventListener('abort', onAbort, { once: true })
   })
+}
+
+function buildFinvizSnapshotRow(
+  run: NewsletterDailyAutomationRun,
+  result: WarmResult,
+  scrapedAt = new Date().toISOString(),
+): Database['public']['Tables']['finviz_catalyst_snapshots']['Insert'] {
+  const status = result.status === 'found' ||
+      (result.status === 'skipped_fresh' && Boolean(result.displayText))
+    ? 'catalyst'
+    : result.status === 'not_found' || result.status === 'skipped_fresh'
+      ? 'no_catalyst'
+      : 'error'
+  return {
+    run_id: run.id,
+    run_label: 'newsletter-morning-full-sp500',
+    summary_date: run.marketDate,
+    symbol: result.symbol,
+    status,
+    catalyst_text: status === 'catalyst' ? result.displayText : null,
+    source_timestamp: result.sourceTimestamp ?? null,
+    error_text: status === 'error'
+      ? result.errorMessage ?? `Unexpected Finviz warm status: ${result.status}`
+      : null,
+    run_started_at: run.startedAt ?? run.createdAt,
+    scraped_at: result.fetchedAt ?? scrapedAt,
+  }
+}
+
+async function storeFinvizSnapshot(
+  run: NewsletterDailyAutomationRun,
+  result: WarmResult,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted()
+  let query = getServiceClient()
+    .from('finviz_catalyst_snapshots')
+    .upsert(buildFinvizSnapshotRow(run, result), {
+      onConflict: 'run_id,symbol',
+    })
+  query = query.abortSignal(signal)
+  const { error } = await query
+  if (error) {
+    throw new Error(
+      `Failed to store Finviz coverage for ${result.symbol}: ${error.message}`,
+    )
+  }
+}
+
+function selectEditorialSummarySymbols(
+  candidates: RankedWiimCandidate[],
+  limit = SUMMARY_SCOPE_LIMIT,
+): string[] {
+  const cappedLimit = Math.max(1, Math.min(SUMMARY_SCOPE_LIMIT, Math.floor(limit)))
+  const selected: string[] = []
+  const seen = new Set<string>()
+  const add = (candidate: RankedWiimCandidate) => {
+    const symbol = candidate.ticker?.trim().toUpperCase()
+    if (!symbol || seen.has(symbol) || selected.length >= cappedLimit) return
+    seen.add(symbol)
+    selected.push(symbol)
+  }
+  const hasEditorialEvidence = (candidate: RankedWiimCandidate) =>
+    candidate.signals.hasFinvizCatalyst ||
+    candidate.signals.hasEarnings ||
+    candidate.signals.hasNews
+
+  candidates
+    .filter((candidate) =>
+      candidate.candidateType !== 'watch_only' && hasEditorialEvidence(candidate),
+    )
+    .forEach(add)
+  candidates
+    .filter((candidate) => hasEditorialEvidence(candidate))
+    .forEach(add)
+
+  const minimum = Math.min(
+    SUMMARY_SCOPE_MINIMUM,
+    cappedLimit,
+    candidates.length,
+  )
+  if (selected.length < minimum) {
+    for (const candidate of candidates) {
+      add(candidate)
+      if (selected.length >= minimum) break
+    }
+  }
+  return selected
 }
 
 function mapRow(row: AutomationRow): NewsletterDailyAutomationRun {
@@ -583,6 +674,34 @@ async function refreshFinvizBatch(
       : coolingDown
         ? `Finviz circuit breaker is cooling down until ${circuit.resumeAt}.`
         : `Finviz daily request budget of ${FINVIZ_DAILY_REQUEST_BUDGET} is exhausted.`
+    if (circuit.mode === 'open' || budgetExhausted) {
+      const coverage = await loadFinvizCoverage(run, signal)
+      const coverageState = getFinvizCoverageState(
+        run.candidateSymbols,
+        coverage,
+        attempts,
+        MAX_SOURCE_ATTEMPTS,
+      )
+      if (coverageState.completedCount < FINVIZ_MIN_EDITORIAL_COVERAGE) {
+        throw new Error(
+          `${reason} Only ${coverageState.completedCount} symbols have usable coverage; ${FINVIZ_MIN_EDITORIAL_COVERAGE} are required to continue.`,
+        )
+      }
+      return updateRun(run.id, leaseToken, {
+        stage: 'wiim',
+        finviz_completed_count: coverageState.completedCount,
+        finviz_found_count: coverageState.foundCount,
+        finviz_error_count: coverageState.errorSymbols.length,
+        last_error: `${reason} Continuing with partial Finviz coverage.`,
+        metadata_json: {
+          ...run.metadata,
+          finvizRequestCount: requestCount,
+          finvizBudgetExhausted: budgetExhausted,
+          finvizCoveragePartial: true,
+          finvizCompletedAt: new Date().toISOString(),
+        } as unknown as Json,
+      }, signal)
+    }
     return updateRun(run.id, leaseToken, {
       last_error: reason,
       metadata_json: {
@@ -639,6 +758,7 @@ async function refreshFinvizBatch(
       jitterMs: 0,
       signal,
     })
+    await storeFinvizSnapshot(run, result, signal)
     results.push(result)
     if (isFinvizBlockingResult(result)) break
     if (index < batch.length - 1) {
@@ -695,8 +815,14 @@ async function refreshFinvizBatch(
     : nextCircuit.mode === 'cooldown'
       ? `Finviz circuit breaker paused requests until ${nextCircuit.resumeAt}.`
       : null
+  const proceedWithPartialCoverage =
+    nextCircuit.mode === 'open' &&
+    afterState.completedCount >= FINVIZ_MIN_EDITORIAL_COVERAGE
+  const advanceToWiim =
+    (afterState.done && nextCircuit.mode === 'closed') ||
+    proceedWithPartialCoverage
   return updateRun(run.id, leaseToken, {
-    stage: afterState.done && nextCircuit.mode === 'closed' ? 'wiim' : 'finviz',
+    stage: advanceToWiim ? 'wiim' : 'finviz',
     finviz_completed_count: afterState.completedCount,
     finviz_found_count: afterState.foundCount,
     finviz_error_count: afterState.errorSymbols.length,
@@ -712,7 +838,8 @@ async function refreshFinvizBatch(
       finvizLastBatch: batch,
       finvizLastBatchSummary: liveSummary,
       finvizExhaustedSymbols: afterState.exhaustedSymbols,
-      finvizCompletedAt: afterState.done ? new Date().toISOString() : null,
+      finvizCoveragePartial: proceedWithPartialCoverage,
+      finvizCompletedAt: advanceToWiim ? new Date().toISOString() : null,
     } as unknown as Json,
   }, signal)
 }
@@ -844,6 +971,12 @@ async function createWiimSnapshot(
     seenAt: wiim.generatedAt,
     discoveries,
   })
+  const summaryScopeSymbols = selectEditorialSummarySymbols(
+    wiim.rankedCandidates,
+  )
+  if (summaryScopeSymbols.length === 0) {
+    throw new Error('The automated WIIM run produced no summary candidates')
+  }
   return updateRun(run.id, leaseToken, {
     stage: 'summaries',
     wiim_run_id: wiim.runId,
@@ -854,6 +987,10 @@ async function createWiimSnapshot(
       wiimRankedCandidateCount: wiim.rankedCandidateCount,
       wiimTopCandidate: wiim.topCandidate,
       whyMovedDiscoveryCount: discoveries.length,
+      summaryScopeSymbols,
+      summaryScopeCount: summaryScopeSymbols.length,
+      summarySkippedCandidateCount:
+        Math.max(0, run.candidateSymbols.length - summaryScopeSymbols.length),
     } as Json,
   }, signal)
 }
@@ -865,13 +1002,17 @@ async function generateSummaryBatch(
 ) {
   signal.throwIfAborted()
   const attempts = stringNumberMap(run.metadata.summaryAttempts)
+  const storedScope = stringArray(run.metadata.summaryScopeSymbols)
+  const summarySymbols = storedScope.length > 0
+    ? storedScope
+    : run.candidateSymbols
   const before = await getDailySummaryCoverage(
     run.marketDate,
-    run.candidateSymbols,
+    summarySymbols,
     signal,
   )
   const completedBefore = new Set(before.completedSymbols)
-  const retryable = run.candidateSymbols.filter(
+  const retryable = summarySymbols.filter(
     (symbol) =>
       !completedBefore.has(symbol) &&
       (attempts[symbol] ?? 0) < MAX_SOURCE_ATTEMPTS,
@@ -879,7 +1020,7 @@ async function generateSummaryBatch(
   const result = await generateDailySummaryBatch({
     marketDate: run.marketDate,
     symbols: retryable,
-    runSymbols: run.candidateSymbols,
+    runSymbols: summarySymbols,
     runId: `newsletter_automation_${run.id}`,
     limit: SUMMARY_BATCH_SIZE,
     concurrency: 4,
@@ -902,18 +1043,18 @@ async function generateSummaryBatch(
 
   const after = await getDailySummaryCoverage(
     run.marketDate,
-    run.candidateSymbols,
+    summarySymbols,
     signal,
   )
   signal.throwIfAborted()
   const completedAfter = new Set(after.completedSymbols)
-  const exhausted = run.candidateSymbols.filter(
+  const exhausted = summarySymbols.filter(
     (symbol) =>
       !completedAfter.has(symbol) &&
       (attempts[symbol] ?? 0) >= MAX_SOURCE_ATTEMPTS,
   )
   const completedCount = completedAfter.size + exhausted.length
-  const done = completedCount >= run.candidateSymbols.length
+  const done = completedCount >= summarySymbols.length
   return updateRun(run.id, leaseToken, {
     stage: done ? 'newsletters' : 'summaries',
     summary_completed_count: completedCount,
@@ -927,6 +1068,8 @@ async function generateSummaryBatch(
     metadata_json: {
       ...run.metadata,
       summaryAttempts: attempts,
+      summaryScopeSymbols: summarySymbols,
+      summaryScopeCount: summarySymbols.length,
       summaryLastBatch: result.attemptedSymbols,
       summaryLastBatchFailures: result.failed,
       summaryExhaustedSymbols: exhausted,
@@ -1863,6 +2006,8 @@ export const __testOnly = {
   readFinvizCircuitState,
   isFinvizBlockingResult,
   shouldRunFinvizCanary,
+  buildFinvizSnapshotRow,
+  selectEditorialSummarySymbols,
   newsletterRunIds,
   requiresApprovedDailyCandidateSetException,
   retryableStage,

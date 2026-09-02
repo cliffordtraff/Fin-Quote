@@ -1114,6 +1114,11 @@ function mapMorningRun(
   run: NewsletterDailyAutomationRun,
 ): NewsletterOperationsPipelineRun {
   const retry = retryDetails(run.metadata)
+  const storedSummaryScopeCount = Number(run.metadata.summaryScopeCount)
+  const summaryScopeCount =
+    Number.isSafeInteger(storedSummaryScopeCount) && storedSummaryScopeCount > 0
+      ? storedSummaryScopeCount
+      : run.candidateCount
   return {
     id: run.id,
     pipeline: 'morning',
@@ -1144,7 +1149,7 @@ function mapMorningRun(
         id: 'summaries',
         label: 'Original summaries',
         completed: run.summaryCompletedCount,
-        total: run.candidateCount,
+        total: summaryScopeCount,
         successful: run.summaryGeneratedCount,
         errors: run.summaryErrorCount,
       },

@@ -113,6 +113,66 @@ describe('daily newsletter automation', () => {
     ).toEqual(['LOW', 'MID', 'HIGH', 'NEW'])
   })
 
+  it('keeps all-company coverage separate from the bounded editorial summary scope', () => {
+    const candidates = Array.from({ length: 503 }, (_, index) => ({
+      ticker: `S${index + 1}`,
+      candidateType: index < 25 ? 'newsletter' : 'watch_only',
+      signals: {
+        hasFinvizCatalyst: index < 25,
+        hasEarnings: false,
+        hasNews: index < 50,
+      },
+    }))
+
+    const selected = __testOnly.selectEditorialSummarySymbols(
+      candidates as never,
+    )
+
+    expect(selected).toHaveLength(80)
+    expect(selected.slice(0, 25)).toEqual(
+      Array.from({ length: 25 }, (_, index) => `S${index + 1}`),
+    )
+    expect(selected).not.toContain('S503')
+  })
+
+  it('maps each Finviz request into an auditable daily coverage row', () => {
+    const run = {
+      id: '60000000-0000-4000-8000-000000000001',
+      marketDate: '2026-09-02',
+      startedAt: '2026-09-02T07:15:00.000Z',
+      createdAt: '2026-09-02T07:15:00.000Z',
+    }
+    expect(__testOnly.buildFinvizSnapshotRow(run as never, {
+      symbol: 'AAPL',
+      status: 'found',
+      displayText: 'Apple catalyst',
+      sourceTimestamp: '2026-09-02T07:10:00.000Z',
+      fetchedAt: '2026-09-02T07:16:00.000Z',
+      errorMessage: null,
+      source: 'live',
+      pass: 1,
+    })).toMatchObject({
+      run_id: run.id,
+      symbol: 'AAPL',
+      status: 'catalyst',
+      catalyst_text: 'Apple catalyst',
+      source_timestamp: '2026-09-02T07:10:00.000Z',
+    })
+    expect(__testOnly.buildFinvizSnapshotRow(run as never, {
+      symbol: 'MSFT',
+      status: 'error',
+      displayText: null,
+      errorMessage: 'Finviz access challenge detected',
+      source: 'none',
+      pass: 1,
+    })).toMatchObject({
+      symbol: 'MSFT',
+      status: 'error',
+      catalyst_text: null,
+      error_text: 'Finviz access challenge detected',
+    })
+  })
+
   it('recognizes blocking responses and opens a canary only after cooldown', () => {
     const blocked = {
       status: 'error',

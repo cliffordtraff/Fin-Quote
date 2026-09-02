@@ -51,6 +51,8 @@ export interface WarmResult {
   symbol: string
   status: WarmResultStatus
   displayText: string | null
+  sourceTimestamp?: string | null
+  fetchedAt?: string | null
   errorMessage: string | null
   source: 'cache' | 'live' | 'none'
   pass: 1 | 2
@@ -164,6 +166,8 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
         symbol,
         status: 'skipped_fresh',
         displayText: cached.result.displayText,
+        sourceTimestamp: cached.result.sourceTimestamp,
+        fetchedAt: cached.result.fetchedAt,
         errorMessage: null,
         source: 'cache',
         pass,
@@ -183,6 +187,8 @@ export async function warmSymbol(symbol: string, options: WarmSymbolOptions): Pr
     symbol,
     status: liveErrorMessage ? 'error' : result.status,
     displayText: result.displayText,
+    sourceTimestamp: result.sourceTimestamp,
+    fetchedAt: result.fetchedAt,
     errorMessage: liveErrorMessage ?? result.errorMessage,
     source:
       outcome.disposition === 'fresh_cache' ||
