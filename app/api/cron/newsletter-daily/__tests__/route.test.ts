@@ -371,7 +371,7 @@ describe('newsletter daily cron route', () => {
     expect(mocks.markFailed).toHaveBeenCalledTimes(1)
   })
 
-  it('caps a fresh stage to the absolute request deadline after preflight', async () => {
+  it('caps a fresh non-Finviz stage to the standard stage budget', async () => {
     vi.useFakeTimers()
     const startedAt = new Date('2026-08-06T12:00:00.000Z')
     vi.setSystemTime(startedAt)
@@ -384,7 +384,21 @@ describe('newsletter daily cron route', () => {
 
     expect(mocks.advance).toHaveBeenCalledWith({
       marketDate: '2026-08-05',
-      stageBudgetMs: 35_000,
+      stageBudgetMs: 42_000,
+    })
+  })
+
+  it('allows the Finviz conveyor to use its extended stage budget', async () => {
+    mocks.getRun.mockResolvedValue({
+      status: 'running',
+      stage: 'finviz',
+    })
+
+    await GET(request())
+
+    expect(mocks.advance).toHaveBeenCalledWith({
+      marketDate: '2026-08-05',
+      stageBudgetMs: 100_000,
     })
   })
 
@@ -393,7 +407,7 @@ describe('newsletter daily cron route', () => {
     const startedAt = new Date('2026-08-06T12:00:00.000Z')
     vi.setSystemTime(startedAt)
     mocks.getRun.mockImplementation(async () => {
-      vi.setSystemTime(new Date(startedAt.getTime() + 39_000))
+      vi.setSystemTime(new Date(startedAt.getTime() + 99_000))
       return null
     })
 
@@ -426,7 +440,7 @@ describe('newsletter daily cron route', () => {
     )
   })
 
-  it('keeps each cron invocation shorter than the polling interval', () => {
-    expect(maxDuration).toBe(60)
+  it('allows four sequential Finviz requests to finish without a timeout', () => {
+    expect(maxDuration).toBe(120)
   })
 })

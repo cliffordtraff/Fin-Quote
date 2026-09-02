@@ -8,6 +8,12 @@ import {
 } from '../daily-automation'
 
 describe('daily newsletter automation', () => {
+  it('paces at most four sequential Finviz requests per invocation', () => {
+    expect(__testOnly.finvizBatchSize).toBe(4)
+    expect(__testOnly.finvizInterRequestPauseMs).toBe(8_000)
+    expect(__testOnly.finvizInterRequestJitterMs).toBe(4_000)
+  })
+
   it('runs the collection window from 3:15 through 7:59 AM New York time', () => {
     expect(
       getNewsletterAutomationClock(new Date('2026-07-30T07:14:00.000Z'))

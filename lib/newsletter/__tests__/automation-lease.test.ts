@@ -5,6 +5,7 @@ import {
   NEWSLETTER_AUTOMATION_MIN_STAGE_BUDGET_MS,
   NEWSLETTER_AUTOMATION_STAGE_BUDGET_MS,
   NEWSLETTER_CRON_REQUEST_RESERVE_MS,
+  NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS,
   NewsletterAutomationLeaseLostError,
   NewsletterAutomationStageBudgetError,
   getNewsletterAutomationStageBudget,
@@ -91,6 +92,13 @@ describe('newsletter automation lease heartbeat', () => {
     ).toBeLessThanOrEqual(60_000)
   })
 
+  it('keeps the four-symbol Finviz stage inside the 120-second route budget', () => {
+    expect(
+      NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS +
+        NEWSLETTER_CRON_REQUEST_RESERVE_MS,
+    ).toBeLessThanOrEqual(120_000)
+  })
+
   it('caps a fresh stage to the deadline and declines unsafe slivers', () => {
     const now = Date.parse('2026-08-06T12:00:00.000Z')
 
@@ -100,6 +108,13 @@ describe('newsletter automation lease heartbeat', () => {
     expect(getNewsletterAutomationStageBudget(now + 45_000, now)).toBe(
       35_000,
     )
+    expect(
+      getNewsletterAutomationStageBudget(
+        now + 120_000,
+        now,
+        NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS,
+      ),
+    ).toBe(NEWSLETTER_DAILY_FINVIZ_STAGE_BUDGET_MS)
     expect(
       getNewsletterAutomationStageBudget(
         now +
