@@ -19,6 +19,13 @@ export const NEWSLETTER_CRON_JOBS = [
 export type NewsletterCronJob = (typeof NEWSLETTER_CRON_JOBS)[number]
 export type NewsletterCronRunStatus = 'running' | 'succeeded' | 'failed'
 
+export type NewsletterCronErrorCode =
+  | 'http_4xx'
+  | 'http_5xx'
+  | 'reported_failure'
+  | 'unhandled_exception'
+  | 'abandoned'
+
 type CronRunRow =
   Database['public']['Tables']['newsletter_cron_runs']['Row']
 
@@ -41,13 +48,63 @@ const defaultDependencies: HeartbeatDependencies = {
 
 function reportPersistenceFailure(
   job: NewsletterCronJob,
-  phase: 'start' | 'complete',
+  phase: 'start' | 'complete' | 'reap',
 ): void {
   if (process.env.NODE_ENV === 'test') return
   console.error('[newsletter-cron-heartbeat] persistence failure', {
     job,
     phase,
   })
+}
+
+/**
+ * Resolves heartbeats this job abandoned when an earlier invocation died before
+ * it could record a terminal status (a timed-out or evicted function leaves its
+ * row at `running` forever). Without this, one orphan permanently pins the job
+ * to `stale` in the health snapshot and no later success can clear it.
+ *
+ * This runs at the start of the next invocation of the same job so the health
+ * endpoint stays read-only and recovery needs no operator intervention.
+ */
+async function reapAbandonedHeartbeats(
+  job: NewsletterCronJob,
+  now: Date,
+): Promise<void> {
+  const abandonedBefore = new Date(now.getTime() - STALE_AFTER_MS[job])
+  try {
+    const supabase = createServiceRoleClient()
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('id,started_at')
+      .eq('job_name', job)
+      .eq('status', 'running')
+      .lt('started_at', abandonedBefore.toISOString())
+    if (error) throw error
+    if (!data?.length) return
+
+    await Promise.all(
+      data.map(async (row) => {
+        const startedAt = new Date(row.started_at)
+        if (!Number.isFinite(startedAt.getTime())) return
+        const { error: updateError } = await supabase
+          .from(TABLE)
+          .update({
+            status: 'failed',
+            completed_at: now.toISOString(),
+            duration_ms: Math.min(
+              MAX_POSTGRES_INTEGER,
+              Math.max(0, now.getTime() - startedAt.getTime()),
+            ),
+            error_code: 'abandoned',
+          })
+          .eq('id', row.id)
+          .eq('status', 'running')
+        if (updateError) throw updateError
+      }),
+    )
+  } catch {
+    reportPersistenceFailure(job, 'reap')
+  }
 }
 
 async function startHeartbeat(
@@ -73,6 +130,7 @@ async function startHeartbeat(
   } catch {
     reportPersistenceFailure(job, 'start')
   }
+  await reapAbandonedHeartbeats(job, context.startedAt)
   return context
 }
 
@@ -80,12 +138,7 @@ async function completeHeartbeat(
   context: HeartbeatContext,
   input: {
     status: Extract<NewsletterCronRunStatus, 'succeeded' | 'failed'>
-    errorCode:
-      | 'http_4xx'
-      | 'http_5xx'
-      | 'reported_failure'
-      | 'unhandled_exception'
-      | null
+    errorCode: NewsletterCronErrorCode | null
   },
   dependencies: HeartbeatDependencies,
 ): Promise<void> {

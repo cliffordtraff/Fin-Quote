@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   queryEq: vi.fn(),
   queryIn: vi.fn(),
   runningEq: vi.fn(),
+  reapJobEq: vi.fn(),
+  reapStatusEq: vi.fn(),
+  reapLt: vi.fn(),
   order: vi.fn(),
   limit: vi.fn(),
   maybeSingle: vi.fn(),
@@ -46,10 +49,15 @@ beforeEach(() => {
   mocks.queryEq.mockReturnValue({ order: mocks.order })
   mocks.runningEq.mockResolvedValue({ data: [], error: null })
   mocks.queryIn.mockReturnValue({ eq: mocks.runningEq })
+  mocks.reapLt.mockResolvedValue({ data: [], error: null })
+  mocks.reapStatusEq.mockReturnValue({ lt: mocks.reapLt })
+  mocks.reapJobEq.mockReturnValue({ eq: mocks.reapStatusEq })
   mocks.select.mockImplementation((columns: string) =>
     columns === 'job_name,started_at'
       ? { in: mocks.queryIn }
-      : { eq: mocks.queryEq },
+      : columns === 'id,started_at'
+        ? { eq: mocks.reapJobEq }
+        : { eq: mocks.queryEq },
   )
   mocks.from.mockReturnValue({
     insert: mocks.insert,
@@ -63,6 +71,108 @@ beforeEach(() => {
     signingSecret: 'x'.repeat(32),
     missing: [],
     error: null,
+  })
+})
+
+describe('abandoned newsletter cron heartbeat recovery', () => {
+  it('resolves an orphaned running heartbeat when the job next starts', async () => {
+    mocks.reapLt.mockResolvedValue({
+      data: [
+        { id: 'orphan-row', started_at: '2026-08-10T14:00:00.000Z' },
+      ],
+      error: null,
+    })
+
+    await withNewsletterCronHeartbeat(
+      'beehiiv_reconciliation',
+      async () => Response.json({ ok: true }),
+      {
+        createId: () => '00000000-0000-4000-8000-00000000000a',
+        now: () => new Date('2026-08-10T14:20:00.000Z'),
+      },
+    )
+
+    // Only heartbeats older than the job's stale window are eligible.
+    expect(mocks.reapJobEq).toHaveBeenCalledWith(
+      'job_name',
+      'beehiiv_reconciliation',
+    )
+    expect(mocks.reapStatusEq).toHaveBeenCalledWith('status', 'running')
+    expect(mocks.reapLt).toHaveBeenCalledWith(
+      'started_at',
+      '2026-08-10T14:10:00.000Z',
+    )
+    expect(mocks.update).toHaveBeenCalledWith({
+      status: 'failed',
+      completed_at: '2026-08-10T14:20:00.000Z',
+      duration_ms: 20 * 60_000,
+      error_code: 'abandoned',
+    })
+  })
+
+  it('leaves heartbeats inside the stale window untouched', async () => {
+    mocks.reapLt.mockResolvedValue({ data: [], error: null })
+
+    await withNewsletterCronHeartbeat(
+      'daily',
+      async () => Response.json({ ok: true }),
+      {
+        createId: () => '00000000-0000-4000-8000-00000000000b',
+        now: () => new Date('2026-08-10T14:20:00.000Z'),
+      },
+    )
+
+    expect(mocks.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ error_code: 'abandoned' }),
+    )
+  })
+
+  it('never turns a failed reap into a failure of the run itself', async () => {
+    mocks.reapLt.mockResolvedValue({
+      data: null,
+      error: { message: 'reap query failed' },
+    })
+
+    const response = await withNewsletterCronHeartbeat(
+      'beehiiv_reconciliation',
+      async () => Response.json({ ok: true }),
+      {
+        createId: () => '00000000-0000-4000-8000-00000000000c',
+        now: () => new Date('2026-08-10T14:20:00.000Z'),
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'succeeded' }),
+    )
+  })
+
+  it('reports healthy once the orphan is resolved and a run has succeeded', async () => {
+    // Regression: an orphan pinned beehiiv_reconciliation to `stale` forever,
+    // so the endpoint served 503 and the production watchdog never recovered.
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        job_name: 'beehiiv_reconciliation',
+        status: 'succeeded',
+        started_at: '2026-08-10T14:19:00.000Z',
+        completed_at: '2026-08-10T14:19:05.000Z',
+      },
+      error: null,
+    })
+    mocks.runningEq.mockResolvedValue({ data: [], error: null })
+
+    const snapshot = await getNewsletterCronHealthSnapshot(
+      new Date('2026-08-10T14:20:00.000Z'),
+    )
+
+    expect(snapshot.status).toBe('healthy')
+    expect(snapshot.jobs).toContainEqual(
+      expect.objectContaining({
+        job: 'beehiiv_reconciliation',
+        state: 'healthy',
+      }),
+    )
   })
 })
 
