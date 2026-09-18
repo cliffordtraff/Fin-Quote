@@ -442,17 +442,35 @@ export async function getNewsletterCronHealthSnapshot(
   if (staleRunningResult.error) {
     throw new Error('Newsletter cron health query failed.')
   }
+  // A job's newest run, used to tell an in-flight orphan from dead history.
+  const latestStartByJob = new Map<NewsletterCronJob, number>()
+  for (const [job, row] of results) {
+    if (!row || row.status === 'running') continue
+    const startedAt = new Date(row.started_at)
+    if (Number.isFinite(startedAt.getTime())) {
+      latestStartByJob.set(job, startedAt.getTime())
+    }
+  }
+
   const staleRunningJobs = new Set<NewsletterCronJob>()
   for (const row of staleRunningResult.data ?? []) {
     const job = row.job_name as NewsletterCronJob
     const startedAt = new Date(row.started_at)
     if (
-      NEWSLETTER_CRON_JOBS.includes(job) &&
-      Number.isFinite(startedAt.getTime()) &&
-      now.getTime() - startedAt.getTime() > STALE_AFTER_MS[job]
+      !NEWSLETTER_CRON_JOBS.includes(job) ||
+      !Number.isFinite(startedAt.getTime()) ||
+      now.getTime() - startedAt.getTime() <= STALE_AFTER_MS[job]
     ) {
-      staleRunningJobs.add(job)
+      continue
     }
+    // A later run of the same job reached a terminal status, so this row is a
+    // heartbeat an earlier invocation abandoned, not work still in flight. The
+    // next start reaps it; until then it must not hold the job at `stale`,
+    // which previously kept the endpoint unhealthy for hours across a quiet
+    // window and failed the production watchdog on every tick.
+    const supersededBy = latestStartByJob.get(job)
+    if (supersededBy != null && supersededBy > startedAt.getTime()) continue
+    staleRunningJobs.add(job)
   }
   return evaluateNewsletterCronHealth(
     Object.fromEntries(

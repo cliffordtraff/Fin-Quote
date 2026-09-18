@@ -75,6 +75,44 @@ beforeEach(() => {
 })
 
 describe('abandoned newsletter cron heartbeat recovery', () => {
+  it('does not hold a job stale when a later run has since succeeded', async () => {
+    // Regression: an orphan left by an earlier invocation kept the endpoint
+    // unhealthy across a quiet window, long after a later run had succeeded,
+    // because the reaper only fires when the job next starts.
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        job_name: 'beehiiv_reconciliation',
+        status: 'succeeded',
+        started_at: '2026-08-10T14:19:00.000Z',
+        completed_at: '2026-08-10T14:19:05.000Z',
+      },
+      error: null,
+    })
+    mocks.runningEq.mockResolvedValue({
+      data: [
+        {
+          id: 'orphan-superseded-by-a-later-success',
+          job_name: 'beehiiv_reconciliation',
+          started_at: '2026-08-10T13:00:00.000Z',
+        },
+      ],
+      error: null,
+    })
+
+    const snapshot = await getNewsletterCronHealthSnapshot(
+      new Date('2026-08-10T14:20:00.000Z'),
+    )
+
+    expect(snapshot.status).toBe('healthy')
+    expect(snapshot.jobs).toContainEqual(
+      expect.objectContaining({
+        job: 'beehiiv_reconciliation',
+        state: 'healthy',
+      }),
+    )
+  })
+
+
   it('resolves an orphaned running heartbeat when the job next starts', async () => {
     mocks.reapLt.mockResolvedValue({
       data: [
@@ -474,13 +512,15 @@ describe('newsletter cron health evaluation', () => {
     )
   })
 
-  it('marks a job stale when any older running heartbeat is orphaned', async () => {
+  it('marks a job stale when an orphaned running heartbeat is its newest run', async () => {
+    // No later run has reached a terminal status, so the orphan is the most
+    // recent thing this job did and the job is genuinely unhealthy.
     mocks.maybeSingle.mockResolvedValue({
       data: {
         job_name: 'daily',
-        status: 'succeeded',
-        started_at: '2026-08-10T14:19:00.000Z',
-        completed_at: '2026-08-10T14:19:05.000Z',
+        status: 'running',
+        started_at: '2026-08-10T14:09:59.999Z',
+        completed_at: null,
       },
       error: null,
     })
@@ -513,7 +553,6 @@ describe('newsletter cron health evaluation', () => {
     expect(snapshot.jobs).toContainEqual(
       expect.objectContaining({
         job: 'daily',
-        lastStatus: 'succeeded',
         state: 'stale',
       }),
     )
