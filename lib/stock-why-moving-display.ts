@@ -1,35 +1,40 @@
 import { getGeneratedStockWhyMovingData } from '@/lib/generated-stock-why-moving'
-import {
-  getStockWhyMovingData,
-  peekStockWhyMovingCache,
-} from '@/lib/stock-why-moving'
 import type { StockWhyMovingResult } from '@/lib/stock-why-moving'
 
 /**
- * Read-only variant for cacheable page rendering.
+ * What the public site shows for "why is it moving": our own generated summary,
+ * or nothing.
  *
- * Stock pages should never turn a crawler or cache miss into a live Finviz
- * scrape. The explicit API route keeps the live-refresh behavior for callers
- * that need it.
+ * Finviz's why-moving text is scraped only to benchmark our summaries (admin
+ * review, the newsletter automation). It is never shown to readers, including
+ * as a fallback when we have no summary of our own.
  */
 export async function getCachedStockWhyMovingDisplayData(
   symbol: string,
 ): Promise<StockWhyMovingResult | null> {
-  const generated = await getGeneratedStockWhyMovingData(symbol)
-  if (generated) return generated
-
-  const cached = await peekStockWhyMovingCache(symbol)
-  return cached.result
+  return getGeneratedStockWhyMovingData(symbol)
 }
 
 export async function getStockWhyMovingDisplayData(
   symbol: string,
-  options?: { forceRefresh?: boolean; preferGenerated?: boolean },
 ): Promise<StockWhyMovingResult> {
-  if (options?.preferGenerated !== false && !options?.forceRefresh) {
-    const generated = await getGeneratedStockWhyMovingData(symbol)
-    if (generated) return generated
-  }
+  return (await getGeneratedStockWhyMovingData(symbol)) ?? notFound(symbol)
+}
 
-  return getStockWhyMovingData(symbol, { forceRefresh: options?.forceRefresh })
+function notFound(symbol: string): StockWhyMovingResult {
+  return {
+    symbol: symbol.trim().toUpperCase(),
+    status: 'not_found',
+    displayText: null,
+    headline: null,
+    summary: null,
+    bulletPoints: [],
+    sentiment: null,
+    source: null,
+    sourceTimestamp: null,
+    isCatalyst: null,
+    sourceUrl: '',
+    fetchedAt: new Date().toISOString(),
+    errorMessage: null,
+  }
 }

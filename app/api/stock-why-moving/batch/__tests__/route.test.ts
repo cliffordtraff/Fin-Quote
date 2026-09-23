@@ -50,7 +50,7 @@ describe('stock why-moving batch route', () => {
     const payload = await response.json()
 
     expect(Object.keys(payload.reasons)).toEqual(['AAPL'])
-    expect(mocks.live).toHaveBeenCalledTimes(1)
+    expect(mocks.cached).toHaveBeenCalledTimes(1)
   })
 
   it('honors a fresh negative cache without scraping or fetching news again', async () => {
@@ -73,11 +73,12 @@ describe('stock why-moving batch route', () => {
     expect(mocks.getNews).not.toHaveBeenCalled()
   })
 
-  it('uses the normal cached loader instead of a public force refresh', async () => {
-    await POST(request(['AAPL']) as never)
+  it('never scrapes Finviz for readers, even when we have no summary', async () => {
+    mocks.getNews.mockResolvedValue([])
+    const response = await POST(request(['AAPL']) as never)
+    const payload = await response.json()
 
-    expect(mocks.live).toHaveBeenCalledWith('AAPL', {
-      preferGenerated: false,
-    })
+    expect(mocks.live).not.toHaveBeenCalled()
+    expect(payload.reasons.AAPL.status).toBe('not_found')
   })
 })

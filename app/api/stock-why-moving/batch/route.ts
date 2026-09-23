@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   getCachedStockWhyMovingDisplayData,
-  getStockWhyMovingDisplayData,
 } from '@/lib/stock-why-moving-display'
 import { isFreshWhyMovingResult } from '@/lib/stock-why-moving'
 import { getProvider, type ProviderNews } from '@/lib/providers'
@@ -153,18 +152,6 @@ export async function POST(request: NextRequest) {
           : null
         let sourceUrl = reason ? (data?.sourceUrl ?? null) : null
         let status: BatchReason['status'] = reason ? 'found' : 'not_found'
-
-        if (!reason && !hasFreshCache) {
-          const liveData = await getStockWhyMovingDisplayData(symbol, {
-            preferGenerated: false,
-          })
-          const liveTimestamp = liveData.sourceTimestamp || liveData.fetchedAt
-          reason = isFreshTimestamp(liveTimestamp)
-            ? normalizeReasonText(liveData.displayText || liveData.summary)
-            : null
-          sourceUrl = reason ? liveData.sourceUrl || null : null
-          status = reason ? 'found' : liveData.status
-        }
 
         if (!reason && !hasFreshCache) {
           const newsReason = await getRecentNewsReason(symbol)

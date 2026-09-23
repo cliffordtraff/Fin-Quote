@@ -54,28 +54,22 @@ describe('stock why-moving display loaders', () => {
     expect(getStockWhyMovingDataMock).not.toHaveBeenCalled()
   })
 
-  it('lets cacheable stock pages use persisted data without a live scrape', async () => {
+  it('shows nothing rather than Finviz text when we have no summary', async () => {
     getGeneratedStockWhyMovingDataMock.mockResolvedValue(null)
-    peekStockWhyMovingCacheMock.mockResolvedValue({
-      freshness: 'fresh',
-      result: cachedResult,
-    })
+    peekStockWhyMovingCacheMock.mockResolvedValue({ freshness: 'fresh', result: cachedResult })
 
-    await expect(getCachedStockWhyMovingDisplayData('AAPL')).resolves.toEqual(cachedResult)
+    await expect(getCachedStockWhyMovingDisplayData('AAPL')).resolves.toBeNull()
+    const live = await getStockWhyMovingDisplayData('AAPL')
+    expect(live).toMatchObject({ symbol: 'AAPL', status: 'not_found', displayText: null, source: null })
 
-    expect(peekStockWhyMovingCacheMock).toHaveBeenCalledWith('AAPL')
+    expect(peekStockWhyMovingCacheMock).not.toHaveBeenCalled()
     expect(getStockWhyMovingDataMock).not.toHaveBeenCalled()
   })
 
-  it('preserves live fallback behavior for the explicit refresh loader', async () => {
-    const liveResult = { ...cachedResult, displayText: 'Live catalyst' }
-    getGeneratedStockWhyMovingDataMock.mockResolvedValue(null)
-    getStockWhyMovingDataMock.mockResolvedValue(liveResult)
+  it('returns our generated summary from the live loader', async () => {
+    getGeneratedStockWhyMovingDataMock.mockResolvedValue(cachedResult)
 
-    await expect(getStockWhyMovingDisplayData('AAPL')).resolves.toEqual(liveResult)
-
-    expect(getStockWhyMovingDataMock).toHaveBeenCalledWith('AAPL', {
-      forceRefresh: undefined,
-    })
+    await expect(getStockWhyMovingDisplayData('AAPL')).resolves.toEqual(cachedResult)
+    expect(getStockWhyMovingDataMock).not.toHaveBeenCalled()
   })
 })
