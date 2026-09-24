@@ -744,6 +744,8 @@ export async function getGeneratedStockWhyMovingSummary(symbolInput: string, sum
     .select('symbol, summary_date, summary_text, model, generated_at, no_summary_reason, metadata')
     .eq('symbol', symbol)
     .eq('summary_date', summaryDate)
+    // theintraday.com writes its own news briefs to this table under another config version.
+    .eq('config_version', WIIM_SUMMARY_CONFIG_VERSION)
     .or('no_summary_reason.is.null,no_summary_reason.neq.validation_rejected')
     .order('generated_at', { ascending: false })
     .limit(1)
